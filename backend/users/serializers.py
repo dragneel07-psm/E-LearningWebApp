@@ -73,6 +73,8 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
             'first_name': {'required': True},
             'last_name': {'required': True},
             'role': {'required': False},  # Default to 'student' if not provided
+            'username': {'required': False},
+            'email': {'required': True},
         }
     
     def validate_email(self, value):

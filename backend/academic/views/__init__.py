@@ -1,5 +1,6 @@
 from .student_portal import AttendanceViewSet, TimetableViewSet, NoticeViewSet, ResultViewSet as SPResultViewSet
 from rest_framework import viewsets, permissions
+from rest_framework.decorators import action
 from django.db.models import Q
 from core.mixins import TenantScopedQuerysetMixin
 from ..models import AcademicClass, Student, Teacher, Parent, Course, Lesson, Assessment, Result, Submission, Question
