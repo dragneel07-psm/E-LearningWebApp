@@ -139,3 +139,15 @@ def register_user(request):
         }, status=status.HTTP_201_CREATED)
     
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+# Custom Login View
+from rest_framework_simplejwt.views import TokenObtainPairView
+from .serializers import MyTokenObtainPairSerializer
+
+class CustomTokenObtainPairView(TokenObtainPairView):
+    """
+    Login view that returns JWT tokens with custom claims (role, etc.)
+    POST /api/auth/login/
+    """
+    serializer_class = MyTokenObtainPairSerializer

@@ -21,3 +21,8 @@ class UserAccount(AbstractUser):
     address = models.TextField(blank=True, null=True)
     bio = models.TextField(blank=True, null=True)
     date_of_birth = models.DateField(blank=True, null=True)
+
+    # Use email as the login field
+    email = models.EmailField(unique=True)
+    USERNAME_FIELD = 'email'
+    REQUIRED_FIELDS = ['username', 'first_name', 'last_name']
