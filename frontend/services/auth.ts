@@ -3,7 +3,10 @@ import {
     LoginCredentials,
     RegisterData,
     LoginResponse,
-    RegisterResponse
+    RegisterResponse,
+    UserProfile,
+    UpdateProfileData,
+    ChangePasswordData
 } from '@/types/auth';
 import { setTokens, removeTokens, isAuthenticated, getAccessToken } from '@/lib/auth';
 
@@ -21,6 +24,21 @@ export const authService = {
         if (response.data.tokens?.access) {
             setTokens(response.data.tokens.access, response.data.tokens.refresh);
         }
+        return response.data;
+    },
+
+    async getProfile() {
+        const response = await api.get<UserProfile>('/api/users/accounts/me/');
+        return response.data;
+    },
+
+    async updateProfile(data: UpdateProfileData) {
+        const response = await api.patch<UserProfile>('/api/users/accounts/me/', data);
+        return response.data;
+    },
+
+    async changePassword(data: ChangePasswordData) {
+        const response = await api.post('/api/users/accounts/change-password/', data);
         return response.data;
     },
 
