@@ -98,3 +98,44 @@ class AdminPasswordResetView(APIView):
         except Exception as e:
             traceback.print_exc()
             return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+# User Registration View
+from rest_framework.decorators import api_view, permission_classes
+from .serializers import UserRegistrationSerializer
+
+@api_view(['POST'])
+@permission_classes([permissions.AllowAny])
+def register_user(request):
+    """
+    Register a new user
+    
+    POST /api/auth/register/
+    {
+        "email": "user@example.com",
+        "username": "username",  # Optional, will use email prefix if not provided
+        "password": "SecurePass123!",
+        "password_confirm": "SecurePass123!",
+        "first_name": "John",
+        "last_name": "Doe",
+        "role": "student"  # Optional, defaults to 'student'
+    }
+    """
+    serializer = UserRegistrationSerializer(data=request.data)
+    
+    if serializer.is_valid():
+        user = serializer.save()
+        return Response({
+            'message': 'User registered successfully',
+            'user': {
+                'id': user.user_id,
+                'email': user.email,
+                'username': user.username,
+                'first_name': user.first_name,
+                'last_name': user.last_name,
+                'role': user.role,
+            },
+            'tokens': serializer.data['tokens']
+        }, status=status.HTTP_201_CREATED)
+    
+    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
