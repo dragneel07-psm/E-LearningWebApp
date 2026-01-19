@@ -1,0 +1,175 @@
+'use client';
+
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import {
+    BookOpen, GraduationCap, FileText, ArrowLeft, Plus
+} from 'lucide-react';
+import {
+    BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+    RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar, Legend
+} from 'recharts';
+import Link from 'next/link';
+
+type ManagementCardProps = {
+    title: string;
+    desc: string;
+    icon: React.ElementType;
+    link: string;
+    actionLink?: string;
+};
+
+function ManagementCard({ title, desc, icon: Icon, link, actionLink }: ManagementCardProps) {
+    return (
+        <Card className="hover:shadow-md transition-shadow group">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">{title}</CardTitle>
+                <Icon className="h-4 w-4 text-muted-foreground group-hover:text-indigo-500 transition-colors" />
+            </CardHeader>
+            <CardContent>
+                <p className="text-xs text-muted-foreground mt-1 mb-4 h-10">{desc}</p>
+                <div className="flex gap-2">
+                    <Link href={link} className="w-full">
+                        <Button variant="outline" size="sm" className="w-full border-slate-200">
+                            Manage
+                        </Button>
+                    </Link>
+                    {actionLink && (
+                        <Link href={actionLink}>
+                            <Button size="sm" variant="ghost" className="px-2">
+                                <Plus className="h-4 w-4" />
+                            </Button>
+                        </Link>
+                    )}
+                </div>
+            </CardContent>
+        </Card>
+    );
+}
+
+export default function AcademicControlDashboard() {
+    // Mock Data for charts
+    const curriculumData = [
+        { subject: 'Mathematics', covered: 65, target: 100 },
+        { subject: 'Science', covered: 78, target: 100 },
+        { subject: 'English', covered: 90, target: 100 },
+        { subject: 'Social Studies', covered: 82, target: 100 },
+        { subject: 'Computer', covered: 55, target: 100 },
+    ];
+
+    const performanceData = [
+        { subject: 'Math', A: 120, B: 110, fullMark: 150 },
+        { subject: 'Science', A: 98, B: 130, fullMark: 150 },
+        { subject: 'English', A: 86, B: 130, fullMark: 150 },
+        { subject: 'History', A: 99, B: 100, fullMark: 150 },
+        { subject: 'Physics', A: 85, B: 90, fullMark: 150 },
+        { subject: 'Geography', A: 65, B: 85, fullMark: 150 },
+    ];
+
+    return (
+        <div className="p-6 space-y-8 bg-slate-50 min-h-screen dark:bg-slate-900">
+            {/* Header */}
+            <header className="flex items-center gap-4 border-b pb-6">
+                <Link href="/admin">
+                    <Button variant="ghost" size="icon">
+                        <ArrowLeft className="h-4 w-4" />
+                    </Button>
+                </Link>
+                <div>
+                    <h1 className="text-2xl font-bold tracking-tight text-slate-900">Academic Control Center</h1>
+                    <p className="text-slate-500 text-sm">Manage curriculum, subjects, and assess academic standards.</p>
+                </div>
+            </header>
+
+            {/* Analytics Section */}
+            <div className="grid gap-6 md:grid-cols-2">
+                <Card>
+                    <CardHeader>
+                        <CardTitle className="text-base">Curriculum Coverage</CardTitle>
+                        <CardDescription>Percentage of syllabus completed per subject</CardDescription>
+                    </CardHeader>
+                    <CardContent className="h-[300px]">
+                        <ResponsiveContainer width="100%" height="100%">
+                            <BarChart data={curriculumData} layout="vertical" margin={{ left: 20 }}>
+                                <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} />
+                                <XAxis type="number" domain={[0, 100]} />
+                                <YAxis dataKey="subject" type="category" width={100} tick={{ fontSize: 12 }} />
+                                <Tooltip />
+                                <Bar dataKey="covered" fill="#4f46e5" radius={[0, 4, 4, 0]} barSize={20} name="Completed %" />
+                            </BarChart>
+                        </ResponsiveContainer>
+                    </CardContent>
+                </Card>
+
+                <Card>
+                    <CardHeader>
+                        <CardTitle className="text-base">Subject Performance Radar</CardTitle>
+                        <CardDescription>Comparative strength across disciplines</CardDescription>
+                    </CardHeader>
+                    <CardContent className="h-[300px]">
+                        <ResponsiveContainer width="100%" height="100%">
+                            <RadarChart cx="50%" cy="50%" outerRadius="80%" data={performanceData}>
+                                <PolarGrid />
+                                <PolarAngleAxis dataKey="subject" tick={{ fontSize: 11 }} />
+                                <PolarRadiusAxis angle={30} domain={[0, 150]} />
+                                <Radar name="Grade A Students" dataKey="A" stroke="#10b981" fill="#10b981" fillOpacity={0.3} />
+                                <Radar name="Grade B Students" dataKey="B" stroke="#3b82f6" fill="#3b82f6" fillOpacity={0.3} />
+                                <Legend />
+                                <Tooltip />
+                            </RadarChart>
+                        </ResponsiveContainer>
+                    </CardContent>
+                </Card>
+            </div>
+
+            {/* Management Grid */}
+            <div>
+                <h3 className="text-lg font-semibold mb-4 text-slate-800">Management Modules</h3>
+                <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+                    <ManagementCard
+                        title="Academic Structure"
+                        desc="Configure Grades, Sections, and Academic Years."
+                        icon={GraduationCap}
+                        link="/admin/academic/classes"
+                        actionLink="/admin/academic/classes"
+                    />
+                    <ManagementCard
+                        title="Courses & Subjects"
+                        desc="Manage subject definitions and course mappings."
+                        icon={BookOpen}
+                        link="/admin/academic/courses"
+                        actionLink="/admin/academic/courses"
+                    />
+                    <ManagementCard
+                        title="Lesson Plans"
+                        desc="Review and approve teacher lesson plans."
+                        icon={FileText}
+                        link="/admin/academic/lessons"
+                        actionLink="/admin/academic/lessons"
+                    />
+                    <ManagementCard
+                        title="Assessments"
+                        desc="Oversee exams, quizzes, and grading policies."
+                        icon={FileText}
+                        link="/admin/academic/assessments"
+                        actionLink="/admin/academic/assessments"
+                    />
+                    <ManagementCard
+                        title="Student Management"
+                        desc="Manage student profiles, enrollments, and progress."
+                        icon={GraduationCap}
+                        link="/admin/academic/students"
+                        actionLink="/admin/academic/students"
+                    />
+                    <ManagementCard
+                        title="Teacher Management"
+                        desc="Manage faculty, assignments, and workload."
+                        icon={BookOpen}
+                        link="/admin/academic/teachers"
+                        actionLink="/admin/academic/teachers"
+                    />
+                </div>
+            </div>
+        </div>
+    );
+}

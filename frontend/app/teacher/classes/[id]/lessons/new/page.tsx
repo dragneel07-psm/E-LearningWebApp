@@ -1,0 +1,189 @@
+'use client';
+
+import { useState } from 'react';
+import { useParams, useRouter } from 'next/navigation';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { ChevronLeft, Save, Sparkles, Upload, FileText, ListChecks, LayoutTemplate, BrainCircuit } from 'lucide-react';
+import Link from 'next/link';
+
+export default function CreateLessonPage() {
+    const params = useParams();
+    const router = useRouter();
+    const classId = params.id as string;
+
+    // Form State
+    const [title, setTitle] = useState('');
+    const [content, setContent] = useState('');
+    const [loading, setLoading] = useState(false);
+    const [isGenerating, setIsGenerating] = useState(false);
+
+    const handleAIGenerate = (type: 'outline' | 'summary' | 'questions') => {
+        setIsGenerating(true);
+        // Mock AI Generation delay
+        setTimeout(() => {
+            if (type === 'outline') {
+                setContent(prev => prev + "\n\n## Lesson Outline\n1. Introduction to Concept\n2. Key Formulas\n3. Real-world Examples\n4. Practice Problems\n5. Summary");
+            } else if (type === 'summary') {
+                setContent(prev => prev + "\n\n**Summary:** This lesson covers the fundamental principles of Newton's Laws of Motion, emphasizing inertia, acceleration, and action-reaction pairs.");
+            } else if (type === 'questions') {
+                setContent(prev => prev + "\n\n### Review Questions\n1. Define inertia.\n2. Calculate force given mass=5kg and acceleration=2m/s².\n3. Give an example of the 3rd law.");
+            }
+            setIsGenerating(false);
+        }, 1500);
+    };
+
+    const handleSave = () => {
+        setLoading(true);
+        // Mock save
+        setTimeout(() => {
+            setLoading(false);
+            router.push(`/teacher/classes/${classId}`);
+        }, 1000);
+    };
+
+    return (
+        <div className="max-w-4xl mx-auto p-6 md:p-8 min-h-screen bg-gray-50/50">
+            <Link href={`/teacher/classes/${classId}`} className="inline-flex items-center text-sm text-slate-500 hover:text-indigo-600 mb-6 transition-colors">
+                <ChevronLeft className="h-4 w-4 mr-1" /> Back to Class
+            </Link>
+
+            <div className="flex justify-between items-center mb-8">
+                <div>
+                    <h1 className="text-3xl font-bold text-gray-900">Create New Lesson</h1>
+                    <p className="text-muted-foreground mt-1">Design content, upload resources, and use AI to enhance your lesson.</p>
+                </div>
+                <div className="flex gap-3">
+                    <Button variant="outline" onClick={() => router.back()}>Cancel</Button>
+                    <Button onClick={handleSave} disabled={loading} className="bg-indigo-600 hover:bg-indigo-700">
+                        <Save className="h-4 w-4 mr-2" /> {loading ? 'Saving...' : 'Publish Lesson'}
+                    </Button>
+                </div>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                {/* Left Column: Content Editor */}
+                <div className="lg:col-span-2 space-y-6">
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>Lesson Details</CardTitle>
+                        </CardHeader>
+                        <CardContent className="space-y-4">
+                            <div className="space-y-2">
+                                <Label htmlFor="title">Lesson Title</Label>
+                                <Input
+                                    id="title"
+                                    placeholder="e.g., Understanding Motion"
+                                    value={title}
+                                    onChange={(e) => setTitle(e.target.value)}
+                                />
+                            </div>
+
+                            <div className="space-y-2">
+                                <div className="flex justify-between items-center">
+                                    <Label htmlFor="content">Content & Notes</Label>
+                                    <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        className="text-xs text-indigo-600 h-auto py-1"
+                                        onClick={() => handleAIGenerate('outline')}
+                                        disabled={isGenerating}
+                                    >
+                                        <Sparkles className="h-3 w-3 mr-1" /> Generate Outline
+                                    </Button>
+                                </div>
+                                <Textarea
+                                    id="content"
+                                    placeholder="Start typing your lesson plan, or generate one with AI..."
+                                    className="min-h-[300px]"
+                                    value={content}
+                                    onChange={(e) => setContent(e.target.value)}
+                                />
+                            </div>
+                        </CardContent>
+                    </Card>
+
+                    <Card>
+                        <CardHeader>
+                            <CardTitle className="text-base">Resources</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            <div className="border-2 border-dashed border-slate-200 rounded-lg p-8 text-center hover:bg-slate-50 transition-colors cursor-pointer">
+                                <div className="mx-auto h-12 w-12 text-slate-400 bg-slate-100 rounded-full flex items-center justify-center mb-3">
+                                    <Upload className="h-6 w-6" />
+                                </div>
+                                <h3 className="text-sm font-semibold text-gray-900">Upload Materials</h3>
+                                <p className="text-xs text-slate-500 mt-1">Drag and drop PDF, PPTX, or Video files here</p>
+                            </div>
+                        </CardContent>
+                    </Card>
+                </div>
+
+                {/* Right Column: AI Tools & Settings */}
+                <div className="space-y-6">
+                    <Card className="border-indigo-100 shadow-sm overflow-hidden">
+                        <div className="h-1 bg-gradient-to-r from-indigo-500 to-purple-500"></div>
+                        <CardHeader className="pb-3 bg-indigo-50/30">
+                            <CardTitle className="flex items-center gap-2 text-indigo-800 text-base">
+                                <BrainCircuit className="h-5 w-5" /> AI Copilot
+                            </CardTitle>
+                            <CardDescription>Accelerate your workflow</CardDescription>
+                        </CardHeader>
+                        <CardContent className="space-y-3 pt-4">
+                            <Button variant="outline" className="w-full justify-start text-slate-700" onClick={() => handleAIGenerate('summary')} disabled={isGenerating}>
+                                <FileText className="h-4 w-4 mr-2 text-indigo-500" />
+                                {isGenerating ? 'Working...' : 'Summarize Last Class'}
+                            </Button>
+                            <Button variant="outline" className="w-full justify-start text-slate-700" onClick={() => handleAIGenerate('questions')} disabled={isGenerating}>
+                                <ListChecks className="h-4 w-4 mr-2 text-indigo-500" />
+                                Create Practice Questions
+                            </Button>
+                            <Button variant="outline" className="w-full justify-start text-slate-700" disabled={isGenerating}>
+                                <LayoutTemplate className="h-4 w-4 mr-2 text-indigo-500" />
+                                Create Slide Outline
+                            </Button>
+                        </CardContent>
+                    </Card>
+
+                    <Card>
+                        <CardHeader>
+                            <CardTitle className="text-base">Settings</CardTitle>
+                        </CardHeader>
+                        <CardContent className="space-y-4">
+                            <div className="space-y-2">
+                                <Label className="text-xs text-muted-foreground">Syllabus Mapping</Label>
+                                <Select>
+                                    <SelectTrigger>
+                                        <SelectValue placeholder="Select Topic" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="unit1">Unit 1: Mechanics</SelectItem>
+                                        <SelectItem value="unit2">Unit 2: Thermodynamics</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+
+                            <div className="space-y-2">
+                                <Label className="text-xs text-muted-foreground">Release Schedule</Label>
+                                <Select defaultValue="immediate">
+                                    <SelectTrigger>
+                                        <SelectValue placeholder="Select Schedule" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="immediate">Publish Immediately</SelectItem>
+                                        <SelectItem value="scheduled">Schedule for Later</SelectItem>
+                                        <SelectItem value="draft">Save as Draft</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        </CardContent>
+                    </Card>
+                </div>
+            </div>
+        </div>
+    );
+}

@@ -1,0 +1,73 @@
+from rest_framework import serializers
+from django.core.exceptions import ValidationError as DjangoValidationError
+from .models import Book, BookIssue
+
+class BookSerializer(serializers.ModelSerializer):
+    # Make tenant optional since it's set in perform_create
+    tenant = serializers.PrimaryKeyRelatedField(read_only=True, required=False)
+    
+    class Meta:
+        model = Book
+        fields = '__all__'
+        read_only_fields = ['book_id', 'tenant', 'created_at', 'updated_at', 'available_copies']
+    
+    def validate(self, attrs):
+        """Run model validation"""
+        # Create a temporary instance for validation
+        instance = Book(**attrs)
+        if self.instance:
+            instance.pk = self.instance.pk
+        
+        try:
+            instance.clean()
+        except DjangoValidationError as e:
+            raise serializers.ValidationError(e.message_dict)
+        
+        # Check ISBN uniqueness manually since UniqueTogetherValidator key 'tenant' 
+        # is read-only and not in validated_data
+        isbn = attrs.get('isbn')
+        if isbn:
+            from core.middleware.tenant import get_current_tenant
+            tenant = get_current_tenant()
+            if tenant:
+                qs = Book.objects.filter(tenant=tenant, isbn=isbn)
+                if self.instance:
+                    qs = qs.exclude(pk=self.instance.pk)
+                
+                if qs.exists():
+                    raise serializers.ValidationError({'isbn': 'Book with this ISBN already exists.'})
+        
+        return attrs
+    
+    def create(self, validated_data):
+        # Set available_copies equal to total_copies for new books
+        validated_data['available_copies'] = validated_data.get('total_copies', 1)
+        return super().create(validated_data)
+
+
+class BookIssueSerializer(serializers.ModelSerializer):
+    book_title = serializers.CharField(source='book.title', read_only=True)
+    book_author = serializers.CharField(source='book.author', read_only=True)
+    student_name = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = BookIssue
+        fields = '__all__'
+        read_only_fields = ['issue_id', 'issued_date']
+    
+    def validate(self, attrs):
+        """Run model validation"""
+        # Create a temporary instance for validation
+        instance = BookIssue(**attrs)
+        if self.instance:
+            instance.pk = self.instance.pk
+        
+        try:
+            instance.clean()
+        except DjangoValidationError as e:
+            raise serializers.ValidationError(e.message_dict)
+        
+        return attrs
+    
+    def get_student_name(self, obj):
+        return f"{obj.student.user.first_name} {obj.student.user.last_name}"
