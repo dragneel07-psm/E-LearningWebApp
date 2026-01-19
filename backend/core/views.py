@@ -2,13 +2,14 @@
 from rest_framework import viewsets, permissions, status
 from rest_framework.response import Response
 from .models import Tenant, AuditLog, GlobalSettings
-from .serializers import TenantSerializer, AuditLogSerializer, GlobalSettingsSerializer
+from .serializers import TenantSerializer, AuditLogSerializer, GlobalSettingsSerializer, TenantCreateSerializer
 from rest_framework.views import APIView
 from django.db import connection
 import shutil
 import random
 
 from .utils.tenant_db import provision_tenant_db, get_tenant_db_alias
+from .utils.tenant_users import create_tenant_admin
 from django.conf import settings
 
 class TenantCheckView(APIView):
@@ -25,63 +26,54 @@ class TenantCheckView(APIView):
 
 class TenantViewSet(viewsets.ModelViewSet):
     queryset = Tenant.objects.all()
-    serializer_class = TenantSerializer
+    # permission_classes = [permissions.IsAdminUser] # Should be SaaS Admin only
+
+    def get_serializer_class(self):
+        if self.action == 'create':
+            return TenantCreateSerializer
+        return TenantSerializer
 
     def perform_create(self, serializer):
         print("Creating Tenant...")
-        # 1. Validate / Generate Defaults
-        data = serializer.validated_data
-        subdomain = data.get('subdomain')
-        print(f"Subdomain: {subdomain}")
         
-        if not data.get('db_name'):
-            serializer.validated_data['db_name'] = f"school_{subdomain}.sqlite3"
-        if not data.get('db_alias'):
-            serializer.validated_data['db_alias'] = get_tenant_db_alias(subdomain)
-        if not data.get('domain_url'):
-            # TODO: Get base domain from GlobalSettings or ENV
-            serializer.validated_data['domain_url'] = f"{subdomain}.localhost"
+        # 1. Prepare Data
+        subdomain = serializer.validated_data.get('subdomain')
+        db_name = f"school_{subdomain}.sqlite3"
+        db_alias = get_tenant_db_alias(subdomain)
+        # TODO: Get base domain from settings
+        domain_url = f"{subdomain}.localhost"
 
-        print(f"Final Data: {serializer.validated_data}")
+        # Capture Admin Data BEFORE save (as serializer.create pops them)
+        admin_email = serializer.validated_data.get('admin_email')
+        admin_pass = serializer.validated_data.get('password')
+        first = serializer.validated_data.get('admin_first_name')
+        last = serializer.validated_data.get('admin_last_name')
 
-        # 2. Save Tenant
-        tenant = serializer.save()
+        # 2. Save Tenant (defaults)
+        serializer.save(db_name=db_name, db_alias=db_alias, domain_url=domain_url)
+        tenant = serializer.instance
         print(f"Tenant Saved: {tenant.tenant_id}")
 
         # 3. Provision Database
         try:
             print("Provisioning DB...")
             provision_tenant_db(tenant)
-            print("Provisioning Success via ViewSet")
             
-            # 4. Create School Admin User (if provided)
-            admin_email = self.request.data.get('admin_email')
-            admin_password = self.request.data.get('admin_password')
-            admin_username = self.request.data.get('admin_username', 'admin') # Default to 'admin'
-            
-            if admin_email and admin_password:
-                print(f"Creating School Admin: {admin_username} ({admin_email})")
-                from django.contrib.auth import get_user_model
-                User = get_user_model()
+            # 4. Create Admin (using captured data)
+            if admin_email and admin_pass:
+                create_tenant_admin(tenant, admin_email, admin_pass, first, last)
                 
-                # Create in the specific Tenant DB
-                User.objects.db_manager(tenant.db_alias).create_user(
-                    username=admin_username,
-                    email=admin_email,
-                    password=admin_password,
-                    role='admin', # School Admin
-                    tenant=tenant,
-                    is_staff=True, # Optional: if you want them to access school admin panel
-                    is_superuser=False
-                )
-                print("School Admin Created.")
+                # 5. Send Email (Mock)
+                print(f"--- WELCOME EMAIL ({admin_email}) ---\nURL: http://{domain_url}:3000\nUser: {admin_email}\nPass: {admin_pass}\n-------------------------------")
                 
         except Exception as e:
-            # If provisioning fails, we should probably rollback/delete tenant?
-            # For dev, just log.
             print(f"Provisioning failed: {e}")
-            import traceback
-            traceback.print_exc()
+            # Ensure we delete the tenant if provisioning fails to avoid zombie records
+            try:
+                tenant.delete()
+            except Exception as delete_error:
+                print(f"Failed to cleanup tenant after provisioning error: {delete_error}")
+            raise e
 
 class AuditLogViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = AuditLog.objects.all()
