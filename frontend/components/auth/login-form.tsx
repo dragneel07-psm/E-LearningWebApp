@@ -1,14 +1,25 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import * as z from 'zod';
+import { authService } from '@/services/auth';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { setToken } from '@/lib/auth';
-import { getTenantInfo } from '@/lib/tenant';
 import { Loader2, Lock, Mail, ArrowRight, Sparkles } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { toast } from 'sonner';
+import Link from 'next/link';
+
+const loginSchema = z.object({
+    email: z.string().email("Please enter a valid email address"),
+    password: z.string().min(1, "Password is required"),
+});
+
+type LoginFormData = z.infer<typeof loginSchema>;
 
 interface LoginFormProps {
     role?: 'admin' | 'teacher' | 'student' | 'saas_admin';
@@ -20,115 +31,51 @@ export function LoginForm({ role, title, subtitle }: LoginFormProps) {
     const router = useRouter();
     const searchParams = useSearchParams();
     const redirectPath = searchParams.get('redirect');
+    const [isLoading, setIsLoading] = useState(false);
 
-    const [username, setUsername] = useState('');
-    const [password, setPassword] = useState('');
-    const [loading, setLoading] = useState(false);
-    const [pageLoading, setPageLoading] = useState(true); // New state for initial check
-    const [error, setError] = useState('');
+    const { register, handleSubmit, formState: { errors } } = useForm<LoginFormData>({
+        resolver: zodResolver(loginSchema)
+    });
 
-    const tenant = getTenantInfo();
-
-    // Verify Tenant Existence on Mount
-    useEffect(() => {
-        const checkTenant = async () => {
-            if (typeof window === 'undefined') return;
-
-            const hostname = window.location.hostname;
-            const parts = hostname.split('.');
-            // If not localhost or saas domain
-            if (parts.length > 1 && parts[0] !== 'www' && hostname !== 'localhost') {
-                try {
-                    const API_BASE_URL = `http://${hostname}:8000/api`;
-                    // Call the new Tenant Check Endpoint
-                    const res = await fetch(`${API_BASE_URL}/core/tenant-check/`);
-                    if (!res.ok) {
-                        // Tenant Not Found or Error
-                        setError("School not found. Please check the URL.");
-                        setLoading(true); // Block interaction
-                    } else {
-                        // Valid Tenant
-                        await res.json();
-                        // Ideally set tenant name title here using data.name
-                    }
-
-                    setPageLoading(false);
-                } catch (e) {
-                    console.error("Tenant check failed", e);
-                    setError("Unable to connect to school server.");
-                    setPageLoading(false);
-                }
-            } else {
-                setPageLoading(false);
-            }
-        };
-        checkTenant();
-    }, []);
-
-    const handleLogin = async (e: React.FormEvent) => {
-        e.preventDefault();
-        setLoading(true);
-        setError('');
-
+    const onSubmit = async (data: LoginFormData) => {
+        setIsLoading(true);
         try {
-            // 1. Get Token
-            // 1. Get Token
-            // Use dynamic base URL for Multi-Tenancy
-            let API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api';
-            if (typeof window !== 'undefined') {
-                // Determine API URL based on current hostname to support subdomains
-                API_BASE_URL = `http://${window.location.hostname}:8000/api`;
-            }
+            await authService.login(data);
 
-            const res = await fetch(`${API_BASE_URL}/token/`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ username, password })
-            });
+            toast.success('Welcome back! Sign in successful.');
 
-            if (!res.ok) throw new Error('Invalid credentials');
-            const data = await res.json();
-            const token = data.access;
-            if (!token) throw new Error('No access token received');
-
-            setToken(token);
-            // localStorage.setItem('token', token); // Handled by setToken now? Check lib/auth but setToken does both usually. 
-            // In the previous file it was doing both. setToken does both in lib/auth.ts (I checked earlier).
-
-            // 2. Get User Role
-            const meRes = await fetch(`${API_BASE_URL}/users/accounts/me/`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-
-            if (meRes.ok) {
-                const user = await meRes.json();
-                const userRole = user.role || 'student';
-
-                // Optional: Enforce role if specified
-                if (role && userRole !== role && !(role === 'admin' && userRole === 'saas_admin')) {
-                    setError(`Access denied. You are not a ${role}.`);
-                    setLoading(false);
-                    return;
-                }
-
-                if (redirectPath) {
-                    router.push(redirectPath);
-                } else if (userRole === 'saas_admin') {
-                    router.push('/saas');
-                } else if (userRole === 'admin') {
-                    router.push('/admin');
-                } else {
-                    router.push(`/${userRole}`);
-                }
+            // Redirect Logic
+            if (redirectPath) {
+                router.push(redirectPath);
+            } else if (role) {
+                router.push(`/${role}`);
             } else {
-                router.push('/student');
+                router.push('/student'); // Default
             }
-
-        } catch (err) {
-            console.error(err);
-            setError('Invalid username or password');
+        } catch (err: any) {
+            console.error("Login Error:", err);
+            toast.error(err.response?.data?.detail || 'Invalid email or password. Please try again.');
         } finally {
-            setLoading(false);
+            setIsLoading(false);
+        }
+    };
+
+    // Dynamic gradient based on role
+    const getGradient = () => {
+        switch (role) {
+            case 'admin': return 'from-red-500 via-orange-500 to-yellow-500';
+            case 'teacher': return 'from-green-500 via-emerald-500 to-teal-500';
+            case 'student': return 'from-blue-500 via-cyan-500 to-sky-500';
+            default: return 'from-blue-500 via-purple-500 to-pink-500';
+        }
+    };
+
+    const getButtonClass = () => {
+        switch (role) {
+            case 'admin': return 'bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-500 hover:to-orange-500 shadow-orange-900/20';
+            case 'teacher': return 'bg-gradient-to-r from-green-600 to-teal-600 hover:from-green-500 hover:to-teal-500 shadow-green-900/20';
+            case 'student': return 'bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 shadow-blue-900/20';
+            default: return 'bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 shadow-blue-900/20';
         }
     };
 
@@ -141,18 +88,8 @@ export function LoginForm({ role, title, subtitle }: LoginFormProps) {
         >
             <div className="bg-black/40 backdrop-blur-2xl border border-white/10 rounded-3xl shadow-[0_0_40px_-10px_rgba(0,0,0,0.5)] overflow-hidden">
 
-                {/* Decorative header accent */}
-                {pageLoading && (
-                    <div className="absolute inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center rounded-3xl">
-                        <Loader2 className="h-8 w-8 text-white animate-spin" />
-                    </div>
-                )}
-
-                <div className={`absolute top-0 left-0 w-full h-1 opacity-80 bg-gradient-to-r ${role === 'admin' ? 'from-red-500 via-orange-500 to-yellow-500' :
-                    role === 'teacher' ? 'from-green-500 via-emerald-500 to-teal-500' :
-                        role === 'student' ? 'from-blue-500 via-cyan-500 to-sky-500' :
-                            'from-blue-500 via-purple-500 to-pink-500' // default
-                    }`} />
+                {/* Top Gradient Line */}
+                <div className={`absolute top-0 left-0 w-full h-1 opacity-80 bg-gradient-to-r ${getGradient()}`} />
 
                 <div className="p-8 sm:p-10 space-y-8">
                     <div className="space-y-2 text-center">
@@ -162,49 +99,42 @@ export function LoginForm({ role, title, subtitle }: LoginFormProps) {
                             transition={{ delay: 0.2 }}
                             className="inline-flex items-center justify-center p-3 bg-gradient-to-br from-white/10 to-white/5 rounded-2xl mb-4 ring-1 ring-white/10"
                         >
-                            <Sparkles className={`w-6 h-6 ${role === 'admin' ? 'text-orange-400' :
-                                role === 'teacher' ? 'text-green-400' :
-                                    role === 'student' ? 'text-blue-400' :
-                                        'text-blue-400'
-                                }`} />
+                            <Sparkles className={`w-6 h-6 ${role === 'admin' ? 'text-orange-400' : role === 'teacher' ? 'text-green-400' : role === 'student' ? 'text-blue-400' : 'text-purple-400'}`} />
                         </motion.div>
                         <h1 className="text-3xl font-bold tracking-tight text-white bg-clip-text text-transparent bg-gradient-to-br from-white to-white/70">
-                            {title || tenant?.name || 'Welcome Back'}
+                            {title || 'Welcome Back'}
                         </h1>
                         <p className="text-slate-400 text-sm tracking-wide">
-                            {subtitle || 'Sign in to continue to your dashboard'}
+                            {subtitle || 'Sign in to access your account'}
                         </p>
                     </div>
 
-                    <form onSubmit={handleLogin} className="space-y-6" autoComplete="off">
-                        {/* Hidden inputs to explicitly disable autofill in some browsers */}
-                        <input type="text" style={{ display: 'none' }} />
-                        <input type="password" style={{ display: 'none' }} />
-
+                    <form onSubmit={handleSubmit(onSubmit)} className="space-y-6" autoComplete="off">
                         <div className="space-y-4">
                             <div className="space-y-2">
-                                <Label htmlFor="username" className="text-slate-300 text-xs uppercase tracking-wider font-semibold ml-1">Username</Label>
+                                <Label htmlFor="email" className="text-slate-300 text-xs uppercase tracking-wider font-semibold ml-1">Email Address</Label>
                                 <div className="relative group">
                                     <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
                                         <Mail className="h-5 w-5 text-slate-500 group-focus-within:text-white transition-colors duration-300" />
                                     </div>
                                     <Input
-                                        id="username"
-                                        type="text"
-                                        name="username_new_123" // Randomized name
-                                        autoComplete="off"
-                                        placeholder="Enter your username"
-                                        value={username}
-                                        onChange={(e) => setUsername(e.target.value)}
-                                        required
-                                        className="pl-11 h-12 bg-white/5 border-white/10 text-white placeholder:text-slate-600 focus:bg-white/10 focus:border-white/20 focus:ring-4 focus:ring-white/5 transition-all duration-300 rounded-xl"
+                                        id="email"
+                                        type="email"
+                                        placeholder="name@example.com"
+                                        autoComplete="email"
+                                        className={`pl-11 h-12 bg-white/5 border-white/10 text-white placeholder:text-slate-600 focus:bg-white/10 focus:border-white/20 focus:ring-4 focus:ring-white/5 transition-all duration-300 rounded-xl ${errors.email ? 'border-red-500/50 focus:border-red-500/50' : ''}`}
+                                        {...register('email')}
                                     />
                                 </div>
+                                {errors.email && (
+                                    <p className="text-red-400 text-xs ml-1">{errors.email.message}</p>
+                                )}
                             </div>
+
                             <div className="space-y-2">
                                 <div className="flex items-center justify-between ml-1">
                                     <Label htmlFor="password" className="text-slate-300 text-xs uppercase tracking-wider font-semibold">Password</Label>
-                                    <a href="#" className="text-xs text-slate-400 hover:text-white transition-colors">Forgot password?</a>
+                                    <Link href="/forgot-password" className="text-xs text-slate-400 hover:text-white transition-colors">Forgot password?</Link>
                                 </div>
                                 <div className="relative group">
                                     <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
@@ -213,39 +143,24 @@ export function LoginForm({ role, title, subtitle }: LoginFormProps) {
                                     <Input
                                         id="password"
                                         type="password"
-                                        name="password_new_123" // Randomized name
-                                        autoComplete="new-password"
                                         placeholder="••••••••"
-                                        value={password}
-                                        onChange={(e) => setPassword(e.target.value)}
-                                        required
-                                        className="pl-11 h-12 bg-white/5 border-white/10 text-white placeholder:text-slate-600 focus:bg-white/10 focus:border-white/20 focus:ring-4 focus:ring-white/5 transition-all duration-300 rounded-xl"
+                                        autoComplete="current-password"
+                                        className={`pl-11 h-12 bg-white/5 border-white/10 text-white placeholder:text-slate-600 focus:bg-white/10 focus:border-white/20 focus:ring-4 focus:ring-white/5 transition-all duration-300 rounded-xl ${errors.password ? 'border-red-500/50 focus:border-red-500/50' : ''}`}
+                                        {...register('password')}
                                     />
                                 </div>
+                                {errors.password && (
+                                    <p className="text-red-400 text-xs ml-1">{errors.password.message}</p>
+                                )}
                             </div>
                         </div>
 
-                        {error && (
-                            <motion.div
-                                initial={{ opacity: 0, y: -10 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                className="bg-red-500/10 text-red-200 text-sm p-4 rounded-xl border border-red-500/20 flex items-center gap-3"
-                            >
-                                <div className="w-1.5 h-1.5 rounded-full bg-red-400 animate-pulse" />
-                                {error}
-                            </motion.div>
-                        )}
-
                         <Button
-                            className={`w-full h-12 text-white font-bold rounded-xl transition-all duration-300 shadow-lg hover:scale-[1.01] active:scale-[0.99] ${role === 'admin' ? 'bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-500 hover:to-orange-500 shadow-orange-900/20 hover:shadow-orange-900/40' :
-                                role === 'teacher' ? 'bg-gradient-to-r from-green-600 to-teal-600 hover:from-green-500 hover:to-teal-500 shadow-green-900/20 hover:shadow-green-900/40' :
-                                    role === 'student' ? 'bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 shadow-blue-900/20 hover:shadow-blue-900/40' :
-                                        'bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 shadow-blue-900/20 hover:shadow-blue-900/40'
-                                }`}
+                            className={`w-full h-12 text-white font-bold rounded-xl transition-all duration-300 shadow-lg hover:scale-[1.01] active:scale-[0.99] ${getButtonClass()}`}
                             type="submit"
-                            disabled={loading}
+                            disabled={isLoading}
                         >
-                            {loading ? (
+                            {isLoading ? (
                                 <Loader2 className="mr-2 h-5 w-5 animate-spin" />
                             ) : (
                                 <span className="flex items-center justify-center gap-2">
@@ -256,15 +171,17 @@ export function LoginForm({ role, title, subtitle }: LoginFormProps) {
                     </form>
                 </div>
 
-                <div className="py-5 px-8 bg-white/5 border-t border-white/5 flex items-center justify-center">
-                    <p className="text-xs text-slate-500 text-center">
-                        Protected by enterprise-grade security encryption
+                <div className="py-5 px-8 bg-white/5 border-t border-white/5 flex items-center justify-center space-x-1">
+                    <p className="text-xs text-slate-500">
+                        Don't have an account?
                     </p>
+                    <Link href="/register" className="text-xs text-white hover:underline font-medium">
+                        Create an account
+                    </Link>
                 </div>
             </div>
-
             <p className="text-center mt-8 text-slate-500 text-sm">
-                Need help? <a href="#" className="text-slate-400 hover:text-white transition-colors underline decoration-slate-600 hover:decoration-white underline-offset-4">Contact Support</a>
+                Protected by enterprise-grade security encryption
             </p>
         </motion.div>
     );
