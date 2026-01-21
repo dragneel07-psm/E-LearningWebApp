@@ -133,15 +133,46 @@ def setup_test_accounts():
         teacher_profile.save(using=tenant.db_alias)
         print(f"   - Created Teacher Profile")
 
-    # Student
-    student_user = create_account('student_test', 'student@demo.com', 'student123', 'student')
-    student_profile, created = Student.objects.using(tenant.db_alias).get_or_create(
-        user=student_user,
-        defaults={
-            'academic_class': academic_class,
-            'section': section
-        }
+    # Subjects
+    from academic.models import Subject, Chapter
+    
+    physics, _ = Subject.objects.using(tenant.db_alias).get_or_create(
+        name='Physics',
+        academic_class=academic_class,
+        defaults={'credits': 4.0, 'teacher': teacher_profile}
     )
+    if not _: # Update if exists
+        physics.teacher = teacher_profile
+        physics.save(using=tenant.db_alias)
+
+    maths, _ = Subject.objects.using(tenant.db_alias).get_or_create(
+        name='Mathematics',
+        academic_class=academic_class,
+        defaults={'credits': 5.0, 'teacher': teacher_profile}
+    )
+    if not _:
+        maths.teacher = teacher_profile
+        maths.save(using=tenant.db_alias)
+    
+    print(f"✅ Setup Subjects: Physics, Mathematics (Assigned to {teacher_user.username})")
+
+    # Chapters
+    ch1, _ = Chapter.objects.using(tenant.db_alias).get_or_create(
+        subject=physics,
+        title='Mechanics: Motion in One Dimension',
+        defaults={'order': 1}
+    )
+    ch2, _ = Chapter.objects.using(tenant.db_alias).get_or_create(
+        subject=physics,
+        title='Dynamics: Newton\'s Laws',
+        defaults={'order': 2}
+    )
+    print(f"✅ Setup Chapters for Physics")
+
+    # Associate teacher with classes (ManyToMany)
+    teacher_profile.assigned_classes.add(academic_class)
+    print(f"✅ Assigned Teacher to Class: {academic_class.name}")
+
     if created:
         print(f"   - Created Student Profile (Grade 10-A)")
 

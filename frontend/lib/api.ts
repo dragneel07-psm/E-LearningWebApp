@@ -132,6 +132,7 @@ export interface Parent {
 // ... existing Lesson ...
 
 export interface Assessment {
+    id: string;
     assessment_id: string;
     subject: number | string;
     title: string;
@@ -147,6 +148,7 @@ export interface Assessment {
 }
 
 export interface Result {
+    id: string;
     result_id: string;
     assessment: string;
     student: string;
@@ -163,6 +165,7 @@ export interface Result {
 }
 
 export interface Submission {
+    id: string;
     submission_id: string;
     assessment: string;
     student: string;
@@ -220,6 +223,7 @@ export interface LessonMaterial {
 }
 
 export interface Question {
+    id: string;
     question_id: string;
     assessment: string;
     text: string;
@@ -233,6 +237,7 @@ export interface Question {
 // (Moved definitions to top)
 
 export interface Subscription {
+    id: string;
     subscription_id: string;
     tenant: string;
     plan: string;
@@ -243,6 +248,7 @@ export interface Subscription {
 }
 
 export interface SubscriptionPlan {
+    id: string;
     plan_id: string;
     name: string;
     description?: string;
@@ -483,6 +489,10 @@ async function apiRequest<T>(
     if (token) {
         headers['Authorization'] = `Bearer ${token}`;
     }
+
+    // Add tenant context header
+    // This should match the tenant's subdomain in the database
+    headers['x-tenant-id'] = 'demo';
 
     try {
         const response = await fetch(`${API_BASE_URL}${endpoint}`, {

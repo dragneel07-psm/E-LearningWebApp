@@ -48,7 +48,7 @@ export default function ClassDetailPage() {
 
                 // Fetch Assessments
                 const allAssessments = await academicAPI.getAssessments();
-                const relevantAssessments = found ? allAssessments.filter(a => a.course === found.id.toString()) : allAssessments;
+                const relevantAssessments = found ? allAssessments.filter(a => a.subject.toString() === found.id.toString()) : allAssessments;
                 setAssignments(relevantAssessments);
 
                 // Fetch Results & Calculate Analytics
@@ -247,7 +247,7 @@ export default function ClassDetailPage() {
                             <CardContent>
                                 <div className="space-y-4">
                                     {assignments.map(assessment => (
-                                        <div key={assessment.assessment_id} className="flex items-center justify-between p-4 border rounded-lg hover:border-indigo-300 transition-colors bg-white">
+                                        <div key={assessment.id} className="flex items-center justify-between p-4 border rounded-lg hover:border-indigo-300 transition-colors bg-white">
                                             <div className="flex items-center gap-4">
                                                 <div className="h-10 w-10 bg-indigo-50 rounded-lg flex items-center justify-center text-indigo-600">
                                                     <ClipboardList className="h-5 w-5" />

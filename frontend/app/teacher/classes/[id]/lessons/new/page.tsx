@@ -10,17 +10,49 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ChevronLeft, Save, Sparkles, Upload, FileText, ListChecks, LayoutTemplate, BrainCircuit } from 'lucide-react';
 import Link from 'next/link';
+import { academicAPI, AcademicClass, Subject, Chapter } from '@/lib/api';
+import { useEffect } from 'react';
 
 export default function CreateLessonPage() {
     const params = useParams();
     const router = useRouter();
     const classId = params.id as string;
 
+    // Data State
+    const [academicClass, setAcademicClass] = useState<AcademicClass | null>(null);
+    const [subjects, setSubjects] = useState<Subject[]>([]);
+    const [chapters, setChapters] = useState<Chapter[]>([]);
+
     // Form State
+    const [selectedSubjectId, setSelectedSubjectId] = useState<string>('');
+    const [selectedChapterId, setSelectedChapterId] = useState<string>('');
     const [title, setTitle] = useState('');
     const [content, setContent] = useState('');
     const [loading, setLoading] = useState(false);
     const [isGenerating, setIsGenerating] = useState(false);
+
+    useEffect(() => {
+        if (!classId) return;
+        academicAPI.getClass(parseInt(classId)).then(cls => {
+            setAcademicClass(cls);
+            if (cls.subjects && cls.subjects.length > 0) {
+                setSubjects(cls.subjects);
+                setSelectedSubjectId(cls.subjects[0].id.toString());
+            }
+        }).catch(err => console.error("Failed to load class", err));
+    }, [classId]);
+
+    useEffect(() => {
+        if (!selectedSubjectId) return;
+        academicAPI.getChapters(parseInt(selectedSubjectId)).then(data => {
+            setChapters(data);
+            if (data.length > 0) {
+                setSelectedChapterId(data[0].id.toString());
+            } else {
+                setSelectedChapterId('');
+            }
+        }).catch(err => console.error("Failed to load chapters", err));
+    }, [selectedSubjectId]);
 
     const handleAIGenerate = (type: 'outline' | 'summary' | 'questions') => {
         setIsGenerating(true);
@@ -37,13 +69,28 @@ export default function CreateLessonPage() {
         }, 1500);
     };
 
-    const handleSave = () => {
+    const handleSave = async () => {
+        if (!title || !selectedChapterId) {
+            alert("Please provide a title and select a chapter.");
+            return;
+        }
         setLoading(true);
-        // Mock save
-        setTimeout(() => {
-            setLoading(false);
+        try {
+            await academicAPI.createLesson({
+                chapter: parseInt(selectedChapterId),
+                title: title,
+                content: content,
+                is_published: true, // Default to true for demo
+                order: 0
+            });
+            alert("Lesson created successfully!");
             router.push(`/teacher/classes/${classId}`);
-        }, 1000);
+        } catch (error) {
+            console.error("Failed to create lesson", error);
+            alert("Failed to create lesson.");
+        } finally {
+            setLoading(false);
+        }
     };
 
     return (
@@ -155,14 +202,31 @@ export default function CreateLessonPage() {
                         </CardHeader>
                         <CardContent className="space-y-4">
                             <div className="space-y-2">
-                                <Label className="text-xs text-muted-foreground">Syllabus Mapping</Label>
-                                <Select>
+                                <Label className="text-xs text-muted-foreground">Subject</Label>
+                                <Select value={selectedSubjectId} onValueChange={setSelectedSubjectId}>
                                     <SelectTrigger>
-                                        <SelectValue placeholder="Select Topic" />
+                                        <SelectValue placeholder="Select Subject" />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        <SelectItem value="unit1">Unit 1: Mechanics</SelectItem>
-                                        <SelectItem value="unit2">Unit 2: Thermodynamics</SelectItem>
+                                        {subjects.map(s => (
+                                            <SelectItem key={s.id} value={s.id.toString()}>{s.name}</SelectItem>
+                                        ))}
+                                        {subjects.length === 0 && <SelectItem value="none" disabled>No subjects found</SelectItem>}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+
+                            <div className="space-y-2">
+                                <Label className="text-xs text-muted-foreground">Syllabus Mapping (Chapter)</Label>
+                                <Select value={selectedChapterId} onValueChange={setSelectedChapterId}>
+                                    <SelectTrigger>
+                                        <SelectValue placeholder="Select Chapter" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {chapters.map(c => (
+                                            <SelectItem key={c.id} value={c.id.toString()}>{c.title}</SelectItem>
+                                        ))}
+                                        {chapters.length === 0 && <SelectItem value="none" disabled>No chapters found</SelectItem>}
                                     </SelectContent>
                                 </Select>
                             </div>

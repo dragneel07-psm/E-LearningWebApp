@@ -93,10 +93,12 @@ class StudentListSerializer(serializers.ModelSerializer):
     recent_grades = serializers.SerializerMethodField()
     upcoming_assessments = serializers.SerializerMethodField()
     
+    id = serializers.UUIDField(source='student_id', read_only=True)
+    
     class Meta:
         model = Student
         fields = [
-            'student_id', 'user', 'first_name', 'last_name', 'email',
+            'id', 'student_id', 'user', 'first_name', 'last_name', 'email',
             'academic_class', 'class_name', 
             'section', 'section_name', 'current_streak', 'focus_score',
             'attendance_percentage', 'recent_grades', 'upcoming_assessments'
@@ -143,6 +145,7 @@ class StudentListSerializer(serializers.ModelSerializer):
 class StudentDetailSerializer(serializers.ModelSerializer):
     """Detailed serializer for student profile"""
     user = StudentUserSerializer(read_only=True)
+    id = serializers.UUIDField(source='student_id', read_only=True)
     
     class Meta:
         model = Student
@@ -162,15 +165,17 @@ class StudentCreateSerializer(serializers.ModelSerializer):
     # Include user in response
     user = StudentUserSerializer(read_only=True)
     
+    id = serializers.UUIDField(source='student_id', read_only=True)
+
     class Meta:
         model = Student
         fields = [
-            'student_id', 'email', 'password', 'first_name', 'last_name',
+            'id', 'student_id', 'email', 'password', 'first_name', 'last_name',
             'phone_number', 'date_of_birth', 'academic_class', 'section',
             'learning_style', 'daily_study_goal', 'ai_explanation_level',
             'language_preference', 'user'
         ]
-        read_only_fields = ['student_id']
+        read_only_fields = ['id', 'student_id']
     
     def validate_email(self, value):
         """Ensure email is unique"""
@@ -252,7 +257,8 @@ class StudentUpdateSerializer(serializers.ModelSerializer):
 class ParentSerializer(serializers.ModelSerializer):
     user = StudentUserSerializer(read_only=True)
     students = StudentListSerializer(many=True, read_only=True)
+    id = serializers.UUIDField(source='parent_id', read_only=True)
     
     class Meta:
         model = Parent
-        fields = ['parent_id', 'user', 'students']
+        fields = ['id', 'parent_id', 'user', 'students']

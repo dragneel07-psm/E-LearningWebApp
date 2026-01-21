@@ -141,7 +141,7 @@ export default function GradingListPage() {
                                 <SelectContent>
                                     <SelectItem value="all">All Assignments</SelectItem>
                                     {assessments.map(a => (
-                                        <SelectItem key={a.assessment_id} value={a.assessment_id}>
+                                        <SelectItem key={a.id} value={a.id}>
                                             {a.title}
                                         </SelectItem>
                                     ))}
@@ -183,9 +183,9 @@ export default function GradingListPage() {
                                 </thead>
                                 <tbody className="divide-y">
                                     {filteredSubmissions.map((submission) => {
-                                        const assessment = assessments.find(a => a.assessment_id === submission.assessment);
+                                        const assessment = assessments.find(a => a.id === submission.assessment);
                                         return (
-                                            <tr key={submission.submission_id} className="hover:bg-slate-50">
+                                            <tr key={submission.id} className="hover:bg-slate-50">
                                                 <td className="px-4 py-3 font-medium">
                                                     Student {submission.student.slice(0, 8)}
                                                 </td>
@@ -218,7 +218,7 @@ export default function GradingListPage() {
                                                     )}
                                                 </td>
                                                 <td className="px-4 py-3">
-                                                    <Link href={`/teacher/grading/${submission.submission_id}`}>
+                                                    <Link href={`/teacher/grading/${submission.id}`}>
                                                         <Button size="sm" variant="outline">
                                                             {submission.is_graded ? 'Review' : 'Grade'}
                                                         </Button>

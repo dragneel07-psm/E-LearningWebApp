@@ -91,7 +91,7 @@ export default function ParentDashboard() {
             {/* Children Overview */}
             <div className="grid gap-6 md:grid-cols-2">
                 {parentData.students.map((child: Student) => (
-                    <Card key={child.student_id} className="border-t-4 border-t-primary">
+                    <Card key={child.id} className="border-t-4 border-t-primary">
                         <CardHeader>
                             <CardTitle className="flex justify-between items-center">
                                 <div className="flex items-center space-x-2">

@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Loader2, CheckCircle, XCircle, Clock, Save, ArrowLeft } from 'lucide-react';
-import { academicAPI, AcademicClass, Student, Attendance } from '@/lib/api';
+import { academicAPI, AcademicClass, Student, Attendance, Subject } from '@/lib/api';
 import Link from 'next/link';
 
 export default function AttendancePage() {
@@ -13,6 +13,8 @@ export default function AttendancePage() {
     const [submitting, setSubmitting] = useState(false);
     const [classes, setClasses] = useState<AcademicClass[]>([]);
     const [selectedClassId, setSelectedClassId] = useState<string>('');
+    const [subjects, setSubjects] = useState<Subject[]>([]);
+    const [selectedSubjectId, setSelectedSubjectId] = useState<string>('');
     const [students, setStudents] = useState<Student[]>([]);
     const [attendanceData, setAttendanceData] = useState<Record<string, 'present' | 'absent' | 'late'>>({});
     const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
@@ -38,6 +40,17 @@ export default function AttendancePage() {
     useEffect(() => {
         if (!selectedClassId) return;
 
+        // Find selected class and set its subjects
+        const cls = classes.find(c => c.id.toString() === selectedClassId);
+        if (cls && cls.subjects) {
+            setSubjects(cls.subjects);
+            if (cls.subjects.length > 0) {
+                setSelectedSubjectId(cls.subjects[0].id.toString());
+            } else {
+                setSelectedSubjectId('');
+            }
+        }
+
         async function loadStudents() {
             setLoading(true);
             try {
@@ -59,7 +72,7 @@ export default function AttendancePage() {
             }
         }
         loadStudents();
-    }, [selectedClassId]);
+    }, [selectedClassId, classes]);
 
     const handleStatusChange = (studentId: string, status: 'present' | 'absent' | 'late') => {
         setAttendanceData(prev => ({
@@ -71,14 +84,16 @@ export default function AttendancePage() {
     const submitAttendance = async () => {
         setSubmitting(true);
         try {
-            // We would typically loop and send bulk or individual requests
-            // For now, let's assume we send individual requests or a bulk endpoint exists
-            // Since our api.ts support single create, we'll iterate (not efficient but functional for MVP)
+            if (!selectedSubjectId) {
+                alert('Please select a subject');
+                setSubmitting(false);
+                return;
+            }
 
             const promises = students.map(student => {
-                const payload: Partial<Attendance> & { academic_class: string } = {
+                const payload = {
                     student: student.id,
-                    academic_class: selectedClassId,
+                    subject: parseInt(selectedSubjectId),
                     date: date,
                     status: attendanceData[student.id],
                     remarks: ''
@@ -133,6 +148,19 @@ export default function AttendancePage() {
                                         {c.name}
                                     </SelectItem>
                                 ))}
+                            </SelectContent>
+                        </Select>
+                        <Select value={selectedSubjectId} onValueChange={setSelectedSubjectId}>
+                            <SelectTrigger className="w-[180px]">
+                                <SelectValue placeholder="Select Subject" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {subjects.map(s => (
+                                    <SelectItem key={s.id} value={s.id.toString()}>
+                                        {s.name}
+                                    </SelectItem>
+                                ))}
+                                {subjects.length === 0 && <SelectItem value="none" disabled>No subjects</SelectItem>}
                             </SelectContent>
                         </Select>
                     </div>
