@@ -7,6 +7,40 @@ from academic.models.attendance import Attendance
 from academic.models.subject import Subject
 
 class PredictiveAnalyticsService:
+    def get_teacher_dashboard_data(self, class_ids):
+        """
+        Generate predictive analytics for a list of academic class IDs.
+        """
+        try:
+            if not class_ids:
+                return {
+                    "at_risk_count": 0,
+                    "at_risk_students": [],
+                    "performance_trends": [],
+                    "topic_mastery": [],
+                    "ai_insights": ["You haven't been assigned any classes yet."]
+                }
+
+            # 1. Identify Students at Risk
+            risk_students = self._identify_at_risk_students(class_ids)
+            
+            # 2. Performance Trends (Last 4 weeks)
+            trends = self._calculate_performance_trends(class_ids)
+            
+            # 3. Topic Mastery Predictions
+            topic_mastery = self._calculate_topic_mastery(class_ids)
+
+            return {
+                "at_risk_count": len(risk_students),
+                "at_risk_students": risk_students[:5], # Top 5 highest risk
+                "performance_trends": trends,
+                "topic_mastery": topic_mastery,
+                "ai_insights": self._generate_ai_insights(risk_students, topic_mastery)
+            }
+        except Exception as e:
+            print(f"Predictive Analytics Error: {e}")
+            return {"error": str(e)}
+
     def get_teacher_analytics(self, teacher_user):
         """
         Generate predictive analytics for a teacher's assigned classes.

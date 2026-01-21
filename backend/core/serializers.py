@@ -4,9 +4,9 @@ from .models import Tenant, AuditLog, GlobalSettings
 import re
 
 class TenantSerializer(serializers.ModelSerializer):
-    plan_name = serializers.CharField(source='subscription.plan.name', read_only=True, default="No Plan")
-    subscription_status = serializers.CharField(source='subscription.status', read_only=True, default="Inactive")
-    billing_cycle = serializers.CharField(source='subscription.billing_cycle', read_only=True, default="N/A")
+    plan_name = serializers.SerializerMethodField()
+    subscription_status = serializers.SerializerMethodField()
+    billing_cycle = serializers.SerializerMethodField()
     student_count = serializers.SerializerMethodField()
     teacher_count = serializers.SerializerMethodField()
     ai_usage = serializers.SerializerMethodField()
@@ -20,6 +20,24 @@ class TenantSerializer(serializers.ModelSerializer):
             'domain_url': {'required': False, 'allow_null': True},
         }
     
+    def get_plan_name(self, obj):
+        try:
+            return obj.subscription.plan.name if obj.subscription and obj.subscription.plan else "No Plan"
+        except:
+            return "No Plan"
+
+    def get_subscription_status(self, obj):
+        try:
+            return obj.subscription.status if obj.subscription else "Inactive"
+        except:
+            return "Inactive"
+
+    def get_billing_cycle(self, obj):
+        try:
+            return obj.subscription.billing_cycle if obj.subscription else "N/A"
+        except:
+            return "N/A"
+
     def get_student_count(self, obj):
         # This count via related set might fail if UserAccount is not on 'default' DB 
         # but Tenant is on 'default'. 
