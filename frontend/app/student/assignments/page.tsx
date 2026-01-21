@@ -26,8 +26,9 @@ export default function AssignmentsDashboard() {
             setLoading(true);
             // Fetch students to find the current student ID (temporary workaround if no 'me' endpoint for student)
             // In a real app, use a dedicated endpoint like /api/student/me/assignments
-            const students = await academicAPI.getStudents();
-            const studentId = students.length > 0 ? students[0].student_id : null;
+            // Fetch current student profile directly using "me" endpoint
+            const student = await academicAPI.getMyStudent();
+            const studentId = student ? student.student_id : null;
 
             if (!studentId) {
                 console.error("No student profile found for current user");
@@ -67,24 +68,24 @@ export default function AssignmentsDashboard() {
         return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
     };
 
-    const getStatus = (assignmentId: number) => {
+    const getStatus = (assignmentId: string) => {
         const sub = submissions.find(s => s.assessment === assignmentId);
         if (!sub) return 'pending';
         return sub.status; // 'submitted', 'graded', 'draft'
     };
 
     const pendingAssignments = assignments.filter(a => {
-        const status = getStatus(a.assessment_id || 0);
+        const status = getStatus(a.assessment_id || "");
         return status === 'pending' || status === 'draft' || !status;
     });
 
     const submittedAssignments = assignments.filter(a => {
-        const status = getStatus(a.assessment_id || 0);
+        const status = getStatus(a.assessment_id || "");
         return status === 'submitted';
     });
 
     const gradedAssignments = assignments.filter(a => {
-        const status = getStatus(a.assessment_id || 0);
+        const status = getStatus(a.assessment_id || "");
         return status === 'graded';
     });
 
@@ -140,10 +141,10 @@ export default function AssignmentsDashboard() {
                         )}
                     </div>
 
-                    {status === 'graded' && sub?.grade && (
+                    {status === 'graded' && sub?.result?.score !== undefined && (
                         <div className="flex items-center gap-2 text-sm mt-2 p-2 bg-green-50 rounded-md border border-green-100">
                             <CheckCircle className="h-4 w-4 text-green-600" />
-                            <span className="font-semibold text-green-800">Score: {sub.grade} / {assignment.total_marks}</span>
+                            <span className="font-semibold text-green-800">Score: {sub.result.score} / {assignment.total_marks}</span>
                         </div>
                     )}
                 </CardContent>

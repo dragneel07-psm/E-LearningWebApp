@@ -1,11 +1,11 @@
-from .academic_class import AcademicClass
+from .academic_year import AcademicYear
+from .class_section import AcademicClass, Section
+from .subject import Subject
 from .student import Student
 from .teacher import Teacher
-from .attendance import Attendance
-from .timetable import Timetable
-from .notice import Notice
 from .parent import Parent
-from .course import Course, Lesson
+from .communications import Notice
+from .lesson import Chapter, Lesson, LessonMaterial, LessonProgress
+from .attendance import Attendance
 from .assessment import Assessment, Result
-from .submission import Submission
-from .question import Question
+from .timetable import Timetable

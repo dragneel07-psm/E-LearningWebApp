@@ -1,5 +1,5 @@
 from django.db import models
-from .academic_class import AcademicClass
+from .class_section import AcademicClass
 from .teacher import Teacher
 
 class Timetable(models.Model):
