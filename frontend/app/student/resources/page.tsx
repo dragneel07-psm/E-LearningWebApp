@@ -8,7 +8,9 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { ArrowLeft, ExternalLink, BookOpen, Calculator, Beaker, Languages, Globe, Monitor, HeartPulse, PieChart } from 'lucide-react';
 import Link from 'next/link';
 
-export default function ResourcesPage() {
+import { Suspense } from 'react';
+
+function ResourcesContent() {
     const searchParams = useSearchParams();
     const gradeParam = searchParams.get('grade') || '10';
     const grade = parseInt(gradeParam);
@@ -132,5 +134,17 @@ export default function ResourcesPage() {
                 </div>
             </main>
         </div>
+    );
+}
+
+export default function ResourcesPage() {
+    return (
+        <Suspense fallback={
+            <div className="flex h-screen items-center justify-center">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
+            </div>
+        }>
+            <ResourcesContent />
+        </Suspense>
     );
 }

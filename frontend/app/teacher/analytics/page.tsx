@@ -1,173 +1,217 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { BrainCircuit, TrendingUp, AlertCircle } from 'lucide-react';
+import { BrainCircuit, TrendingUp, AlertCircle, Loader2, UserX } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Bar, BarChart, ResponsiveContainer, XAxis, YAxis, Tooltip, CartesianGrid, Line, LineChart, Legend, Cell } from 'recharts';
-
-// Mock Analytics Data
-const performanceData = [
-    { week: 'Week 1', avgScore: 75, classAvg: 70 },
-    { week: 'Week 2', avgScore: 78, classAvg: 72 },
-    { week: 'Week 3', avgScore: 82, classAvg: 74 },
-    { week: 'Week 4', avgScore: 80, classAvg: 75 },
-    { week: 'Week 5', avgScore: 85, classAvg: 78 },
-];
-
-const topicDifficultyData = [
-    { topic: 'Mechanics', score: 85 },
-    { topic: 'Thermodynamics', score: 65 },
-    { topic: 'Optics', score: 72 },
-    { topic: 'Electromagnetism', score: 58 },
-    { topic: 'Modern Physics', score: 80 },
-];
-
-const commonMistakes = [
-    { id: 1, topic: 'Thermodynamics', issue: 'Confusing Heat and Temperature', frequency: '45% of students' },
-    { id: 2, topic: 'Electromagnetism', issue: 'Right-hand rule application', frequency: '38% of students' },
-    { id: 3, topic: 'Mechanics', issue: 'Forgetting vector direction', frequency: '30% of students' },
-];
+import { aiAPI } from '@/lib/api';
 
 export default function AnalyticsPage() {
+    const [loading, setLoading] = useState(true);
+    const [data, setData] = useState<any>(null);
     const [timeRange, setTimeRange] = useState('month');
 
+    useEffect(() => {
+        loadAnalytics();
+    }, []);
+
+    const loadAnalytics = async () => {
+        try {
+            setLoading(true);
+            const result = await aiAPI.getTeacherAnalytics();
+            setData(result);
+        } catch (error) {
+            console.error('Failed to load teacher analytics:', error);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    if (loading) return (
+        <div className="flex flex-col items-center justify-center min-h-[60vh] text-slate-500">
+            <Loader2 className="h-8 w-8 animate-spin mb-4" />
+            <p className="font-medium">Synthesizing predictive insights...</p>
+        </div>
+    );
+
+    if (!data || data.error) return (
+        <div className="p-12 text-center text-slate-500 bg-white rounded-2xl border border-dashed border-slate-200 m-8">
+            <AlertCircle className="h-12 w-12 mx-auto mb-4 opacity-20" />
+            <h3 className="text-xl font-bold text-slate-900">Analytics Unavailable</h3>
+            <p className="mt-2 text-slate-500">{data?.error || "We couldn't load your analytics. Please ensure you have assigned classes."}</p>
+        </div>
+    );
+
     return (
-        <div className="p-6 md:p-8 min-h-screen bg-gray-50/50 space-y-8">
-            <div className="flex justify-between items-center">
+        <div className="p-6 md:p-8 min-h-screen space-y-8 animate-in fade-in duration-500">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                 <div>
-                    <h1 className="text-3xl font-bold text-gray-900">Exams & Analytics</h1>
-                    <p className="text-muted-foreground mt-1">Deep dive into class performance and learning trends.</p>
+                    <h1 className="text-3xl font-black text-slate-900 tracking-tight">Predictive Analytics</h1>
+                    <p className="text-slate-500 mt-1">Data-driven performance projections and student risk assessment.</p>
                 </div>
                 <div className="flex gap-2">
-                    <Select defaultValue="all">
-                        <SelectTrigger className="w-[150px]"><SelectValue placeholder="Select Class" /></SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="all">All Classes</SelectItem>
-                            <SelectItem value="10a">Class 10-A</SelectItem>
-                            <SelectItem value="9b">Class 9-B</SelectItem>
-                        </SelectContent>
-                    </Select>
                     <Select value={timeRange} onValueChange={setTimeRange}>
-                        <SelectTrigger className="w-[150px]"><SelectValue /></SelectTrigger>
+                        <SelectTrigger className="w-[150px] bg-white"><SelectValue /></SelectTrigger>
                         <SelectContent>
                             <SelectItem value="month">Last Month</SelectItem>
                             <SelectItem value="term">This Term</SelectItem>
-                            <SelectItem value="year">Use Year</SelectItem>
                         </SelectContent>
                     </Select>
+                    <Button onClick={loadAnalytics} variant="outline" size="icon" className="bg-white">
+                        <TrendingUp className="h-4 w-4" />
+                    </Button>
                 </div>
             </div>
 
-            {/* AI Insight Box (Top Priority) */}
-            <Card className="border-indigo-100 bg-indigo-50/40 shadow-sm relative overflow-hidden">
-                <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-100 rounded-bl-full opacity-50 -mr-16 -mt-16"></div>
+            {/* AI Insight Box */}
+            <Card className="border-none bg-gradient-to-br from-indigo-50 via-white to-purple-50 shadow-sm relative overflow-hidden ring-1 ring-indigo-100">
+                <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-100/30 rounded-full blur-3xl -mr-32 -mt-32"></div>
                 <CardHeader className="pb-2">
                     <CardTitle className="text-lg font-bold text-indigo-900 flex items-center gap-2">
                         <BrainCircuit className="h-5 w-5 text-indigo-600" />
-                        AI Insights & Suggestions
+                        AI Analytics Engine
                     </CardTitle>
                 </CardHeader>
                 <CardContent>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div className="space-y-3">
-                            <h4 className="text-sm font-semibold text-indigo-800">Teaching Improvements</h4>
-                            <div className="p-3 bg-white rounded-lg border border-indigo-100 text-sm text-slate-700 shadow-sm">
-                                <p className="leading-relaxed">
-                                    Students are struggling consistently with <strong>Thermodynamics</strong> concepts. Consider dedicating an extra lab session to heat transfer experiments.
-                                </p>
+                        <div className="space-y-4">
+                            <h4 className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest">Key Insights</h4>
+                            <div className="space-y-3">
+                                {data.ai_insights.map((insight: string, idx: number) => (
+                                    <div key={idx} className="p-4 bg-white/60 backdrop-blur-sm rounded-2xl border border-indigo-100 text-sm text-slate-700 shadow-sm flex gap-3">
+                                        <div className="h-2 w-2 rounded-full bg-indigo-500 mt-1.5 shrink-0" />
+                                        <p className="leading-relaxed">{insight}</p>
+                                    </div>
+                                ))}
                             </div>
                         </div>
-                        <div className="space-y-3">
-                            <h4 className="text-sm font-semibold text-indigo-800">Recommended Revision</h4>
-                            <div className="p-3 bg-white rounded-lg border border-indigo-100 text-sm text-slate-700 shadow-sm">
-                                <ul className="list-disc list-inside space-y-1">
-                                    <li>Right-hand rule (Electromagnetism)</li>
-                                    <li>Vector addition principles</li>
-                                </ul>
+                        <div className="space-y-4">
+                            <h4 className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest">At-Risk Summary</h4>
+                            <div className="p-4 bg-white/60 backdrop-blur-sm rounded-2xl border border-indigo-100 shadow-sm">
+                                <div className="flex items-center justify-between mb-4">
+                                    <h5 className="font-bold text-slate-900">{data.at_risk_count} Students At-Risk</h5>
+                                    <Badge className={`${data.at_risk_count > 0 ? 'bg-orange-100 text-orange-700' : 'bg-emerald-100 text-emerald-700'} border-none`}>
+                                        {data.at_risk_count > 0 ? 'Action Recommended' : 'Low Priority'}
+                                    </Badge>
+                                </div>
+                                <div className="space-y-2">
+                                    {data.at_risk_students.map((student: any) => (
+                                        <div key={student.id} className="flex items-center justify-between text-xs p-2 rounded-lg bg-white/40 border border-slate-50">
+                                            <span className="font-medium text-slate-700">{student.name}</span>
+                                            <span className={`font-bold ${student.risk_level === 'High' ? 'text-red-500' : 'text-orange-500'}`}>{student.risk_level} Risk</span>
+                                        </div>
+                                    ))}
+                                    {data.at_risk_students.length === 0 && (
+                                        <p className="text-slate-400 italic text-center text-xs py-4">No high-risk students identified.</p>
+                                    )}
+                                </div>
                             </div>
                         </div>
-                    </div>
-                    <div className="mt-4 flex justify-end">
-                        <Button size="sm" className="bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm">Generate Lesson Plan for Weak Topics</Button>
                     </div>
                 </CardContent>
             </Card>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                {/* Chart 1: Average Score Trend */}
-                <Card className="lg:col-span-2 shadow-sm">
-                    <CardHeader>
-                        <CardTitle className="text-base font-semibold text-gray-800 flex items-center justify-between">
-                            <span>Average Score Trend</span>
-                            <span className="text-xs font-normal text-green-600 flex items-center bg-green-50 px-2 py-1 rounded-full">
-                                <TrendingUp className="h-3 w-3 mr-1" /> +5% vs last month
-                            </span>
+                {/* Performance Trend */}
+                <Card className="lg:col-span-2 border-slate-200 shadow-sm bg-white overflow-hidden">
+                    <CardHeader className="bg-slate-50/50 border-b border-slate-100">
+                        <CardTitle className="text-base font-bold text-slate-800 flex items-center justify-between">
+                            <span>Mastery Projection</span>
+                            <Badge variant="outline" className="text-xs bg-white">Trend Analysis</Badge>
                         </CardTitle>
-                        <CardDescription>Comparison of class average vs overall standard</CardDescription>
+                        <CardDescription>Predicted class performance based on historical trends</CardDescription>
                     </CardHeader>
-                    <CardContent className="h-[300px]">
+                    <CardContent className="h-[350px] pt-8">
                         <ResponsiveContainer width="100%" height="100%">
-                            <LineChart data={performanceData}>
-                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
-                                <XAxis dataKey="week" axisLine={false} tickLine={false} tick={{ fill: '#64748B', fontSize: 12 }} dy={10} />
-                                <YAxis axisLine={false} tickLine={false} tick={{ fill: '#64748B', fontSize: 12 }} />
+                            <LineChart data={data.performance_trends}>
+                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                                <XAxis dataKey="week" axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 12 }} dy={10} />
+                                <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 12 }} />
                                 <Tooltip
-                                    contentStyle={{ backgroundColor: '#fff', borderRadius: '8px', border: '1px solid #E2E8F0' }}
+                                    contentStyle={{ backgroundColor: '#fff', borderRadius: '16px', border: '1px solid #f1f5f9', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
                                 />
-                                <Legend />
-                                <Line type="monotone" dataKey="avgScore" name="Class Average" stroke="#4F46E5" strokeWidth={3} dot={{ r: 4, fill: '#4F46E5', strokeWidth: 2, stroke: '#fff' }} />
-                                <Line type="monotone" dataKey="classAvg" name="Grade Standard" stroke="#94A3B8" strokeWidth={2} strokeDasharray="5 5" dot={false} />
+                                <Legend wrapperStyle={{ paddingTop: '20px' }} />
+                                <Line
+                                    type="monotone"
+                                    dataKey="avgScore"
+                                    name="Current Score"
+                                    stroke="#4f46e5"
+                                    strokeWidth={4}
+                                    dot={{ r: 6, fill: '#4f46e5', strokeWidth: 3, stroke: '#fff' }}
+                                    activeDot={{ r: 8, strokeWidth: 0 }}
+                                />
+                                <Line
+                                    type="monotone"
+                                    dataKey="classAvg"
+                                    name="Benchmark"
+                                    stroke="#cbd5e1"
+                                    strokeWidth={2}
+                                    strokeDasharray="5 5"
+                                    dot={false}
+                                />
                             </LineChart>
                         </ResponsiveContainer>
                     </CardContent>
                 </Card>
 
-                {/* List: Common Mistakes */}
-                <Card className="shadow-sm">
-                    <CardHeader>
-                        <CardTitle className="text-base font-semibold text-gray-800">Common Mistakes</CardTitle>
-                        <CardDescription>Top issues identified in recent exams</CardDescription>
+                {/* List: At-Risk Detail */}
+                <Card className="border-slate-200 shadow-sm bg-white overflow-hidden flex flex-col">
+                    <CardHeader className="bg-slate-50/50 border-b border-slate-100">
+                        <CardTitle className="text-base font-bold text-slate-800">Risk Intervention</CardTitle>
+                        <CardDescription>Early signs of academic withdrawal</CardDescription>
                     </CardHeader>
-                    <CardContent>
-                        <div className="space-y-4">
-                            {commonMistakes.map(mistake => (
-                                <div key={mistake.id} className="flex gap-3 items-start p-3 rounded-lg hover:bg-slate-50 transition-colors border border-transparent hover:border-slate-100">
-                                    <div className="mt-1">
-                                        <AlertCircle className="h-5 w-5 text-orange-500" />
-                                    </div>
-                                    <div>
-                                        <h5 className="font-medium text-gray-900 text-sm">{mistake.issue}</h5>
-                                        <p className="text-xs text-muted-foreground mt-0.5">{mistake.topic}</p>
-                                        <Badge variant="secondary" className="mt-2 text-[10px] bg-slate-100 text-slate-600">
-                                            {mistake.frequency}
+                    <CardContent className="flex-1 overflow-y-auto p-0">
+                        <div className="divide-y divide-slate-100">
+                            {data.at_risk_students.map((student: any) => (
+                                <div key={student.id} className="p-4 hover:bg-slate-50/50 transition-colors">
+                                    <div className="flex justify-between items-start mb-2">
+                                        <h5 className="font-bold text-slate-900 text-sm">{student.name}</h5>
+                                        <Badge className={`${student.risk_level === 'High' ? 'bg-red-50 text-red-600' : 'bg-orange-50 text-orange-600'} border-none text-[10px]`}>
+                                            {student.risk_level}
                                         </Badge>
                                     </div>
+                                    <div className="space-y-1">
+                                        {student.reasons.map((reason: string, i: number) => (
+                                            <div key={i} className="flex items-center gap-2 text-[11px] text-slate-500">
+                                                <AlertCircle className="h-3 w-3 text-slate-300" />
+                                                <span>{reason}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                    <Button size="sm" variant="ghost" className="w-full mt-3 h-8 text-[11px] text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 border border-indigo-100 rounded-lg">
+                                        Schedule Mentoring
+                                    </Button>
                                 </div>
                             ))}
+                            {data.at_risk_students.length === 0 && (
+                                <div className="p-12 text-center text-slate-400 mt-12">
+                                    <UserX className="h-10 w-10 mx-auto mb-3 opacity-20" />
+                                    <p className="text-sm">No interventions needed</p>
+                                </div>
+                            )}
                         </div>
-                        <Button variant="ghost" className="w-full mt-4 text-xs text-indigo-600">View All Analysis</Button>
                     </CardContent>
                 </Card>
 
-                {/* Chart 2: Topic Difficulty */}
-                <Card className="lg:col-span-3 shadow-sm">
-                    <CardHeader>
-                        <CardTitle className="text-base font-semibold text-gray-800">Topic Proficiency</CardTitle>
-                        <CardDescription>Average mastery levels by major topic</CardDescription>
+                {/* Chart 2: Topic Proficiency */}
+                <Card className="lg:col-span-3 border-slate-200 shadow-sm bg-white">
+                    <CardHeader className="bg-slate-50/50 border-b border-slate-100">
+                        <CardTitle className="text-base font-bold text-slate-800">Curriculum Mastery Map</CardTitle>
+                        <CardDescription>Aggregate performance by subject and topic areas</CardDescription>
                     </CardHeader>
-                    <CardContent className="h-[250px]">
+                    <CardContent className="h-[300px] pt-8">
                         <ResponsiveContainer width="100%" height="100%">
-                            <BarChart data={topicDifficultyData} layout="vertical" barSize={20}>
-                                <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} stroke="#E2E8F0" />
+                            <BarChart data={data.topic_mastery} layout="vertical" barSize={32}>
+                                <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} stroke="#f1f5f9" />
                                 <XAxis type="number" domain={[0, 100]} hide />
-                                <YAxis dataKey="topic" type="category" width={120} tick={{ fill: '#475569', fontSize: 13, fontWeight: 500 }} axisLine={false} tickLine={false} />
-                                <Tooltip cursor={{ fill: 'transparent' }} contentStyle={{ borderRadius: '8px' }} />
-                                <Bar dataKey="score" name="Mastery Score" radius={[0, 4, 4, 0]}>
-                                    {topicDifficultyData.map((entry, index) => (
-                                        <Cell key={`cell-${index}`} fill={entry.score < 60 ? '#EF4444' : entry.score < 75 ? '#F59E0B' : '#10B981'} />
+                                <YAxis dataKey="topic" type="category" width={140} tick={{ fill: '#475569', fontSize: 13, fontWeight: 600 }} axisLine={false} tickLine={false} />
+                                <Tooltip cursor={{ fill: '#f8fafc' }} contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }} />
+                                <Bar dataKey="score" name="Mastery Level" radius={[0, 8, 8, 0]}>
+                                    {data.topic_mastery.map((entry: any, index: number) => (
+                                        <Cell key={`cell-${index}`} fill={entry.score < 60 ? '#f43f5e' : entry.score < 75 ? '#f59e0b' : '#10b981'} />
                                     ))}
                                 </Bar>
                             </BarChart>

@@ -1,6 +1,6 @@
 from django.db import models
 import uuid as uuid_lib
-from .course import Course
+from .subject import Subject
 from .student import Student
 
 class Assessment(models.Model):
@@ -20,7 +20,7 @@ class Assessment(models.Model):
     ]
 
     assessment_id = models.UUIDField(primary_key=True, default=uuid_lib.uuid4, editable=False)
-    course = models.ForeignKey(Course, on_delete=models.CASCADE, related_name='assessments')
+    subject = models.ForeignKey(Subject, on_delete=models.CASCADE, related_name='assessments')
     title = models.CharField(max_length=255, default="Assessment")
     description = models.TextField(blank=True, null=True)
     type = models.CharField(max_length=50, choices=TYPES, default='quiz')

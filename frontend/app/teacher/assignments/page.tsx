@@ -10,7 +10,7 @@ import {
     ChevronRight, MoreVertical, CheckCircle
 } from 'lucide-react';
 import Link from 'next/link';
-import { academicAPI, Assessment, Course } from '@/lib/api';
+import { academicAPI, Assessment, Subject } from '@/lib/api';
 import {
     DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
@@ -18,7 +18,7 @@ import {
 export default function TeacherAssignmentsPage() {
     const [loading, setLoading] = useState(true);
     const [assessments, setAssessments] = useState<Assessment[]>([]);
-    const [courses, setCourses] = useState<Course[]>([]);
+    const [courses, setCourses] = useState<Subject[]>([]);
     const [searchTerm, setSearchTerm] = useState('');
 
     useEffect(() => {
@@ -30,7 +30,7 @@ export default function TeacherAssignmentsPage() {
             setLoading(true);
             const [assessmentsData, coursesData] = await Promise.all([
                 academicAPI.getAssessments().catch(() => []),
-                academicAPI.getCourses().catch(() => [])
+                academicAPI.getSubjects().catch(() => [])
             ]);
             setAssessments(assessmentsData);
             setCourses(coursesData);
@@ -41,9 +41,9 @@ export default function TeacherAssignmentsPage() {
         }
     };
 
-    const getCourseName = (id: string) => {
-        const c = courses.find(c => c.course_id === id);
-        return c ? c.subject : 'Unknown Course';
+    const getCourseName = (id: number | string) => {
+        const c = courses.find(c => c.id.toString() === id.toString());
+        return c ? c.name : 'Unknown Course';
     };
 
     const getStatusColor = (dueDate?: string) => {
@@ -140,7 +140,7 @@ export default function TeacherAssignmentsPage() {
                                     {assessment.title}
                                 </CardTitle>
                                 <CardDescription className="line-clamp-1 flex items-center gap-1">
-                                    <span className="font-medium text-indigo-600">{getCourseName(assessment.course)}</span>
+                                    <span className="font-medium text-indigo-600">{getCourseName(assessment.subject)}</span>
                                     <span>•</span>
                                     <span className="capitalize">{assessment.type}</span>
                                 </CardDescription>

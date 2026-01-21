@@ -32,6 +32,13 @@ class GroupSerializer(serializers.ModelSerializer):
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
 class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # SimpleJWT expects 'username' by default. If we want to support 'email' 
+        # as the field name from frontend, we can map it here.
+        if 'email' in self.initial_data and 'username' not in self.initial_data:
+            self.initial_data['username'] = self.initial_data['email']
+
     @classmethod
     def get_token(cls, user):
         token = super().get_token(user)

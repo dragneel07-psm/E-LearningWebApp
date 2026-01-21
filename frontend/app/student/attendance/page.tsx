@@ -5,7 +5,7 @@ import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Calendar } from '@/components/ui/calendar';
 import { CheckCircle, XCircle, Clock, Loader2 } from 'lucide-react';
-import { academicAPI, Attendance } from '@/lib/api/saas';
+import { academicAPI, Attendance } from '@/lib/api';
 import { toast } from 'sonner';
 
 export default function AttendancePage() {

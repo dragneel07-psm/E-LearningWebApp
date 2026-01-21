@@ -9,12 +9,12 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ArrowLeft, Loader2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { academicAPI, usersAPI, Course, AcademicClass } from '@/lib/api';
+import { academicAPI, usersAPI, Subject, AcademicClass } from '@/lib/api';
 
 export default function CreateAssignmentPage() {
     const router = useRouter();
     const [loading, setLoading] = useState(false);
-    const [courses, setCourses] = useState<Course[]>([]);
+    const [courses, setCourses] = useState<Subject[]>([]);
     const [classes, setClasses] = useState<AcademicClass[]>([]);
     const [selectedClassId, setSelectedClassId] = useState<string>('');
 
@@ -28,7 +28,7 @@ export default function CreateAssignmentPage() {
     const [formData, setFormData] = useState<{
         title: string;
         description: string;
-        course: string;
+        subject: string;
         type: AssessmentType;
         total_marks: number;
         due_date: string;
@@ -37,7 +37,7 @@ export default function CreateAssignmentPage() {
     }>({
         title: '',
         description: '',
-        course: '',
+        subject: '',
         type: 'assignment',
         total_marks: 100,
         due_date: defaultDate,
@@ -51,19 +51,19 @@ export default function CreateAssignmentPage() {
                 // 1. Get current user's teacher profile
                 const me = await usersAPI.getMe();
                 const teachers = await academicAPI.getTeachers(); // Assuming we can list all, or get specific. Ideally getTeacherByUserId
-                const myTeacherProfile = teachers.find(t => t.user === me.user_id);
+                const myTeacherProfile = teachers.find(t => t.user_id === me.user_id);
 
                 if (myTeacherProfile) {
                     // 2. Get all classes and filter by assigned_classes
                     const allClasses = await academicAPI.getClasses();
                     const myClasses = allClasses.filter(c =>
-                        myTeacherProfile.assigned_classes?.includes(c.class_id)
+                        myTeacherProfile.assigned_classes?.includes(c.id)
                     );
                     setClasses(myClasses);
                 }
 
                 // 3. Get all courses (we'll filter them locally based on selected class)
-                const allCourses = await academicAPI.getCourses();
+                const allCourses = await academicAPI.getSubjects();
                 setCourses(allCourses);
 
             } catch (error) {
@@ -75,7 +75,7 @@ export default function CreateAssignmentPage() {
 
     // Filter courses based on selected class
     const filteredCourses = selectedClassId
-        ? courses.filter(c => c.academic_class === selectedClassId)
+        ? courses.filter(c => c.academic_class.toString() === selectedClassId)
         : [];
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -134,7 +134,7 @@ export default function CreateAssignmentPage() {
                                     value={selectedClassId}
                                     onValueChange={(val) => {
                                         setSelectedClassId(val);
-                                        setFormData({ ...formData, course: '' }); // Reset course when class changes
+                                        setFormData({ ...formData, subject: '' }); // Reset course when class changes
                                     }}
                                     required
                                 >
@@ -144,8 +144,8 @@ export default function CreateAssignmentPage() {
                                     <SelectContent>
                                         {classes.length > 0 ? (
                                             classes.map(c => (
-                                                <SelectItem key={c.class_id} value={c.class_id}>
-                                                    Grade {c.grade}-{c.section}
+                                                <SelectItem key={c.id} value={c.id.toString()}>
+                                                    {c.name}
                                                 </SelectItem>
                                             ))
                                         ) : (
@@ -159,8 +159,8 @@ export default function CreateAssignmentPage() {
                             <div className="space-y-2">
                                 <Label htmlFor="course">Course (Subject) <span className="text-red-500">*</span></Label>
                                 <Select
-                                    value={formData.course}
-                                    onValueChange={(val) => setFormData({ ...formData, course: val })}
+                                    value={formData.subject}
+                                    onValueChange={(val) => setFormData({ ...formData, subject: val })}
                                     required
                                     disabled={!selectedClassId}
                                 >
@@ -170,7 +170,7 @@ export default function CreateAssignmentPage() {
                                     <SelectContent>
                                         {filteredCourses.length > 0 ? (
                                             filteredCourses.map(c => (
-                                                <SelectItem key={c.course_id} value={c.course_id}>{c.subject}</SelectItem>
+                                                <SelectItem key={c.id} value={c.id.toString()}>{c.name}</SelectItem>
                                             ))
                                         ) : (
                                             <div className="p-2 text-sm text-muted-foreground">No courses found for this class</div>

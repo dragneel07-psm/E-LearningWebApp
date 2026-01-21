@@ -38,12 +38,12 @@ export function AssignClassDialog({ open, onOpenChange, onSuccess }: AssignClass
     // When teacher changes, pre-fill their assigned classes
     useEffect(() => {
         if (selectedTeacherId) {
-            const teacher = teachers.find(t => t.teacher_id === selectedTeacherId);
+            const teacher = teachers.find(t => t.id === selectedTeacherId);
             if (teacher && teacher.assigned_classes) {
                 // If assigned_classes contains IDs
                 if (Array.isArray(teacher.assigned_classes)) {
                     const normalized = teacher.assigned_classes
-                        .map((value) => (typeof value === 'string' ? value : value.class_id))
+                        .map((value) => (typeof value === 'number' ? value.toString() : (value as any).id?.toString()))
                         .filter(Boolean);
                     setSelectedClassIds(normalized);
                 }
@@ -84,7 +84,7 @@ export function AssignClassDialog({ open, onOpenChange, onSuccess }: AssignClass
         setSubmitting(true);
         try {
             await academicAPI.updateTeacher(selectedTeacherId, {
-                assigned_classes: selectedClassIds
+                assigned_classes: selectedClassIds.map(id => parseInt(id))
             });
             onSuccess();
             onOpenChange(false);
@@ -96,7 +96,7 @@ export function AssignClassDialog({ open, onOpenChange, onSuccess }: AssignClass
     };
 
     const getTeacherName = (t: Teacher) => {
-        const user = users.find(u => u.user_id === t.user);
+        const user = users.find(u => u.user_id === t.user_id);
         return user ? `${user.first_name} ${user.last_name}` : 'Unknown Teacher';
     };
 
@@ -117,7 +117,7 @@ export function AssignClassDialog({ open, onOpenChange, onSuccess }: AssignClass
                             </SelectTrigger>
                             <SelectContent>
                                 {teachers.map((t) => (
-                                    <SelectItem key={t.teacher_id} value={t.teacher_id}>
+                                    <SelectItem key={t.id} value={t.id}>
                                         {getTeacherName(t)} ({t.designation})
                                     </SelectItem>
                                 ))}
@@ -135,16 +135,15 @@ export function AssignClassDialog({ open, onOpenChange, onSuccess }: AssignClass
                                 ) : (
                                     <div className="space-y-2">
                                         {classes.map((cls) => {
-                                            const isSelected = selectedClassIds.includes(cls.class_id);
+                                            const isSelected = selectedClassIds.includes(cls.id.toString());
                                             return (
                                                 <div
-                                                    key={cls.class_id}
+                                                    key={cls.id}
                                                     className={`flex items-center justify-between p-2 rounded-md cursor-pointer transition-colors ${isSelected ? 'bg-indigo-50 border-indigo-200' : 'hover:bg-slate-50'}`}
-                                                    onClick={() => toggleClass(cls.class_id)}
+                                                    onClick={() => toggleClass(cls.id.toString())}
                                                 >
                                                     <div className="flex items-center gap-2">
-                                                        <Badge variant="outline">{cls.academic_class}</Badge>
-                                                        <span className="text-sm text-gray-700">Section {cls.section}</span>
+                                                        <Badge variant="outline">{cls.name}</Badge>
                                                     </div>
                                                     {isSelected && <Check className="h-4 w-4 text-indigo-600" />}
                                                 </div>

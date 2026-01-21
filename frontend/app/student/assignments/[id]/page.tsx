@@ -28,7 +28,7 @@ export default function AssignmentSubmissionPage() {
         try {
             const students = await academicAPI.getStudents();
             if (students.length === 0) return;
-            const sId = students[0].student_id;
+            const sId = students[0].id;
             setStudentId(sId);
 
             // Get assignment
@@ -168,7 +168,7 @@ export default function AssignmentSubmissionPage() {
                                             onClick={async () => {
                                                 if (confirm("Request AI Grading for this assignment?")) {
                                                     try {
-                                                        const res = await academicAPI.gradeSubmission(submission.submission_id);
+                                                        const res = await academicAPI.gradeSubmission(submission.submission_id, {});
                                                         alert(`Graded! Score: ${res.score}`);
                                                         window.location.reload();
                                                     } catch (error) {

@@ -60,7 +60,7 @@ export default function AdminNoticesPage() {
                 academicAPI.getStudents(),
             ]);
             // Sort by date desc
-            fetchedNotices.sort((a, b) => new Date(b.published_date).getTime() - new Date(a.published_date).getTime());
+            fetchedNotices.sort((a, b) => new Date(b.published_date || 0).getTime() - new Date(a.published_date || 0).getTime());
             setNotices(fetchedNotices);
             setClasses(fetchedClasses);
             setStudents(fetchedStudents);
@@ -101,7 +101,7 @@ export default function AdminNoticesPage() {
                 payload.append('attachment', selectedFile);
             }
 
-            await academicAPI.createNotice(payload);
+            await academicAPI.createNotice(payload as any);
             toast.success('Notice published successfully');
             setIsCreateOpen(false);
             setFormData({
@@ -145,7 +145,7 @@ export default function AdminNoticesPage() {
                 payload.append('attachment', selectedFile);
             }
 
-            await academicAPI.updateNotice(selectedNotice.notice_id, payload);
+            await academicAPI.updateNotice(selectedNotice.notice_id!, payload as any);
             toast.success('Notice updated successfully');
             setIsEditOpen(false);
             setSelectedNotice(null);
@@ -193,8 +193,8 @@ export default function AdminNoticesPage() {
 
     const getClassName = (classId: string | null) => {
         if (!classId) return 'N/A';
-        const cls = classes.find(c => c.class_id === classId);
-        return cls ? `Grade ${cls.grade}-${cls.section}` : 'Unknown Class';
+        const cls = classes.find(c => c.id.toString() === classId);
+        return cls ? cls.name : 'Unknown Class';
     };
 
     return (
@@ -233,7 +233,7 @@ export default function AdminNoticesPage() {
                                     <h3 className="font-semibold text-lg line-clamp-1">{notice.title}</h3>
                                     <p className="text-xs text-muted-foreground flex items-center gap-1 mt-1">
                                         <Calendar className="h-3 w-3" />
-                                        {new Date(notice.published_date).toLocaleDateString()}
+                                        {new Date(notice.published_date || 0).toLocaleDateString()}
                                     </p>
                                 </div>
                                 <div className={`text-xs px-2 py-1 rounded-full border ${notice.priority === 'high' ? 'bg-red-50 text-red-700 border-red-100' :
@@ -255,7 +255,7 @@ export default function AdminNoticesPage() {
                                     </span>
                                 ) : (
                                     <span className="flex items-center gap-1 bg-indigo-50 text-indigo-700 px-2 py-1 rounded">
-                                        <Users className="h-3 w-3" /> {getClassName(notice.target_class)}
+                                        <Users className="h-3 w-3" /> {getClassName(notice.target_class || null)}
                                     </span>
                                 )}
                                 <span className="flex items-center gap-1 bg-slate-100 px-2 py-1 rounded ml-auto">
@@ -267,7 +267,7 @@ export default function AdminNoticesPage() {
                             <Button variant="ghost" size="sm" onClick={() => openEdit(notice)}>
                                 <Edit className="h-4 w-4" />
                             </Button>
-                            <Button variant="ghost" size="sm" onClick={() => handleDelete(notice.notice_id)} className="text-red-500 hover:text-red-700 hover:bg-red-50">
+                            <Button variant="ghost" size="sm" onClick={() => handleDelete(notice.notice_id!)} className="text-red-500 hover:text-red-700 hover:bg-red-50">
                                 <Trash2 className="h-4 w-4" />
                             </Button>
                         </div>
@@ -369,8 +369,8 @@ export default function AdminNoticesPage() {
                                     <SelectTrigger><SelectValue placeholder="Select a class" /></SelectTrigger>
                                     <SelectContent>
                                         {classes.map(c => (
-                                            <SelectItem key={c.class_id} value={c.class_id}>
-                                                Grade {c.grade}-{c.section}
+                                            <SelectItem key={c.id} value={c.id.toString()}>
+                                                {c.name}
                                             </SelectItem>
                                         ))}
                                     </SelectContent>
@@ -384,8 +384,8 @@ export default function AdminNoticesPage() {
                                     <SelectTrigger><SelectValue placeholder="Select a student" /></SelectTrigger>
                                     <SelectContent>
                                         {students.map(s => (
-                                            <SelectItem key={s.student_id} value={s.student_id}>
-                                                {s.first_name} {s.last_name} ({s.student_id})
+                                            <SelectItem key={s.id} value={s.id}>
+                                                {s.first_name} {s.last_name} ({s.id})
                                             </SelectItem>
                                         ))}
                                     </SelectContent>
@@ -493,8 +493,8 @@ export default function AdminNoticesPage() {
                                     <SelectTrigger><SelectValue placeholder="Select a class" /></SelectTrigger>
                                     <SelectContent>
                                         {classes.map(c => (
-                                            <SelectItem key={c.class_id} value={c.class_id}>
-                                                Grade {c.grade}-{c.section}
+                                            <SelectItem key={c.id} value={c.id.toString()}>
+                                                {c.name}
                                             </SelectItem>
                                         ))}
                                     </SelectContent>
@@ -508,8 +508,8 @@ export default function AdminNoticesPage() {
                                     <SelectTrigger><SelectValue placeholder="Select a student" /></SelectTrigger>
                                     <SelectContent>
                                         {students.map(s => (
-                                            <SelectItem key={s.student_id} value={s.student_id}>
-                                                {s.first_name} {s.last_name} ({s.student_id})
+                                            <SelectItem key={s.id} value={s.id}>
+                                                {s.first_name} {s.last_name} ({s.id})
                                             </SelectItem>
                                         ))}
                                     </SelectContent>

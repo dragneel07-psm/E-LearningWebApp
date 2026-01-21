@@ -1,12 +1,13 @@
 from django.db import models
 import uuid as uuid_lib
 from django.conf import settings
-from .academic_class import AcademicClass
+from .class_section import AcademicClass
 
 class Student(models.Model):
     student_id = models.UUIDField(primary_key=True, default=uuid_lib.uuid4, editable=False)
     user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='student_profile', db_constraint=False)
-    academic_class = models.ForeignKey(AcademicClass, on_delete=models.SET_NULL, null=True, related_name='students')
+    academic_class = models.ForeignKey('academic.AcademicClass', on_delete=models.SET_NULL, null=True, related_name='students')
+    section = models.ForeignKey('academic.Section', on_delete=models.SET_NULL, null=True, blank=True, related_name='students')
 
     # Personalization & Learning Preferences
     LEARNING_STYLES = [

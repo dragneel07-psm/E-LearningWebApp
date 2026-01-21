@@ -2,15 +2,17 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, Users, GraduationCap, School, CreditCard, BarChart3, Settings, LogOut, Bell, BookOpen } from 'lucide-react';
+import { LayoutDashboard, Users, GraduationCap, School, CreditCard, BarChart3, Settings, LogOut, Bell, BookOpen, Calendar, Library } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 const navigation = [
     { name: 'Dashboard', href: '/admin', icon: LayoutDashboard },
+    { name: 'Academic Years', href: '/admin/academic/years', icon: Calendar },
+    { name: 'Classes', href: '/admin/academic/classes', icon: School },
+    { name: 'Subjects', href: '/admin/academic/subjects', icon: BookOpen },
     { name: 'Students', href: '/admin/academic/students', icon: GraduationCap },
     { name: 'Teachers', href: '/admin/academic/teachers', icon: Users },
-    { name: 'Classes', href: '/admin/academic/classes', icon: School },
-    { name: 'Library', href: '/admin/library', icon: BookOpen },
+    { name: 'Library', href: '/admin/library', icon: Library },
     { name: 'Finance', href: '/admin/finance', icon: CreditCard },
     { name: 'Reports', href: '/admin/reports', icon: BarChart3 },
     { name: 'Notices', href: '/admin/notices', icon: Bell },

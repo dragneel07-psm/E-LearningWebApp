@@ -75,7 +75,7 @@ export default function TeacherStudentsPage() {
             ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                     {filteredStudents.map((student) => (
-                        <Card key={student.student_id} className="group hover:shadow-md transition-all duration-200 border-slate-200">
+                        <Card key={student.id} className="group hover:shadow-md transition-all duration-200 border-slate-200">
                             <CardContent className="p-6">
                                 <div className="flex items-start justify-between mb-4">
                                     <div className="h-16 w-16 rounded-full bg-slate-100 flex items-center justify-center border-2 border-white shadow-sm overflow-hidden">
@@ -101,7 +101,7 @@ export default function TeacherStudentsPage() {
                                     <h3 className="font-bold text-slate-900 group-hover:text-indigo-600 transition-colors">
                                         {student.first_name} {student.last_name}
                                     </h3>
-                                    <p className="text-xs text-slate-500 font-mono mt-0.5">ID: {student.student_id?.substring(0, 8)}</p>
+                                    <p className="text-xs text-slate-500 font-mono mt-0.5">ID: {student.id?.substring(0, 8)}</p>
                                 </div>
 
                                 <div className="space-y-2 text-sm text-slate-600">
@@ -149,7 +149,7 @@ export default function TeacherStudentsPage() {
                                     </div>
                                     <div>
                                         <h2 className="text-xl font-bold text-slate-900">{selectedStudent.first_name} {selectedStudent.last_name}</h2>
-                                        <p className="text-sm text-slate-500">ID: {selectedStudent.student_id?.substring(0, 8)}</p>
+                                        <p className="text-sm text-slate-500">ID: {selectedStudent.id?.substring(0, 8)}</p>
                                         <Badge className="mt-2 bg-indigo-100 text-indigo-700 hover:bg-indigo-200">
                                             Class {selectedStudent.academic_class || 'N/A'}
                                         </Badge>

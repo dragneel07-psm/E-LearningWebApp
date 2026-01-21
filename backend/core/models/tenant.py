@@ -28,6 +28,7 @@ class Tenant(TimeStampedModel):
     website = models.URLField(blank=True, null=True)
     current_academic_year = models.CharField(max_length=20, default='2024-2025')
     established_year = models.IntegerField(blank=True, null=True)
+    logo = models.ImageField(upload_to='tenant_logos/', blank=True, null=True)
 
     def __str__(self):
         return self.name

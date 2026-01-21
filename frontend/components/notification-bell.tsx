@@ -20,18 +20,24 @@ export function NotificationBell() {
     const [notifications, setNotifications] = useState<Notification[]>([]);
     const [unreadCount, setUnreadCount] = useState(0);
     const [loading, setLoading] = useState(false);
+    const [mounted, setMounted] = useState(false);
     const pathname = usePathname();
 
     // Determine the role from the current path
     const role = pathname.split('/')[1] || 'admin';
 
     useEffect(() => {
+        setMounted(true);
         loadNotifications();
 
         // Auto-refresh every 30 seconds
         const interval = setInterval(loadNotifications, 30000);
         return () => clearInterval(interval);
     }, []);
+
+    if (!mounted) {
+        return <Button variant="ghost" size="icon" className="relative"><Bell className="h-5 w-5 text-slate-600" /></Button>;
+    }
 
     async function loadNotifications() {
         try {

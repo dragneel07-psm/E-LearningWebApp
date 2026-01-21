@@ -4,7 +4,7 @@ from django.conf import settings
 
 class Teacher(models.Model):
     teacher_id = models.UUIDField(primary_key=True, default=uuid_lib.uuid4, editable=False)
-    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='teacher_profile')
+    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='teacher_profile', db_constraint=False)
     
     DESIGNATION_CHOICES = [
         ('subject_teacher', 'Subject Teacher'),

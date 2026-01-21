@@ -2,71 +2,64 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { Card } from '@/components/ui/card';
+import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
-import { FileText, Video, Link as LinkIcon, FileUp, ArrowLeft, CheckCircle2, Circle } from 'lucide-react';
-import { academicAPI, Lesson, Course } from '@/lib/api/saas';
+import {
+    FileText, Video, Link as LinkIcon,
+    ArrowLeft, CheckCircle2, Circle,
+    PlayCircle, BookOpen, ChevronRight,
+    Clock
+} from 'lucide-react';
+import { academicAPI, Lesson, Subject, Chapter } from '@/lib/api';
 import { toast } from 'sonner';
+import { Badge } from '@/components/ui/badge';
 
 export default function StudentCourseLessonsPage() {
     const params = useParams();
     const router = useRouter();
     const courseId = params.courseId as string;
 
-    const [course, setCourse] = useState<Course | null>(null);
-    const [lessons, setLessons] = useState<Lesson[]>([]);
-    const [completedLessons, setCompletedLessons] = useState<Set<string>>(new Set());
+    const [subject, setSubject] = useState<Subject | null>(null);
+    const [chapters, setChapters] = useState<Chapter[]>([]);
+    const [completedLessons, setCompletedLessons] = useState<Set<number>>(new Set());
     const [loading, setLoading] = useState(true);
 
     const loadData = useCallback(async () => {
         try {
             setLoading(true);
-            const [courseData, lessonsData] = await Promise.all([
-                academicAPI.getCourse(courseId),
-                academicAPI.getLessonsByCourse(courseId)
+            const [subjectData, chaptersData] = await Promise.all([
+                academicAPI.getSubject(parseInt(courseId)),
+                academicAPI.getChapters(parseInt(courseId))
             ]);
-            setCourse(courseData);
-            setLessons(lessonsData);
+            setSubject(subjectData);
+            setChapters(chaptersData);
+
+            // Calculate completed lessons from the backend data
+            const completed = new Set<number>();
+            chaptersData.forEach(chapter => {
+                chapter.lessons?.forEach(lesson => {
+                    if (lesson.completed) {
+                        completed.add(lesson.id);
+                    }
+                });
+            });
+            setCompletedLessons(completed);
         } catch (error) {
-            console.error('Failed to load course data:', error);
-            toast.error('Failed to load course data');
+            console.error('Failed to load curriculum data:', error);
+            toast.error('Failed to load course content');
         } finally {
             setLoading(false);
         }
     }, [courseId]);
 
-    const loadProgress = useCallback(() => {
-        // Load from localStorage for now
-        // TODO: Replace with API call when backend progress tracking is implemented
-        const saved = localStorage.getItem(`course-progress-${courseId}`);
-        if (saved) {
-            setCompletedLessons(new Set(JSON.parse(saved)));
-        }
-    }, [courseId]);
-
     useEffect(() => {
         loadData();
-        loadProgress();
-    }, [loadData, loadProgress]);
+    }, [loadData]);
 
-    const getContentTypeIcon = (type: string) => {
-        switch (type) {
-            case 'text':
-                return <FileText className="h-5 w-5 text-blue-600" />;
-            case 'video':
-                return <Video className="h-5 w-5 text-red-600" />;
-            case 'pdf':
-                return <FileUp className="h-5 w-5 text-green-600" />;
-            case 'link':
-                return <LinkIcon className="h-5 w-5 text-purple-600" />;
-            default:
-                return <FileText className="h-5 w-5 text-gray-600" />;
-        }
-    };
-
-    const progressPercentage = lessons.length > 0
-        ? (completedLessons.size / lessons.length) * 100
+    const totalLessons = chapters.reduce((acc, chapter) => acc + (chapter.lessons?.filter(l => l.is_published).length || 0), 0);
+    const progressPercentage = totalLessons > 0
+        ? (completedLessons.size / totalLessons) * 100
         : 0;
 
     if (loading) {
@@ -78,85 +71,139 @@ export default function StudentCourseLessonsPage() {
     }
 
     return (
-        <div className="space-y-6 max-w-4xl mx-auto">
+        <div className="space-y-6 max-w-5xl mx-auto py-8 px-4">
             {/* Header */}
             <div className="flex items-center gap-4">
                 <Button
                     variant="ghost"
                     size="icon"
                     onClick={() => router.back()}
+                    className="hover:bg-white"
                 >
                     <ArrowLeft className="h-5 w-5" />
                 </Button>
                 <div className="flex-1">
-                    <h1 className="text-3xl font-bold tracking-tight">{course?.subject}</h1>
-                    <p className="text-muted-foreground">Course Lessons</p>
+                    <h1 className="text-4xl font-bold tracking-tight text-slate-900">{subject?.name}</h1>
+                    <p className="text-slate-500 font-medium">Course Curriculum</p>
                 </div>
             </div>
 
             {/* Progress Card */}
-            <Card className="p-6">
-                <div className="flex items-center justify-between mb-4">
-                    <div>
-                        <h3 className="font-semibold text-lg">Your Progress</h3>
-                        <p className="text-sm text-muted-foreground">
-                            {completedLessons.size} of {lessons.length} lessons completed
-                        </p>
+            <Card className="p-8 border-none shadow-xl bg-gradient-to-br from-indigo-600 to-violet-700 text-white overflow-hidden relative">
+                <div className="relative z-10">
+                    <div className="flex items-center justify-between mb-6">
+                        <div>
+                            <h3 className="font-bold text-2xl mb-1">Your Learning Journey</h3>
+                            <p className="text-indigo-100 opacity-90">
+                                {completedLessons.size} of {totalLessons} lessons completed
+                            </p>
+                        </div>
+                        <div className="text-4xl font-black bg-white/20 backdrop-blur-md rounded-2xl p-4 min-w-[100px] text-center">
+                            {Math.round(progressPercentage)}%
+                        </div>
                     </div>
-                    <div className="text-2xl font-bold text-indigo-600">
-                        {Math.round(progressPercentage)}%
-                    </div>
+                    <Progress value={progressPercentage} className="h-3 bg-white/20" />
                 </div>
-                <Progress value={progressPercentage} className="h-2" />
+                {/* Decorative blobs */}
+                <div className="absolute top-[-50px] right-[-50px] w-64 h-64 bg-white/10 rounded-full blur-3xl"></div>
+                <div className="absolute bottom-[-100px] left-[-50px] w-80 h-80 bg-indigo-400/20 rounded-full blur-3xl"></div>
             </Card>
 
-            {/* Lessons List */}
-            {lessons.length === 0 ? (
-                <Card className="p-12 text-center">
-                    <FileText className="h-12 w-12 mx-auto mb-4 text-muted-foreground opacity-20" />
-                    <h3 className="text-lg font-semibold mb-2">No lessons available</h3>
-                    <p className="text-muted-foreground">
-                        Your teacher hasn&apos;t added any lessons yet
+            {/* Curriculum List */}
+            {chapters.length === 0 ? (
+                <Card className="p-12 text-center border-dashed">
+                    <BookOpen className="h-16 w-16 mx-auto mb-4 text-slate-200" />
+                    <h3 className="text-xl font-bold text-slate-800 mb-2">No content yet</h3>
+                    <p className="text-slate-500">
+                        Stay tuned! Your teacher will upload lessons soon.
                     </p>
                 </Card>
             ) : (
-                <div className="space-y-3">
-                    {lessons.map((lesson, index) => {
-                        const isCompleted = completedLessons.has(lesson.lesson_id);
-
-                        return (
-                            <Card
-                                key={lesson.lesson_id}
-                                className={`p-6 hover:shadow-md transition-all cursor-pointer ${isCompleted ? 'bg-green-50 border-green-200' : ''
-                                    }`}
-                                onClick={() => router.push(`/student/courses/${courseId}/lessons/${lesson.lesson_id}`)}
-                            >
-                                <div className="flex items-center gap-4">
-                                    <div className="flex-shrink-0">
-                                        {isCompleted ? (
-                                            <CheckCircle2 className="h-6 w-6 text-green-600" />
-                                        ) : (
-                                            <Circle className="h-6 w-6 text-muted-foreground" />
-                                        )}
-                                    </div>
-                                    <div className="p-3 bg-white rounded-lg border">
-                                        {getContentTypeIcon(lesson.content_type)}
-                                    </div>
-                                    <div className="flex-1">
-                                        <div className="flex items-center gap-2 mb-1">
-                                            <span className="text-sm font-medium text-muted-foreground">
-                                                Lesson {index + 1}
-                                            </span>
-                                        </div>
-                                        <h3 className="text-lg font-semibold">{lesson.title}</h3>
-                                    </div>
-                                    <Button variant="ghost" size="sm">
-                                        {isCompleted ? 'Review' : 'Start'}
-                                    </Button>
+                <div className="space-y-10">
+                    {chapters.map((chapter, chapterIndex) => (
+                        <div key={chapter.id} className="space-y-4">
+                            <div className="flex items-center gap-3 py-2 border-b border-slate-200">
+                                <div className="flex items-center justify-center w-8 h-8 rounded-full bg-slate-900 text-white font-bold text-sm">
+                                    {chapterIndex + 1}
                                 </div>
-                            </Card>
-                        );
-                    })}
+                                <h2 className="text-2xl font-bold text-slate-800">{chapter.title}</h2>
+                                {chapter.description && (
+                                    <span className="text-sm text-slate-400 ml-2">• {chapter.description}</span>
+                                )}
+                            </div>
+
+                            <div className="grid gap-4">
+                                {chapter.lessons?.filter(l => l.is_published).map((lesson, lessonIndex) => {
+                                    const isCompleted = completedLessons.has(lesson.id);
+
+                                    return (
+                                        <Card
+                                            key={lesson.id}
+                                            className={`group relative overflow-hidden transition-all duration-300 hover:shadow-lg border-slate-200 cursor-pointer ${isCompleted ? 'bg-emerald-50/30' : 'bg-white'
+                                                }`}
+                                            onClick={() => router.push(`/student/courses/${courseId}/lessons/${lesson.id}`)}
+                                        >
+                                            <CardContent className="p-0">
+                                                <div className="flex items-stretch min-h-[90px]">
+                                                    {/* Status indicator bar */}
+                                                    <div className={`w-1.5 ${isCompleted ? 'bg-emerald-500' : 'bg-slate-100 group-hover:bg-indigo-500'}`} />
+
+                                                    <div className="flex items-center gap-6 flex-1 px-6 py-4">
+                                                        <div className={`flex-shrink-0 flex items-center justify-center w-12 h-12 rounded-2xl transition-colors ${isCompleted ? 'bg-emerald-100 text-emerald-600' : 'bg-slate-50 text-slate-400 group-hover:bg-indigo-50 group-hover:text-indigo-600'
+                                                            }`}>
+                                                            {isCompleted ? (
+                                                                <CheckCircle2 className="h-6 w-6" />
+                                                            ) : lesson.video_url ? (
+                                                                <PlayCircle className="h-6 w-6" />
+                                                            ) : (
+                                                                <FileText className="h-6 w-6" />
+                                                            )}
+                                                        </div>
+
+                                                        <div className="flex-1">
+                                                            <div className="flex items-center gap-2 mb-1">
+                                                                <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+                                                                    Lesson {chapterIndex + 1}.{lessonIndex + 1}
+                                                                </span>
+                                                                <span className="flex items-center gap-1 text-[10px] text-slate-400">
+                                                                    <Clock className="h-3 w-3" />
+                                                                    {lesson.duration_minutes}m
+                                                                </span>
+                                                            </div>
+                                                            <h3 className={`text-lg font-bold ${isCompleted ? 'text-slate-600' : 'text-slate-800'}`}>
+                                                                {lesson.title}
+                                                            </h3>
+                                                        </div>
+
+                                                        <div className="flex items-center gap-3">
+                                                            {isCompleted && (
+                                                                <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100 border-none px-3 font-bold">
+                                                                    COMPLETED
+                                                                </Badge>
+                                                            )}
+                                                            <Button
+                                                                variant="outline"
+                                                                className={`rounded-xl h-10 px-6 font-bold transition-all ${isCompleted ? 'border-emerald-200 text-emerald-600' : 'border-slate-200 text-indigo-600 group-hover:bg-indigo-600 group-hover:text-white group-hover:border-indigo-600'
+                                                                    }`}
+                                                            >
+                                                                {isCompleted ? 'Review' : 'Start Lesson'}
+                                                                <ChevronRight className="ml-2 h-4 w-4" />
+                                                            </Button>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </CardContent>
+                                        </Card>
+                                    );
+                                })}
+                                {(!chapter.lessons || chapter.lessons.filter(l => l.is_published).length === 0) && (
+                                    <div className="text-center py-6 text-slate-400 italic text-sm">
+                                        No lessons published in this chapter yet.
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    ))}
                 </div>
             )}
         </div>

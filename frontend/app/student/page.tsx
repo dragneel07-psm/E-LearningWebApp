@@ -1,22 +1,27 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import {
     BookOpen, Trophy, BrainCircuit, Calendar,
-    AlertCircle, TrendingUp, ChevronRight, PlayCircle
+    AlertCircle, TrendingUp, ChevronRight, PlayCircle,
+    Sparkles, Lightbulb
 } from 'lucide-react';
-import { academicAPI, helpers, Course } from '@/lib/api';
+import { academicAPI, aiAPI, helpers, Subject } from '@/lib/api';
 import { AITutorChat } from '@/components/ai-tutor-chat';
 
 export default function StudentDashboard() {
+    const router = useRouter();
     const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
     const [studentId, setStudentId] = useState<string>('');
-    const [courses, setCourses] = useState<Course[]>([]);
+    const [courses, setCourses] = useState<Subject[]>([]);
     const [showAITutor, setShowAITutor] = useState(false);
+    const [recommendations, setRecommendations] = useState<any>(null);
 
     // Mock Data based on requirements
     const attendance = 92;
@@ -30,24 +35,72 @@ export default function StudentDashboard() {
         { time: '02:30 PM', subject: 'Computer Science', type: 'Lab', status: 'upcoming' },
     ];
 
+    const [upcomingExamsCount, setUpcomingExamsCount] = useState(0);
+    const [pendingAssignmentsCount, setPendingAssignmentsCount] = useState(0);
+
     useEffect(() => {
         loadData();
     }, []);
 
     const loadData = async () => {
         try {
+            setError(null);
+            setLoading(true);
             const student = await academicAPI.getMyStudent();
-            setStudentId(student.student_id);
-            const c = await helpers.getStudentCourses(student.student_id);
-            setCourses(c);
-        } catch (e) {
+            setStudentId(student.id);
+
+            // 1. Fetch Subjects
+            const subjects = await helpers.getStudentSubjects(student.id);
+            setCourses(subjects);
+
+            // 2. Fetch Assessments for counts
+            const allAssessments = await academicAPI.getAssessments();
+            const now = new Date();
+
+            const upcomingExams = allAssessments.filter(a =>
+                (a.type === 'exam' || a.type === 'quiz') &&
+                a.due_date && new Date(a.due_date) > now
+            );
+            setUpcomingExamsCount(upcomingExams.length);
+
+            // 3. Fetch Submissions to find pending ones
+            const mySubmissions = await academicAPI.getSubmissions();
+            const submittedIds = new Set(mySubmissions.filter(s => s.status !== 'draft').map(s => s.assessment));
+            const pending = allAssessments.filter(a => !submittedIds.has(a.assessment_id));
+            setPendingAssignmentsCount(pending.length);
+
+            // 4. Fetch AI Recommendations
+            try {
+                const recs = await aiAPI.getRecommendations();
+                setRecommendations(recs);
+            } catch (recError) {
+                console.warn("Could not fetch AI recommendations", recError);
+            }
+
+        } catch (e: any) {
             console.error(e);
+            if (e.message?.includes('404')) {
+                setError("Student profile not found. Are you logged in as a student?");
+            } else {
+                setError("Failed to load dashboard data.");
+            }
         } finally {
             setLoading(false);
         }
     };
 
     if (loading) return <div className="p-8 flex justify-center text-slate-500">Loading dashboard...</div>;
+
+    if (error) return (
+        <div className="p-8 flex flex-col items-center justify-center text-center space-y-4">
+            <div className="bg-red-50 text-red-600 p-4 rounded-full">
+                <AlertCircle className="h-8 w-8" />
+            </div>
+            <h3 className="text-xl font-semibold text-slate-900">Dashboard Error</h3>
+            <p className="text-slate-500 max-w-md">{error}</p>
+            <Button onClick={() => window.location.href = '/login'} variant="outline">Back to Login</Button>
+        </div>
+    );
 
     return (
         <div className="space-y-6">
@@ -75,7 +128,7 @@ export default function StudentDashboard() {
                     <CardContent className="p-5 flex items-center justify-between">
                         <div>
                             <p className="text-sm font-medium text-slate-500 mb-1">Assignments</p>
-                            <h3 className="text-2xl font-bold text-slate-900">{pendingAssignments}</h3>
+                            <h3 className="text-2xl font-bold text-slate-900">{pendingAssignmentsCount}</h3>
                             <p className="text-xs text-orange-600 font-medium flex items-center mt-1">
                                 <AlertCircle className="h-3 w-3 mr-1" /> Pending
                             </p>
@@ -91,8 +144,8 @@ export default function StudentDashboard() {
                     <CardContent className="p-5 flex items-center justify-between">
                         <div>
                             <p className="text-sm font-medium text-slate-500 mb-1">Upcoming Exams</p>
-                            <h3 className="text-2xl font-bold text-slate-900">2</h3>
-                            <p className="text-xs text-blue-600 font-medium mt-1">Maths & Physics</p>
+                            <h3 className="text-2xl font-bold text-slate-900">{upcomingExamsCount}</h3>
+                            <p className="text-xs text-blue-600 font-medium mt-1">Quizzes & Exams</p>
                         </div>
                         <div className="h-12 w-12 rounded-full bg-blue-50 flex items-center justify-center">
                             <Trophy className="h-6 w-6 text-blue-600" />
@@ -130,7 +183,7 @@ export default function StudentDashboard() {
                         </CardHeader>
                         <CardContent className="grid gap-4">
                             {courses.slice(0, 3).map((course, idx) => (
-                                <div key={course.course_id} className="group flex items-center gap-4 p-3 rounded-xl hover:bg-slate-50 transition-colors border border-transparent hover:border-slate-100 cursor-pointer">
+                                <div key={course.id} className="group flex items-center gap-4 p-3 rounded-xl hover:bg-slate-50 transition-colors border border-transparent hover:border-slate-100 cursor-pointer">
                                     <div className={`h-12 w-12 rounded-lg flex items-center justify-center shrink-0 
                                         ${idx === 0 ? 'bg-indigo-100 text-indigo-600' :
                                             idx === 1 ? 'bg-emerald-100 text-emerald-600' :
@@ -139,7 +192,7 @@ export default function StudentDashboard() {
                                     </div>
                                     <div className="flex-1 min-w-0">
                                         <div className="flex justify-between mb-1">
-                                            <h4 className="font-semibold text-slate-900 truncate">{course.subject}</h4>
+                                            <h4 className="font-semibold text-slate-900 truncate">{course.name}</h4>
                                             <span className="text-xs font-bold text-slate-600">{(idx + 1) * 24}%</span>
                                         </div>
                                         <Progress value={(idx + 1) * 24} className="h-2 bg-slate-100" />
@@ -197,6 +250,37 @@ export default function StudentDashboard() {
 
                 {/* 3. Right Sidebar (1/3 width) */}
                 <div className="space-y-6">
+
+                    {/* AI Recommendations */}
+                    {recommendations && recommendations.recommendations.length > 0 && (
+                        <Card className="border-none shadow-md overflow-hidden bg-white border-l-4 border-indigo-500">
+                            <CardHeader className="pb-3 flex flex-row items-center gap-2">
+                                <Sparkles className="h-5 w-5 text-indigo-600 animate-pulse" />
+                                <CardTitle className="text-base font-bold text-slate-800">AI Study Picks</CardTitle>
+                            </CardHeader>
+                            <CardContent className="space-y-4">
+                                <div className="p-3 bg-indigo-50/50 rounded-xl border border-indigo-100 flex gap-3">
+                                    <Lightbulb className="h-5 w-5 text-indigo-600 shrink-0" />
+                                    <p className="text-xs text-indigo-900 leading-relaxed italic">
+                                        &quot;{recommendations.learning_style_advice}&quot;
+                                    </p>
+                                </div>
+                                <div className="space-y-3">
+                                    {recommendations.recommendations.map((rec: any) => (
+                                        <div
+                                            key={rec.id}
+                                            className="group p-3 rounded-xl border border-slate-100 transition-all hover:shadow-sm hover:border-indigo-200 cursor-pointer"
+                                            onClick={() => router.push(`/student/courses/${rec.subject_id}/lessons`)}
+                                        >
+                                            <p className="text-[10px] font-bold text-indigo-600 uppercase tracking-wider mb-1">{rec.subject}</p>
+                                            <h4 className="text-sm font-semibold text-slate-800 group-hover:text-indigo-600 line-clamp-1">{rec.title}</h4>
+                                            <p className="text-[10px] text-slate-500 mt-1">{rec.reason}</p>
+                                        </div>
+                                    ))}
+                                </div>
+                            </CardContent>
+                        </Card>
+                    )}
 
                     {/* AI Tutor Call to Action */}
                     <Card className="bg-gradient-to-br from-indigo-600 to-purple-700 text-white border-none shadow-lg overflow-hidden relative">

@@ -39,8 +39,8 @@ export default function AuditLogsPage() {
 
     const filteredLogs = logs.filter(log =>
         log.action.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        log.user?.toString().toLowerCase().includes(searchTerm.toLowerCase()) ||
-        log.details?.toString().toLowerCase().includes(searchTerm.toLowerCase())
+        (log.actor || 'System').toLowerCase().includes(searchTerm.toLowerCase()) ||
+        JSON.stringify(log.metadata || {}).toLowerCase().includes(searchTerm.toLowerCase())
     );
 
     return (
@@ -98,13 +98,13 @@ export default function AuditLogsPage() {
                                 filteredLogs.map((log) => (
                                     <TableRow key={log.id}>
                                         <TableCell className="font-mono text-xs">
-                                            {new Date(log.timestamp).toLocaleString()}
+                                            {new Date(log.created_at).toLocaleString()}
                                         </TableCell>
                                         <TableCell className="font-medium">{log.action}</TableCell>
-                                        <TableCell>{log.user || 'System'}</TableCell>
-                                        <TableCell className="font-mono text-xs text-muted-foreground">{log.ip_address}</TableCell>
+                                        <TableCell>{log.actor || 'System'}</TableCell>
+                                        <TableCell className="font-mono text-xs text-muted-foreground">{(log as any).ip_address || (log.metadata as any)?.ip_address || 'N/A'}</TableCell>
                                         <TableCell className="text-xs text-muted-foreground max-w-md truncate">
-                                            {JSON.stringify(log.details)}
+                                            {JSON.stringify(log.metadata)}
                                         </TableCell>
                                     </TableRow>
                                 ))

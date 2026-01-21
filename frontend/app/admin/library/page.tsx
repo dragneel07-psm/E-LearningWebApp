@@ -693,7 +693,7 @@ export default function AdminLibraryPage() {
                                 </SelectTrigger>
                                 <SelectContent>
                                     {students.map(student => (
-                                        <SelectItem key={student.student_id} value={student.student_id}>
+                                        <SelectItem key={student.id} value={student.id}>
                                             {student.first_name} {student.last_name}
                                         </SelectItem>
                                     ))}

@@ -1,88 +1,147 @@
-from rest_framework import viewsets
-from rest_framework.decorators import api_view
+from rest_framework import viewsets, status
+from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
-from rest_framework import status
+from rest_framework.permissions import IsAuthenticated
 from django.shortcuts import get_object_or_404
-from academic.models import Student
-from .services.tutor_service import ai_tutor_service
-from .models import AIInteractionLog
+from academic.models import Student, Teacher, Result
+from .services.tutor_service import AITutorService
+from .services.personalization_service import PersonalizationService
+from .services.predictive_service import PredictiveAnalyticsService
+from .services.reporting_service import ReportingService
+from .models import AIInteractionLog, StudentAIReport
 from .serializers import AIInteractionLogSerializer
 from core.mixins import TenantScopedQuerysetMixin
 
-# ViewSet for AIInteractionLog
-class AIInteractionLogViewSet(TenantScopedQuerysetMixin, viewsets.ModelViewSet):
+class AIInteractionLogViewSet(TenantScopedQuerysetMixin, viewsets.ReadOnlyModelViewSet):
+    """
+    ViewSet for viewing AI interaction logs.
+    """
     queryset = AIInteractionLog.objects.all()
     serializer_class = AIInteractionLogSerializer
+    permission_classes = [IsAuthenticated]
+    tenant_field = 'tenant'
 
-# AI Tutor Chat Endpoint
-@api_view(['POST'])
-def ai_tutor_chat(request):
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def teacher_analytics(request):
     """
-    Handle AI tutor chat messages
-    
-    Request body:
-    {
-        "message": "string",
-        "student_id": "uuid",
-        "conversation_history": [{"role": "user|assistant", "content": "..."}]
-    }
+    Teacher-facing predictive analytics.
     """
     try:
-        message = request.data.get('message')
-        student_id = request.data.get('student_id')
-        conversation_history = request.data.get('conversation_history', [])
+        # Check if user is a teacher
+        teacher = Teacher.objects.get(user=request.user)
+        class_ids = teacher.assigned_classes.values_list('id', flat=True)
         
-        print(f"DEBUG: AI Chat Request - message='{message}', student_id='{student_id}', history_len={len(conversation_history)}")
+        service = PredictiveAnalyticsService()
+        data = service.get_teacher_dashboard_data(list(class_ids))
+        return Response(data)
+    except Teacher.DoesNotExist:
+        return Response({'error': 'Teacher profile not found'}, status=status.HTTP_404_NOT_FOUND)
+    except Exception as e:
+        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-        if not message or not student_id:
-            print(f"DEBUG: Missing fields! message={bool(message)}, student_id={bool(student_id)}")
-            return Response(
-                {'error': 'message and student_id are required'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def student_report(request, student_id):
+    """
+    Generate a detailed AI report for a student.
+    """
+    try:
+        service = ReportingService()
+        data = service.generate_student_report(student_id)
+        return Response(data)
+    except Exception as e:
+        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def student_past_reports(request, student_id):
+    """
+    Get past AI reports for a student.
+    """
+    try:
+        reports = StudentAIReport.objects.filter(student_id=student_id).order_by('-generated_at')
+        data = [{
+            'report_id': r.report_id,
+            'report_data': r.report_data,
+            'generated_at': r.generated_at,
+            'is_automated': r.is_automated
+        } for r in reports]
+        return Response(data)
+    except Exception as e:
+        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def student_recommendations(request):
+    """
+    Get personalized study recommendations for the current student.
+    """
+    try:
+        student = Student.objects.get(user=request.user)
+        service = PersonalizationService()
+        data = service.get_student_recommendations(student.student_id)
+        return Response(data)
+    except Student.DoesNotExist:
+        return Response({'error': 'Student profile not found'}, status=status.HTTP_404_NOT_FOUND)
+    except Exception as e:
+        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def ai_tutor_chat(request):
+    """
+    Handle AI tutor chat messages with context awareness.
+    """
+    message = request.data.get('message')
+    history = request.data.get('history', [])
+    
+    if not message:
+        return Response({'error': 'Message is required'}, status=status.HTTP_400_BAD_REQUEST)
         
-        # Get student for context
-        student = get_object_or_404(Student, student_id=student_id)
+    try:
+        # Get student context for personalization
+        student = Student.objects.get(user=request.user)
         
-        # Build student context
-        student_context = {
-            'student_id': str(student_id),
-            'courses': [],  # TODO: fetch from student's enrolled courses
-            'weak_topics': [],  # TODO: analyze from recent results
-            'learning_style': getattr(student, 'learning_style', 'visual'),
-            'ai_explanation_level': getattr(student, 'ai_explanation_level', 'normal'),
-            'daily_goal': getattr(student, 'daily_study_goal', 30)
+        # Identify weak topics from results
+        results = Result.objects.filter(student=student).select_related('assessment', 'assessment__subject')
+        weak_topics = []
+        for res in results:
+            if (res.score / res.assessment.total_marks) < 0.6:
+                weak_topics.append(res.assessment.subject.name)
+        
+        # Deduplicate and limit
+        weak_topics = list(set(weak_topics))[:3]
+        
+        # Get enrolled courses
+        # Note: In this project subjects are linked to Class. 
+        # Students belong to a Class. So courses are subjects of their class.
+        courses = [s.name for s in student.academic_class.subjects.all()] if student.academic_class else []
+        
+        context = {
+            'learning_style': student.learning_style,
+            'ai_explanation_level': student.ai_explanation_level,
+            'courses': courses,
+            'weak_topics': weak_topics
         }
         
-        # Generate AI response
-        result = ai_tutor_service.generate_tutor_response(
-            message=message,
-            student_context=student_context,
-            conversation_history=conversation_history
+        service = AITutorService()
+        response_text = service.get_chat_response(history + [{"role": "user", "content": message}], context)
+        
+        # Log interaction (simplified)
+        AIInteractionLog.objects.create(
+            tenant=request.user.tenant,
+            user=request.user,
+            feature_used='tutor',
+            total_tokens=len(message) // 4 + len(response_text) // 4 # Very rough estimation
         )
         
-        # Log interaction if not demo
-        if not result.get('is_demo'):
-            try:
-                AIInteractionLog.objects.create(
-                    tenant=student.user.tenant,
-                    user=student.user,
-                    feature_used='tutor',
-                    total_tokens=result.get('tokens_used', 0),
-                    prompt_tokens=0,
-                    completion_tokens=result.get('tokens_used', 0)
-                )
-            except Exception as log_error:
-                print(f"Failed to log AI interaction: {log_error}")
+        return Response({'response': response_text})
         
-        return Response({
-            'response': result['response'],
-            'tokens_used': result.get('tokens_used', 0),
-            'is_demo': result.get('is_demo', False)
-        })
-        
+    except Student.DoesNotExist:
+        # Fallback for non-student users (e.g. teachers/admins)
+        service = AITutorService()
+        response_text = service.get_chat_response(history + [{"role": "user", "content": message}])
+        return Response({'response': response_text})
     except Exception as e:
-        return Response(
-            {'error': str(e)},
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR
-        )
+        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

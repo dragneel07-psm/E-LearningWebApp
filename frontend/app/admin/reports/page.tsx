@@ -356,10 +356,10 @@ export default function ReportsPage() {
                                         {auditLogs.length > 0 ? (
                                             auditLogs.map((log, i) => (
                                                 <tr key={i} className="hover:bg-slate-50">
-                                                    <td className="px-4 py-3 text-slate-600">{new Date(log.timestamp).toLocaleString()}</td>
+                                                    <td className="px-4 py-3 text-slate-600">{new Date(log.created_at).toLocaleString()}</td>
                                                     <td className="px-4 py-3 font-medium text-slate-900">{log.actor}</td>
                                                     <td className="px-4 py-3 text-slate-900">{log.action}</td>
-                                                    <td className="px-4 py-3 text-slate-500 font-mono text-xs">{log.ip_address}</td>
+                                                    <td className="px-4 py-3 text-slate-500 font-mono text-xs">{(log as any).ip_address}</td>
                                                     <td className="px-4 py-3">
                                                         <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-700">
                                                             Success

@@ -58,7 +58,7 @@ export default function TeacherNoticesPage() {
             setLoading(true);
             const user = await usersAPI.getMe();
             const teachers = await academicAPI.getTeachers();
-            const meTeacher = teachers.find(t => t.user === user.user_id);
+            const meTeacher = teachers.find(t => t.user_id === user.user_id);
 
             if (!meTeacher || !meTeacher.assigned_classes) {
                 toast.error('Could not find teacher profile');
@@ -66,12 +66,12 @@ export default function TeacherNoticesPage() {
             }
 
             const allClasses = await academicAPI.getClasses();
-            const assigned = allClasses.filter(c => meTeacher.assigned_classes?.includes(c.class_id));
+            const assigned = allClasses.filter(c => meTeacher.assigned_classes?.includes(c.id));
             setMyClasses(assigned);
 
             const fetchedNotices = await academicAPI.getNotices();
             // Sort by date desc
-            fetchedNotices.sort((a, b) => new Date(b.published_date).getTime() - new Date(a.published_date).getTime());
+            fetchedNotices.sort((a, b) => new Date(b.published_date || 0).getTime() - new Date(a.published_date || 0).getTime());
             setNotices(fetchedNotices);
         } catch (error) {
             console.error(error);
@@ -123,7 +123,7 @@ export default function TeacherNoticesPage() {
                 return;
             }
 
-            await academicAPI.updateNotice(selectedNotice.notice_id, payload);
+            await academicAPI.updateNotice(selectedNotice.notice_id!, payload);
             toast.success('Notice updated successfully');
             setIsEditOpen(false);
             setSelectedNotice(null);
@@ -149,7 +149,7 @@ export default function TeacherNoticesPage() {
 
     const openEdit = (notice: Notice) => {
         // Teachers can only edit notices for their classes
-        const canEdit = notice.target_audience === 'class' && myClasses.some(c => c.class_id === notice.target_class);
+        const canEdit = notice.target_audience === 'class' && myClasses.some(c => c.id.toString() === notice.target_class);
 
         if (!canEdit) {
             toast.error("You can only edit notices for your updated classes.");
@@ -186,8 +186,8 @@ export default function TeacherNoticesPage() {
         // Actually, we did fetch all classes in loadData()!
         // But I only stored `assigned`. Let me change loadData to store map if needed.
         // For simplicity, I'll display classId if not found in myClasses (or fix logic).
-        const cls = myClasses.find(c => c.class_id === classId);
-        return cls ? `Grade ${cls.grade}-${cls.section}` : 'Other Class';
+        const cls = myClasses.find(c => c.id.toString() === classId);
+        return cls ? cls.name : 'Other Class';
     };
 
     return (
@@ -216,7 +216,7 @@ export default function TeacherNoticesPage() {
 
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                 {filteredNotices.map((notice) => {
-                    const isMyClassNotice = notice.target_audience === 'class' && myClasses.some(c => c.class_id === notice.target_class);
+                    const isMyClassNotice = notice.target_audience === 'class' && myClasses.some(c => c.id.toString() === notice.target_class);
                     // Teacher can create/edit ONLY their class notices.
                     // But they can VIEW all? The prompt said "Teacher can create... assigned class".
                     // Assuming view all is fine.
@@ -232,7 +232,7 @@ export default function TeacherNoticesPage() {
                                         <h3 className="font-semibold text-lg line-clamp-1">{notice.title}</h3>
                                         <p className="text-xs text-muted-foreground flex items-center gap-1 mt-1">
                                             <Calendar className="h-3 w-3" />
-                                            {new Date(notice.published_date).toLocaleDateString()}
+                                            {new Date(notice.published_date || 0).toLocaleDateString()}
                                         </p>
                                     </div>
                                     <div className={`text-xs px-2 py-1 rounded-full border ${notice.priority === 'high' ? 'bg-red-50 text-red-700 border-red-100' :
@@ -254,7 +254,7 @@ export default function TeacherNoticesPage() {
                                         </span>
                                     ) : (
                                         <span className="flex items-center gap-1 bg-indigo-50 text-indigo-700 px-2 py-1 rounded">
-                                            <Users className="h-3 w-3" /> {getClassName(notice.target_class)}
+                                            <Users className="h-3 w-3" /> {getClassName(notice.target_class || null)}
                                         </span>
                                     )}
                                 </div>
@@ -281,7 +281,7 @@ export default function TeacherNoticesPage() {
                                     <Button variant="ghost" size="sm" onClick={() => openEdit(notice)}>
                                         <Edit className="h-4 w-4" />
                                     </Button>
-                                    <Button variant="ghost" size="sm" onClick={() => handleDelete(notice.notice_id)} className="text-red-500 hover:text-red-700 hover:bg-red-50">
+                                    <Button variant="ghost" size="sm" onClick={() => handleDelete(notice.notice_id!)} className="text-red-500 hover:text-red-700 hover:bg-red-50">
                                         <Trash2 className="h-4 w-4" />
                                     </Button>
                                 </div>
@@ -353,8 +353,8 @@ export default function TeacherNoticesPage() {
                                 <SelectTrigger><SelectValue placeholder="Select one of your classes" /></SelectTrigger>
                                 <SelectContent>
                                     {myClasses.map(c => (
-                                        <SelectItem key={c.class_id} value={c.class_id}>
-                                            Grade {c.grade}-{c.section}
+                                        <SelectItem key={c.id} value={c.id.toString()}>
+                                            {c.name}
                                         </SelectItem>
                                     ))}
                                 </SelectContent>
@@ -425,8 +425,8 @@ export default function TeacherNoticesPage() {
                                 <SelectTrigger><SelectValue placeholder="Select one of your classes" /></SelectTrigger>
                                 <SelectContent>
                                     {myClasses.map(c => (
-                                        <SelectItem key={c.class_id} value={c.class_id}>
-                                            Grade {c.grade}-{c.section}
+                                        <SelectItem key={c.id} value={c.id.toString()}>
+                                            {c.name}
                                         </SelectItem>
                                     ))}
                                 </SelectContent>

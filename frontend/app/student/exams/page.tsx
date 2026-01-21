@@ -3,16 +3,19 @@
 import { useState, useEffect } from 'react';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { useRouter } from 'next/navigation';
 import { Clock, Calendar, BarChart3, Loader2 } from 'lucide-react';
-import { academicAPI, helpers, Assessment, Result, Course } from '@/lib/api/saas';
+import { academicAPI, helpers, Assessment, Result, Subject } from '@/lib/api';
 
 type ResultWithDetails = Result & {
     assessmentDetails?: Assessment;
-    courseDetails?: Course;
+    subjectDetails?: Subject;
     percentage?: number;
 };
 
 export default function ExamsResultsPage() {
+    const router = useRouter();
     const [upcomingExams, setUpcomingExams] = useState<Assessment[]>([]);
     const [pastResults, setPastResults] = useState<ResultWithDetails[]>([]); // Results with details
     const [loading, setLoading] = useState(true);
@@ -29,7 +32,7 @@ export default function ExamsResultsPage() {
             // 1. Get student ID
             // We fetch the list of students available to this user context
             const students = await academicAPI.getStudents();
-            const myStudentId = students.length > 0 ? students[0].student_id : null;
+            const myStudentId = students.length > 0 ? students[0].id : null;
             console.log('ExamsPage: Found student ID:', myStudentId);
 
             if (myStudentId) {
@@ -40,7 +43,7 @@ export default function ExamsResultsPage() {
 
                 // 3. Fetch Results
                 const results = await helpers.getStudentResultsWithDetails(myStudentId);
-                setPastResults(results);
+                setPastResults(results as ResultWithDetails[]);
             }
         } catch (error) {
             console.error('Failed to load exams/results', error);
@@ -99,9 +102,17 @@ export default function ExamsResultsPage() {
                                                 </div> */}
                                             </div>
                                         </div>
-                                        <div className="shrink-0 text-center bg-slate-50 p-3 rounded-lg border border-slate-100">
-                                            <span className="block text-xs uppercase tracking-wider text-slate-500">Total Marks</span>
-                                            <span className="block text-xl font-bold text-slate-800">{exam.total_marks}</span>
+                                        <div className="shrink-0 flex flex-col items-center gap-3">
+                                            <div className="text-center bg-slate-50 p-3 rounded-xl border border-slate-100 min-w-[100px]">
+                                                <span className="block text-xs uppercase tracking-wider text-slate-500">Marks</span>
+                                                <span className="block text-xl font-bold text-slate-800">{exam.total_marks}</span>
+                                            </div>
+                                            <Button
+                                                className="w-full bg-indigo-600 hover:bg-indigo-700 font-bold rounded-xl"
+                                                onClick={() => router.push(`/student/quizzes/${exam.assessment_id}`)}
+                                            >
+                                                Start Exam
+                                            </Button>
                                         </div>
                                     </div>
                                 </Card>
@@ -130,7 +141,7 @@ export default function ExamsResultsPage() {
                                             </h4>
                                             <p className="text-xs text-slate-500">{new Date(result.submitted_at || Date.now()).toLocaleDateString()}</p>
                                         </div>
-                                        <GradeBadge percentage={result.percentage} />
+                                        <GradeBadge percentage={result.percentage!} />
                                     </div>
 
                                     <div className="relative z-10">
@@ -140,7 +151,7 @@ export default function ExamsResultsPage() {
                                         </div>
                                         <div className="w-full bg-slate-100 rounded-full h-1.5">
                                             <div
-                                                className={`h-1.5 rounded-full ${result.percentage >= 60 ? 'bg-green-500' : result.percentage >= 40 ? 'bg-orange-500' : 'bg-red-500'}`}
+                                                className={`h-1.5 rounded-full ${result.percentage! >= 60 ? 'bg-green-500' : result.percentage! >= 40 ? 'bg-orange-500' : 'bg-red-500'}`}
                                                 style={{ width: `${result.percentage}%` }}
                                             ></div>
                                         </div>

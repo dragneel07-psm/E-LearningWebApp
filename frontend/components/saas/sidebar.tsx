@@ -13,7 +13,7 @@ import {
     LogOut
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { removeToken } from '@/lib/auth';
+import { removeTokens } from '@/lib/auth';
 
 export function SaasSidebar() {
     const pathname = usePathname();
@@ -99,7 +99,7 @@ export function SaasSidebar() {
                     className="w-full justify-start text-zinc-400 hover:text-white hover:bg-white/10"
                     onClick={() => {
                         // Clear auth token
-                        removeToken();
+                        removeTokens();
                         // Redirect to SaaS Login
                         window.location.href = '/login/saas';
                     }}

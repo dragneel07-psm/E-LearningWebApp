@@ -6,11 +6,10 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Send, Sparkles, Trash2, Loader2 } from 'lucide-react';
-import { aiAPI, usersAPI } from '@/lib/api/saas';
+import { aiAPI, usersAPI } from '@/lib/api';
 import { toast } from 'sonner';
 import ReactMarkdown from 'react-markdown';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
-import type { CSSProperties } from 'react';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 
 interface Message {
@@ -70,11 +69,8 @@ export default function AITutorPage() {
         setLoading(true);
 
         try {
-            const response = await aiAPI.chat({
-                message: input,
-                student_id: studentId,
-                conversation_history: messages
-            });
+            // Updated to pass 3 arguments as expected by aiAPI.chat
+            const response = await aiAPI.chat(input, studentId, messages as any);
 
             const assistantMessage: Message = {
                 role: 'assistant',
@@ -170,35 +166,36 @@ export default function AITutorPage() {
                                 >
                                     <div
                                         className={`max-w-[80%] rounded-lg p-4 ${message.role === 'user'
-                                                ? 'bg-indigo-600 text-white'
-                                                : 'bg-slate-100 text-slate-900'
+                                            ? 'bg-indigo-600 text-white'
+                                            : 'bg-slate-100 text-slate-900'
                                             }`}
                                     >
                                         {message.role === 'assistant' ? (
-                                            <ReactMarkdown
-                                                className="prose prose-sm max-w-none"
-                                                components={{
-                                                    code({ inline, className, children, ...props }) {
-                                                        const match = /language-(\w+)/.exec(className || '');
-                                                        return !inline && match ? (
-                                                            <SyntaxHighlighter
-                                                                style={vscDarkPlus as Record<string, CSSProperties>}
-                                                                language={match[1]}
-                                                                PreTag="div"
-                                                                {...props}
-                                                            >
-                                                                {String(children).replace(/\n$/, '')}
-                                                            </SyntaxHighlighter>
-                                                        ) : (
-                                                            <code className={className} {...props}>
-                                                                {children}
-                                                            </code>
-                                                        );
-                                                    }
-                                                }}
-                                            >
-                                                {message.content}
-                                            </ReactMarkdown>
+                                            <div className="prose prose-sm max-w-none">
+                                                <ReactMarkdown
+                                                    components={{
+                                                        code({ inline, className, children, ...props }: any) {
+                                                            const match = /language-(\w+)/.exec(className || '');
+                                                            return !inline && match ? (
+                                                                <SyntaxHighlighter
+                                                                    style={vscDarkPlus as any}
+                                                                    language={match[1]}
+                                                                    PreTag="div"
+                                                                    {...props}
+                                                                >
+                                                                    {String(children).replace(/\n$/, '')}
+                                                                </SyntaxHighlighter>
+                                                            ) : (
+                                                                <code className={className} {...props}>
+                                                                    {children}
+                                                                </code>
+                                                            );
+                                                        }
+                                                    }}
+                                                >
+                                                    {message.content}
+                                                </ReactMarkdown>
+                                            </div>
                                         ) : (
                                             <p className="whitespace-pre-wrap">{message.content}</p>
                                         )}

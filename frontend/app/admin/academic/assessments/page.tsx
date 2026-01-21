@@ -6,12 +6,12 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { ArrowLeft, Trash2, Search, Loader2 } from 'lucide-react';
-import { academicAPI, Assessment, Course } from '@/lib/api';
+import { academicAPI, Assessment, Subject } from '@/lib/api';
 import Link from 'next/link';
 
 export default function AssessmentOversightPage() {
     const [assessments, setAssessments] = useState<Assessment[]>([]);
-    const [courses, setCourses] = useState<Course[]>([]);
+    const [subjects, setSubjects] = useState<Subject[]>([]);
     const [loading, setLoading] = useState(true);
     const [filter, setFilter] = useState('');
 
@@ -21,12 +21,12 @@ export default function AssessmentOversightPage() {
 
     async function loadData() {
         try {
-            const [assessmentsData, coursesData] = await Promise.all([
+            const [assessmentsData, subjectsData] = await Promise.all([
                 academicAPI.getAssessments(),
-                academicAPI.getCourses()
+                academicAPI.getSubjects()
             ]);
             setAssessments(assessmentsData);
-            setCourses(coursesData);
+            setSubjects(subjectsData);
         } catch (error) {
             console.error('Failed to load data', error);
         } finally {
@@ -44,14 +44,15 @@ export default function AssessmentOversightPage() {
         }
     }
 
-    const getCourseName = (id: string) => {
-        const c = courses.find(course => course.course_id === id);
-        return c ? c.subject : 'Unknown Course';
+    const getSubjectName = (id: string) => {
+        // Assessment.course is string, Subject.id is number
+        const s = subjects.find(sub => sub.id.toString() === id);
+        return s ? s.name : 'Unknown Subject';
     };
 
     const filteredAssessments = assessments.filter(a =>
         a.title.toLowerCase().includes(filter.toLowerCase()) ||
-        getCourseName(a.course).toLowerCase().includes(filter.toLowerCase())
+        getSubjectName(a.course).toLowerCase().includes(filter.toLowerCase())
     );
 
     return (
@@ -92,7 +93,7 @@ export default function AssessmentOversightPage() {
                         <TableHeader>
                             <TableRow>
                                 <TableHead>Title</TableHead>
-                                <TableHead>Course</TableHead>
+                                <TableHead>Subject</TableHead>
                                 <TableHead>Type</TableHead>
                                 <TableHead>Due Date</TableHead>
                                 <TableHead>Total Marks</TableHead>
@@ -120,7 +121,7 @@ export default function AssessmentOversightPage() {
                                         </TableCell>
                                         <TableCell>
                                             <span className="inline-flex items-center px-2 py-0.5 rounded text-xs bg-slate-100 text-slate-800">
-                                                {getCourseName(a.course)}
+                                                {getSubjectName(a.course)}
                                             </span>
                                         </TableCell>
                                         <TableCell>

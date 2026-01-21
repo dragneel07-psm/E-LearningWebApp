@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Bell, Calendar, Info, AlertTriangle, Loader2, FileText } from 'lucide-react';
-import { academicAPI, Notice } from '@/lib/api/saas';
+import { academicAPI, Notice } from '@/lib/api';
 import { DocumentViewerModal } from '@/components/document-viewer-modal';
 
 export default function NoticesPage() {
@@ -63,7 +63,9 @@ export default function NoticesPage() {
                                 <div className="flex-1">
                                     <div className="flex justify-between items-start">
                                         <h3 className="font-bold text-lg text-slate-800">{notice.title}</h3>
-                                        <span className="text-xs text-slate-500 whitespace-nowrap">{new Date(notice.published_date).toLocaleDateString()}</span>
+                                        <span className="text-xs text-slate-500 whitespace-nowrap">
+                                            {notice.published_date ? new Date(notice.published_date).toLocaleDateString() : 'N/A'}
+                                        </span>
                                     </div>
 
                                     <div className="flex items-center gap-2 mt-1 mb-2">

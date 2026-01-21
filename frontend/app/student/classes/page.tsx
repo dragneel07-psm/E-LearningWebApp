@@ -5,11 +5,11 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { BookOpen, Clock, User, Calendar, TrendingUp } from 'lucide-react';
-import { academicAPI, helpers, Course } from '@/lib/api/saas';
+import { academicAPI, helpers, Subject, Teacher, AcademicClass } from '@/lib/api';
 import { toast } from 'sonner';
 
 export default function MyClassesPage() {
-    const [courses, setCourses] = useState<Course[]>([]);
+    const [courses, setCourses] = useState<(Subject & { teacher_details?: Teacher, academic_class_details?: AcademicClass })[]>([]);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
@@ -19,8 +19,8 @@ export default function MyClassesPage() {
     const loadCourses = async () => {
         try {
             setLoading(true);
-            // helpers.getStudentCourses() now handles fetching the current student's ID internally if not provided
-            const studentCourses = await helpers.getStudentCourses();
+            // helpers.getStudentSubjects() now handles fetching the current student's ID internally if not provided
+            const studentCourses = await helpers.getStudentSubjects();
 
             // For now, we need to fetch teacher/class details manually if they aren't expanded by backend
             // In a production app, the backend serializer should expand these relations
@@ -31,12 +31,8 @@ export default function MyClassesPage() {
 
             const enrichedCourses = studentCourses.map(course => ({
                 ...course,
-                // This logic assumes we can find teacher by some relation, but Course model has no direct Teacher field yet?
-                // Wait, existing course model has `subject` and `academic_class`. Teacher assignment is usually per class-subject.
-                // Let's check Teacher model. Teacher has `assigned_classes`.
-                // We'll simplisticly find a teacher who is assigned to this class. This is imprecise but works for now.
                 teacher_details: teachers.find(t => t.assigned_classes?.includes(course.academic_class)),
-                academic_class_details: classes.find(c => c.class_id === course.academic_class)
+                academic_class_details: classes.find(c => c.id === course.academic_class)
             }));
 
             setCourses(enrichedCourses);
@@ -49,9 +45,9 @@ export default function MyClassesPage() {
     };
 
     // Mock progress data - replace with actual data when backend has detailed progress tracking
-    const getProgress = (courseId: string) => {
+    const getProgress = (id: number) => {
         // Deterministic mock based on ID char code
-        const sum = courseId.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+        const sum = id.toString().split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
         return sum % 100;
     };
 
@@ -89,7 +85,7 @@ export default function MyClassesPage() {
                             <p className="text-sm text-green-600 font-medium">Average Progress</p>
                             <p className="text-3xl font-bold text-green-900 mt-1">
                                 {courses.length > 0
-                                    ? Math.round(courses.reduce((acc, c) => acc + getProgress(c.course_id), 0) / courses.length)
+                                    ? Math.round(courses.reduce((acc, c) => acc + getProgress(c.id), 0) / courses.length)
                                     : 0}%
                             </p>
                         </div>
@@ -118,9 +114,9 @@ export default function MyClassesPage() {
             ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     {courses.map((course) => {
-                        const progress = getProgress(course.course_id);
+                        const progress = getProgress(course.id);
                         return (
-                            <Card key={course.course_id} className="overflow-hidden hover:shadow-lg transition-shadow">
+                            <Card key={course.id} className="overflow-hidden hover:shadow-lg transition-shadow">
                                 {/* Course Header */}
                                 <div className="bg-gradient-to-r from-indigo-500 to-purple-600 p-6 text-white">
                                     <div className="flex items-start justify-between mb-3">
@@ -129,9 +125,9 @@ export default function MyClassesPage() {
                                             Active
                                         </Badge>
                                     </div>
-                                    <h3 className="text-xl font-bold mb-1 line-clamp-1">{course.subject}</h3>
+                                    <h3 className="text-xl font-bold mb-1 line-clamp-1">{course.name}</h3>
                                     <p className="text-indigo-100 text-sm">
-                                        Grade {course.academic_class_details?.grade || 'N/A'} - {course.academic_class_details?.section || 'N/A'}
+                                        Grade {course.academic_class_details?.name || 'N/A'}
                                     </p>
                                 </div>
 
@@ -156,7 +152,7 @@ export default function MyClassesPage() {
                                     <div className="mb-4">
                                         <div className="flex justify-between text-xs mb-2">
                                             <span className="text-slate-500 font-medium">Course Progress</span>
-                                            <span className="font-bold text-indigo-600">{progress}%</span>
+                                            <span className="font-bold text-indigo-600">{getProgress(course.id)}%</span>
                                         </div>
                                         <div className="w-full bg-slate-100 rounded-full h-2">
                                             <div

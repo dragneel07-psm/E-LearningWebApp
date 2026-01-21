@@ -37,7 +37,7 @@ export function ManageScheduleDialog({ open, onOpenChange, trigger }: ManageSche
             try {
                 const data = await academicAPI.getClasses();
                 setClasses(data);
-                if (data.length > 0) setSelectedClass(data[0].class_id);
+                if (data.length > 0) setSelectedClass(data[0].id.toString());
             } catch (error) {
                 console.error("Failed to load classes", error);
             }
@@ -51,7 +51,7 @@ export function ManageScheduleDialog({ open, onOpenChange, trigger }: ManageSche
             try {
                 // In a real app, we might filter by class on backend
                 const allTimetable = await academicAPI.getTimetable();
-                setTimetable(allTimetable.filter(t => t.academic_class === selectedClass));
+                setTimetable(allTimetable.filter(t => t.academic_class.toString() === selectedClass));
             } catch (error) {
                 console.error("Failed to load timetable", error);
             }
@@ -80,7 +80,7 @@ export function ManageScheduleDialog({ open, onOpenChange, trigger }: ManageSche
 
             // Refresh
             const allTimetable = await academicAPI.getTimetable();
-            setTimetable(allTimetable.filter(t => t.academic_class === selectedClass));
+            setTimetable(allTimetable.filter(t => t.academic_class.toString() === selectedClass));
 
             // Reset partial form
             setFormData(prev => ({ ...prev, subject_name: '', room_number: '' }));
@@ -98,7 +98,7 @@ export function ManageScheduleDialog({ open, onOpenChange, trigger }: ManageSche
             await academicAPI.deleteTimetable(id);
             // Refresh
             const allTimetable = await academicAPI.getTimetable();
-            setTimetable(allTimetable.filter(t => t.academic_class === selectedClass));
+            setTimetable(allTimetable.filter(t => t.academic_class.toString() === selectedClass));
         } catch (error) {
             console.error('Failed to delete slot', error);
             alert("Failed to delete slot");
@@ -121,7 +121,7 @@ export function ManageScheduleDialog({ open, onOpenChange, trigger }: ManageSche
                         </SelectTrigger>
                         <SelectContent>
                             {classes.map(c => (
-                                <SelectItem key={c.class_id} value={c.class_id}>Grade {c.grade}-{c.section}</SelectItem>
+                                <SelectItem key={c.id} value={c.id.toString()}>{c.name}</SelectItem>
                             ))}
                         </SelectContent>
                     </Select>

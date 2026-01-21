@@ -42,8 +42,8 @@ export function AddTeacherDialog({ open, onOpenChange, onSuccess }: AddTeacherDi
 
             // Create teacher profile
             await academicAPI.createTeacher({
-                user: user.user_id
-            });
+                user_id: user.user_id
+            } as any);
 
             alert('Teacher created successfully!');
             onOpenChange(false);

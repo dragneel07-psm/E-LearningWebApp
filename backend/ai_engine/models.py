@@ -5,7 +5,7 @@ from core.models.tenant import Tenant
 
 class AIInteractionLog(models.Model):
     log_id = models.UUIDField(primary_key=True, default=uuid_lib.uuid4, editable=False)
-    tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE)
+    tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE, db_constraint=False)
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True)
     feature_used = models.CharField(max_length=100) # e.g., 'tutor', 'grading', 'email'
     prompt_tokens = models.IntegerField(default=0)
@@ -16,3 +16,14 @@ class AIInteractionLog(models.Model):
 
     def __str__(self):
         return f"{self.tenant.name} - {self.feature_used}"
+
+class StudentAIReport(models.Model):
+    report_id = models.UUIDField(primary_key=True, default=uuid_lib.uuid4, editable=False)
+    tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE, db_constraint=False)
+    student = models.ForeignKey('academic.Student', on_delete=models.CASCADE, related_name='ai_reports')
+    report_data = models.JSONField()
+    generated_at = models.DateTimeField(auto_now_add=True)
+    is_automated = models.BooleanField(default=False)
+
+    def __str__(self):
+        return f"Report for {self.student} - {self.generated_at.date()}"

@@ -35,7 +35,7 @@ export default function ExamRoomPage() {
     const loadData = useCallback(async () => {
         try {
             const students = await academicAPI.getStudents();
-            if (students.length > 0) setStudentId(students[0].student_id);
+            if (students.length > 0) setStudentId(students[0].id);
 
             const [assessData, qData] = await Promise.all([
                 academicAPI.getAssessment(id),

@@ -78,8 +78,8 @@ export function CreateLessonDialog({ trigger }: CreateLessonDialogProps) {
                                         <div className="p-2 text-sm text-center text-muted-foreground">No classes found</div>
                                     ) : (
                                         classes.map((cls) => (
-                                            <SelectItem key={cls.class_id} value={cls.class_id}>
-                                                Class {cls.grade}-{cls.section}
+                                            <SelectItem key={cls.id} value={cls.id.toString()}>
+                                                {cls.name}
                                             </SelectItem>
                                         ))
                                     )}

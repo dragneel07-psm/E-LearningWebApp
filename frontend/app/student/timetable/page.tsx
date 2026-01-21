@@ -5,7 +5,7 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Download, Clock, MapPin, Loader2 } from 'lucide-react';
-import { academicAPI, Timetable } from '@/lib/api/saas';
+import { academicAPI, Timetable } from '@/lib/api';
 import { jsPDF } from "jspdf";
 import autoTable from 'jspdf-autotable';
 
@@ -13,6 +13,7 @@ export default function TimetablePage() {
     const weekDays = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
     const [timetable, setTimetable] = useState<Timetable[]>([]);
     const [loading, setLoading] = useState(true);
+    const [selectedDay, setSelectedDay] = useState('Monday');
 
     useEffect(() => {
         loadTimetable();

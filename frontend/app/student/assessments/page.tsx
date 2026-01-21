@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import {
     Clock, Calendar, CheckCircle, BrainCircuit, ArrowRight, TrendingUp
 } from 'lucide-react';
-import { academicAPI, helpers, Assessment, Result, Course } from '@/lib/api';
+import { academicAPI, helpers, Assessment, Result, Subject } from '@/lib/api';
 import {
     ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip,
     RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar
@@ -18,7 +18,7 @@ export default function AssessmentDashboard() {
     const [loading, setLoading] = useState(true);
     type ResultWithDetails = Result & {
         assessmentDetails?: Assessment;
-        courseDetails?: Course;
+        subjectDetails?: Subject;
         percentage?: number;
     };
     const [results, setResults] = useState<ResultWithDetails[]>([]);
@@ -33,7 +33,7 @@ export default function AssessmentDashboard() {
             // Get mock user - in real app from context
             const students = await academicAPI.getStudents();
             if (students.length === 0) return;
-            const studentId = students[0].student_id;
+            const studentId = students[0].id; // Changed student_id to id (UUID)
 
             // Fetch data parallel
             const [allAssessments, studentResults] = await Promise.all([
@@ -41,10 +41,10 @@ export default function AssessmentDashboard() {
                 helpers.getStudentResultsWithDetails(studentId),
             ]);
 
-            setResults(studentResults);
+            // helpers returns object with subjectDetails
+            setResults(studentResults as any);
 
-            // Filter upcoming (mock logic as we don't have real dates yet)
-            // Just picking standard 'Exam' types as upcoming for demo
+            // Filter upcoming
             const upcoming = allAssessments.filter(a => !studentResults.find(r => r.assessment === a.assessment_id));
             setUpcomingTests(upcoming);
 
@@ -57,7 +57,7 @@ export default function AssessmentDashboard() {
 
     if (loading) return <div className="p-8">Loading Assessments...</div>;
 
-    // Mock Data for Charts (since we have limited real data)
+    // Mock Data for Charts
     const trendData = [
         { name: 'Unit 1', score: 65, avg: 70 },
         { name: 'Unit 2', score: 72, avg: 71 },
@@ -166,8 +166,8 @@ export default function AssessmentDashboard() {
                                 {results.map((result) => (
                                     <div key={result.result_id} className="flex items-center justify-between p-4 rounded-lg border bg-white hover:bg-slate-50 transition-colors">
                                         <div className="flex items-start gap-4">
-                                            <div className={`h-10 w-10 rounded-full flex items-center justify-center font-bold ${result.percentage >= 80 ? 'bg-green-100 text-green-700' :
-                                                result.percentage >= 60 ? 'bg-blue-100 text-blue-700' :
+                                            <div className={`h-10 w-10 rounded-full flex items-center justify-center font-bold ${result.percentage! >= 80 ? 'bg-green-100 text-green-700' :
+                                                result.percentage! >= 60 ? 'bg-blue-100 text-blue-700' :
                                                     'bg-orange-100 text-orange-700'
                                                 }`}>
                                                 {result.percentage}%
@@ -175,7 +175,7 @@ export default function AssessmentDashboard() {
                                             <div>
                                                 <h4 className="font-semibold">{result.assessmentDetails?.title || 'Assessment'}</h4>
                                                 <p className="text-sm text-muted-foreground">
-                                                    {result.courseDetails?.subject} • Completed on {new Date().toLocaleDateString()}
+                                                    {result.subjectDetails?.name} • Completed on {new Date().toLocaleDateString()}
                                                 </p>
                                             </div>
                                         </div>

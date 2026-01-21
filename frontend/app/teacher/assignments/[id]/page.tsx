@@ -15,6 +15,7 @@ import {
     Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription
 } from '@/components/ui/dialog';
 import { academicAPI, Assessment, Submission, Student } from '@/lib/api';
+import QuestionManager from './QuestionManager';
 
 export default function AssignmentDetailsPage() {
     const params = useParams();
@@ -46,7 +47,7 @@ export default function AssignmentDetailsPage() {
 
             // Map students for easy lookup
             const studentMap: Record<string, Student> = {};
-            studentsData.forEach((s: Student) => studentMap[s.student_id] = s);
+            studentsData.forEach((s: Student) => studentMap[s.id] = s);
             setStudents(studentMap);
 
         } catch (error) {
@@ -156,8 +157,13 @@ export default function AssignmentDetailsPage() {
             <Tabs defaultValue="submissions" className="w-full">
                 <TabsList className="bg-white border mb-4">
                     <TabsTrigger value="submissions">Submissions</TabsTrigger>
+                    {assessment.type === 'quiz' && <TabsTrigger value="questions">Questions</TabsTrigger>}
                     <TabsTrigger value="details">Instructions</TabsTrigger>
                 </TabsList>
+
+                <TabsContent value="questions">
+                    <QuestionManager assessmentId={assessment.assessment_id} />
+                </TabsContent>
 
                 <TabsContent value="details">
                     <Card>
@@ -197,7 +203,7 @@ export default function AssignmentDetailsPage() {
                                                     </div>
                                                     <div>
                                                         <div className="font-medium text-slate-900">{student.first_name} {student.last_name}</div>
-                                                        <div className="text-xs text-slate-500">Student ID: {student.student_id ? student.student_id.substring(0, 8) : '...'}</div>
+                                                        <div className="text-xs text-slate-500">Student ID: {student.id ? student.id.substring(0, 8) : '...'}</div>
                                                     </div>
                                                 </div>
                                                 <div className="col-span-3">

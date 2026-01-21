@@ -91,7 +91,7 @@ export default function GroupsPage() {
         }
     };
 
-    const handleDeleteGroup = async (id: string) => {
+    const handleDeleteGroup = async (id: string | number) => {
         if (!confirm('Are you sure you want to delete this group?')) return;
         try {
             setError(null);
@@ -272,7 +272,7 @@ export default function GroupsPage() {
                                             {perm.name}
                                         </label>
                                         <span className="text-gray-500 text-xs text-wrap break-all">
-                                            {perm.content_type_id} | {perm.codename}
+                                            {perm.codename}
                                         </span>
                                     </div>
                                 </div>

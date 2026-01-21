@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Sparkles, TrendingUp, Users, DollarSign, Clock } from 'lucide-react';
-import { aiAPI } from '@/lib/api/saas';
+import { aiAPI } from '@/lib/api';
 import { toast } from 'sonner';
 
 interface AILog {

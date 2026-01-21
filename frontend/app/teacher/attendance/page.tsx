@@ -24,7 +24,7 @@ export default function AttendancePage() {
                 const classList = await academicAPI.getClasses();
                 setClasses(classList);
                 if (classList.length > 0) {
-                    setSelectedClassId(classList[0].class_id);
+                    setSelectedClassId(classList[0].id.toString());
                 }
             } catch (error) {
                 console.error("Failed to load classes", error);
@@ -43,13 +43,13 @@ export default function AttendancePage() {
             try {
                 // Fetch all students and filter by class (backend filtering preferred)
                 const allStudents = await academicAPI.getStudents();
-                const classStudents = allStudents.filter(s => s.academic_class === selectedClassId);
+                const classStudents = allStudents.filter((s: Student) => s.academic_class?.toString() === selectedClassId);
                 setStudents(classStudents);
 
                 // Initialize attendance as 'present' for all
                 const initialData: Record<string, 'present' | 'absent' | 'late'> = {};
-                classStudents.forEach(s => {
-                    initialData[s.student_id] = 'present';
+                classStudents.forEach((s: Student) => {
+                    initialData[s.id] = 'present';
                 });
                 setAttendanceData(initialData);
             } catch (error) {
@@ -77,10 +77,10 @@ export default function AttendancePage() {
 
             const promises = students.map(student => {
                 const payload: Partial<Attendance> & { academic_class: string } = {
-                    student: student.student_id,
+                    student: student.id,
                     academic_class: selectedClassId,
                     date: date,
-                    status: attendanceData[student.student_id],
+                    status: attendanceData[student.id],
                     remarks: ''
                 };
                 return academicAPI.createAttendance(payload);
@@ -129,8 +129,8 @@ export default function AttendancePage() {
                             </SelectTrigger>
                             <SelectContent>
                                 {classes.map(c => (
-                                    <SelectItem key={c.class_id} value={c.class_id}>
-                                        Grade {c.grade}-{c.section}
+                                    <SelectItem key={c.id} value={c.id.toString()}>
+                                        {c.name}
                                     </SelectItem>
                                 ))}
                             </SelectContent>
@@ -155,7 +155,7 @@ export default function AttendancePage() {
 
                             <div className="space-y-2">
                                 {students.map(student => (
-                                    <div key={student.student_id} className="flex justify-between items-center p-3 rounded-lg border hover:bg-slate-50 transition-colors">
+                                    <div key={student.id} className="flex justify-between items-center p-3 rounded-lg border hover:bg-slate-50 transition-colors">
                                         <div className="flex items-center gap-3">
                                             <div className="h-8 w-8 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-700 font-bold text-xs">
                                                 {student.first_name?.[0]}{student.last_name?.[0]}
@@ -169,25 +169,25 @@ export default function AttendancePage() {
                                         <div className="flex gap-2">
                                             <Button
                                                 size="sm"
-                                                variant={attendanceData[student.student_id] === 'present' ? 'default' : 'outline'}
-                                                className={attendanceData[student.student_id] === 'present' ? 'bg-emerald-600 hover:bg-emerald-700' : ''}
-                                                onClick={() => handleStatusChange(student.student_id, 'present')}
+                                                variant={attendanceData[student.id] === 'present' ? 'default' : 'outline'}
+                                                className={attendanceData[student.id] === 'present' ? 'bg-emerald-600 hover:bg-emerald-700' : ''}
+                                                onClick={() => handleStatusChange(student.id, 'present')}
                                             >
                                                 <CheckCircle className="h-4 w-4 mr-1" /> Present
                                             </Button>
                                             <Button
                                                 size="sm"
-                                                variant={attendanceData[student.student_id] === 'late' ? 'default' : 'outline'}
-                                                className={attendanceData[student.student_id] === 'late' ? 'bg-amber-500 hover:bg-amber-600' : ''}
-                                                onClick={() => handleStatusChange(student.student_id, 'late')}
+                                                variant={attendanceData[student.id] === 'late' ? 'default' : 'outline'}
+                                                className={attendanceData[student.id] === 'late' ? 'bg-amber-500 hover:bg-amber-600' : ''}
+                                                onClick={() => handleStatusChange(student.id, 'late')}
                                             >
                                                 <Clock className="h-4 w-4 mr-1" /> Late
                                             </Button>
                                             <Button
                                                 size="sm"
-                                                variant={attendanceData[student.student_id] === 'absent' ? 'default' : 'outline'}
-                                                className={attendanceData[student.student_id] === 'absent' ? 'bg-red-600 hover:bg-red-700' : ''}
-                                                onClick={() => handleStatusChange(student.student_id, 'absent')}
+                                                variant={attendanceData[student.id] === 'absent' ? 'default' : 'outline'}
+                                                className={attendanceData[student.id] === 'absent' ? 'bg-red-600 hover:bg-red-700' : ''}
+                                                onClick={() => handleStatusChange(student.id, 'absent')}
                                             >
                                                 <XCircle className="h-4 w-4 mr-1" /> Absent
                                             </Button>

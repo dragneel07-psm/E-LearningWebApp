@@ -61,9 +61,9 @@ export function AddStudentDialog({ open, onOpenChange, onSuccess }: AddStudentDi
 
             // Create student profile
             await academicAPI.createStudent({
-                user: user.user_id,
-                academic_class: formData.academic_class
-            });
+                user_id: user.user_id,
+                academic_class: parseInt(formData.academic_class)
+            } as any); // Cast as any because createStudent expects full Student but we pass partial from models slice
 
             alert('Student created successfully!');
             onOpenChange(false);
@@ -165,8 +165,8 @@ export function AddStudentDialog({ open, onOpenChange, onSuccess }: AddStudentDi
                                 </SelectTrigger>
                                 <SelectContent>
                                     {classes.map((cls) => (
-                                        <SelectItem key={cls.class_id} value={cls.class_id}>
-                                            {cls.grade} - Section {cls.section}
+                                        <SelectItem key={cls.id} value={cls.id.toString()}>
+                                            {cls.name}
                                         </SelectItem>
                                     ))}
                                 </SelectContent>

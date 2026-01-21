@@ -1,31 +1,35 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
     Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger
 } from '@/components/ui/dialog';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { ArrowLeft, Plus, Trash2, Search, Loader2 } from 'lucide-react';
-import { academicAPI, AcademicClass } from '@/lib/api';
+import { ArrowLeft, Plus, Trash2, Search, Loader2, School, Settings2, Edit } from 'lucide-react';
+import { academicAPI, AcademicClass, Section } from '@/lib/api';
 import Link from 'next/link';
 import { Label } from '@/components/ui/label';
+import { Badge } from '@/components/ui/badge';
+import { toast } from 'sonner';
 
 export default function ClassManagementPage() {
     const [classes, setClasses] = useState<AcademicClass[]>([]);
     const [loading, setLoading] = useState(true);
     const [filter, setFilter] = useState('');
-    const [isDialogOpen, setIsDialogOpen] = useState(false);
 
-    const [formData, setFormData] = useState({
-        grade: '10',
-        section: 'A'
-    });
+    // Create Class State
+    const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+    const [createForm, setCreateForm] = useState({ name: '', order: 0 });
+    const [createLoading, setCreateLoading] = useState(false);
 
-    const [subjects, setSubjects] = useState<string[]>(['']);
+    // Manage Sections State
+    const [selectedClass, setSelectedClass] = useState<AcademicClass | null>(null);
+    const [isSectionDialogOpen, setIsSectionDialogOpen] = useState(false);
+    const [newSection, setNewSection] = useState({ name: '', capacity: 40 });
+    const [sectionLoading, setSectionLoading] = useState(false);
 
     useEffect(() => {
         loadClasses();
@@ -34,74 +38,116 @@ export default function ClassManagementPage() {
     async function loadClasses() {
         try {
             const data = await academicAPI.getClasses();
-            // Sort by grade then section
-            const sorted = data.sort((a, b) => {
-                if (a.grade === b.grade) return a.section.localeCompare(b.section);
-                return a.grade - b.grade;
-            });
+            // Sort by order
+            const sorted = data.sort((a, b) => a.order - b.order);
             setClasses(sorted);
         } catch (error) {
             console.error('Failed to load classes', error);
+            toast.error('Failed to load classes');
         } finally {
             setLoading(false);
         }
     }
 
-    const addSubjectField = () => setSubjects([...subjects, '']);
-    const updateSubject = (index: number, value: string) => {
-        const newSubjects = [...subjects];
-        newSubjects[index] = value;
-        setSubjects(newSubjects);
-    };
-    const removeSubject = (index: number) => {
-        const newSubjects = subjects.filter((_, i) => i !== index);
-        setSubjects(newSubjects);
-    };
-
-    async function handleCreate() {
+    async function handleCreateClass() {
+        if (!createForm.name) {
+            toast.error("Class name is required");
+            return;
+        }
         try {
-            setLoading(true);
-            // 1. Create Class
-            const newClass = await academicAPI.createClass({
-                grade: parseInt(formData.grade),
-                section: formData.section.toUpperCase(),
+            setCreateLoading(true);
+            await academicAPI.createClass({
+                name: createForm.name,
+                order: createForm.order || classes.length + 1
             });
-
-            // 2. Create Subjects (Courses) for this class
-            const validSubjects = subjects.filter(s => s.trim() !== '');
-            if (validSubjects.length > 0 && newClass.class_id) {
-                await Promise.all(validSubjects.map(subject =>
-                    academicAPI.createCourse({
-                        academic_class: newClass.class_id,
-                        subject: subject.trim()
-                        // teacher: null initially
-                    })
-                ));
-            }
-
-            setIsDialogOpen(false);
-            setSubjects(['']); // Reset
+            toast.success("Class created successfully");
+            setIsCreateDialogOpen(false);
+            setCreateForm({ name: '', order: 0 });
             loadClasses();
-        } catch (error) {
-            console.error('Failed to create class', error);
-            // In a real app, show toast error
+        } catch (err) {
+            console.error(err);
+            toast.error("Failed to create class");
         } finally {
-            setLoading(false);
+            setCreateLoading(false);
         }
     }
 
-    async function handleDelete(id: string) {
-        if (!confirm('Are you sure? This will not delete students but will unlink them.')) return;
+    async function handleDeleteClass(id: number) {
+        if (!confirm('Are you sure? This will delete all sections and unlink students.')) return;
         try {
             await academicAPI.deleteClass(id);
+            toast.success("Class deleted");
             loadClasses();
         } catch (error) {
-            console.error('Failed to delete class', error);
+            console.error(error);
+            toast.error("Failed to delete class");
         }
     }
 
+    function openSectionManager(cls: AcademicClass) {
+        setSelectedClass(cls);
+        setIsSectionDialogOpen(true);
+    }
+
+    async function handleAddSection() {
+        if (!selectedClass || !newSection.name) return;
+        try {
+            setSectionLoading(true);
+            await academicAPI.createSection({
+                name: newSection.name,
+                capacity: newSection.capacity,
+                academic_class: selectedClass.id
+            });
+            toast.success("Section added");
+            setNewSection({ name: '', capacity: 40 });
+            // Reload classes only (or fetch class specific? getClasses includes sections normally?)
+            // Assuming getClasses serializer includes nested sections
+            loadClasses();
+            // Update selected class ref if needed, but getClasses updates 'classes' state which re-renders table
+            // However, the Dialog uses 'selectedClass' state. We need to update that too or close dialog
+            // Better to re-fetch or find the updated class in the new 'classes' list.
+
+            // For smoother UX, let's just reload list and keep dialog open?
+            // But selectedClass is stale.
+            // Let's rely on effect or manually update state.
+            // Simpler: Close dialog or switch to View Mode.
+        } catch (err) {
+            console.error(err);
+            toast.error("Failed to add section");
+        } finally {
+            setSectionLoading(false);
+        }
+    }
+
+    async function handleDeleteSection(sectionId: number) {
+        if (!confirm("Delete this section? Enrollment data may be lost.")) return;
+        try {
+            await academicAPI.deleteSection(sectionId);
+            toast.success("Section deleted");
+            loadClasses(); // Reloads list
+            // Manually update selectedClass for immediate UI feedback if dialog is open?
+            if (selectedClass && selectedClass.sections) {
+                setSelectedClass({
+                    ...selectedClass,
+                    sections: selectedClass.sections.filter(s => s.id !== sectionId)
+                });
+            }
+        } catch (err) {
+            console.error(err);
+            toast.error("Failed to delete section");
+        }
+    }
+
+    // Update selectedClass when classes list changes (to keep dialog in sync)
+    useEffect(() => {
+        if (selectedClass) {
+            const updated = classes.find(c => c.id === selectedClass.id);
+            if (updated) setSelectedClass(updated);
+        }
+    }, [classes, selectedClass?.id]); // Note: Don't dep on selectedClass itself to avoid loop
+
     const filteredClasses = classes.filter(c =>
-        `Grade ${c.grade} ${c.section}`.toLowerCase().includes(filter.toLowerCase())
+        c.name.toLowerCase().includes(filter.toLowerCase())
     );
 
     return (
@@ -116,91 +162,55 @@ export default function ClassManagementPage() {
                     </Link>
                     <div>
                         <h1 className="text-2xl font-bold tracking-tight text-slate-900">Class Management</h1>
-                        <p className="text-slate-500 text-sm">Define your school&apos;s structural hierarchy.</p>
+                        <p className="text-slate-500 text-sm">Define your school&apos;s structural hierarchy (Grades, Classes, Sections).</p>
                     </div>
                 </div>
-                <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+
+                <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
                     <DialogTrigger asChild>
-                        <Button className="bg-emerald-600 hover:bg-emerald-700">
+                        <Button className="bg-indigo-600 hover:bg-indigo-700">
                             <Plus className="mr-2 h-4 w-4" /> Add New Class
                         </Button>
                     </DialogTrigger>
-                    <DialogContent className="max-w-md">
+                    <DialogContent>
                         <DialogHeader>
-                            <DialogTitle>Add New Academic Class</DialogTitle>
-                            <DialogDescription>Create a new grade, section, and default subjects.</DialogDescription>
+                            <DialogTitle>Add Academic Class</DialogTitle>
+                            <DialogDescription>Create a new grade level (e.g. Grade 1, Class 10).</DialogDescription>
                         </DialogHeader>
                         <div className="grid gap-4 py-4">
-                            <div className="grid grid-cols-4 items-center gap-4">
-                                <Label className="text-right">Grade</Label>
-                                <Select
-                                    value={formData.grade}
-                                    onValueChange={(v) => setFormData({ ...formData, grade: v })}
-                                >
-                                    <SelectTrigger className="w-full col-span-3">
-                                        <SelectValue placeholder="Select Grade" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map(g => (
-                                            <SelectItem key={g} value={g.toString()}>Grade {g}</SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                            </div>
-                            <div className="grid grid-cols-4 items-center gap-4">
-                                <Label className="text-right">Section</Label>
+                            <div className="grid gap-2">
+                                <Label>Class Name</Label>
                                 <Input
-                                    className="col-span-3"
-                                    value={formData.section}
-                                    onChange={(e) => setFormData({ ...formData, section: e.target.value })}
-                                    placeholder="e.g. A, B, Blue"
+                                    placeholder="e.g. Grade 10"
+                                    value={createForm.name}
+                                    onChange={e => setCreateForm({ ...createForm, name: e.target.value })}
                                 />
                             </div>
-
-                            <div className="border-t pt-4 mt-2">
-                                <Label className="mb-2 block font-semibold">Subjects (Courses)</Label>
-                                <div className="space-y-2 max-h-48 overflow-y-auto">
-                                    {subjects.map((subject, index) => (
-                                        <div key={index} className="flex gap-2">
-                                            <Input
-                                                value={subject}
-                                                onChange={(e) => updateSubject(index, e.target.value)}
-                                                placeholder="Subject Name (e.g. Mathematics)"
-                                            />
-                                            {subjects.length > 1 && (
-                                                <Button variant="ghost" size="icon" onClick={() => removeSubject(index)}>
-                                                    <Trash2 className="h-4 w-4 text-red-500" />
-                                                </Button>
-                                            )}
-                                        </div>
-                                    ))}
-                                </div>
-                                <Button
-                                    type="button"
-                                    variant="outline"
-                                    size="sm"
-                                    className="mt-2 w-full border-dashed"
-                                    onClick={addSubjectField}
-                                >
-                                    <Plus className="h-3 w-3 mr-1" /> Add Subject
-                                </Button>
+                            <div className="grid gap-2">
+                                <Label>Order Sequence</Label>
+                                <Input
+                                    type="number"
+                                    value={createForm.order}
+                                    onChange={e => setCreateForm({ ...createForm, order: parseInt(e.target.value) || 0 })}
+                                />
+                                <p className="text-xs text-slate-500">Used for sorting (e.g. Grade 1 comes before Grade 2)</p>
                             </div>
                         </div>
                         <DialogFooter>
-                            <Button onClick={handleCreate} disabled={loading}>
-                                {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                                Create Class & Subjects
+                            <Button onClick={handleCreateClass} disabled={createLoading}>
+                                {createLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                                Create Class
                             </Button>
                         </DialogFooter>
                     </DialogContent>
                 </Dialog>
             </header>
 
-            {/* Content */}
+            {/* List */}
             <Card>
                 <CardHeader>
                     <div className="flex items-center justify-between">
-                        <CardTitle>Active Classes</CardTitle>
+                        <CardTitle>Academic Structure</CardTitle>
                         <div className="relative w-72">
                             <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
                             <Input
@@ -216,9 +226,9 @@ export default function ClassManagementPage() {
                     <Table>
                         <TableHeader>
                             <TableRow>
-                                <TableHead>Grade Level</TableHead>
-                                <TableHead>Section</TableHead>
-                                <TableHead>Class ID</TableHead>
+                                <TableHead className="w-[100px]">Order</TableHead>
+                                <TableHead>Class Name</TableHead>
+                                <TableHead>Sections</TableHead>
                                 <TableHead className="text-right">Actions</TableHead>
                             </TableRow>
                         </TableHeader>
@@ -232,23 +242,44 @@ export default function ClassManagementPage() {
                             ) : filteredClasses.length === 0 ? (
                                 <TableRow>
                                     <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">
-                                        No classes found. Create one to get started.
+                                        No classes defined yet.
                                     </TableCell>
                                 </TableRow>
                             ) : (
                                 filteredClasses.map((cls) => (
-                                    <TableRow key={cls.class_id}>
-                                        <TableCell className="font-medium">Grade {cls.grade}</TableCell>
-                                        <TableCell>
-                                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                                                Section {cls.section}
-                                            </span>
+                                    <TableRow key={cls.id}>
+                                        <TableCell className="font-mono text-slate-500">#{cls.order}</TableCell>
+                                        <TableCell className="font-medium text-lg">
+                                            <div className="flex items-center gap-2">
+                                                <School className="h-4 w-4 text-slate-400" />
+                                                {cls.name}
+                                            </div>
                                         </TableCell>
-                                        <TableCell className="text-slate-500 font-mono text-xs">{cls.class_id.slice(0, 8)}...</TableCell>
+                                        <TableCell>
+                                            <div className="flex flex-wrap gap-2">
+                                                {cls.sections && cls.sections.length > 0 ? (
+                                                    cls.sections.map(sec => (
+                                                        <Badge key={sec.id} variant="secondary" className="px-2 py-0.5">
+                                                            Section {sec.name}
+                                                        </Badge>
+                                                    ))
+                                                ) : (
+                                                    <span className="text-xs text-slate-400 italic">No sections</span>
+                                                )}
+                                                <Button size="icon" variant="ghost" className="h-6 w-6 ml-1" onClick={() => openSectionManager(cls)}>
+                                                    <Edit className="h-3 w-3 text-slate-500" />
+                                                </Button>
+                                            </div>
+                                        </TableCell>
                                         <TableCell className="text-right">
-                                            <Button variant="ghost" size="icon" className="h-8 w-8 text-red-600" onClick={() => handleDelete(cls.class_id)}>
-                                                <Trash2 className="h-4 w-4" />
-                                            </Button>
+                                            <div className="flex justify-end gap-2">
+                                                <Button variant="outline" size="sm" onClick={() => openSectionManager(cls)}>
+                                                    Manage Sections
+                                                </Button>
+                                                <Button variant="ghost" size="icon" className="h-8 w-8 text-red-600" onClick={() => handleDeleteClass(cls.id)}>
+                                                    <Trash2 className="h-4 w-4" />
+                                                </Button>
+                                            </div>
                                         </TableCell>
                                     </TableRow>
                                 ))
@@ -257,6 +288,67 @@ export default function ClassManagementPage() {
                     </Table>
                 </CardContent>
             </Card>
+
+            {/* Section Management Dialog */}
+            <Dialog open={isSectionDialogOpen} onOpenChange={setIsSectionDialogOpen}>
+                <DialogContent className="max-w-xl">
+                    <DialogHeader>
+                        <DialogTitle>Manage Sections for {selectedClass?.name}</DialogTitle>
+                        <DialogDescription>Add or remove sections. Students are enrolled into specific sections.</DialogDescription>
+                    </DialogHeader>
+
+                    <div className="space-y-6 py-4">
+                        {/* List Existing */}
+                        <div className="space-y-3">
+                            <h4 className="text-sm font-medium text-slate-700">Existing Sections</h4>
+                            <div className="grid grid-cols-2 gap-3">
+                                {selectedClass?.sections?.map(sec => (
+                                    <div key={sec.id} className="flex items-center justify-between p-3 border rounded-lg bg-slate-50">
+                                        <div>
+                                            <p className="font-semibold text-sm">Section {sec.name}</p>
+                                            <p className="text-xs text-slate-500">Capacity: {sec.capacity}</p>
+                                        </div>
+                                        <Button size="icon" variant="ghost" className="h-7 w-7 text-red-500 hover:bg-red-100" onClick={() => handleDeleteSection(sec.id)}>
+                                            <Trash2 className="h-4 w-4" />
+                                        </Button>
+                                    </div>
+                                ))}
+                                {(!selectedClass?.sections || selectedClass.sections.length === 0) && (
+                                    <p className="text-sm text-slate-500 col-span-2 italic">No sections created yet.</p>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Add New */}
+                        <div className="border-t pt-4 space-y-3">
+                            <h4 className="text-sm font-medium text-slate-700">Add New Section</h4>
+                            <div className="flex gap-3 items-end">
+                                <div className="grid gap-1.5 flex-1">
+                                    <Label className="text-xs">Section Name</Label>
+                                    <Input
+                                        placeholder="e.g. A, B, Blue"
+                                        value={newSection.name}
+                                        onChange={e => setNewSection({ ...newSection, name: e.target.value })}
+                                    />
+                                </div>
+                                <div className="grid gap-1.5 w-24">
+                                    <Label className="text-xs">Capacity</Label>
+                                    <Input
+                                        type="number"
+                                        placeholder="40"
+                                        value={newSection.capacity}
+                                        onChange={e => setNewSection({ ...newSection, capacity: parseInt(e.target.value) || 0 })}
+                                    />
+                                </div>
+                                <Button onClick={handleAddSection} disabled={sectionLoading || !newSection.name}>
+                                    {sectionLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4 mr-1" />}
+                                    Add
+                                </Button>
+                            </div>
+                        </div>
+                    </div>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }

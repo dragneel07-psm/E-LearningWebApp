@@ -10,7 +10,7 @@ import {
     ChevronRight, ClipboardList, CheckCircle, TrendingUp
 } from 'lucide-react';
 import { CreateLessonDialog } from '@/components/create-lesson-dialog';
-import { academicAPI, User, usersAPI, coreAPI } from '@/lib/api';
+import { academicAPI, User, usersAPI, coreAPI, aiAPI } from '@/lib/api';
 import { AITeachingAssistant } from '@/components/ai-teaching-assistant';
 import { MyProfileDialog } from '@/components/my-profile-dialog';
 import Link from 'next/link';
@@ -36,11 +36,8 @@ export default function TeacherDashboard() {
         { time: '14:00 - 14:45', class: 'Class 10-C', subject: 'Physics', room: 'Online', status: 'upcoming' },
     ];
 
-    // Mock Data for Alerts
-    const alerts = [
-        { id: 1, type: 'warning', title: 'Missing Assignments', desc: '5 students in Class 10-A haven\'t submitted "Newton\'s Laws"', action: 'View Details' },
-        { id: 2, type: 'alert', title: 'Performance Drop', desc: 'Class 9-B average score dropped by 15% in last quiz', action: 'Analyze' },
-    ];
+    const [analytics, setAnalytics] = useState<any>(null);
+    const [alerts, setAlerts] = useState<any[]>([]);
 
     useEffect(() => {
         async function loadData() {
@@ -59,12 +56,47 @@ export default function TeacherDashboard() {
 
                 // Fetch Stats
                 const students = await academicAPI.getStudents().catch(() => []);
-                const courses = await academicAPI.getCourses().catch(() => []);
+                const courses = await academicAPI.getSubjects().catch(() => []);
                 setStats(prev => ({
                     ...prev,
                     totalStudents: students.length,
                     classesAssigned: courses.length
                 }));
+
+                // Fetch Predictive Analytics
+                try {
+                    const aiData = await aiAPI.getTeacherAnalytics();
+                    setAnalytics(aiData);
+
+                    // Map AI Data to Alerts
+                    const newAlerts = [];
+                    if (aiData.at_risk_count > 0) {
+                        newAlerts.push({
+                            id: 1,
+                            type: 'alert',
+                            title: `${aiData.at_risk_count} Students At-Risk`,
+                            desc: `Critical: ${aiData.at_risk_students[0].name} and others show declining trends.`,
+                            action: 'View Analytics',
+                            link: '/teacher/analytics'
+                        });
+                    }
+                    aiData.ai_insights.forEach((insight: string, i: number) => {
+                        if (newAlerts.length < 3) {
+                            newAlerts.push({
+                                id: i + 2,
+                                type: 'warning',
+                                title: 'Curriculum Insight',
+                                desc: insight,
+                                action: 'Manage Lessons',
+                                link: '/teacher/courses'
+                            });
+                        }
+                    });
+                    setAlerts(newAlerts);
+                } catch (e) {
+                    console.warn("Predictive analytics failed to load", e);
+                }
+
             } catch (error) {
                 console.error('Dashboard load failed:', error);
             } finally {
@@ -265,9 +297,11 @@ export default function TeacherDashboard() {
                                     <div key={alert.id} className="p-4 hover:bg-slate-50 transition-colors">
                                         <h4 className="text-sm font-semibold text-slate-900">{alert.title}</h4>
                                         <p className="text-xs text-slate-500 mt-1 mb-2 leading-relaxed">{alert.desc}</p>
-                                        <Button variant="link" size="sm" className="h-auto p-0 text-indigo-600 text-xs">
-                                            {alert.action} <ChevronRight className="h-3 w-3 ml-1" />
-                                        </Button>
+                                        <Link href={alert.link || '#'}>
+                                            <Button variant="link" size="sm" className="h-auto p-0 text-indigo-600 text-xs">
+                                                {alert.action} <ChevronRight className="h-3 w-3 ml-1" />
+                                            </Button>
+                                        </Link>
                                     </div>
                                 ))}
                             </div>

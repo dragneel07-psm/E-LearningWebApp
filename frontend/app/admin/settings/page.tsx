@@ -8,7 +8,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { coreAPI, usersAPI, Tenant } from '@/lib/api';
-import { Building2, Save, GraduationCap, Globe, Mail, Phone, Calendar } from 'lucide-react';
+import { Building2, Save, GraduationCap, Globe, Mail, Phone, Calendar, Upload } from 'lucide-react';
+import { toast } from 'sonner';
+import Image from 'next/image';
 
 export default function SchoolSettingsPage() {
     const [loading, setLoading] = useState(true);
@@ -40,6 +42,7 @@ export default function SchoolSettingsPage() {
             }
         } catch (error) {
             console.error('Failed to load settings:', error);
+            toast.error("Failed to load settings");
         } finally {
             setLoading(false);
         }
@@ -50,13 +53,33 @@ export default function SchoolSettingsPage() {
         try {
             setSaving(true);
             await coreAPI.updateTenant(tenant.tenant_id, formData);
-            alert('Settings saved successfully!');
+            toast.success("Settings saved successfully");
             // Reload to confirm matches
             const updated = await coreAPI.getTenant(tenant.tenant_id);
             setTenant(updated);
         } catch (error) {
             console.error('Failed to save settings:', error);
-            alert('Failed to save settings.');
+            toast.error("Failed to save settings");
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (!e.target.files || !e.target.files[0] || !tenant) return;
+        const file = e.target.files[0];
+        const uploadData = new FormData();
+        uploadData.append('logo', file);
+
+        try {
+            setSaving(true);
+            await coreAPI.uploadTenantLogo(tenant.tenant_id, uploadData);
+            toast.success("Logo uploaded successfully");
+            const updated = await coreAPI.getTenant(tenant.tenant_id);
+            setTenant(updated);
+        } catch (error) {
+            console.error(error);
+            toast.error("Failed to upload logo");
         } finally {
             setSaving(false);
         }
@@ -97,35 +120,71 @@ export default function SchoolSettingsPage() {
                                 <CardDescription>Visible to all users and on public pages.</CardDescription>
                             </CardHeader>
                             <CardContent className="space-y-4">
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <div className="space-y-2">
-                                        <Label>School Name</Label>
-                                        <Input
-                                            value={formData.name || ''}
-                                            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                                            placeholder="Ex: Spring Valley High School"
-                                        />
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                                    <div className="space-y-4">
+                                        <div className="space-y-2">
+                                            <Label>School Logo</Label>
+                                            <div className="flex items-center gap-4">
+                                                <div className="relative h-24 w-24 rounded-lg border bg-slate-100 overflow-hidden flex items-center justify-center">
+                                                    {tenant?.logo ? (
+                                                        <Image
+                                                            src={tenant.logo}
+                                                            alt="School Logo"
+                                                            fill
+                                                            className="object-cover"
+                                                            unoptimized // Simplify for demo/remote handling
+                                                        />
+                                                    ) : (
+                                                        <Building2 className="h-8 w-8 text-slate-300" />
+                                                    )}
+                                                </div>
+                                                <div className="space-y-2">
+                                                    <Button variant="outline" size="sm" className="relative cursor-pointer" type="button">
+                                                        <Upload className="h-3 w-3 mr-2" />
+                                                        Upload Logo
+                                                        <input
+                                                            type="file"
+                                                            className="absolute inset-0 opacity-0 cursor-pointer"
+                                                            accept="image/*"
+                                                            onChange={handleLogoUpload}
+                                                        />
+                                                    </Button>
+                                                    <p className="text-xs text-muted-foreground">Recommended: 512x512px PNG</p>
+                                                </div>
+                                            </div>
+                                        </div>
                                     </div>
-                                    <div className="space-y-2">
-                                        <Label>Established Year</Label>
-                                        <Input
-                                            type="number"
-                                            value={formData.established_year || ''}
-                                            onChange={(e) => setFormData({ ...formData, established_year: parseInt(e.target.value) || undefined })}
-                                            placeholder="YYYY"
-                                        />
-                                    </div>
-                                </div>
-                                <div className="space-y-2">
-                                    <Label>Website</Label>
-                                    <div className="relative">
-                                        <Globe className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
-                                        <Input
-                                            className="pl-9"
-                                            value={formData.website || ''}
-                                            onChange={(e) => setFormData({ ...formData, website: e.target.value })}
-                                            placeholder="https://www.myschool.edu"
-                                        />
+
+                                    <div className="space-y-4">
+                                        <div className="space-y-2">
+                                            <Label>School Name</Label>
+                                            <Input
+                                                value={formData.name || ''}
+                                                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                                                placeholder="Ex: Spring Valley High School"
+                                            />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Label>Established Year</Label>
+                                            <Input
+                                                type="number"
+                                                value={formData.established_year || ''}
+                                                onChange={(e) => setFormData({ ...formData, established_year: parseInt(e.target.value) || undefined })}
+                                                placeholder="YYYY"
+                                            />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Label>Website</Label>
+                                            <div className="relative">
+                                                <Globe className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
+                                                <Input
+                                                    className="pl-9"
+                                                    value={formData.website || ''}
+                                                    onChange={(e) => setFormData({ ...formData, website: e.target.value })}
+                                                    placeholder="https://www.myschool.edu"
+                                                />
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
                             </CardContent>

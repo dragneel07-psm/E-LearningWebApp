@@ -8,14 +8,14 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ChevronLeft, Users, BookOpen, ClipboardList, BarChart2, Plus, BrainCircuit, AlertCircle, FileText, TrendingUp } from 'lucide-react';
 import Link from 'next/link';
-import { academicAPI, Course, Student, Assessment } from '@/lib/api';
+import { academicAPI, Subject, Student, Assessment } from '@/lib/api';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line } from 'recharts';
 
 export default function ClassDetailPage() {
     const params = useParams();
     const id = params.id as string;
     const [loading, setLoading] = useState(true);
-    const [course, setCourse] = useState<Course | null>(null);
+    const [course, setCourse] = useState<Subject | null>(null);
     const [students, setStudents] = useState<Student[]>([]);
     const [assignments, setAssignments] = useState<Assessment[]>([]);
     const [metrics, setMetrics] = useState({
@@ -37,8 +37,8 @@ export default function ClassDetailPage() {
         async function loadData() {
             try {
                 // In real app, get course by ID
-                const allCourses = await academicAPI.getCourses();
-                const found = allCourses.find(c => c.course_id === id);
+                const allCourses = await academicAPI.getSubjects();
+                const found = allCourses.find(c => c.id.toString() === id);
                 if (found) setCourse(found);
 
                 // Get students for this class (Mock filter implementation)
@@ -48,7 +48,7 @@ export default function ClassDetailPage() {
 
                 // Fetch Assessments
                 const allAssessments = await academicAPI.getAssessments();
-                const relevantAssessments = found ? allAssessments.filter(a => a.course === found.course_id) : allAssessments;
+                const relevantAssessments = found ? allAssessments.filter(a => a.course === found.id.toString()) : allAssessments;
                 setAssignments(relevantAssessments);
 
                 // Fetch Results & Calculate Analytics
@@ -113,9 +113,9 @@ export default function ClassDetailPage() {
             <header className="flex justify-between items-start mb-8">
                 <div>
                     <Badge variant="outline" className="mb-2 bg-white text-slate-600 font-normal border-slate-200">
-                        {course.academic_class}
+                        Class {course.academic_class}
                     </Badge>
-                    <h1 className="text-3xl font-bold text-gray-900">{course.subject}</h1>
+                    <h1 className="text-3xl font-bold text-gray-900">{course.name}</h1>
                     <p className="text-muted-foreground mt-1">Physics Lab 2 • Mon, Wed, Fri</p>
                 </div>
                 <div className="flex gap-2">
@@ -161,8 +161,8 @@ export default function ClassDetailPage() {
                                     </thead>
                                     <tbody className="divide-y">
                                         {students.map((student, i) => (
-                                            <tr key={student.student_id} className="hover:bg-slate-50/50">
-                                                <td className="p-4 font-medium text-gray-900">Student {i + 1}</td>
+                                            <tr key={student.id} className="hover:bg-slate-50/50">
+                                                <td className="p-4 font-medium text-gray-900">{student.first_name} {student.last_name}</td>
                                                 <td className="p-4 text-slate-600">{90 - (i * 2)}%</td>
                                                 <td className="p-4">
                                                     <Badge variant="secondary" className="bg-green-100 text-green-700 hover:bg-green-100">Active</Badge>

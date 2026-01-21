@@ -6,12 +6,12 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { ArrowLeft, Trash2, Search, Loader2, Eye } from 'lucide-react';
-import { academicAPI, Lesson, Course } from '@/lib/api';
+import { academicAPI, Lesson, Subject } from '@/lib/api';
 import Link from 'next/link';
 
 export default function LessonPlanReviewPage() {
     const [lessons, setLessons] = useState<Lesson[]>([]);
-    const [courses, setCourses] = useState<Course[]>([]);
+    const [subjects, setSubjects] = useState<Subject[]>([]);
     const [loading, setLoading] = useState(true);
     const [filter, setFilter] = useState('');
 
@@ -21,12 +21,12 @@ export default function LessonPlanReviewPage() {
 
     async function loadData() {
         try {
-            const [lessonsData, coursesData] = await Promise.all([
+            const [lessonsData, subjectsData] = await Promise.all([
                 academicAPI.getLessons(),
-                academicAPI.getCourses()
+                academicAPI.getSubjects()
             ]);
             setLessons(lessonsData);
-            setCourses(coursesData);
+            setSubjects(subjectsData);
         } catch (error) {
             console.error('Failed to load data', error);
         } finally {
@@ -44,14 +44,14 @@ export default function LessonPlanReviewPage() {
         }
     }
 
-    const getCourseName = (id: string) => {
-        const c = courses.find(course => course.course_id === id);
-        return c ? c.subject : 'Unknown Course';
+    const getSubjectName = (id: string) => {
+        const s = subjects.find(sub => sub.id.toString() === id);
+        return s ? s.name : 'Unknown Subject';
     };
 
     const filteredLessons = lessons.filter(l =>
         l.title.toLowerCase().includes(filter.toLowerCase()) ||
-        getCourseName(l.course).toLowerCase().includes(filter.toLowerCase())
+        getSubjectName(l.course).toLowerCase().includes(filter.toLowerCase())
     );
 
     return (
@@ -92,7 +92,7 @@ export default function LessonPlanReviewPage() {
                         <TableHeader>
                             <TableRow>
                                 <TableHead>Title</TableHead>
-                                <TableHead>Course</TableHead>
+                                <TableHead>Subject</TableHead>
                                 <TableHead>Content Type</TableHead>
                                 <TableHead className="text-right">Actions</TableHead>
                             </TableRow>
@@ -118,7 +118,7 @@ export default function LessonPlanReviewPage() {
                                         </TableCell>
                                         <TableCell>
                                             <span className="inline-flex items-center px-2 py-0.5 rounded text-xs bg-slate-100 text-slate-800">
-                                                {getCourseName(l.course)}
+                                                {getSubjectName(l.course)}
                                             </span>
                                         </TableCell>
                                         <TableCell>

@@ -1,25 +1,27 @@
 #!/bin/bash
 
-# Architecture Diagram Export Script
+# Simple Diagram Generation Script
 # Generates PNG images from Mermaid diagrams
 
-set -e
-
-echo "🎨 Architecture Diagram Export Script"
-echo "======================================"
+echo "🎨 Generating Architecture Diagrams"
+echo "===================================="
+echo ""
 
 # Check if mermaid-cli is installed
 if ! command -v mmdc &> /dev/null; then
-    echo "❌ mermaid-cli not found. Installing..."
-    npm install -g @mermaid-js/mermaid-cli
-    echo "✅ mermaid-cli installed"
+    echo "❌ mermaid-cli not found."
+    echo "📦 Install it with: npm install -g @mermaid-js/mermaid-cli"
+    echo ""
+    echo "💡 Alternative: View diagrams on GitHub (they render automatically!)"
+    echo "   Just push your code: git push origin main"
+    exit 1
 fi
 
 # Create output directory
 OUTPUT_DIR=".agent/architecture/diagrams"
 mkdir -p "$OUTPUT_DIR"
 
-echo ""
+echo "✅ mermaid-cli found"
 echo "📁 Output directory: $OUTPUT_DIR"
 echo ""
 
@@ -33,60 +35,32 @@ fi
 
 echo "📄 Source file: $SOURCE_FILE"
 echo ""
-
-# Extract and generate each diagram
 echo "🔨 Generating diagrams..."
 echo ""
+echo "⚠️  Note: This may take a few minutes for all 12 diagrams"
+echo ""
 
-# Function to extract diagram by section
-extract_diagram() {
-    local section_number=$1
-    local diagram_name=$2
-    local temp_file="$OUTPUT_DIR/temp_${diagram_name}.mmd"
-    local output_file="$OUTPUT_DIR/${diagram_name}.png"
-    
-    echo "  [$section_number/12] Generating: $diagram_name.png"
-    
-    # Extract the mermaid code block for this diagram
-    # This is a simplified extraction - adjust based on actual file structure
-    awk "/## $section_number\./,/^```$/" "$SOURCE_FILE" | \
-        sed -n '/^```mermaid$/,/^```$/p' | \
-        sed '1d;$d' > "$temp_file"
-    
-    if [ -s "$temp_file" ]; then
-        # Generate PNG
-        mmdc -i "$temp_file" -o "$output_file" -b transparent -w 1920 -H 1080 2>/dev/null || true
-        rm "$temp_file"
-        
-        if [ -f "$output_file" ]; then
-            echo "     ✅ Generated successfully"
-        else
-            echo "     ⚠️  Failed to generate"
-        fi
-    else
-        echo "     ⚠️  No diagram found"
-        rm "$temp_file"
-    fi
-}
+# Try to generate all diagrams at once
+mmdc -i "$SOURCE_FILE" -o "$OUTPUT_DIR" -b transparent 2>&1 | grep -v "Warning"
 
-# Generate all diagrams
-extract_diagram "1" "01-system-architecture"
-extract_diagram "2" "02-multi-tenant-architecture"
-extract_diagram "3" "03-authentication-flow"
-extract_diagram "4" "04-multi-tenant-request-flow"
-extract_diagram "5" "05-ai-integration"
-extract_diagram "6" "06-data-model"
-extract_diagram "7" "07-api-architecture"
-extract_diagram "8" "08-frontend-architecture"
-extract_diagram "9" "09-deployment-architecture"
-extract_diagram "10" "10-security-architecture"
-extract_diagram "11" "11-cicd-pipeline"
-extract_diagram "12" "12-monitoring-observability"
+if [ $? -eq 0 ]; then
+    echo ""
+    echo "✅ Diagram generation complete!"
+    echo ""
+    echo "📊 Generated files:"
+    ls -lh "$OUTPUT_DIR"/*.png 2>/dev/null || echo "  Check $OUTPUT_DIR for generated files"
+else
+    echo ""
+    echo "⚠️  Some diagrams may have failed to generate"
+    echo ""
+    echo "💡 Alternative options:"
+    echo "  1. View on GitHub (easiest - diagrams render automatically)"
+    echo "  2. Use VS Code with Mermaid extension"
+    echo "  3. Use https://mermaid.live to view/export individual diagrams"
+fi
 
 echo ""
-echo "✅ Diagram generation complete!"
+echo "📚 Documentation:"
+echo "  - View diagrams: open $OUTPUT_DIR"
+echo "  - Source file: $SOURCE_FILE"
 echo ""
-echo "📊 Generated files:"
-ls -lh "$OUTPUT_DIR"/*.png 2>/dev/null || echo "  No PNG files generated"
-echo ""
-echo "💡 Tip: You can also view diagrams directly on GitHub or in VS Code with Mermaid extension"

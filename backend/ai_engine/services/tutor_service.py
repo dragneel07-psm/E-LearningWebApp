@@ -152,5 +152,20 @@ To give you the best answer, could you provide more details about:
 Let's work through this together!"""
 
 
+    def get_chat_response(self, messages: List[Dict], context: Dict = None) -> str:
+        """
+        Adapter method to match usage in views/services.
+        Extracts the last message and passes previous ones as history.
+        Returns just the response string.
+        """
+        if not messages:
+            return ""
+            
+        current_message = messages[-1]['content']
+        history = messages[:-1]
+        
+        result = self.generate_tutor_response(current_message, context, history)
+        return result['response']
+
 # Singleton instance
 ai_tutor_service = AITutorService()

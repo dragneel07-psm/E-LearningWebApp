@@ -16,13 +16,18 @@ def get_current_db_alias():
 
 class TenantMiddleware(MiddlewareMixin):
     def process_request(self, request):
-        # 1. Get Host Logic
+        # 1. Get Host Logic (Support Header and Hostname)
+        tenant_header = request.META.get('HTTP_X_TENANT_ID')
         host = request.get_host().split(':')[0] # Remove port
         
         # 2. Identify Tenant
         try:
-            # Check for specific domain match
-            tenant = Tenant.objects.get(domain_url=host)
+            if tenant_header and tenant_header != 'localhost':
+                # Prioritize Header (from Frontend)
+                tenant = Tenant.objects.get(subdomain=tenant_header)
+            else:
+                # Fallback to specific domain match
+                tenant = Tenant.objects.get(domain_url=host)
             
             # Configure Request and Thread-Local
             request.tenant = tenant

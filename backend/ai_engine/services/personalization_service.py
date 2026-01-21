@@ -1,0 +1,82 @@
+from typing import Dict, List
+from academic.models.student import Student
+from academic.models.assessment import Result
+from academic.models.lesson import Lesson, LessonProgress
+from academic.models.subject import Subject
+
+class PersonalizationService:
+    def get_student_recommendations(self, student_id: str) -> Dict:
+        """
+        Analyze student performance and return personalized study recommendations.
+        """
+        try:
+            student = Student.objects.get(student_id=student_id)
+            
+            # 1. Analyze Weak Topics from Results
+            results = Result.objects.filter(student=student).order_by('-submitted_at')[:10]
+            weak_subjects = {}
+            
+            for res in results:
+                percentage = (res.score / res.assessment.total_marks) * 100
+                subject_id = res.assessment.subject.id
+                if percentage < 60:
+                    weak_subjects[subject_id] = weak_subjects.get(subject_id, 0) + 1
+            
+            # 2. Find Incomplete Lessons in those subjects
+            recommendations = []
+            for sub_id, count in sorted(weak_subjects.items(), key=lambda item: item[1], reverse=True):
+                # Get some lessons that haven't been completed yet
+                subject = Subject.objects.get(id=sub_id)
+                lessons = Lesson.objects.filter(chapter__subject=subject, is_published=True)
+                
+                for lesson in lessons:
+                    progress = LessonProgress.objects.filter(student=student, lesson=lesson, completed=True).exists()
+                    if not progress:
+                        recommendations.append({
+                            'id': lesson.id,
+                            'title': lesson.title,
+                            'subject': subject.name,
+                            'subject_id': subject.id,
+                            'reason': 'Based on your recent quiz scores'
+                        })
+                        if len(recommendations) >= 3:
+                            break
+                if len(recommendations) >= 3:
+                    break
+            
+            # 3. Fallback: If no weak topics, recommend the next lesson in current courses
+            if not recommendations:
+                subjects = Subject.objects.filter(academic_class=student.academic_class)
+                for sub in subjects:
+                    lessons = Lesson.objects.filter(chapter__subject=sub, is_published=True).order_by('chapter__order', 'order')
+                    for lesson in lessons:
+                        if not LessonProgress.objects.filter(student=student, lesson=lesson, completed=True).exists():
+                            recommendations.append({
+                                'id': lesson.id,
+                                'title': lesson.title,
+                                'subject': sub.name,
+                                'subject_id': sub.id,
+                                'reason': 'Continue your learning journey'
+                            })
+                            break
+                    if len(recommendations) >= 3:
+                        break
+
+            return {
+                'recommendations': recommendations[:3],
+                'learning_style_advice': self._get_learning_style_advice(getattr(student, 'learning_style', 'visual'))
+            }
+        except Exception as e:
+            print(f"Personalization Error: {e}")
+            return {'recommendations': [], 'error': str(e)}
+
+    def _get_learning_style_advice(self, style: str) -> str:
+        advices = {
+            'visual': "Try using mind maps and diagrams for the topics you find challenging.",
+            'reading': "Read through the lesson materials carefully and take structured notes.",
+            'practice': "Focus on completing the practice exercises and quizzes multiple times.",
+            'auditory': "Consider reading the content out loud or using text-to-speech tools."
+        }
+        return advices.get(style, "Keep up with your daily study goals!")
+
+personalization_service = PersonalizationService()

@@ -85,8 +85,8 @@ export function StudentProfileSettings({ open, onOpenChange, studentId, onSucces
                                 <Label>Preferred Learning Style</Label>
                                 <Select
                                     value={formData.learning_style}
-                                    onValueChange={(value: Student['learning_style']) =>
-                                        setFormData({ ...formData, learning_style: value })
+                                    onValueChange={(value) =>
+                                        setFormData({ ...formData, learning_style: value as any })
                                     }
                                 >
                                     <SelectTrigger>
@@ -107,8 +107,8 @@ export function StudentProfileSettings({ open, onOpenChange, studentId, onSucces
                                 <Label>AI Explanation Level</Label>
                                 <Select
                                     value={formData.ai_explanation_level}
-                                    onValueChange={(value: Student['ai_explanation_level']) =>
-                                        setFormData({ ...formData, ai_explanation_level: value })
+                                    onValueChange={(value) =>
+                                        setFormData({ ...formData, ai_explanation_level: value as any })
                                     }
                                 >
                                     <SelectTrigger>

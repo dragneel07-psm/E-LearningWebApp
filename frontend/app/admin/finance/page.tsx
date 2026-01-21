@@ -338,7 +338,7 @@ function AddFeeStructureDialog({ onSuccess, classes }: { onSuccess: () => void; 
                     </div>
                     <div>
                         <Label>Frequency</Label>
-                        <Select value={formData.frequency} onValueChange={(v) => setFormData({ ...formData, frequency: v })}>
+                        <Select value={formData.frequency} onValueChange={(v) => setFormData({ ...formData, frequency: v as any })}>
                             <SelectTrigger><SelectValue /></SelectTrigger>
                             <SelectContent>
                                 <SelectItem value="monthly">Monthly</SelectItem>
@@ -353,7 +353,7 @@ function AddFeeStructureDialog({ onSuccess, classes }: { onSuccess: () => void; 
                         <Select value={formData.academic_class} onValueChange={(v) => setFormData({ ...formData, academic_class: v })}>
                             <SelectTrigger><SelectValue placeholder="All Classes" /></SelectTrigger>
                             <SelectContent>
-                                {classes.map(c => <SelectItem key={c.class_id} value={c.class_id}>Grade {c.grade}-{c.section}</SelectItem>)}
+                                {classes.map(c => <SelectItem key={c.id} value={c.id.toString()}>{c.name}</SelectItem>)}
                             </SelectContent>
                         </Select>
                     </div>
@@ -434,7 +434,7 @@ function RecordPaymentDialog({ onSuccess, studentFees }: { onSuccess: () => void
                     </div>
                     <div>
                         <Label>Payment Method</Label>
-                        <Select value={formData.method} onValueChange={(v) => setFormData({ ...formData, method: v })}>
+                        <Select value={formData.method} onValueChange={(v) => setFormData({ ...formData, method: v as any })}>
                             <SelectTrigger><SelectValue /></SelectTrigger>
                             <SelectContent>
                                 <SelectItem value="cash">Cash</SelectItem>
@@ -515,7 +515,7 @@ function AddExpenseDialog({ onSuccess }: { onSuccess: () => void }) {
                     </div>
                     <div>
                         <Label>Category</Label>
-                        <Select value={formData.category} onValueChange={(v) => setFormData({ ...formData, category: v })}>
+                        <Select value={formData.category} onValueChange={(v) => setFormData({ ...formData, category: v as any })}>
                             <SelectTrigger><SelectValue /></SelectTrigger>
                             <SelectContent>
                                 <SelectItem value="salary">Salary</SelectItem>
@@ -606,8 +606,8 @@ function AssignFeeDialog({ onSuccess, classes, feeStructures }: { onSuccess: () 
                             <SelectTrigger><SelectValue placeholder="Select class" /></SelectTrigger>
                             <SelectContent>
                                 {classes.map(c => (
-                                    <SelectItem key={c.class_id} value={c.class_id}>
-                                        Grade {c.grade}-{c.section}
+                                    <SelectItem key={c.id} value={c.id.toString()}>
+                                        {c.name}
                                     </SelectItem>
                                 ))}
                             </SelectContent>

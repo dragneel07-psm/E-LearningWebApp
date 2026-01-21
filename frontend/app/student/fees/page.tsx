@@ -23,7 +23,7 @@ export default function StudentFeesPage() {
             setLoading(true);
             const user = await usersAPI.getMe();
             const students = await academicAPI.getStudents();
-            const currentStudent = students.find(s => s.user === user.user_id);
+            const currentStudent = students.find(s => s.user_id === user.user_id);
 
             if (currentStudent) {
                 const [feesData, paymentsData] = await Promise.all([
@@ -32,8 +32,8 @@ export default function StudentFeesPage() {
                 ]);
 
                 // Filter for current student
-                const myFees = feesData.filter(f => f.student === currentStudent.student_id);
-                const myPayments = paymentsData.filter(p => p.student === currentStudent.student_id);
+                const myFees = feesData.filter(f => f.student === currentStudent.id);
+                const myPayments = paymentsData.filter(p => p.student === currentStudent.id);
 
                 setFees(myFees);
                 setPayments(myPayments);

@@ -33,16 +33,16 @@ export default function StudentLibraryPage() {
             setLoading(true);
             const user = await usersAPI.getMe();
             const students = await academicAPI.getStudents();
-            const currentStudent = students.find(s => s.user === user.user_id);
+            const currentStudent = students.find(s => s.user_id === user.user_id);
 
             if (currentStudent) {
-                setStudentId(currentStudent.student_id);
+                setStudentId(currentStudent.id);
                 const [booksData, issuesData] = await Promise.all([
                     libraryAPI.getBooks(),
                     libraryAPI.getBookIssues()
                 ]);
                 setBooks(booksData);
-                setMyIssues(issuesData.filter(issue => issue.student === currentStudent.student_id));
+                setMyIssues(issuesData.filter(issue => issue.student === currentStudent.id));
             }
         } catch (error) {
             console.error('Failed to load library data:', error);

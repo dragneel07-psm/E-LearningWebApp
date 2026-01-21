@@ -5,11 +5,11 @@ import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/componen
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Users, TrendingUp, TrendingDown, Clock, Search, Filter, Plus, ChevronRight } from 'lucide-react';
-import { academicAPI, Course } from '@/lib/api';
+import { academicAPI, Subject } from '@/lib/api';
 import Link from 'next/link';
 import { Input } from '@/components/ui/input';
 
-interface EnrichedCourse extends Course {
+interface EnrichedCourse extends Subject {
     studentCount: number;
     avgPerformance: number;
     attendanceTrend: 'up' | 'down' | 'stable';
@@ -24,7 +24,7 @@ export default function ClassManagementPage() {
     useEffect(() => {
         async function loadClasses() {
             try {
-                const courses = await academicAPI.getCourses();
+                const courses = await academicAPI.getSubjects();
 
                 // Mock Enrichment
                 const enriched = courses.map((c, i) => ({
@@ -46,8 +46,8 @@ export default function ClassManagementPage() {
     }, []);
 
     const filteredClasses = classes.filter(c =>
-        c.subject.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        c.academic_class.toLowerCase().includes(searchTerm.toLowerCase())
+        c.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        c.academic_class.toString().toLowerCase().includes(searchTerm.toLowerCase())
     );
 
     if (loading) return <div className="p-8 text-center text-muted-foreground">Loading classes...</div>;
@@ -83,16 +83,16 @@ export default function ClassManagementPage() {
             {/* Class Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {filteredClasses.map((cls) => (
-                    <Link key={cls.course_id} href={`/teacher/classes/${cls.course_id}`} className="block transition-transform hover:-translate-y-1">
+                    <Link key={cls.id} href={`/teacher/classes/${cls.id}`} className="block transition-transform hover:-translate-y-1">
                         <Card className="h-full border-slate-200 hover:border-indigo-300 hover:shadow-md cursor-pointer group">
                             <CardHeader className="pb-3">
                                 <div className="flex justify-between items-start">
                                     <div>
                                         <Badge variant="outline" className="mb-2 bg-slate-50 text-slate-600 font-normal">
-                                            {cls.academic_class}
+                                            Class {cls.academic_class}
                                         </Badge>
                                         <CardTitle className="text-lg text-gray-900 group-hover:text-indigo-700 transition-colors">
-                                            {cls.subject}
+                                            {cls.name}
                                         </CardTitle>
                                     </div>
                                     {cls.status === 'on-track' && <Badge className="bg-green-100 text-green-700 hover:bg-green-200">On Track</Badge>}

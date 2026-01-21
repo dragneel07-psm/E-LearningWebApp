@@ -262,7 +262,7 @@ export function LessonEditor({ open, onOpenChange, lesson, courseId, onSave }: L
                         <Label>Content Type</Label>
                         <Select
                             value={contentType}
-                            onValueChange={(v: LessonData['content_type']) => setContentType(v)}
+                            onValueChange={(v) => setContentType(v as 'text' | 'video' | 'pdf' | 'link')}
                         >
                             <SelectTrigger>
                                 <SelectValue />
@@ -296,7 +296,7 @@ export function LessonEditor({ open, onOpenChange, lesson, courseId, onSave }: L
                         </Select>
                     </div>
 
-                    <Tabs value={activeTab} onValueChange={(v: 'edit' | 'preview') => setActiveTab(v)}>
+                    <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'edit' | 'preview')}>
                         <TabsList className="grid w-full grid-cols-2">
                             <TabsTrigger value="edit">Edit</TabsTrigger>
                             <TabsTrigger value="preview">

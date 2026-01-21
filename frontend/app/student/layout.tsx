@@ -12,7 +12,7 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { removeToken } from '@/lib/auth';
+import { removeTokens } from '@/lib/auth';
 import { usersAPI, User } from '@/lib/api';
 import { NotificationBell } from '@/components/notification-bell';
 
@@ -50,7 +50,7 @@ export default function StudentLayout({ children }: { children: React.ReactNode 
     ];
 
     const handleLogout = () => {
-        removeToken();
+        removeTokens();
         router.push('/login');
     };
 

@@ -112,7 +112,7 @@ export default function SaasSchoolsPage() {
                                             <div className="flex items-center gap-2">
                                                 <div className="w-16 h-2 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
                                                     <div
-                                                        className={`h-full rounded-full ${parseInt(school.ai_usage) > 90 ? 'bg-red-500' : 'bg-blue-500'}`}
+                                                        className={`h-full rounded-full ${parseInt(school.ai_usage || '0') > 90 ? 'bg-red-500' : 'bg-blue-500'}`}
                                                         style={{ width: school.ai_usage }}
                                                     ></div>
                                                 </div>

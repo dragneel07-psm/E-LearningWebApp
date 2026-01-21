@@ -19,12 +19,12 @@ export function GenerateReportsDialog({ open, onOpenChange }: GenerateReportsDia
             if (type === 'students') {
                 const students = await academicAPI.getStudents();
                 headers = ['ID', 'First Name', 'Last Name', 'Email', 'Class', 'Status'];
-                data = students.map(s => [s.student_id, s.first_name, s.last_name, s.email, s.academic_class, s.is_active ? 'Active' : 'Suspended']);
+                data = students.map(s => [s.id, s.first_name, s.last_name, s.email, s.academic_class, s.is_active ? 'Active' : 'Suspended']);
                 filename = 'student_report.csv';
             } else {
                 const teachers = await academicAPI.getTeachers();
                 headers = ['ID', 'First Name', 'Last Name', 'Email', 'Designation', 'Status'];
-                data = teachers.map(t => [t.teacher_id, t.first_name, t.last_name, t.email, t.designation, t.is_active ? 'Active' : 'Suspended']);
+                data = teachers.map(t => [t.id, t.first_name, t.last_name, t.email, t.designation, t.is_active ? 'Active' : 'Suspended']);
                 filename = 'staff_report.csv';
             }
 

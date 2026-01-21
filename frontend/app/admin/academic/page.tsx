@@ -1,15 +1,17 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import {
-    BookOpen, GraduationCap, FileText, ArrowLeft, Plus
+    BookOpen, GraduationCap, FileText, ArrowLeft, Plus, Users, School
 } from 'lucide-react';
 import {
     BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
     RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar, Legend
 } from 'recharts';
 import Link from 'next/link';
+import { academicAPI } from '@/lib/api';
 
 type ManagementCardProps = {
     title: string;
@@ -47,8 +49,35 @@ function ManagementCard({ title, desc, icon: Icon, link, actionLink }: Managemen
     );
 }
 
+function StatCard({ title, value, icon: Icon, color }: { title: string, value: number, icon: any, color: string }) {
+    return (
+        <Card>
+            <CardContent className="p-6 flex items-center gap-4">
+                <div className={`p-3 rounded-full ${color} bg-opacity-10`}>
+                    <Icon className={`h-6 w-6 ${color.replace('bg-', 'text-')}`} />
+                </div>
+                <div>
+                    <p className="text-sm font-medium text-slate-500">{title}</p>
+                    <h3 className="text-2xl font-bold text-slate-900">{value}</h3>
+                </div>
+            </CardContent>
+        </Card>
+    );
+}
+
 export default function AcademicControlDashboard() {
-    // Mock Data for charts
+    const [stats, setStats] = useState({
+        total_teachers: 0,
+        total_students: 0,
+        total_classes: 0,
+        total_subjects: 0
+    });
+
+    useEffect(() => {
+        academicAPI.getStats().then(setStats).catch(console.error);
+    }, []);
+
+    // Mock Data for charts (Keep as placeholder for now)
     const curriculumData = [
         { subject: 'Mathematics', covered: 65, target: 100 },
         { subject: 'Science', covered: 78, target: 100 },
@@ -58,12 +87,12 @@ export default function AcademicControlDashboard() {
     ];
 
     const performanceData = [
-        { subject: 'Math', A: 120, B: 110, fullMark: 150 },
-        { subject: 'Science', A: 98, B: 130, fullMark: 150 },
-        { subject: 'English', A: 86, B: 130, fullMark: 150 },
-        { subject: 'History', A: 99, B: 100, fullMark: 150 },
-        { subject: 'Physics', A: 85, B: 90, fullMark: 150 },
-        { subject: 'Geography', A: 65, B: 85, fullMark: 150 },
+        { subject: 'Math', A: 12, B: 18, fullMark: 30 },
+        { subject: 'Science', A: 15, B: 10, fullMark: 30 },
+        { subject: 'English', A: 20, B: 5, fullMark: 30 },
+        { subject: 'History', A: 10, B: 15, fullMark: 30 },
+        { subject: 'Physics', A: 8, B: 12, fullMark: 30 },
+        { subject: 'Geography', A: 18, B: 7, fullMark: 30 },
     ];
 
     return (
@@ -81,11 +110,19 @@ export default function AcademicControlDashboard() {
                 </div>
             </header>
 
+            {/* Key Metrics */}
+            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+                <StatCard title="Total Classes" value={stats.total_classes} icon={School} color="bg-indigo-500 text-indigo-500" />
+                <StatCard title="Subjects" value={stats.total_subjects} icon={BookOpen} color="bg-emerald-500 text-emerald-500" />
+                <StatCard title="Faculty" value={stats.total_teachers} icon={GraduationCap} color="bg-amber-500 text-amber-500" />
+                <StatCard title="Students" value={stats.total_students} icon={Users} color="bg-blue-500 text-blue-500" />
+            </div>
+
             {/* Analytics Section */}
             <div className="grid gap-6 md:grid-cols-2">
                 <Card>
                     <CardHeader>
-                        <CardTitle className="text-base">Curriculum Coverage</CardTitle>
+                        <CardTitle className="text-base">Curriculum Coverage (Demo)</CardTitle>
                         <CardDescription>Percentage of syllabus completed per subject</CardDescription>
                     </CardHeader>
                     <CardContent className="h-[300px]">
@@ -103,7 +140,7 @@ export default function AcademicControlDashboard() {
 
                 <Card>
                     <CardHeader>
-                        <CardTitle className="text-base">Subject Performance Radar</CardTitle>
+                        <CardTitle className="text-base">Subject Performance Radar (Demo)</CardTitle>
                         <CardDescription>Comparative strength across disciplines</CardDescription>
                     </CardHeader>
                     <CardContent className="h-[300px]">
@@ -111,7 +148,7 @@ export default function AcademicControlDashboard() {
                             <RadarChart cx="50%" cy="50%" outerRadius="80%" data={performanceData}>
                                 <PolarGrid />
                                 <PolarAngleAxis dataKey="subject" tick={{ fontSize: 11 }} />
-                                <PolarRadiusAxis angle={30} domain={[0, 150]} />
+                                <PolarRadiusAxis angle={30} domain={[0, 30]} />
                                 <Radar name="Grade A Students" dataKey="A" stroke="#10b981" fill="#10b981" fillOpacity={0.3} />
                                 <Radar name="Grade B Students" dataKey="B" stroke="#3b82f6" fill="#3b82f6" fillOpacity={0.3} />
                                 <Legend />
@@ -127,44 +164,38 @@ export default function AcademicControlDashboard() {
                 <h3 className="text-lg font-semibold mb-4 text-slate-800">Management Modules</h3>
                 <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
                     <ManagementCard
-                        title="Academic Structure"
-                        desc="Configure Grades, Sections, and Academic Years."
+                        title="Academic Years"
+                        desc="Configure academic sessions and terms."
                         icon={GraduationCap}
+                        link="/admin/academic/years"
+                        actionLink="/admin/academic/years"
+                    />
+                    <ManagementCard
+                        title="Classes & Sections"
+                        desc="Configure Grades, Classes, and Sections."
+                        icon={School}
                         link="/admin/academic/classes"
                         actionLink="/admin/academic/classes"
                     />
                     <ManagementCard
-                        title="Courses & Subjects"
-                        desc="Manage subject definitions and course mappings."
+                        title="Subjects"
+                        desc="Manage subject definitions and curriculum."
                         icon={BookOpen}
-                        link="/admin/academic/courses"
-                        actionLink="/admin/academic/courses"
+                        link="/admin/academic/subjects"
+                        actionLink="/admin/academic/subjects"
                     />
-                    <ManagementCard
-                        title="Lesson Plans"
-                        desc="Review and approve teacher lesson plans."
-                        icon={FileText}
-                        link="/admin/academic/lessons"
-                        actionLink="/admin/academic/lessons"
-                    />
-                    <ManagementCard
-                        title="Assessments"
-                        desc="Oversee exams, quizzes, and grading policies."
-                        icon={FileText}
-                        link="/admin/academic/assessments"
-                        actionLink="/admin/academic/assessments"
-                    />
+                    {/* Placeholder links for future sprints */}
                     <ManagementCard
                         title="Student Management"
                         desc="Manage student profiles, enrollments, and progress."
-                        icon={GraduationCap}
+                        icon={Users}
                         link="/admin/academic/students"
                         actionLink="/admin/academic/students"
                     />
                     <ManagementCard
                         title="Teacher Management"
                         desc="Manage faculty, assignments, and workload."
-                        icon={BookOpen}
+                        icon={GraduationCap}
                         link="/admin/academic/teachers"
                         actionLink="/admin/academic/teachers"
                     />

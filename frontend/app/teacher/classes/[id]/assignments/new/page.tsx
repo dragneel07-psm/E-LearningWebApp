@@ -10,7 +10,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ChevronLeft, ChevronRight, BrainCircuit, Plus, Trash2, CheckCircle, Loader2 } from 'lucide-react';
 import Link from 'next/link';
-import { academicAPI, Course } from '@/lib/api';
+import { academicAPI, Subject } from '@/lib/api';
 
 export default function CreateAssignmentPage() {
     const params = useParams();
@@ -19,7 +19,7 @@ export default function CreateAssignmentPage() {
 
     const [step, setStep] = useState(1);
     const [loading, setLoading] = useState(false);
-    const [courses, setCourses] = useState<Course[]>([]);
+    const [courses, setCourses] = useState<Subject[]>([]);
 
     // Form Data
     const [title, setTitle] = useState('');
@@ -32,26 +32,29 @@ export default function CreateAssignmentPage() {
     useEffect(() => {
         const init = async () => {
             try {
-                // Dual Strategy: Check if ID is Course ID or Class ID
+                // Dual Strategy: Check if ID is Subject ID or Class ID
                 try {
-                    // Try as Course ID first
-                    const course = await academicAPI.getCourse(classId);
-                    setSelectedCourseId(course.course_id);
+                    // Try as Subject ID first
+                    const numericId = parseInt(classId);
+                    if (!isNaN(numericId)) {
+                        const course = await academicAPI.getSubject(numericId);
+                        setSelectedCourseId(course.id.toString());
 
-                    // It's a Course ID, so fetch related courses for this Class
-                    const allCourses = await academicAPI.getCourses();
-                    const related = allCourses.filter(c => c.academic_class === course.academic_class);
-                    setCourses(related);
-                    return;
+                        // It's a Subject ID, so fetch related subjects for this Class
+                        const allCourses = await academicAPI.getSubjects();
+                        const related = allCourses.filter(c => c.academic_class === course.academic_class);
+                        setCourses(related);
+                        return;
+                    }
                 } catch {
                     // Ignore error, proceed to try as Class ID
                 }
 
                 // Fallback: Treat as Class ID
-                const allCourses = await academicAPI.getCourses();
-                const classCourses = allCourses.filter(c => c.academic_class === classId);
+                const allCourses = await academicAPI.getSubjects();
+                const classCourses = allCourses.filter(c => c.academic_class.toString() === classId);
                 setCourses(classCourses);
-                if (classCourses.length > 0) setSelectedCourseId(classCourses[0].course_id);
+                if (classCourses.length > 0) setSelectedCourseId(classCourses[0].id.toString());
             } catch (err) {
                 console.error("Failed to load courses", err);
             }
@@ -155,7 +158,7 @@ export default function CreateAssignmentPage() {
                                     <SelectTrigger><SelectValue placeholder="Select Course" /></SelectTrigger>
                                     <SelectContent>
                                         {courses.length > 0 ? courses.map(c => (
-                                            <SelectItem key={c.course_id} value={c.course_id}>{c.subject}</SelectItem>
+                                            <SelectItem key={c.id} value={c.id.toString()}>{c.name}</SelectItem>
                                         )) : <SelectItem value="placeholder" disabled>No courses found</SelectItem>}
                                     </SelectContent>
                                 </Select>

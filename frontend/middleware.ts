@@ -13,7 +13,8 @@ const PUBLIC_PATHS = [
     '/login',
     '/register',
     '/public',
-    '/forgot-password'
+    '/forgot-password',
+    '/debug-auth'
 ];
 
 export function middleware(request: NextRequest) {
@@ -67,7 +68,6 @@ export function middleware(request: NextRequest) {
         if (pathname.startsWith('/student') && userRole !== 'student') {
             return NextResponse.redirect(new URL('/unauthorized', request.url));
         }
-        // Parent role check if needed
         if (pathname.startsWith('/parent') && userRole !== 'parent') {
             return NextResponse.redirect(new URL('/unauthorized', request.url));
         }
@@ -81,11 +81,11 @@ export function middleware(request: NextRequest) {
                 saas_admin: '/saas',
                 parent: '/parent'
             };
-            return NextResponse.redirect(new URL(dashboardMap[userRole] || '/student', request.url));
+            const target = dashboardMap[userRole] || '/student';
+            return NextResponse.redirect(new URL(target, request.url));
         }
 
     } catch (e) {
-        // Token invalid or decode failed
         const response = NextResponse.redirect(new URL('/login', request.url));
         response.cookies.delete('access_token');
         return response;

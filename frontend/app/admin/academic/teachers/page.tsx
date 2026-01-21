@@ -14,12 +14,13 @@ import {
 } from '@/components/ui/dropdown-menu';
 import {
     ArrowLeft, Plus, Search, MoreHorizontal, User as UserIcon, Download,
-    Shield, ShieldCheck, ShieldAlert, X, Mail, Edit, Briefcase, Lock
+    ShieldCheck, ShieldAlert, X, Mail, Edit, Briefcase, Lock
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import Link from 'next/link';
-import { academicAPI, usersAPI, Teacher, AcademicClass, Course, User } from '@/lib/api';
+import { academicAPI, usersAPI, Teacher, AcademicClass } from '@/lib/api';
 import { ChangePasswordDialog } from '@/components/admin/change-password-dialog';
+import { toast } from 'sonner';
 
 // Helper to generate consistent avatars
 const getAvatarUrl = (seed: string) => `https://api.dicebear.com/7.x/avataaars/svg?seed=${seed}&backgroundColor=e5e7eb`;
@@ -32,7 +33,6 @@ interface TeacherFormState extends Partial<Teacher> {
 export default function TeachersPage() {
     const [teachers, setTeachers] = useState<Teacher[]>([]);
     const [classes, setClasses] = useState<AcademicClass[]>([]);
-    const [courses, setCourses] = useState<Course[]>([]);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
 
@@ -40,7 +40,6 @@ export default function TeachersPage() {
     const [selectedTeacher, setSelectedTeacher] = useState<Teacher | null>(null);
     const [dialogOpen, setDialogOpen] = useState(false);
     const [dialogMode, setDialogMode] = useState<'view' | 'edit' | 'create'>('view');
-    const [selectedCourses, setSelectedCourses] = useState<string[]>([]); // Track selected Course IDs
 
     // Create Form State
     const [newTeacher, setNewTeacher] = useState<TeacherFormState>({
@@ -65,30 +64,29 @@ export default function TeachersPage() {
     const loadData = async () => {
         try {
             setLoading(true);
-            const [teachersData, classesData, coursesData] = await Promise.all([
+            const [teachersData, classesData] = await Promise.all([
                 academicAPI.getTeachers(),
-                academicAPI.getClasses(),
-                academicAPI.getCourses()
+                academicAPI.getClasses()
             ]);
             setTeachers(teachersData);
             setClasses(classesData);
-            setCourses(coursesData);
         } catch (error) {
             console.error('Failed to load teachers:', error);
+            toast.error('Failed to load data');
         } finally {
             setLoading(false);
         }
     };
 
-    const getAssignedClasses = (assignedIds: string[] | undefined) => {
+    const getAssignedClasses = (assignedIds: number[] | undefined) => {
         if (!assignedIds || assignedIds.length === 0) return [];
-        return assignedIds.map(id => classes.find(c => c.class_id === id)).filter(Boolean) as AcademicClass[];
+        return assignedIds.map(id => classes.find(c => c.id === id)).filter(Boolean) as AcademicClass[];
     };
 
     const handleExportCSV = () => {
-        const headers = ['Teacher ID', 'First Name', 'Last Name', 'Username', 'Email', 'Designation', 'Status'];
+        const headers = ['ID', 'First Name', 'Last Name', 'Username', 'Email', 'Designation', 'Status'];
         const rows = teachers.map(t => [
-            t.teacher_id,
+            t.id,
             t.first_name || '',
             t.last_name || '',
             t.username || '',
@@ -114,48 +112,31 @@ export default function TeachersPage() {
 
     const handleCreateTeacher = async () => {
         if (!newTeacher.first_name || !newTeacher.last_name || !newTeacher.username || !newTeacher.email) {
-            alert('Please fill in all required fields.');
+            toast.error('Please fill in all required fields.');
             return;
         }
 
         try {
-            // 1. Create User Account
-            const userPayload: Partial<User> & { password?: string } = {
+            await academicAPI.createTeacher({
                 first_name: newTeacher.first_name,
                 last_name: newTeacher.last_name,
                 username: newTeacher.username,
                 email: newTeacher.email,
-                role: 'teacher',
-                // password: newTeacher.password
-            };
-            const user = await usersAPI.createAccount(userPayload);
-
-            // 2. Create Teacher Profile
-            const teacher = await academicAPI.createTeacher({
-                user: user.user_id,
+                password: newTeacher.password,
                 designation: newTeacher.designation,
                 assigned_classes: newTeacher.assigned_classes
             });
 
-            // 3. Assign Selected Courses
-            if (selectedCourses.length > 0 && teacher.teacher_id) {
-                await Promise.all(
-                    selectedCourses.map((courseId) =>
-                        academicAPI.updateCourse(courseId, { teacher: teacher.teacher_id })
-                    )
-                );
-            }
-
-            alert('Teacher created successfully!');
+            toast.success('Teacher created successfully!');
             setDialogOpen(false);
             setNewTeacher({
-                first_name: '', last_name: '', email: '', username: '', password: 'ChangeMe123!', designation: 'subject_teacher'
+                first_name: '', last_name: '', email: '', username: '', password: 'ChangeMe123!', designation: 'subject_teacher', assigned_classes: []
             });
             loadData();
-        } catch (error: unknown) {
+        } catch (error: any) {
             console.error(error);
-            const message = error instanceof Error ? error.message : 'Unknown error';
-            alert(`Failed to create teacher: ${message}`);
+            const message = error.message || 'Unknown error';
+            toast.error(`Failed to create teacher: ${message}`);
         }
     };
 
@@ -165,43 +146,33 @@ export default function TeachersPage() {
 
         try {
             const newState = teacher.is_active === false;
-            if (teacher.user) {
-                await usersAPI.updateAccount(teacher.user, { is_active: newState });
+            if (teacher.user_id) {
+                await usersAPI.updateAccount(teacher.user_id, { is_active: newState });
             }
 
             // Optimistic update
-            setTeachers(teachers.map(t => t.teacher_id === teacher.teacher_id ? { ...t, is_active: newState } : t));
-            alert(`Teacher ${newState ? 'activated' : 'suspended'} successfully.`);
+            setTeachers(teachers.map(t => t.id === teacher.id ? { ...t, is_active: newState } : t));
+            toast.success(`Teacher ${newState ? 'activated' : 'suspended'} successfully.`);
         } catch (e) {
             console.error(e);
-            alert('Failed to update status.');
+            toast.error('Failed to update status.');
         }
     };
 
     const handleSaveTeacher = async () => {
         if (!selectedTeacher) return;
         try {
-            await academicAPI.updateTeacher(selectedTeacher.teacher_id, {
+            await academicAPI.updateTeacher(selectedTeacher.id, {
                 designation: selectedTeacher.designation,
                 assigned_classes: selectedTeacher.assigned_classes
             });
 
-            // Update Course Assignments
-            // 1. Unassign courses that were unselected (optional but good practice)
-            // Ideally we'd compare with initial state, but simpler to just overwrite current selection
-
-            // 2. Assign selected courses
-            if (selectedCourses.length > 0) {
-                await Promise.all(selectedCourses.map(courseId =>
-                    academicAPI.updateCourse(courseId, { teacher: selectedTeacher.teacher_id })
-                ));
-            }
+            toast.success('Teacher updated successfully!');
             setDialogOpen(false);
             loadData();
-            alert('Teacher updated successfully!');
         } catch (e) {
             console.error(e);
-            alert('Failed to update teacher');
+            toast.error('Failed to update teacher');
         }
     };
 
@@ -209,7 +180,7 @@ export default function TeachersPage() {
     const [selectedClass, setSelectedClass] = useState<string>('all');
 
     const filteredTeachers = teachers.filter(teacher => {
-        const matchesSearch = (teacher.first_name + ' ' + teacher.last_name + ' ' + teacher.username + ' ' + teacher.designation).toLowerCase().includes(searchTerm.toLowerCase());
+        const matchesSearch = ((teacher.first_name || '') + ' ' + (teacher.last_name || '') + ' ' + (teacher.username || '') + ' ' + teacher.designation).toLowerCase().includes(searchTerm.toLowerCase());
 
         // Filter by Designation
         if (selectedDesignation !== 'all') {
@@ -218,7 +189,8 @@ export default function TeachersPage() {
 
         // Filter by Assigned Class
         if (selectedClass !== 'all') {
-            if (!teacher.assigned_classes || !teacher.assigned_classes.includes(selectedClass)) return false;
+            const classIdToCheck = parseInt(selectedClass);
+            if (!teacher.assigned_classes || !teacher.assigned_classes.includes(classIdToCheck)) return false;
         }
 
         return matchesSearch;
@@ -246,7 +218,6 @@ export default function TeachersPage() {
                     <Button
                         onClick={() => {
                             setNewTeacher({ first_name: '', last_name: '', email: '', username: '', password: 'ChangeMe123!', designation: 'subject_teacher', assigned_classes: [] });
-                            setSelectedCourses([]); // Reset courses
                             setDialogMode('create');
                             setDialogOpen(true);
                         }}
@@ -289,7 +260,7 @@ export default function TeachersPage() {
                     >
                         <option value="all">All Classes</option>
                         {classes.map(c => (
-                            <option key={c.class_id} value={c.class_id}>Grade {c.grade}-{c.section}</option>
+                            <option key={c.id} value={c.id}>Grade {c.name}</option>
                         ))}
                     </select>
 
@@ -334,10 +305,10 @@ export default function TeachersPage() {
                                     </TableRow>
                                 ) : (
                                     filteredTeachers.map((teacher) => (
-                                        <TableRow key={teacher.teacher_id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/50 transition-colors">
+                                        <TableRow key={teacher.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/50 transition-colors">
                                             <TableCell>
                                                 <img
-                                                    src={getAvatarUrl(teacher.username || teacher.teacher_id)}
+                                                    src={getAvatarUrl(teacher.username || String(teacher.id))}
                                                     alt="Avatar"
                                                     className="h-10 w-10 rounded-full border border-slate-200 dark:border-slate-700 bg-white"
                                                 />
@@ -354,7 +325,7 @@ export default function TeachersPage() {
                                             </TableCell>
                                             <TableCell>
                                                 <Badge variant="outline" className="font-medium bg-purple-50 text-purple-700 border-purple-200 capitalize">
-                                                    {teacher.designation.replace('_', ' ')}
+                                                    {(teacher.designation || 'Teacher').replace('_', ' ')}
                                                 </Badge>
                                             </TableCell>
                                             <TableCell>
@@ -368,22 +339,13 @@ export default function TeachersPage() {
                                                 {getAssignedClasses(teacher.assigned_classes).length > 0 ? (
                                                     <div className="flex gap-1 flex-wrap">
                                                         {getAssignedClasses(teacher.assigned_classes).map(c => (
-                                                            <span key={c.class_id} className="px-1.5 py-0.5 rounded bg-slate-100 text-xs border border-slate-200">
-                                                                {c.grade}-{c.section}
+                                                            <span key={c.id} className="px-1.5 py-0.5 rounded bg-slate-100 text-xs border border-slate-200">
+                                                                {c.name}
                                                             </span>
                                                         ))}
                                                     </div>
                                                 ) : (
-                                                    <div className="flex flex-col">
-                                                        <span className="text-slate-400 italic">None</span>
-                                                        {teacher.assigned_classes && teacher.assigned_classes.length > 0 && (
-                                                            <span className="text-[10px] text-red-400">
-                                                                Debug: {teacher.assigned_classes.length} IDs found but not matched.
-                                                                <br />
-                                                                IDs: {teacher.assigned_classes.join(', ').substring(0, 20)}...
-                                                            </span>
-                                                        )}
-                                                    </div>
+                                                    <span className="text-slate-400 italic">None</span>
                                                 )}
                                             </TableCell>
                                             <TableCell className="text-right lg:pr-6">
@@ -398,9 +360,6 @@ export default function TeachersPage() {
                                                         <DropdownMenuItem
                                                             onClick={() => {
                                                                 setSelectedTeacher(teacher);
-                                                                // Find courses taught by this teacher
-                                                                const teacherCourses = courses.filter(c => c.teacher === teacher.teacher_id).map(c => c.course_id);
-                                                                setSelectedCourses(teacherCourses);
                                                                 setDialogMode('view');
                                                                 setDialogOpen(true);
                                                             }}
@@ -411,8 +370,6 @@ export default function TeachersPage() {
                                                         <DropdownMenuItem
                                                             onClick={() => {
                                                                 setSelectedTeacher(teacher);
-                                                                const teacherCourses = courses.filter(c => c.teacher === teacher.teacher_id).map(c => c.course_id);
-                                                                setSelectedCourses(teacherCourses);
                                                                 setDialogMode('edit');
                                                                 setDialogOpen(true);
                                                             }}
@@ -423,7 +380,7 @@ export default function TeachersPage() {
                                                         <DropdownMenuItem
                                                             onClick={() => setPasswordDialog({
                                                                 open: true,
-                                                                userId: teacher.user,
+                                                                userId: teacher.user_id,
                                                                 userName: `${teacher.first_name || ''} ${teacher.last_name || ''}`
                                                             })}
                                                             className="rounded-lg cursor-pointer focus:bg-indigo-50 focus:text-indigo-600"
@@ -556,109 +513,28 @@ export default function TeachersPage() {
 
                                         <div className="space-y-2 md:col-span-2">
                                             <label className="text-sm font-medium">Assigned Classes</label>
-                                            {newTeacher.designation === 'class_teacher' ? (
+                                            <div className="border rounded-md p-3 max-h-60 overflow-y-auto bg-slate-50">
                                                 <div className="space-y-3">
-                                                    <div>
-                                                        <label className="text-xs font-semibold text-indigo-600 block mb-1">Primary Class (Homeroom)</label>
-                                                        <select
-                                                            className="w-full h-10 px-3 rounded-md border border-indigo-200 text-sm bg-indigo-50/50 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                                                            value={newTeacher.assigned_classes?.[0] || ''}
-                                                            onChange={(e) => {
-                                                                const val = e.target.value;
-                                                                const others = newTeacher.assigned_classes?.slice(1) || [];
-                                                                setNewTeacher({ ...newTeacher, assigned_classes: val ? [val, ...others] : others });
-                                                            }}
-                                                        >
-                                                            <option value="">Select Primary Class</option>
-                                                            {classes.map(c => (
-                                                                <option key={c.class_id} value={c.class_id}>Grade {c.grade} - {c.section}</option>
-                                                            ))}
-                                                        </select>
-                                                    </div>
-                                                    <div>
-                                                        <label className="text-xs font-semibold text-slate-600 block mb-1">Additional Subject Classes</label>
-                                                        <div className="border rounded-md p-3 max-h-32 overflow-y-auto bg-slate-50">
-                                                            <div className="grid grid-cols-2 gap-2">
-                                                                {classes.filter(c => c.class_id !== newTeacher.assigned_classes?.[0]).map(c => (
-                                                                    <label key={c.class_id} className="flex items-center space-x-2 cursor-pointer">
-                                                                        <input
-                                                                            type="checkbox"
-                                                                            className="rounded text-indigo-600 focus:ring-indigo-500 border-gray-300"
-                                                                            checked={newTeacher.assigned_classes?.includes(c.class_id) || false}
-                                                                            onChange={(e) => {
-                                                                                const checked = e.target.checked;
-                                                                                const primary = newTeacher.assigned_classes?.[0];
-                                                                                const current = newTeacher.assigned_classes?.slice(1) || [];
-
-                                                                                let newOthers;
-                                                                                if (checked) newOthers = [...current, c.class_id];
-                                                                                else newOthers = current.filter(id => id !== c.class_id);
-
-                                                                                setNewTeacher({ ...newTeacher, assigned_classes: primary ? [primary, ...newOthers] : newOthers });
-                                                                            }}
-                                                                        />
-                                                                        <span className="text-sm">Grade {c.grade}-{c.section}</span>
-                                                                    </label>
-                                                                ))}
-                                                            </div>
+                                                    {classes.map(c => (
+                                                        <div key={c.id} className="bg-white p-2 rounded border border-slate-100">
+                                                            <label className="flex items-center space-x-2 cursor-pointer font-medium mb-1">
+                                                                <input
+                                                                    type="checkbox"
+                                                                    className="rounded text-indigo-600 focus:ring-indigo-500 border-gray-300"
+                                                                    checked={newTeacher.assigned_classes?.includes(c.id) || false}
+                                                                    onChange={(e) => {
+                                                                        const checked = e.target.checked;
+                                                                        const current = newTeacher.assigned_classes || [];
+                                                                        if (checked) setNewTeacher({ ...newTeacher, assigned_classes: [...current, c.id] });
+                                                                        else setNewTeacher({ ...newTeacher, assigned_classes: current.filter(id => id !== c.id) });
+                                                                    }}
+                                                                />
+                                                                <span className="text-sm text-slate-700">Grade {c.name}</span>
+                                                            </label>
                                                         </div>
-                                                    </div>
+                                                    ))}
                                                 </div>
-                                            ) : (
-                                                <div className="border rounded-md p-3 max-h-60 overflow-y-auto bg-slate-50">
-                                                    <div className="space-y-3">
-                                                        {classes.map(c => (
-                                                            <div key={c.class_id} className="bg-white p-2 rounded border border-slate-100">
-                                                                <label className="flex items-center space-x-2 cursor-pointer font-medium mb-1">
-                                                                    <input
-                                                                        type="checkbox"
-                                                                        className="rounded text-indigo-600 focus:ring-indigo-500 border-gray-300"
-                                                                        checked={newTeacher.assigned_classes?.includes(c.class_id) || false}
-                                                                        onChange={(e) => {
-                                                                            const checked = e.target.checked;
-                                                                            const current = newTeacher.assigned_classes || [];
-                                                                            if (checked) setNewTeacher({ ...newTeacher, assigned_classes: [...current, c.class_id] });
-                                                                            else {
-                                                                                // Uncheck class -> Uncheck all its courses
-                                                                                const classCourses = courses.filter(co => co.academic_class === c.class_id).map(co => co.course_id);
-                                                                                setSelectedCourses(prev => prev.filter(id => !classCourses.includes(id)));
-                                                                                setNewTeacher({ ...newTeacher, assigned_classes: current.filter(id => id !== c.class_id) });
-                                                                            }
-                                                                        }}
-                                                                    />
-                                                                    <span className="text-sm text-slate-700">Grade {c.grade}-{c.section}</span>
-                                                                </label>
-
-                                                                {/* Show Subjects if Class is Selected */}
-                                                                {newTeacher.assigned_classes?.includes(c.class_id) && (
-                                                                    <div className="ml-6 space-y-1 mt-1 border-l-2 border-slate-100 pl-2">
-                                                                        <div className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">Subjects</div>
-                                                                        {courses.filter(course => course.academic_class === c.class_id).length > 0 ? (
-                                                                            courses.filter(course => course.academic_class === c.class_id).map(course => (
-                                                                                <label key={course.course_id} className="flex items-center space-x-2 cursor-pointer hover:bg-slate-50 p-1 rounded">
-                                                                                    <input
-                                                                                        type="checkbox"
-                                                                                        className="rounded-sm text-emerald-600 focus:ring-emerald-500 border-gray-300 h-3 w-3"
-                                                                                        checked={selectedCourses.includes(course.course_id)}
-                                                                                        onChange={(e) => {
-                                                                                            const checked = e.target.checked;
-                                                                                            if (checked) setSelectedCourses(prev => [...prev, course.course_id]);
-                                                                                            else setSelectedCourses(prev => prev.filter(id => id !== course.course_id));
-                                                                                        }}
-                                                                                    />
-                                                                                    <span className="text-xs text-slate-600">{course.subject}</span>
-                                                                                </label>
-                                                                            ))
-                                                                        ) : (
-                                                                            <span className="text-xs text-slate-400 italic">No subjects found</span>
-                                                                        )}
-                                                                    </div>
-                                                                )}
-                                                            </div>
-                                                        ))}
-                                                    </div>
-                                                </div>
-                                            )}
+                                            </div>
                                         </div>
                                     </div>
                                 ) : (
@@ -673,7 +549,7 @@ export default function TeachersPage() {
                                                 <div>
                                                     <label className="text-xs text-slate-500 block mb-1">Designation</label>
                                                     {dialogMode === 'view' ? (
-                                                        <div className="font-medium text-slate-900 capitalize">{selectedTeacher?.designation.replace('_', ' ')}</div>
+                                                        <div className="font-medium text-slate-900 capitalize">{(selectedTeacher?.designation || 'Teacher').replace('_', ' ')}</div>
                                                     ) : (
                                                         <select
                                                             className="w-full p-2 rounded-md border border-slate-200 text-sm bg-white focus:ring-2 focus:ring-indigo-500 outline-none"
@@ -696,148 +572,52 @@ export default function TeachersPage() {
                                                 {dialogMode === 'view' ? (
                                                     <div className="flex gap-2 flex-wrap">
                                                         {getAssignedClasses(selectedTeacher?.assigned_classes).length > 0 ?
-                                                            getAssignedClasses(selectedTeacher?.assigned_classes).map((c, idx) => (
-                                                                <span key={c.class_id} className={`px-2 py-1 rounded-md border text-xs font-medium ${idx === 0 && selectedTeacher?.designation === 'class_teacher' ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'bg-white'}`}>
-                                                                    {idx === 0 && selectedTeacher?.designation === 'class_teacher' ? 'Class Teacher: ' : ''}
-                                                                    Grade {c.grade}-{c.section}
+                                                            getAssignedClasses(selectedTeacher?.assigned_classes).map((c) => (
+                                                                <span key={c.id} className="px-2 py-1 rounded-md border text-xs font-medium bg-white">
+                                                                    Grade {c.name}
                                                                 </span>
                                                             ))
                                                             : <span className="text-sm text-slate-400">No active assignments</span>}
                                                     </div>
                                                 ) : (
                                                     <div className="space-y-4">
-                                                        {/* Class Teacher Logic: Primary + Others */}
-                                                        {selectedTeacher?.designation === 'class_teacher' ? (
-                                                            <>
-                                                                <div>
-                                                                    <label className="text-xs font-semibold text-indigo-600 block mb-1">Primary Class (Homeroom)</label>
-                                                                    <select
-                                                                        className="w-full p-2 rounded-md border border-indigo-200 text-sm bg-indigo-50/50 focus:ring-2 focus:ring-indigo-500 outline-none"
-                                                                        value={selectedTeacher?.assigned_classes?.[0] || ''}
-                                                                        onChange={(e) => {
-                                                                            const val = e.target.value;
-                                                                            setSelectedTeacher(prev => {
-                                                                                if (!prev) return null;
-                                                                                const others = prev.assigned_classes?.slice(1) || [];
-                                                                                return { ...prev, assigned_classes: val ? [val, ...others] : others };
-                                                                            });
-                                                                        }}
-                                                                    >
-                                                                        <option value="">Select Primary Class</option>
-                                                                        {classes.map(c => (
-                                                                            <option key={c.class_id} value={c.class_id}>Grade {c.grade} - {c.section}</option>
-                                                                        ))}
-                                                                    </select>
-                                                                    <p className="text-[10px] text-slate-500 mt-1">This is the class they manage administratively.</p>
-                                                                </div>
-
-                                                                <div>
-                                                                    <label className="text-xs font-semibold text-slate-600 block mb-1">Additional Subject Classes</label>
-                                                                    <div className="border rounded-md p-2 max-h-32 overflow-y-auto bg-white">
-                                                                        <div className="space-y-1">
-                                                                            {classes.filter(c => c.class_id !== selectedTeacher.assigned_classes?.[0]).map(c => (
-                                                                                <label key={c.class_id} className="flex items-center space-x-2 p-1 hover:bg-slate-50 rounded cursor-pointer">
-                                                                                    <input
-                                                                                        type="checkbox"
-                                                                                        className="rounded text-indigo-600 focus:ring-indigo-500 border-gray-300"
-                                                                                        checked={selectedTeacher.assigned_classes?.includes(c.class_id) || false}
-                                                                                        onChange={(e) => {
-                                                                                            const checked = e.target.checked;
-                                                                                            setSelectedTeacher(prev => {
-                                                                                                if (!prev) return null;
-                                                                                                const primary = prev.assigned_classes?.[0]; // Preserve primary
-                                                                                                const current = prev.assigned_classes?.slice(1) || []; // Work with others
-
-                                                                                                let newOthers;
-                                                                                                if (checked) newOthers = [...current, c.class_id];
-                                                                                                else newOthers = current.filter(id => id !== c.class_id);
-
-                                                                                                return { ...prev, assigned_classes: primary ? [primary, ...newOthers] : newOthers };
-                                                                                            });
-                                                                                        }}
-                                                                                    />
-                                                                                    <span className="text-sm">Grade {c.grade} - {c.section}</span>
-                                                                                </label>
-                                                                            ))}
-                                                                        </div>
-                                                                    </div>
-                                                                </div>
-                                                            </>
-                                                        ) : (
-                                                            // Subject Teacher Logic: Simple Multi-select
-                                                            // Subject Teacher Logic: Simple Multi-select
+                                                        <div>
                                                             <div className="border rounded-md p-3 max-h-60 overflow-y-auto bg-white">
-                                                                <div className="text-xs text-slate-500 mb-2">Select classes and subjects to teach:</div>
+                                                                <div className="text-xs text-slate-500 mb-2">Select classes to teach:</div>
                                                                 <div className="space-y-3">
                                                                     {classes.map(c => (
-                                                                        <div key={c.class_id} className="bg-slate-50 p-2 rounded border border-slate-100">
+                                                                        <div key={c.id} className="bg-slate-50 p-2 rounded border border-slate-100">
                                                                             <label className="flex items-center space-x-2 cursor-pointer font-medium mb-1">
                                                                                 <input
                                                                                     type="checkbox"
                                                                                     className="rounded text-indigo-600 focus:ring-indigo-500 border-gray-300"
-                                                                                    checked={selectedTeacher?.assigned_classes?.includes(c.class_id) || false}
+                                                                                    checked={selectedTeacher?.assigned_classes?.includes(c.id) || false}
                                                                                     onChange={(e) => {
                                                                                         const checked = e.target.checked;
                                                                                         setSelectedTeacher(prev => {
                                                                                             if (!prev) return null;
                                                                                             const current = prev.assigned_classes || [];
-                                                                                            if (checked) return { ...prev, assigned_classes: [...current, c.class_id] };
-                                                                                            else {
-                                                                                                // Uncheck class -> Uncheck all its courses from selectedCourses
-                                                                                                const classCourses = courses.filter(co => co.academic_class === c.class_id).map(co => co.course_id);
-                                                                                                setSelectedCourses(prevCourses => prevCourses.filter(id => !classCourses.includes(id)));
-                                                                                                return { ...prev, assigned_classes: current.filter(id => id !== c.class_id) };
-                                                                                            }
+                                                                                            if (checked) return { ...prev, assigned_classes: [...current, c.id] };
+                                                                                            else return { ...prev, assigned_classes: current.filter(id => id !== c.id) };
                                                                                         });
                                                                                     }}
                                                                                 />
-                                                                                <span className="text-sm text-slate-800">Grade {c.grade} - {c.section}</span>
+                                                                                <span className="text-sm text-slate-800">Grade {c.name}</span>
                                                                             </label>
-
-                                                                            {/* Show Subjects if Class is Selected */}
-                                                                            {selectedTeacher?.assigned_classes?.includes(c.class_id) && (
-                                                                                <div className="ml-6 space-y-1 mt-1 border-l-2 border-slate-200 pl-2">
-                                                                                    <div className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">Subjects</div>
-                                                                                    {courses.filter(course => course.academic_class === c.class_id).length > 0 ? (
-                                                                                        courses.filter(course => course.academic_class === c.class_id).map(course => (
-                                                                                            <label key={course.course_id} className="flex items-center space-x-2 cursor-pointer hover:bg-white p-1 rounded">
-                                                                                                <input
-                                                                                                    type="checkbox"
-                                                                                                    className="rounded-sm text-emerald-600 focus:ring-emerald-500 border-gray-300 h-3 w-3"
-                                                                                                    checked={selectedCourses.includes(course.course_id)}
-                                                                                                    onChange={(e) => {
-                                                                                                        const checked = e.target.checked;
-                                                                                                        if (checked) setSelectedCourses(prev => [...prev, course.course_id]);
-                                                                                                        else setSelectedCourses(prev => prev.filter(id => id !== course.course_id));
-                                                                                                    }}
-                                                                                                />
-                                                                                                <span className="text-xs text-slate-600">{course.subject}</span>
-                                                                                                {/* Show if assigned to another teacher */}
-                                                                                                {course.teacher && course.teacher !== selectedTeacher.teacher_id && (
-                                                                                                    <span className="text-[10px] text-amber-500 ml-1">(Assigned to other)</span>
-                                                                                                )}
-                                                                                            </label>
-                                                                                        ))
-                                                                                    ) : (
-                                                                                        <span className="text-xs text-slate-400 italic">No subjects found</span>
-                                                                                    )}
-                                                                                </div>
-                                                                            )}
                                                                         </div>
                                                                     ))}
                                                                 </div>
                                                             </div>
-                                                        )}
+                                                        </div>
                                                     </div>
                                                 )}
                                             </div>
                                         </div>
-                                        {/* Removed extra div */}
 
                                         {/* Account Check */}
                                         <div className="space-y-4">
                                             <h3 className="text-sm font-semibold uppercase tracking-wider text-slate-400 flex items-center">
-                                                <Shield className="h-4 w-4 mr-2" /> Account Status
+                                                <ShieldCheck className="h-4 w-4 mr-2" /> Account Status
                                             </h3>
                                             <div className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-xl space-y-3">
                                                 <div className="flex justify-between items-center">
@@ -883,5 +663,3 @@ export default function TeachersPage() {
         </div>
     );
 }
-
-

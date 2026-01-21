@@ -2,11 +2,15 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { Card } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
-import { ArrowLeft, ArrowRight, CheckCircle2 } from 'lucide-react';
-import { academicAPI, Lesson } from '@/lib/api/saas';
+import {
+    ArrowLeft, ArrowRight, CheckCircle2,
+    PlayCircle, FileText, Paperclip,
+    Download, Link as LinkIcon, ExternalLink
+} from 'lucide-react';
+import { academicAPI, Lesson, helpers } from '@/lib/api';
 import { toast } from 'sonner';
 
 export default function StudentLessonViewPage() {
@@ -24,11 +28,16 @@ export default function StudentLessonViewPage() {
         try {
             setLoading(true);
             const [lessonData, lessonsData] = await Promise.all([
-                academicAPI.getLesson(lessonId),
-                academicAPI.getLessonsByCourse(courseId)
+                academicAPI.getLesson(parseInt(lessonId)),
+                helpers.getLessonsBySubject(courseId)
             ]);
             setLesson(lessonData);
             setAllLessons(lessonsData);
+
+            // Set progress from backend data
+            if (lessonData.user_progress) {
+                setIsCompleted(lessonData.user_progress.completed);
+            }
         } catch (error) {
             console.error('Failed to load lesson:', error);
             toast.error('Failed to load lesson');
@@ -37,43 +46,31 @@ export default function StudentLessonViewPage() {
         }
     }, [courseId, lessonId]);
 
-    const loadProgress = useCallback(() => {
-        const saved = localStorage.getItem(`course-progress-${courseId}`);
-        if (saved) {
-            const completed = new Set(JSON.parse(saved));
-            setIsCompleted(completed.has(lessonId));
-        }
-    }, [courseId, lessonId]);
-
     useEffect(() => {
         loadLesson();
-        loadProgress();
-    }, [loadLesson, loadProgress]);
+    }, [loadLesson]);
 
-    const toggleComplete = () => {
-        const saved = localStorage.getItem(`course-progress-${courseId}`);
-        const completed = saved ? new Set(JSON.parse(saved)) : new Set();
-
-        if (isCompleted) {
-            completed.delete(lessonId);
-        } else {
-            completed.add(lessonId);
+    const toggleComplete = async () => {
+        const idNum = parseInt(lessonId);
+        try {
+            const response = await academicAPI.toggleLessonProgress(idNum);
+            setIsCompleted(response.completed);
+            toast.success(response.completed ? 'Marked as complete!' : 'Marked as incomplete');
+        } catch (error) {
+            console.error('Failed to toggle progress:', error);
+            toast.error('Failed to update progress');
         }
-
-        localStorage.setItem(`course-progress-${courseId}`, JSON.stringify([...completed]));
-        setIsCompleted(!isCompleted);
-        toast.success(isCompleted ? 'Marked as incomplete' : 'Marked as complete!');
     };
 
     const getCurrentLessonIndex = () => {
-        return allLessons.findIndex(l => l.lesson_id === lessonId);
+        return allLessons.findIndex(l => l.id === parseInt(lessonId));
     };
 
     const goToNextLesson = () => {
         const currentIndex = getCurrentLessonIndex();
         if (currentIndex < allLessons.length - 1) {
             const nextLesson = allLessons[currentIndex + 1];
-            router.push(`/student/courses/${courseId}/lessons/${nextLesson.lesson_id}`);
+            router.push(`/student/courses/${courseId}/lessons/${nextLesson.id}`);
         }
     };
 
@@ -81,93 +78,41 @@ export default function StudentLessonViewPage() {
         const currentIndex = getCurrentLessonIndex();
         if (currentIndex > 0) {
             const prevLesson = allLessons[currentIndex - 1];
-            router.push(`/student/courses/${courseId}/lessons/${prevLesson.lesson_id}`);
+            router.push(`/student/courses/${courseId}/lessons/${prevLesson.id}`);
         }
     };
 
-    const renderContent = () => {
-        if (!lesson) return null;
+    const renderVideo = () => {
+        if (!lesson?.video_url) return null;
 
-        switch (lesson.content_type) {
-            case 'text':
-                return (
-                    <div
-                        className="prose max-w-none p-6"
-                        dangerouslySetInnerHTML={{ __html: lesson.content }}
-                    />
-                );
+        const youtubeMatch = lesson.video_url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&\s]+)/);
+        const vimeoMatch = lesson.video_url.match(/vimeo\.com\/(\d+)/);
 
-            case 'video':
-                const youtubeMatch = lesson.content.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&\s]+)/);
-                const vimeoMatch = lesson.content.match(/vimeo\.com\/(\d+)/);
+        let embedUrl = '';
+        if (youtubeMatch) embedUrl = `https://www.youtube.com/embed/${youtubeMatch[1]}`;
+        else if (vimeoMatch) embedUrl = `https://player.vimeo.com/video/${vimeoMatch[1]}`;
 
-                if (youtubeMatch) {
-                    return (
-                        <div className="aspect-video">
-                            <iframe
-                                width="100%"
-                                height="100%"
-                                src={`https://www.youtube.com/embed/${youtubeMatch[1]}`}
-                                frameBorder="0"
-                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                                allowFullScreen
-                                className="rounded-lg"
-                            />
-                        </div>
-                    );
-                } else if (vimeoMatch) {
-                    return (
-                        <div className="aspect-video">
-                            <iframe
-                                width="100%"
-                                height="100%"
-                                src={`https://player.vimeo.com/video/${vimeoMatch[1]}`}
-                                frameBorder="0"
-                                allow="autoplay; fullscreen; picture-in-picture"
-                                allowFullScreen
-                                className="rounded-lg"
-                            />
-                        </div>
-                    );
-                } else {
-                    return (
-                        <video width="100%" controls className="rounded-lg">
-                            <source src={lesson.content} />
-                            Your browser does not support the video tag.
-                        </video>
-                    );
-                }
-
-            case 'pdf':
-                return (
-                    <iframe
-                        src={lesson.content}
-                        width="100%"
-                        height="800"
-                        className="border rounded-lg"
-                        title="PDF Document"
-                    />
-                );
-
-            case 'link':
-                return (
-                    <Card className="p-8 text-center">
-                        <h3 className="text-lg font-semibold mb-4">External Resource</h3>
-                        <p className="text-muted-foreground mb-6">
-                            This lesson links to an external resource
-                        </p>
-                        <Button asChild>
-                            <a
-                                href={lesson.content}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                            >
-                                Open Resource
-                            </a>
-                        </Button>
-                    </Card>
-                );
-        }
+        return (
+            <div className="mb-8 rounded-2xl overflow-hidden bg-slate-900 shadow-2xl">
+                {embedUrl ? (
+                    <div className="aspect-video">
+                        <iframe
+                            width="100%"
+                            height="100%"
+                            src={embedUrl}
+                            frameBorder="0"
+                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                            allowFullScreen
+                        />
+                    </div>
+                ) : (
+                    <video width="100%" controls className="aspect-video">
+                        <source src={lesson.video_url} />
+                        Your browser does not support the video tag.
+                    </video>
+                )}
+            </div>
+        );
     };
 
     if (loading) {
@@ -183,62 +128,156 @@ export default function StudentLessonViewPage() {
     const hasNext = currentIndex < allLessons.length - 1;
 
     return (
-        <div className="max-w-5xl mx-auto space-y-6">
-            {/* Header */}
-            <div className="flex items-center justify-between">
+        <div className="max-w-4xl mx-auto space-y-8 py-8 px-4">
+            {/* Header / Navigation Bar */}
+            <div className="flex items-center justify-between sticky top-0 z-30 bg-white/80 backdrop-blur-md py-4 border-b">
                 <Button
                     variant="ghost"
                     onClick={() => router.push(`/student/courses/${courseId}/lessons`)}
+                    className="hover:bg-slate-100"
                 >
                     <ArrowLeft className="h-4 w-4 mr-2" />
-                    Back to Lessons
+                    Back
                 </Button>
-                <div className="flex items-center gap-2">
-                    <Checkbox
-                        id="complete"
-                        checked={isCompleted}
-                        onCheckedChange={toggleComplete}
-                    />
-                    <label
-                        htmlFor="complete"
-                        className="text-sm font-medium cursor-pointer select-none"
-                    >
-                        Mark as complete
-                    </label>
-                    {isCompleted && <CheckCircle2 className="h-5 w-5 text-green-600" />}
+
+                <div className="flex items-center gap-6">
+                    <div className="flex items-center gap-2">
+                        <Checkbox
+                            id="complete"
+                            checked={isCompleted}
+                            onCheckedChange={toggleComplete}
+                            className="h-5 w-5 rounded-full"
+                        />
+                        <label
+                            htmlFor="complete"
+                            className="text-sm font-bold text-slate-600 cursor-pointer select-none"
+                        >
+                            Complete
+                        </label>
+                    </div>
+
+                    <div className="flex items-center gap-1 bg-slate-100 rounded-xl p-1">
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 rounded-lg"
+                            onClick={goToPreviousLesson}
+                            disabled={!hasPrevious}
+                        >
+                            <ArrowLeft className="h-4 w-4" />
+                        </Button>
+                        <span className="text-xs font-bold px-2 text-slate-500">
+                            {currentIndex + 1} / {allLessons.length}
+                        </span>
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 rounded-lg"
+                            onClick={goToNextLesson}
+                            disabled={!hasNext}
+                        >
+                            <ArrowRight className="h-4 w-4" />
+                        </Button>
+                    </div>
                 </div>
             </div>
 
-            {/* Lesson Content */}
-            <Card className="overflow-hidden">
-                <div className="bg-gradient-to-r from-indigo-500 to-purple-600 p-6 text-white">
-                    <div className="text-sm opacity-90 mb-2">
-                        Lesson {currentIndex + 1} of {allLessons.length}
-                    </div>
-                    <h1 className="text-3xl font-bold">{lesson?.title}</h1>
+            {/* Lesson Title Section */}
+            <div>
+                <div className="flex items-center gap-2 mb-2">
+                    <span className="bg-indigo-100 text-indigo-700 text-[10px] font-black px-2 py-0.5 rounded uppercase tracking-wider">
+                        Current Lesson
+                    </span>
+                    <span className="text-slate-400 text-xs">•</span>
+                    <span className="text-slate-500 text-xs font-medium">{lesson?.duration_minutes} mins</span>
                 </div>
-                <div className="p-6">
-                    {renderContent()}
-                </div>
-            </Card>
+                <h1 className="text-4xl font-black text-slate-900 tracking-tight leading-tight">
+                    {lesson?.title}
+                </h1>
+            </div>
 
-            {/* Navigation */}
-            <div className="flex justify-between items-center">
-                <Button
-                    variant="outline"
-                    onClick={goToPreviousLesson}
-                    disabled={!hasPrevious}
-                >
-                    <ArrowLeft className="h-4 w-4 mr-2" />
-                    Previous Lesson
-                </Button>
-                <Button
-                    onClick={goToNextLesson}
-                    disabled={!hasNext}
-                >
-                    Next Lesson
-                    <ArrowRight className="h-4 w-4 ml-2" />
-                </Button>
+            {/* Video Content */}
+            {renderVideo()}
+
+            {/* Main Content */}
+            <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
+                {/* Left side: Content */}
+                <div className="lg:col-span-3 space-y-8">
+                    {lesson?.content ? (
+                        <Card className="border-none shadow-none">
+                            <CardContent className="p-0">
+                                <div
+                                    className="prose prose-slate prose-lg max-w-none 
+                                    prose-headings:text-slate-900 prose-headings:font-black
+                                    prose-p:text-slate-600 prose-p:leading-relaxed
+                                    prose-a:text-indigo-600 prose-a:font-bold prose-a:no-underline hover:prose-a:underline
+                                    prose-strong:text-slate-900
+                                    prose-img:rounded-2xl prose-img:shadow-lg"
+                                    dangerouslySetInnerHTML={{ __html: lesson.content }}
+                                />
+                            </CardContent>
+                        </Card>
+                    ) : (
+                        <div className="p-12 text-center bg-slate-50 rounded-3xl border-2 border-dashed border-slate-200">
+                            <FileText className="h-12 w-12 mx-auto text-slate-300 mb-4" />
+                            <p className="text-slate-500 font-medium italic">No text content for this lesson.</p>
+                        </div>
+                    )}
+                </div>
+
+                {/* Right side: Materials & Sidebar */}
+                <div className="space-y-6">
+                    <div className="sticky top-24 space-y-6">
+                        {/* Materials Section */}
+                        {lesson?.materials && lesson.materials.length > 0 && (
+                            <div className="space-y-4">
+                                <h3 className="font-black text-slate-900 text-sm uppercase tracking-widest flex items-center gap-2">
+                                    <Paperclip className="h-4 w-4 text-indigo-600" />
+                                    Materials
+                                </h3>
+                                <div className="space-y-2">
+                                    {lesson.materials.map((m) => (
+                                        <a
+                                            key={m.id}
+                                            href={m.file || m.link}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="block p-3 rounded-xl border border-slate-200 bg-white hover:border-indigo-600 hover:shadow-md transition-all group"
+                                        >
+                                            <div className="flex items-center gap-3">
+                                                <div className="bg-slate-50 p-2 rounded-lg group-hover:bg-indigo-50 transition-colors">
+                                                    {m.material_type === 'pdf' ? (
+                                                        <FileText className="h-4 w-4 text-red-500" />
+                                                    ) : m.material_type === 'link' ? (
+                                                        <ExternalLink className="h-4 w-4 text-indigo-500" />
+                                                    ) : (
+                                                        <Paperclip className="h-4 w-4 text-slate-500" />
+                                                    )}
+                                                </div>
+                                                <div className="flex-1 min-w-0">
+                                                    <p className="text-xs font-bold text-slate-800 truncate">{m.title}</p>
+                                                    <p className="text-[10px] text-slate-400 font-bold uppercase">{m.material_type}</p>
+                                                </div>
+                                            </div>
+                                        </a>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Next Action Card */}
+                        <Card className="bg-slate-900 text-white p-6 rounded-3xl border-none shadow-2xl">
+                            <h4 className="font-bold mb-4">Ready to move on?</h4>
+                            <Button
+                                className="w-full bg-indigo-600 hover:bg-indigo-700 h-12 rounded-2xl font-bold"
+                                onClick={isCompleted ? goToNextLesson : toggleComplete}
+                            >
+                                {isCompleted ? 'Next Lesson' : 'Complete Lesson'}
+                                <ArrowRight className="ml-2 h-4 w-4" />
+                            </Button>
+                        </Card>
+                    </div>
+                </div>
             </div>
         </div>
     );

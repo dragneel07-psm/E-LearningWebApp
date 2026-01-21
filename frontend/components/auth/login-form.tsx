@@ -44,18 +44,17 @@ export function LoginForm({ role, title, subtitle }: LoginFormProps) {
 
             toast.success('Welcome back! Sign in successful.');
 
-            // Redirect Logic
-            if (redirectPath) {
-                router.push(redirectPath);
-            } else if (role) {
-                router.push(`/${role}`);
-            } else {
-                router.push('/student'); // Default
-            }
+            // Small delay to ensure cookies are set
+            await new Promise(resolve => setTimeout(resolve, 100));
+
+            // Determine redirect path
+            const targetPath = redirectPath || (role ? `/${role}` : '/student');
+
+            // Use window.location.href for hard navigation to ensure cookies are sent
+            window.location.href = targetPath;
         } catch (err: any) {
             console.error("Login Error:", err);
             toast.error(err.response?.data?.detail || 'Invalid email or password. Please try again.');
-        } finally {
             setIsLoading(false);
         }
     };

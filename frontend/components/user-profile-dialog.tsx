@@ -70,10 +70,10 @@ export function UserProfileDialog({ user, open, onOpenChange }: UserProfileDialo
     const loadStudentDetails = async (userId: string) => {
         try {
             const students = await academicAPI.getStudents();
-            const profile = students.find(s => s.user === userId);
+            const profile = students.find(s => s.user_id === userId);
             if (profile) {
-                setStudentProfileId(profile.student_id);
-                setCurrentClass(profile.academic_class || '');
+                setStudentProfileId(profile.id);
+                setCurrentClass(profile.academic_class?.toString() || '');
             }
         } catch (e) {
             console.error("Failed to load student profile", e);
@@ -95,7 +95,7 @@ export function UserProfileDialog({ user, open, onOpenChange }: UserProfileDialo
             // 2. Update Enrollment (if student and class changed)
             if (formData.role === 'student' && studentProfileId && currentClass) {
                 await academicAPI.updateStudent(studentProfileId, {
-                    academic_class: currentClass
+                    academic_class: parseInt(currentClass)
                 });
             }
 
@@ -171,7 +171,7 @@ export function UserProfileDialog({ user, open, onOpenChange }: UserProfileDialo
                             )}
 
                             {isEditing ? (
-                                <Select value={formData.role} onValueChange={(v) => setFormData({ ...formData, role: v })}>
+                                <Select value={formData.role} onValueChange={(v) => setFormData({ ...formData, role: v as any })}>
                                     <SelectTrigger className="w-[180px] h-8">
                                         <SelectValue placeholder="Role" />
                                     </SelectTrigger>
@@ -231,17 +231,15 @@ export function UserProfileDialog({ user, open, onOpenChange }: UserProfileDialo
                                                     </SelectTrigger>
                                                     <SelectContent>
                                                         {classes.map(c => (
-                                                            <SelectItem key={c.class_id} value={c.class_id}>
-                                                                {c.grade} - Section {c.section}
+                                                            <SelectItem key={c.id} value={c.id.toString()}>
+                                                                {c.name}
                                                             </SelectItem>
                                                         ))}
                                                     </SelectContent>
                                                 </Select>
                                             ) : (
                                                 <p className="font-medium">
-                                                    {classes.find(c => c.class_id === currentClass)
-                                                        ? `${classes.find(c => c.class_id === currentClass).grade} - ${classes.find(c => c.class_id === currentClass).section}`
-                                                        : 'No Class Assigned'}
+                                                    {classes.find(c => c.id.toString() === currentClass)?.name || 'No Class Assigned'}
                                                 </p>
                                             )}
                                         </div>
