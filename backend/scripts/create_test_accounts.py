@@ -56,17 +56,23 @@ def setup_test_accounts():
     from academic.models import Student, Teacher, AcademicClass, Section
 
     # 5. Helper to create user
-    def create_account(username, email, password, role, is_superuser=False):
+    def create_account(username, email, password, role, first_name='', last_name='', is_superuser=False):
         user, created = User.objects.using('default').get_or_create(
             username=username,
             defaults={
                 'email': email,
+                'first_name': first_name,
+                'last_name': last_name,
                 'role': role,
                 'tenant': tenant,
                 'is_staff': is_superuser,
                 'is_superuser': is_superuser
             }
         )
+        if not created:
+            user.email = email
+            user.first_name = first_name
+            user.last_name = last_name
         user.set_password(password)
         user.save(using='default')
         
@@ -87,6 +93,8 @@ def setup_test_accounts():
                     user_id=user.user_id, # Force same UUID
                     username=username,
                     email=email,
+                    first_name=first_name,
+                    last_name=last_name,
                     role=role,
                     tenant=tenant,
                     is_staff=is_superuser,
@@ -97,6 +105,8 @@ def setup_test_accounts():
             else:
                 # Update existing
                 existing_tenant_user.email = email
+                existing_tenant_user.first_name = first_name
+                existing_tenant_user.last_name = last_name
                 existing_tenant_user.role = role
                 existing_tenant_user.is_staff = is_superuser
                 existing_tenant_user.is_superuser = is_superuser
@@ -108,10 +118,10 @@ def setup_test_accounts():
         return user
 
     # SaaS Admin (Superuser)
-    saas_admin = create_account('saas_admin', 'saas@demo.com', 'saas123', 'saas_admin', is_superuser=True)
+    saas_admin = create_account('saas_admin', 'saas@demo.com', 'saas123', 'saas_admin', 'SaaS', 'Admin', is_superuser=True)
 
     # School Admin (Admin role)
-    school_admin = create_account('school_admin', 'admin@demo.com', 'admin123', 'admin')
+    school_admin = create_account('school_admin', 'admin@demo.com', 'admin123', 'admin', 'School', 'Administrator')
 
     # Within the tenant database, create academic entities
     academic_class, _ = AcademicClass.objects.using(tenant.db_alias).get_or_create(
@@ -126,7 +136,7 @@ def setup_test_accounts():
     print(f"✅ Setup Academic Class: {academic_class.name}")
 
     # Teacher
-    teacher_user = create_account('teacher_test', 'teacher@demo.com', 'teacher123', 'teacher')
+    teacher_user = create_account('teacher_test', 'teacher@demo.com', 'teacher123', 'teacher', 'Test', 'Teacher')
     teacher_profile, created = Teacher.objects.using(tenant.db_alias).get_or_create(user=teacher_user)
     if created:
         teacher_profile.designation = 'subject_teacher'
@@ -173,8 +183,42 @@ def setup_test_accounts():
     teacher_profile.assigned_classes.add(academic_class)
     print(f"✅ Assigned Teacher to Class: {academic_class.name}")
 
+    # Student
+    student_user = create_account('student_test', 'student@demo.com', 'student123', 'student', 'Test', 'Student')
+    student_profile, created = Student.objects.using(tenant.db_alias).get_or_create(
+        user=student_user,
+        defaults={
+            'academic_class': academic_class,
+            'section': section,
+            'learning_style': 'visual',
+            'daily_study_goal': 60,
+            'ai_explanation_level': 'normal',
+            'current_streak': 7,
+            'focus_score': 85
+        }
+    )
     if created:
         print(f"   - Created Student Profile (Grade 10-A)")
+    else:
+        # Update if exists
+        student_profile.academic_class = academic_class
+        student_profile.section = section
+        student_profile.save(using=tenant.db_alias)
+        print(f"   - Updated Student Profile")
+
+    # Parent
+    from academic.models import Parent
+    parent_user = create_account('parent_test', 'parent@demo.com', 'parent123', 'parent', 'Test', 'Parent')
+    parent_profile, created = Parent.objects.using(tenant.db_alias).get_or_create(
+        user=parent_user,
+        defaults={}
+    )
+    # Link parent to student
+    parent_profile.students.add(student_profile)
+    if created:
+        print(f"✅ Created Parent Profile (linked to {student_profile.user.first_name})")
+    else:
+        print(f"✅ Updated Parent Profile")
 
     print("\n🎉 Test accounts setup complete!")
     print("-" * 30)
@@ -182,6 +226,7 @@ def setup_test_accounts():
     print(f"School Admin: school_admin / admin123")
     print(f"Teacher:      teacher_test / teacher123")
     print(f"Student:      student_test / student123")
+    print(f"Parent:       parent_test / parent123")
     print("-" * 30)
 
 if __name__ == '__main__':
