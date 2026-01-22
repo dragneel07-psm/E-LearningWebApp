@@ -8,22 +8,13 @@ from .models import Book, BookIssue
 from .serializers import BookSerializer, BookIssueSerializer
 from core.mixins import TenantScopedQuerysetMixin
 
-class BookViewSet(TenantScopedQuerysetMixin, viewsets.ModelViewSet):
+class BookViewSet(viewsets.ModelViewSet):
     queryset = Book.objects.all()
     serializer_class = BookSerializer
 
-    def get_queryset(self):
-        return super().get_queryset()
-
-    def perform_create(self, serializer):
-        tenant = self.get_tenant()
-        serializer.save(tenant=tenant)
-
-
-class BookIssueViewSet(TenantScopedQuerysetMixin, viewsets.ModelViewSet):
+class BookIssueViewSet(viewsets.ModelViewSet):
     queryset = BookIssue.objects.all()
     serializer_class = BookIssueSerializer
-    tenant_field = "book__tenant"
 
     def get_queryset(self):
         queryset = super().get_queryset()

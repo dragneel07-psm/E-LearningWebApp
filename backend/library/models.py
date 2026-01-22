@@ -1,15 +1,15 @@
 from django.db import models
 from django.core.exceptions import ValidationError
+from django.utils import timezone
 import uuid as uuid_lib
-from core.models.tenant import Tenant
 from academic.models import Student
 
 class Book(models.Model):
     book_id = models.UUIDField(primary_key=True, default=uuid_lib.uuid4, editable=False)
-    tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE, related_name='books')
+    # tenant field removed - isolation is handled by database router
     title = models.CharField(max_length=255)
     author = models.CharField(max_length=255)
-    isbn = models.CharField(max_length=13, null=True, blank=True)  # Removed unique=True
+    isbn = models.CharField(max_length=13, null=True, blank=True)
     category = models.CharField(max_length=100, choices=[
         ('fiction', 'Fiction'),
         ('non_fiction', 'Non-Fiction'),
@@ -33,10 +33,10 @@ class Book(models.Model):
 
     class Meta:
         ordering = ['title']
-        # ISBN should be unique per tenant, not globally
+        # ISBN should be unique per tenant (enforced by DB isolation)
         constraints = [
             models.UniqueConstraint(
-                fields=['tenant', 'isbn'],
+                fields=['isbn'],
                 name='unique_isbn_per_tenant',
                 condition=models.Q(isbn__isnull=False)
             )
@@ -100,8 +100,9 @@ class BookIssue(models.Model):
                 'book': f'No copies of "{self.book.title}" are currently available'
             })
         
-        # Validate dates
-        if self.return_date and self.return_date < self.issued_date.date():
+        # Validate dates - Handle case where issued_date is None (new instance)
+        issued = self.issued_date.date() if self.issued_date else timezone.now().date()
+        if self.return_date and self.return_date < issued:
             raise ValidationError({
                 'return_date': 'Return date cannot be before issue date'
             })

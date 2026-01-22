@@ -3,13 +3,11 @@ from django.core.exceptions import ValidationError as DjangoValidationError
 from .models import Book, BookIssue
 
 class BookSerializer(serializers.ModelSerializer):
-    # Make tenant optional since it's set in perform_create
-    tenant = serializers.PrimaryKeyRelatedField(read_only=True, required=False)
     
     class Meta:
         model = Book
         fields = '__all__'
-        read_only_fields = ['book_id', 'tenant', 'created_at', 'updated_at', 'available_copies']
+        read_only_fields = ['book_id', 'created_at', 'updated_at', 'available_copies']
     
     def validate(self, attrs):
         """Run model validation"""
@@ -23,19 +21,15 @@ class BookSerializer(serializers.ModelSerializer):
         except DjangoValidationError as e:
             raise serializers.ValidationError(e.message_dict)
         
-        # Check ISBN uniqueness manually since UniqueTogetherValidator key 'tenant' 
-        # is read-only and not in validated_data
+        # Check ISBN uniqueness manually
         isbn = attrs.get('isbn')
         if isbn:
-            from core.middleware.tenant import get_current_tenant
-            tenant = get_current_tenant()
-            if tenant:
-                qs = Book.objects.filter(tenant=tenant, isbn=isbn)
-                if self.instance:
-                    qs = qs.exclude(pk=self.instance.pk)
-                
-                if qs.exists():
-                    raise serializers.ValidationError({'isbn': 'Book with this ISBN already exists.'})
+            qs = Book.objects.filter(isbn=isbn)
+            if self.instance:
+                qs = qs.exclude(pk=self.instance.pk)
+            
+            if qs.exists():
+                raise serializers.ValidationError({'isbn': 'Book with this ISBN already exists.'})
         
         return attrs
     

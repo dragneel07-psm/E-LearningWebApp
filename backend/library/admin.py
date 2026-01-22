@@ -3,8 +3,8 @@ from .models import Book, BookIssue
 
 @admin.register(Book)
 class BookAdmin(admin.ModelAdmin):
-    list_display = ['title', 'author', 'category', 'total_copies', 'available_copies', 'tenant']
-    list_filter = ['category', 'tenant']
+    list_display = ['title', 'author', 'category', 'total_copies', 'available_copies']
+    list_filter = ['category']
     search_fields = ['title', 'author', 'isbn']
     readonly_fields = ['book_id', 'created_at', 'updated_at']
 
