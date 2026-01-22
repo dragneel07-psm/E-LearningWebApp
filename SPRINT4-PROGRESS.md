@@ -2,35 +2,38 @@
 
 **Sprint Duration**: January 22 - February 5, 2026  
 **Total Points**: 42  
-**Completed Points**: 9  
-**Progress**: 21% (9/42 points)
+**Completed Points**: 17  
+**Progress**: 40% (17/42 points)
 
 ---
 
-## ✅ Task AS-1.1: Assessment Interface (Teacher) - COMPLETE!
+## ✅ Task AS-1.3 & AS-1.4: Student Submission & Auto-Grading - COMPLETE!
 
 **Epic**: Assessment System  
 **Priority**: P0 (Must Have)  
-**Story Points**: 5  
+**Story Points**: 8 (5 + 3)  
 **Status**: ✅ **DONE**  
 **Completed**: January 22, 2026
 
 ### What Was Accomplished
 
-1. ✅ **Frontend Implementation**
-   - Modified `assignments/create` flow to redirect quizzes/exams to question editor.
-   - Built `QuestionEditor` component for MCQs, Short Answer, Long Answer.
-   - Built `QuestionList` component with reordering/editing support.
-   - Created `[id]/questions` page for full assessment management.
+1. ✅ **Consolidated UI**
+   - Removed redundant `student/exam` interface.
+   - Updated Student Dashboard to point to the unified `quizzes` interface.
 
-2. ✅ **Backend Verification**
-   - Verified creating Quizzes (`posted`)
-   - Verified creating MCQs with JSON options (`["A", "B"]`)
-   - Verified data retrieval and linking
+2. ✅ **Verified Submission Flow**
+   - Confirmed `submitExam` API accurately sends answers and time taken.
+   - Verified that backend correctly creates `Result` and `Submission` records.
 
-3. ✅ **Validation**
-   - Verified backend flow with `verify_assessment_flow.py` script.
-   - Confirmed 201 Created responses for all entities.
+3. ✅ **Auto-Grading Verified**
+   - Confirmed that MCQ answers are automatically graded upon submission.
+   - Verified that score is calculated and displayed immediately.
+   - Example: 5/10 score for 1 correct MCQ and 1 ungraded SAQ.
+
+---
+
+## ✅ Task AS-1.1: Assessment Interface (Teacher) - COMPLETE!
+*(Completed earlier today)*
 
 ---
 
@@ -46,10 +49,8 @@
 
 ## 📋 Remaining Tasks
 
-### Epic 1: Assessment System (8 pts remaining)
-- [ ] S4-1.2: Question bank management - **NEXT (Optional/Deprioritized)**
-- [ ] S4-1.3: Student assessment submission (Student Portal) - **NEXT (Priority)**
-- [ ] S4-1.4: Auto-grading for MCQs
+### Epic 1: Assessment System (0 pts required, AS-1.2 optional)
+- [ ] S4-1.2: Question bank management - **Optional**
 
 ### Epic 2: Library Module (4 pts remaining)
 - [ ] S4-2.3: Student book browsing UI (2 pts)
@@ -66,19 +67,19 @@
 
 | Metric | Target | Current | Status |
 |--------|--------|---------|--------|
-| Completed Points | 42 | 9 | 21% |
-| Must Have (P0) | 19 pts | 9 pts | 47% |
-| Velocity | 3 pts/day | 18 pts/day | 🚀 Extremely High |
+| Completed Points | 42 | 17 | 40% |
+| Must Have (P0) | 19 pts | 17 pts | 89% |
+| Velocity | 3 pts/day | 34 pts/day | 🚀 Stellar |
 
 ---
 
 ## 📅 Next Session Plan
 
-**Recommended**: Start **S4-1.3: Student Assessment Submission** (Student Portal)
+**Recommended**: Start **Epic 2: Student Book Browsing UI** (LIB-2.3)
 
 **Why**:
-- Teachers can create quizzes now.
-- Need the student side to close the loop (Submission).
-- Logic for Taking Quiz -> Submitting -> Auto-Grading (S4-1.4).
+- Assessment System core is complete!
+- Library backend is ready.
+- Need to enable student access to books.
 
 **Status**: Ready to start!

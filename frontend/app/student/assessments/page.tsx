@@ -111,7 +111,7 @@ export default function AssessmentDashboard() {
                                     <span className="text-xs font-medium bg-indigo-50 text-indigo-700 px-2 py-1 rounded">
                                         {test.total_marks} Marks
                                     </span>
-                                    <Link href={test.type === 'assignment' ? `/student/assignments/${test.assessment_id}` : `/student/exam/${test.assessment_id}`}>
+                                    <Link href={test.type === 'assignment' ? `/student/assignments/${test.assessment_id}` : `/student/quizzes/${test.assessment_id}`}>
                                         <Button size="sm" className="gap-1">
                                             Start <ArrowRight className="h-3 w-3" />
                                         </Button>
