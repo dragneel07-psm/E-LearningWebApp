@@ -47,7 +47,7 @@ class BookIssueSerializer(serializers.ModelSerializer):
     class Meta:
         model = BookIssue
         fields = '__all__'
-        read_only_fields = ['issue_id', 'issued_date']
+        read_only_fields = ['issue_id', 'issued_date', 'due_date', 'return_date', 'fine_amount', 'status']
     
     def validate(self, attrs):
         """Run model validation"""

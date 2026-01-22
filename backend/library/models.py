@@ -113,7 +113,7 @@ class BookIssue(models.Model):
         
         with transaction.atomic():
             # New issue - decrement available copies
-            if not self.pk:
+            if self._state.adding:
                 # Lock the book row to prevent race conditions
                 book = Book.objects.select_for_update().get(pk=self.book.pk)
                 

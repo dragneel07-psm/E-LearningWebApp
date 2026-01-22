@@ -2,45 +2,45 @@
 
 **Sprint Duration**: January 22 - February 5, 2026  
 **Total Points**: 42  
-**Completed Points**: 17  
-**Progress**: 40% (17/42 points)
+**Completed Points**: 19  
+**Progress**: 45% (19/42 points)
 
 ---
 
-## ✅ Task AS-1.3 & AS-1.4: Student Submission & Auto-Grading - COMPLETE!
+## ✅ Task LIB-2.3: Student Book Browsing UI - COMPLETE!
 
-**Epic**: Assessment System  
-**Priority**: P0 (Must Have)  
-**Story Points**: 8 (5 + 3)  
+**Epic**: Library Module  
+**Priority**: P1 (Should Have)  
+**Story Points**: 2  
 **Status**: ✅ **DONE**  
 **Completed**: January 22, 2026
 
 ### What Was Accomplished
 
-1. ✅ **Consolidated UI**
-   - Removed redundant `student/exam` interface.
-   - Updated Student Dashboard to point to the unified `quizzes` interface.
+1. ✅ **Browsing Interface**
+   - Verified functionality of `frontend/app/student/library/page.tsx`.
+   - Students can lists books, filter by category/search, and view availability.
 
-2. ✅ **Verified Submission Flow**
-   - Confirmed `submitExam` API accurately sends answers and time taken.
-   - Verified that backend correctly creates `Result` and `Submission` records.
+2. ✅ **Book Request Flow**
+   - Implemented "Request Book" functionality.
+   - Fixed backend bugs:
+     - Made `due_date` read-only in serializer to allow auto-calculation.
+     - Fixed `BookIssue.save()` to correctly detect new instances (using `self._state.adding`) and decrement inventory.
 
-3. ✅ **Auto-Grading Verified**
-   - Confirmed that MCQ answers are automatically graded upon submission.
-   - Verified that score is calculated and displayed immediately.
-   - Example: 5/10 score for 1 correct MCQ and 1 ungraded SAQ.
+3. ✅ **Validation**
+   - Verified flow with `backend/verify_library_student.py`.
+   - Confirmed student login, book listing, request submission, and inventory update (`available_copies` decreased).
 
 ---
+
+## ✅ Task AS-1.3 & AS-1.4: Student Submission & Auto-Grading - COMPLETE!
+*(Completed earlier today)*
 
 ## ✅ Task AS-1.1: Assessment Interface (Teacher) - COMPLETE!
 *(Completed earlier today)*
 
----
-
 ## ✅ Task LIB-2.2: Create Sample Book Catalog - COMPLETE!
 *(Completed earlier today)*
-
----
 
 ## ✅ Task LIB-2.1: Library Module Deployment - COMPLETE!
 *(Completed earlier today)*
@@ -49,12 +49,11 @@
 
 ## 📋 Remaining Tasks
 
-### Epic 1: Assessment System (0 pts required, AS-1.2 optional)
-- [ ] S4-1.2: Question bank management - **Optional**
+### Epic 2: Library Module (2 pts remaining)
+- [ ] S4-2.4: Librarian dashboard (2 pts) - **NEXT**
 
-### Epic 2: Library Module (4 pts remaining)
-- [ ] S4-2.3: Student book browsing UI (2 pts)
-- [ ] S4-2.4: Librarian dashboard (2 pts)
+### Epic 1: Assessment System (0 pts required)
+- [ ] S4-1.2: Question bank management - **Optional**
 
 ### Other Epics
 - [ ] Epic 3: Enhanced AI Features (8 pts)
@@ -67,19 +66,18 @@
 
 | Metric | Target | Current | Status |
 |--------|--------|---------|--------|
-| Completed Points | 42 | 17 | 40% |
+| Completed Points | 42 | 19 | 45% |
 | Must Have (P0) | 19 pts | 17 pts | 89% |
-| Velocity | 3 pts/day | 34 pts/day | 🚀 Stellar |
+| Velocity | 3 pts/day | 36 pts/day | 🚀 Stellar |
 
 ---
 
 ## 📅 Next Session Plan
 
-**Recommended**: Start **Epic 2: Student Book Browsing UI** (LIB-2.3)
+**Recommended**: Start **S4-2.4: Librarian Dashboard**
 
 **Why**:
-- Assessment System core is complete!
-- Library backend is ready.
-- Need to enable student access to books.
+- Complete the Library Epic.
+- Features: Manage book issues, returns, and inventory.
 
 **Status**: Ready to start!
