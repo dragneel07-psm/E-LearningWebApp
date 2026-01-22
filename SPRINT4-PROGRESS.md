@@ -2,35 +2,40 @@
 
 **Sprint Duration**: January 22 - February 5, 2026  
 **Total Points**: 42  
-**Completed Points**: 4  
-**Progress**: 10% (4/42 points)
+**Completed Points**: 9  
+**Progress**: 21% (9/42 points)
 
 ---
 
-## ✅ Task LIB-2.2: Create Sample Book Catalog - COMPLETE!
+## ✅ Task AS-1.1: Assessment Interface (Teacher) - COMPLETE!
 
-**Epic**: Library Module  
+**Epic**: Assessment System  
 **Priority**: P0 (Must Have)  
-**Story Points**: 2  
+**Story Points**: 5  
 **Status**: ✅ **DONE**  
 **Completed**: January 22, 2026
 
 ### What Was Accomplished
 
-1. ✅ **Refactored Book Model**
-   - Removed invalid `tenant` Foreign Key (fixed OperationalError)
-   - Updated `admin.py` and `serializers.py` to match new schema
-   - Simplified `views.py` by removing manual tenant handling
+1. ✅ **Frontend Implementation**
+   - Modified `assignments/create` flow to redirect quizzes/exams to question editor.
+   - Built `QuestionEditor` component for MCQs, Short Answer, Long Answer.
+   - Built `QuestionList` component with reordering/editing support.
+   - Created `[id]/questions` page for full assessment management.
 
-2. ✅ **Populated Library**
-   - Created `backend/add_books.py` script
-   - Successfully added 9 sample books (Orwell, Hawking, etc.)
-   - Verified data persistency in `school_demo.sqlite3`
+2. ✅ **Backend Verification**
+   - Verified creating Quizzes (`posted`)
+   - Verified creating MCQs with JSON options (`["A", "B"]`)
+   - Verified data retrieval and linking
 
-3. ✅ **Verified API**
-   - `GET /api/library/books/` returns 200 OK
-   - `POST /api/library/issues/` verified (Book Issuing works)
-   - `clean()` method validation fixed for new issues
+3. ✅ **Validation**
+   - Verified backend flow with `verify_assessment_flow.py` script.
+   - Confirmed 201 Created responses for all entities.
+
+---
+
+## ✅ Task LIB-2.2: Create Sample Book Catalog - COMPLETE!
+*(Completed earlier today)*
 
 ---
 
@@ -41,10 +46,9 @@
 
 ## 📋 Remaining Tasks
 
-### Epic 1: Assessment System (13 pts)
-- [ ] S4-1.1: Create quiz/exam interface (Teacher) - **NEXT**
-- [ ] S4-1.2: Question bank management
-- [ ] S4-1.3: Student assessment submission
+### Epic 1: Assessment System (8 pts remaining)
+- [ ] S4-1.2: Question bank management - **NEXT (Optional/Deprioritized)**
+- [ ] S4-1.3: Student assessment submission (Student Portal) - **NEXT (Priority)**
 - [ ] S4-1.4: Auto-grading for MCQs
 
 ### Epic 2: Library Module (4 pts remaining)
@@ -62,19 +66,19 @@
 
 | Metric | Target | Current | Status |
 |--------|--------|---------|--------|
-| Completed Points | 42 | 4 | 10% |
-| Must Have (P0) | 19 pts | 4 pts | 21% |
-| Velocity | 3 pts/day | 8 pts/day | 🚀 High |
+| Completed Points | 42 | 9 | 21% |
+| Must Have (P0) | 19 pts | 9 pts | 47% |
+| Velocity | 3 pts/day | 18 pts/day | 🚀 Extremely High |
 
 ---
 
 ## 📅 Next Session Plan
 
-**Recommended**: Start **Epic 1: Assessment System** (AS-1.1)
+**Recommended**: Start **S4-1.3: Student Assessment Submission** (Student Portal)
 
 **Why**:
-- Highest priority feature for Sprint 4
-- Core academic functionality
-- Requires significant frontend/backend work
+- Teachers can create quizzes now.
+- Need the student side to close the loop (Submission).
+- Logic for Taking Quiz -> Submitting -> Auto-Grading (S4-1.4).
 
 **Status**: Ready to start!

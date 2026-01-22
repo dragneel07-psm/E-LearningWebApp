@@ -82,12 +82,17 @@ export default function CreateAssignmentPage() {
         e.preventDefault();
         setLoading(true);
         try {
-            await academicAPI.createAssessment({
+            const response = await academicAPI.createAssessment({
                 ...formData,
                 due_date: new Date(formData.due_date).toISOString(),
                 passing_marks: Math.round(formData.total_marks * 0.4) // Default 40%
             });
-            router.push('/teacher/assignments');
+
+            if (formData.type === 'quiz' || formData.type === 'exam') {
+                router.push(`/teacher/assignments/${response.assessment_id}/questions`);
+            } else {
+                router.push('/teacher/assignments');
+            }
         } catch (error) {
             console.error('Failed to create assignment:', error);
             alert('Failed to create assignment');
@@ -246,7 +251,7 @@ export default function CreateAssignmentPage() {
                             <Button type="button" variant="outline" onClick={() => router.back()}>Cancel</Button>
                             <Button type="submit" className="bg-indigo-600 hover:bg-indigo-700" disabled={loading}>
                                 {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                                Create Assignment
+                                {formData.type === 'quiz' || formData.type === 'exam' ? 'Next: Add Questions' : 'Create Assignment'}
                             </Button>
                         </div>
                     </form>
