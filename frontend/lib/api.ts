@@ -1128,6 +1128,21 @@ const api = {
     library: libraryAPI,
     ai: aiAPI,
     notifications: notificationsAPI,
+
+    // Learning Path API
+    learningPaths: {
+        getPaths: () => apiRequest<any[]>('/ai/learning-paths/'),
+        generatePath: (data: { student_id: string; subject_id?: number; topic_focus?: string }) =>
+            apiRequest<any>('/ai/learning-paths/generate/', {
+                method: 'POST',
+                body: JSON.stringify(data)
+            }),
+        updateNodeStatus: (nodeId: string, status: string) =>
+            apiRequest<any>(`/ai/learning-nodes/${nodeId}/complete/`, { // Using custom action
+                method: 'POST'
+            }),
+    },
+
     helpers,
 };
 

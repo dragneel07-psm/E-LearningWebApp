@@ -27,3 +27,47 @@ class StudentAIReport(models.Model):
 
     def __str__(self):
         return f"Report for {self.student} - {self.generated_at.date()}"
+
+class LearningPath(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid_lib.uuid4, editable=False)
+    tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE, db_constraint=False)
+    student = models.ForeignKey('academic.Student', on_delete=models.CASCADE, related_name='learning_paths')
+    subject = models.ForeignKey('academic.Subject', on_delete=models.CASCADE, related_name='learning_paths', null=True, blank=True)
+    title = models.CharField(max_length=255)
+    description = models.TextField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    is_active = models.BooleanField(default=True)
+    generated_by_ai = models.BooleanField(default=True)
+
+    def __str__(self):
+        return f"Path: {self.title} ({self.student})"
+
+class LearningNode(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid_lib.uuid4, editable=False)
+    learning_path = models.ForeignKey(LearningPath, on_delete=models.CASCADE, related_name='nodes')
+    title = models.CharField(max_length=255)
+    description = models.TextField(null=True, blank=True)
+    order = models.IntegerField(default=0)
+    resource_type = models.CharField(max_length=50, choices=[
+        ('video', 'Video'),
+        ('article', 'Article'),
+        ('quiz', 'Quiz'),
+        ('assignment', 'Assignment'),
+        ('topic', 'Topic Concept')
+    ], default='topic')
+    resource_link = models.CharField(max_length=500, null=True, blank=True) # Could be internal URL or external
+    estimated_minutes = models.IntegerField(default=15)
+    status = models.CharField(max_length=20, choices=[
+        ('locked', 'Locked'),
+        ('unlocked', 'Unlocked'),
+        ('in_progress', 'In Progress'),
+        ('completed', 'Completed')
+    ], default='locked')
+    completed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['order']
+
+    def __str__(self):
+        return f"{self.order}. {self.title}"
