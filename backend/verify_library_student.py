@@ -19,7 +19,7 @@ def verify_library_student_flow():
 
     # 1. Login as Student
     # Try common test accounts
-    student_email = "student_user@demo.com"
+    student_email = "student@demo.com"
     student_pass = "student123"
     token = get_token(student_email, student_pass)
     

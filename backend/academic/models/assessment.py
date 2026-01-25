@@ -1,6 +1,7 @@
 from django.db import models
 import uuid as uuid_lib
 from .subject import Subject
+from .class_section import Section
 from .student import Student
 
 class Assessment(models.Model):
@@ -21,6 +22,7 @@ class Assessment(models.Model):
 
     assessment_id = models.UUIDField(primary_key=True, default=uuid_lib.uuid4, editable=False)
     subject = models.ForeignKey(Subject, on_delete=models.CASCADE, related_name='assessments')
+    section = models.ForeignKey(Section, on_delete=models.SET_NULL, null=True, blank=True, related_name='assessments')
     title = models.CharField(max_length=255, default="Assessment")
     description = models.TextField(blank=True, null=True)
     type = models.CharField(max_length=50, choices=TYPES, default='quiz')
@@ -36,7 +38,9 @@ class Assessment(models.Model):
     blooms_level = models.CharField(max_length=20, choices=BLOOMS_LEVELS, default='remember')
     
     def __str__(self):
-        return self.title
+        if self.section:
+            return f"{self.title} ({self.section})"
+        return f"{self.title} ({self.subject.academic_class})"
 
 class Result(models.Model):
     result_id = models.UUIDField(primary_key=True, default=uuid_lib.uuid4, editable=False)

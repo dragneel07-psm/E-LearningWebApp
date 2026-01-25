@@ -1,268 +1,254 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Card, CardContent } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { BookOpen, Search, Calendar, User } from 'lucide-react';
-import { libraryAPI, academicAPI, usersAPI, Book, BookIssue } from '@/lib/api';
+import {
+    Search, Book, Filter, BookOpen,
+    Calendar, CheckCircle2, Clock,
+    AlertCircle, ChevronRight
+} from 'lucide-react';
+import { libraryAPI, academicAPI, Book as BookType, BookIssue } from '@/lib/api';
 import { toast } from 'sonner';
-
-const CATEGORIES = [
-    'fiction', 'non_fiction', 'science', 'mathematics', 'history',
-    'literature', 'technology', 'biography', 'reference', 'other'
-];
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 
 export default function StudentLibraryPage() {
-    const [books, setBooks] = useState<Book[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [books, setBooks] = useState<BookType[]>([]);
     const [myIssues, setMyIssues] = useState<BookIssue[]>([]);
     const [studentId, setStudentId] = useState<string>('');
-    const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
-    const [categoryFilter, setCategoryFilter] = useState('all');
+    const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+    const [issuing, setIssuing] = useState<string | null>(null);
 
     useEffect(() => {
-        loadData();
-    }, []);
+        async function loadLibrary() {
+            try {
+                const student = await academicAPI.getMyStudent();
+                setStudentId(student.id);
 
-    const loadData = async () => {
-        try {
-            setLoading(true);
-            const user = await usersAPI.getMe();
-            const students = await academicAPI.getStudents();
-            const currentStudent = students.find(s => s.user_id === user.user_id);
-
-            if (currentStudent) {
-                setStudentId(currentStudent.id);
                 const [booksData, issuesData] = await Promise.all([
                     libraryAPI.getBooks(),
-                    libraryAPI.getBookIssues()
+                    libraryAPI.getBookIssues() // This should return issues for the current user/student ideally, or we filter
                 ]);
+
                 setBooks(booksData);
-                setMyIssues(issuesData.filter(issue => issue.student === currentStudent.id));
+                // Filter issues for current student if API returns all (API security should ideally handle this)
+                // Assuming API returns all for now based on typical implementation, verifying security later
+                const myBookIssues = issuesData.filter(issue => issue.student === student.id);
+                setMyIssues(myBookIssues);
+            } catch (error) {
+                console.error('Failed to load library', error);
+                toast.error('Failed to load library catalog');
+            } finally {
+                setLoading(false);
             }
-        } catch (error) {
-            console.error('Failed to load library data:', error);
-            toast.error('Failed to load library data');
-        } finally {
-            setLoading(false);
         }
-    };
+        loadLibrary();
+    }, []);
 
-    const handleRequestBook = async (bookId: string) => {
-        if (!studentId) {
-            toast.error('Student information not found');
-            return;
-        }
-
+    const handleIssueBook = async (bookId: string) => {
+        if (!studentId) return;
+        setIssuing(bookId);
         try {
             await libraryAPI.issueBook({ book: bookId, student: studentId });
-            toast.success('Book request submitted successfully');
-            loadData();
-        } catch (error) {
-            console.error('Failed to request book:', error);
-            toast.error('Failed to request book');
+            toast.success("Book issued successfully! Please pick it up from the library.");
+
+            // Refresh data
+            const [booksData, issuesData] = await Promise.all([
+                libraryAPI.getBooks(),
+                libraryAPI.getBookIssues()
+            ]);
+            setBooks(booksData);
+            setMyIssues(issuesData.filter(issue => issue.student === studentId));
+        } catch (error: any) {
+            console.error('Failed to issue book', error);
+            toast.error(error.message || "Failed to issue book. You may have reached your limit.");
+        } finally {
+            setIssuing(null);
         }
     };
 
     const filteredBooks = books.filter(book => {
         const matchesSearch = book.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
             book.author.toLowerCase().includes(searchTerm.toLowerCase());
-        const matchesCategory = categoryFilter === 'all' || book.category === categoryFilter;
+        const matchesCategory = selectedCategory ? book.category === selectedCategory : true;
         return matchesSearch && matchesCategory;
     });
 
-    const activeIssues = myIssues.filter(issue => issue.status === 'issued');
-    const overdueIssues = myIssues.filter(issue => issue.status === 'overdue');
+    const categories = Array.from(new Set(books.map(b => b.category)));
 
-    if (loading) {
-        return (
-            <div className="flex justify-center items-center min-h-[400px]">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
-            </div>
-        );
-    }
+    if (loading) return <div className="p-8 text-center text-slate-400">Loading library...</div>;
 
     return (
-        <div className="space-y-6">
+        <div className="space-y-8 animate-in fade-in duration-500">
             {/* Header */}
             <div>
-                <h1 className="text-3xl font-bold tracking-tight flex items-center gap-2">
-                    <BookOpen className="h-8 w-8 text-indigo-600" />
-                    Library
+                <h1 className="text-3xl font-bold text-slate-900 flex items-center gap-3">
+                    <BookOpen className="h-8 w-8 text-indigo-600" /> Library
                 </h1>
-                <p className="text-muted-foreground">Browse and request books</p>
+                <p className="text-slate-500">Browse, borrow, and read books from the school collection</p>
             </div>
 
-            {/* Stats */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <Card>
-                    <CardContent className="p-6">
-                        <div className="flex items-center justify-between">
-                            <div>
-                                <p className="text-sm font-medium text-muted-foreground">Books Issued</p>
-                                <h3 className="text-2xl font-bold mt-2">{activeIssues.length}</h3>
-                            </div>
-                            <BookOpen className="h-8 w-8 text-blue-600 opacity-20" />
-                        </div>
-                    </CardContent>
-                </Card>
-                <Card>
-                    <CardContent className="p-6">
-                        <div className="flex items-center justify-between">
-                            <div>
-                                <p className="text-sm font-medium text-muted-foreground">Overdue</p>
-                                <h3 className="text-2xl font-bold mt-2 text-red-600">{overdueIssues.length}</h3>
-                            </div>
-                            <Calendar className="h-8 w-8 text-red-600 opacity-20" />
-                        </div>
-                    </CardContent>
-                </Card>
-                <Card>
-                    <CardContent className="p-6">
-                        <div className="flex items-center justify-between">
-                            <div>
-                                <p className="text-sm font-medium text-muted-foreground">Available Books</p>
-                                <h3 className="text-2xl font-bold mt-2 text-green-600">
-                                    {books.filter(b => b.available_copies > 0).length}
-                                </h3>
-                            </div>
-                            <BookOpen className="h-8 w-8 text-green-600 opacity-20" />
-                        </div>
-                    </CardContent>
-                </Card>
-            </div>
-
-            {/* Tabs */}
-            <Tabs defaultValue="browse" className="space-y-4">
-                <TabsList>
-                    <TabsTrigger value="browse">Browse Books</TabsTrigger>
-                    <TabsTrigger value="mybooks">My Books ({activeIssues.length})</TabsTrigger>
-                </TabsList>
-
-                <TabsContent value="browse" className="space-y-4">
-                    {/* Search and Filter */}
-                    <div className="flex gap-4">
-                        <div className="flex-1 relative">
-                            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                            <Input
-                                placeholder="Search by title or author..."
-                                value={searchTerm}
-                                onChange={(e) => setSearchTerm(e.target.value)}
-                                className="pl-10"
-                            />
-                        </div>
-                        <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-                            <SelectTrigger className="w-[200px]">
-                                <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="all">All Categories</SelectItem>
-                                {CATEGORIES.map(cat => (
-                                    <SelectItem key={cat} value={cat}>
-                                        {cat.replace('_', ' ').toUpperCase()}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                    </div>
-
-                    {/* Books Grid */}
+            {/* My Books Section */}
+            {myIssues.length > 0 && (
+                <div className="space-y-4">
+                    <h2 className="text-lg font-semibold text-slate-800 flex items-center gap-2">
+                        <Book className="h-5 w-5 text-indigo-500" /> My Current Books
+                    </h2>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                        {filteredBooks.map(book => (
-                            <Card key={book.book_id} className="hover:shadow-md transition-shadow">
-                                <CardContent className="p-6">
-                                    <div className="mb-4">
-                                        <h3 className="font-semibold text-lg mb-1">{book.title}</h3>
-                                        <p className="text-sm text-muted-foreground mb-2">by {book.author}</p>
-                                        <Badge variant="outline" className="text-xs">
-                                            {book.category.replace('_', ' ')}
+                        {myIssues.map(issue => (
+                            <Card key={issue.issue_id} className="border-slate-200 shadow-sm bg-indigo-50/30">
+                                <CardContent className="p-4">
+                                    <div className="flex justify-between items-start">
+                                        <div>
+                                            <h3 className="font-bold text-slate-900">{issue.book_title}</h3>
+                                            <p className="text-xs text-slate-500">{issue.book_author}</p>
+                                        </div>
+                                        <Badge variant={
+                                            issue.status === 'issued' ? 'default' :
+                                                issue.status === 'overdue' ? 'destructive' : 'secondary'
+                                        } className="capitalize">
+                                            {issue.status}
                                         </Badge>
                                     </div>
-                                    {book.description && (
-                                        <p className="text-sm text-muted-foreground mb-4 line-clamp-3">
-                                            {book.description}
-                                        </p>
-                                    )}
-                                    <div className="flex items-center justify-between">
-                                        <div className="text-sm">
-                                            <span className={`font-medium ${book.available_copies > 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                                {book.available_copies > 0 ? `${book.available_copies} available` : 'Not available'}
-                                            </span>
+                                    <div className="mt-4 flex items-center gap-4 text-xs text-slate-600">
+                                        <div className="flex items-center gap-1">
+                                            <Calendar className="h-3 w-3" />
+                                            Due: {new Date(issue.due_date).toLocaleDateString()}
                                         </div>
-                                        <Button
-                                            size="sm"
-                                            onClick={() => handleRequestBook(book.book_id)}
-                                            disabled={book.available_copies === 0}
-                                        >
-                                            Request
-                                        </Button>
+                                        {issue.status === 'overdue' && (
+                                            <div className="flex items-center gap-1 text-red-600 font-bold">
+                                                <AlertCircle className="h-3 w-3" />
+                                                Late
+                                            </div>
+                                        )}
                                     </div>
                                 </CardContent>
                             </Card>
                         ))}
                     </div>
+                </div>
+            )}
 
-                    {filteredBooks.length === 0 && (
-                        <div className="text-center py-12">
-                            <BookOpen className="h-12 w-12 mx-auto mb-4 text-muted-foreground opacity-20" />
-                            <p className="text-muted-foreground">No books found</p>
+            {/* Catalog Section */}
+            <div className="space-y-6">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <div className="relative flex-1 max-w-md">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                        <Input
+                            placeholder="Search by title, author..."
+                            className="pl-10"
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                        />
+                    </div>
+                    <div className="flex items-center gap-2 overflow-x-auto pb-2 md:pb-0">
+                        <Badge
+                            variant={selectedCategory === null ? 'default' : 'outline'}
+                            className="cursor-pointer whitespace-nowrap"
+                            onClick={() => setSelectedCategory(null)}
+                        >
+                            All Categories
+                        </Badge>
+                        {categories.map(cat => (
+                            <Badge
+                                key={cat}
+                                variant={selectedCategory === cat ? 'default' : 'outline'}
+                                className="cursor-pointer capitalize whitespace-nowrap"
+                                onClick={() => setSelectedCategory(cat)}
+                            >
+                                {cat.replace('_', ' ')}
+                            </Badge>
+                        ))}
+                    </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                    {filteredBooks.length === 0 ? (
+                        <div className="col-span-full py-12 text-center text-slate-400">
+                            No books found matching your criteria.
                         </div>
-                    )}
-                </TabsContent>
+                    ) : (
+                        filteredBooks.map(book => (
+                            <Card key={book.book_id} className="border-slate-200 shadow-sm hover:shadow-md transition-all flex flex-col h-full group">
+                                <div className="h-48 bg-slate-100 relative overflow-hidden rounded-t-xl">
+                                    {/* Placeholder Cover */}
+                                    <div className="absolute inset-0 flex items-center justify-center bg-slate-200 text-slate-400">
+                                        <Book className="h-12 w-12 opacity-20" />
+                                    </div>
+                                    {book.available_copies === 0 && (
+                                        <div className="absolute inset-0 bg-black/50 flex items-center justify-center backdrop-blur-sm">
+                                            <Badge variant="destructive" className="text-xs">Out of Stock</Badge>
+                                        </div>
+                                    )}
+                                    <div className="absolute top-2 right-2">
+                                        <Badge variant="secondary" className="bg-white/80 backdrop-blur-sm text-[10px] capitalize">
+                                            {book.category}
+                                        </Badge>
+                                    </div>
+                                </div>
+                                <CardContent className="p-4 flex-1 space-y-2">
+                                    <h3 className="font-bold text-slate-900 line-clamp-1" title={book.title}>{book.title}</h3>
+                                    <p className="text-sm text-slate-500 line-clamp-1">{book.author}</p>
+                                    <p className="text-xs text-slate-400 line-clamp-2 mt-2">{book.description}</p>
+                                </CardContent>
+                                <CardFooter className="p-4 border-t border-slate-50 flex items-center justify-between">
+                                    <div className="text-xs font-medium text-slate-500">
+                                        {book.available_copies} / {book.total_copies} available
+                                    </div>
 
-                <TabsContent value="mybooks" className="space-y-4">
-                    <Card>
-                        <CardContent className="p-6">
-                            <div className="space-y-4">
-                                {myIssues.map(issue => (
-                                    <div key={issue.issue_id} className="flex items-center justify-between p-4 bg-slate-50 rounded-lg">
-                                        <div className="flex-1">
-                                            <h4 className="font-semibold">{issue.book_title}</h4>
-                                            <p className="text-sm text-muted-foreground">by {issue.book_author}</p>
-                                            <div className="flex gap-4 mt-2 text-xs text-muted-foreground">
-                                                <span className="flex items-center gap-1">
-                                                    <Calendar className="h-3 w-3" />
-                                                    Issued: {new Date(issue.issued_date).toLocaleDateString()}
-                                                </span>
-                                                <span className="flex items-center gap-1">
-                                                    <Calendar className="h-3 w-3" />
-                                                    Due: {new Date(issue.due_date).toLocaleDateString()}
-                                                </span>
+                                    <Dialog>
+                                        <DialogTrigger asChild>
+                                            <Button size="sm" variant="outline">Details</Button>
+                                        </DialogTrigger>
+                                        <DialogContent>
+                                            <DialogHeader>
+                                                <DialogTitle>{book.title}</DialogTitle>
+                                                <DialogDescription>{book.author} • {book.published_year}</DialogDescription>
+                                            </DialogHeader>
+                                            <div className="space-y-4 py-4">
+                                                <p className="text-sm text-slate-600">{book.description || 'No description available.'}</p>
+                                                <div className="grid grid-cols-2 gap-4 text-sm">
+                                                    <div>
+                                                        <span className="text-slate-500">Publisher:</span>
+                                                        <p className="font-medium">{book.publisher}</p>
+                                                    </div>
+                                                    <div>
+                                                        <span className="text-slate-500">ISBN:</span>
+                                                        <p className="font-medium font-mono text-xs">{book.isbn}</p>
+                                                    </div>
+                                                    <div>
+                                                        <span className="text-slate-500">Category:</span>
+                                                        <p className="font-medium capitalize">{book.category}</p>
+                                                    </div>
+                                                    <div>
+                                                        <span className="text-slate-500">Availability:</span>
+                                                        <p className={`font-medium ${book.available_copies > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                                            {book.available_copies} copies
+                                                        </p>
+                                                    </div>
+                                                </div>
                                             </div>
-                                        </div>
-                                        <div className="flex items-center gap-4">
-                                            <Badge variant={
-                                                issue.status === 'returned' ? 'default' :
-                                                    issue.status === 'overdue' ? 'destructive' : 'secondary'
-                                            }>
-                                                {issue.status}
-                                            </Badge>
-                                            {issue.fine_amount > 0 && (
-                                                <span className="text-sm font-medium text-red-600">
-                                                    Fine: ${issue.fine_amount.toFixed(2)}
-                                                </span>
-                                            )}
-                                        </div>
-                                    </div>
-                                ))}
-                                {myIssues.length === 0 && (
-                                    <div className="text-center py-12">
-                                        <User className="h-12 w-12 mx-auto mb-4 text-muted-foreground opacity-20" />
-                                        <p className="text-muted-foreground">No books issued yet</p>
-                                        <p className="text-sm text-muted-foreground mt-2">
-                                            Browse the catalog and request books
-                                        </p>
-                                    </div>
-                                )}
-                            </div>
-                        </CardContent>
-                    </Card>
-                </TabsContent>
-            </Tabs>
+                                            <DialogFooter>
+                                                <Button
+                                                    className="w-full bg-indigo-600 hover:bg-indigo-700"
+                                                    disabled={book.available_copies === 0 || issuing === book.book_id}
+                                                    onClick={() => handleIssueBook(book.book_id)}
+                                                >
+                                                    {issuing === book.book_id ? 'Processing...' : book.available_copies === 0 ? 'Not Available' : 'Issue Book'}
+                                                </Button>
+                                            </DialogFooter>
+                                        </DialogContent>
+                                    </Dialog>
+                                </CardFooter>
+                            </Card>
+                        ))
+                    )}
+                </div>
+            </div>
         </div>
     );
 }

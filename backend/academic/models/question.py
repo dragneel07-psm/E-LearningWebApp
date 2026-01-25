@@ -11,9 +11,13 @@ class Question(models.Model):
     ]
 
     question_id = models.UUIDField(primary_key=True, default=uuid_lib.uuid4, editable=False)
-    assessment = models.ForeignKey(Assessment, on_delete=models.CASCADE, related_name='questions')
+    assessment = models.ForeignKey(Assessment, on_delete=models.CASCADE, related_name='questions', null=True, blank=True)
     text = models.TextField()
     type = models.CharField(max_length=50, choices=TYPES, default='mcq')
+    
+    # Categorization
+    tags = models.JSONField(default=list, blank=True, help_text="Tags for categorization")
+    difficulty = models.CharField(max_length=20, choices=[('easy', 'Easy'), ('medium', 'Medium'), ('hard', 'Hard')], default='medium')
     
     # For MCQs
     options = models.JSONField(default=list, blank=True, help_text="List of options for MCQ")

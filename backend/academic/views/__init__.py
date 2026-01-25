@@ -5,3 +5,4 @@ from .assessment import AssessmentViewSet, QuestionViewSet, SubmissionViewSet, R
 from .attendance import AttendanceViewSet
 from .timetable import TimetableViewSet
 from .communications import NoticeViewSet
+from .reports import ReportViewSet

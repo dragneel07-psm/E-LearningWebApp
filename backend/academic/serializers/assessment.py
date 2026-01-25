@@ -7,7 +7,7 @@ class QuestionSerializer(serializers.ModelSerializer):
     id = serializers.UUIDField(source='question_id', read_only=True)
     class Meta:
         model = Question
-        fields = ['id', 'question_id', 'assessment', 'text', 'type', 'options', 'correct_answer', 'points', 'order']
+        fields = ['id', 'question_id', 'assessment', 'text', 'type', 'options', 'correct_answer', 'points', 'order', 'tags', 'difficulty']
 
 class AssessmentSerializer(serializers.ModelSerializer):
     questions = QuestionSerializer(many=True, read_only=True)
@@ -16,7 +16,7 @@ class AssessmentSerializer(serializers.ModelSerializer):
     class Meta:
         model = Assessment
         fields = [
-            'id', 'assessment_id', 'subject', 'title', 'description', 'type', 
+            'id', 'assessment_id', 'subject', 'section', 'title', 'description', 'type', 
             'total_marks', 'passing_marks', 'scheduled_at', 'due_date', 
             'duration_minutes', 'blooms_level', 'questions'
         ]

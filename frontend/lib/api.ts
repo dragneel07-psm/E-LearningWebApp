@@ -1178,7 +1178,6 @@ const api = {
             }),
     },
     notifications: notificationsAPI,
-
     learningPaths: {
         getPaths: () => apiRequest<any[]>('/ai/learning-paths/'),
         generatePath: (data: { student_id: string; subject_id?: number; topic_focus?: string }) =>
@@ -1191,17 +1190,43 @@ const api = {
                 method: 'POST'
             }),
     },
-
     gamification: {
         getStudentBadges: () => apiRequest<StudentBadge[]>('/gamification/student-badges/'),
         getLeaderboard: () => apiRequest<any[]>('/gamification/leaderboard/'),
         getPointTransactions: () => apiRequest<PointTransaction[]>('/gamification/student-points/'),
     },
-
-    helpers,
+    reports: {
+        getStudentPerformancePDF: (studentId: string) => `${API_BASE_URL}/academic/reports/student-performance/${studentId}/`,
+        getStudentPerformanceExcel: (studentId: string) => `${API_BASE_URL}/academic/reports/student-performance-excel/${studentId}/`,
+        getAttendanceSummaryPDF: (sectionId: string | number) => `${API_BASE_URL}/academic/reports/attendance-summary/${sectionId}/`,
+        getAttendanceSummaryExcel: (sectionId: string | number) => `${API_BASE_URL}/academic/reports/attendance-summary-excel/${sectionId}/`,
+        getFeeCollectionPDF: () => `${API_BASE_URL}/billing/reports/fee-collection/`,
+        getFeeCollectionExcel: () => `${API_BASE_URL}/billing/reports/fee-collection-excel/`,
+    },
+    helpers: {
+        ...helpers,
+        downloadFile: async (url: string, filename: string) => {
+            const token = getAuthToken();
+            const response = await fetch(url, {
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'x-tenant-id': 'demo'
+                }
+            });
+            const blob = await response.blob();
+            const downloadUrl = window.URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = downloadUrl;
+            link.setAttribute('download', filename);
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+        }
+    },
 };
 
 export const learningPathsAPI = api.learningPaths;
 export const gamificationAPI = api.gamification;
+export const reportsAPI = api.reports;
 
 export default api;

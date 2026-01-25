@@ -1,6 +1,7 @@
 from rest_framework import viewsets, status, permissions
 from rest_framework.decorators import action
 from rest_framework.response import Response
+from django.db import models
 from academic.models.assessment import Assessment, Result
 from academic.models.question import Question
 from academic.models.submission import Submission
@@ -9,6 +10,7 @@ from academic.serializers.assessment import (
     AssessmentSerializer, QuestionSerializer, 
     SubmissionSerializer, ResultSerializer
 )
+from academic.services.grading_service import GradingService
 
 class AssessmentViewSet(viewsets.ModelViewSet):
     queryset = Assessment.objects.all()
@@ -18,8 +20,20 @@ class AssessmentViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         queryset = Assessment.objects.all()
         subject_id = self.request.query_params.get('subject')
+        section_id = self.request.query_params.get('section')
         if subject_id:
             queryset = queryset.filter(subject_id=subject_id)
+        if section_id:
+            queryset = queryset.filter(section_id=section_id)
+            
+        # If student, filter by their section or section-less assessments
+        try:
+            student = Student.objects.get(user=self.request.user)
+            if student.section:
+                queryset = queryset.filter(models.Q(section=student.section) | models.Q(section__isnull=True))
+        except Student.DoesNotExist:
+            pass
+            
         return queryset
 
 class QuestionViewSet(viewsets.ModelViewSet):
@@ -76,36 +90,9 @@ class SubmissionViewSet(viewsets.ModelViewSet):
             defaults={'status': 'submitted'}
         )
 
-        # 2. Basic MCQ Grading
-        questions = Question.objects.filter(assessment=assessment)
-        total_score = 0
-        max_possible = 0
-        graded_answers = {}
-
-        for q in questions:
-            user_answer = answers.get(str(q.question_id))
-            is_correct = False
-            points_earned = 0
-            
-            if q.type == 'mcq' and user_answer == q.correct_answer:
-                is_correct = True
-                points_earned = q.points
-                total_score += points_earned
-            elif q.type == 'short_answer':
-                # Basic case-insensitive matching for short answers
-                if user_answer and q.correct_answer and \
-                   user_answer.strip().lower() == q.correct_answer.strip().lower():
-                    is_correct = True
-                    points_earned = q.points
-                    total_score += points_earned
-            
-            graded_answers[str(q.question_id)] = {
-                'answer': user_answer,
-                'correct': is_correct,
-                'points': points_earned
-            }
-            max_possible += q.points
-
+        # 2. Use Grading Service
+        total_score, max_possible, graded_answers = GradingService.grade_submission(assessment, answers)
+        
         # 3. Create Result
         result, _ = Result.objects.update_or_create(
             assessment=assessment,
