@@ -1171,7 +1171,11 @@ const api = {
             apiRequest<any>(`/ai/study-schedule/${id}/`, {
                 method: 'PATCH',
                 body: JSON.stringify(updates)
-            })
+            }),
+        generateStudentReport: (studentId: string) =>
+            apiRequest<any>(`/ai/reports/student/${studentId}/`, {
+                method: 'POST'
+            }),
     },
     notifications: notificationsAPI,
 
