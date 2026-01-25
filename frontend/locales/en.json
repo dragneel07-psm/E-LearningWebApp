@@ -1,0 +1,24 @@
+{
+    "common": {
+        "welcome": "Welcome",
+        "logout": "Logout",
+        "settings": "Settings",
+        "dashboard": "Dashboard",
+        "loading": "Loading...",
+        "save": "Save",
+        "cancel": "Cancel"
+    },
+    "student": {
+        "my_courses": "My Courses",
+        "next_lesson": "Next Recommended Lesson",
+        "learning_streak": "Learning Streak",
+        "badges": "Badges Unlocked",
+        "leaderboard": "Class Leaderboard"
+    },
+    "teacher": {
+        "analytics": "Analytics",
+        "reports": "AI Reports",
+        "classes": "My Classes",
+        "at_risk": "Students at Risk"
+    }
+}

@@ -15,6 +15,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { removeTokens } from '@/lib/auth';
 import { usersAPI, User } from '@/lib/api';
 import { NotificationBell } from '@/components/notification-bell';
+import { LanguageSelector } from '@/components/LanguageSelector';
 
 export default function StudentLayout({ children }: { children: React.ReactNode }) {
     const pathname = usePathname();
@@ -166,6 +167,7 @@ export default function StudentLayout({ children }: { children: React.ReactNode 
                                 <p className="text-slate-500 mt-1">Here&apos;s what&apos;s happening in your classes today.</p>
                             </div>
                             <div className="flex items-center gap-3">
+                                <LanguageSelector />
                                 <NotificationBell />
                                 <Button className="bg-indigo-600 hover:bg-indigo-700 text-white rounded-full px-6 shadow-md shadow-indigo-200">
                                     Join Online Class

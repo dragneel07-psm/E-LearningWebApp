@@ -9,6 +9,7 @@ import { Search, User, Menu } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { usersAPI, User as UserType } from '@/lib/api';
 import { NotificationBell } from '@/components/notification-bell';
+import { LanguageSelector } from '@/components/LanguageSelector';
 
 export default function TeacherLayout({
     children,
@@ -57,6 +58,7 @@ export default function TeacherLayout({
                     </div>
 
                     <div className="flex items-center gap-4">
+                        <LanguageSelector />
                         <NotificationBell />
 
                         <div className="flex items-center gap-3 pl-4 border-l border-slate-100">

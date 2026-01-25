@@ -15,9 +15,11 @@ import { academicAPI, aiAPI, helpers, Subject } from '@/lib/api';
 import { AITutorChat } from '@/components/ai-tutor-chat';
 import { GamificationWidget } from '@/components/student/GamificationWidget';
 import { SmartPathWidget } from '@/components/student/SmartPathWidget';
+import { useTranslation } from '@/lib/localization';
 
 export default function StudentDashboard() {
     const router = useRouter();
+    const { t } = useTranslation();
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [studentId, setStudentId] = useState<string>('');
@@ -108,7 +110,7 @@ export default function StudentDashboard() {
         <div className="space-y-6">
 
             {/* 1. Overview Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 {/* Attendance */}
                 <Card className="border-none shadow-sm bg-white hover:shadow-md transition-shadow">
                     <CardContent className="p-5 flex items-center justify-between">
@@ -187,7 +189,7 @@ export default function StudentDashboard() {
                         <CardHeader className="flex flex-row items-center justify-between pb-2">
                             <CardTitle className="text-lg font-bold text-slate-800">My Learning Progress</CardTitle>
                         </CardHeader>
-                        <CardContent className="grid gap-4">
+                        <CardContent className="grid gap-4 overflow-x-auto">
                             {courses.slice(0, 3).map((course, idx) => (
                                 <div
                                     key={course.id}

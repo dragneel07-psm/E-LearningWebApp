@@ -119,7 +119,7 @@ export default function TeacherDashboard() {
             </div>
 
             {/* 2. KPI Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
                 <Card className="shadow-sm border-slate-200 hover:shadow-md transition-shadow">
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                         <CardTitle className="text-sm font-medium text-slate-500">Today&apos;s Classes</CardTitle>
@@ -205,7 +205,7 @@ export default function TeacherDashboard() {
                     </Card>
 
                     {/* Charts Section */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                         <Card className="border-slate-200 shadow-sm">
                             <CardHeader className="pb-2">
                                 <CardTitle className="text-sm font-bold text-slate-700">Performance Trends</CardTitle>
