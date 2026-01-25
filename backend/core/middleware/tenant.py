@@ -19,6 +19,7 @@ class TenantMiddleware(MiddlewareMixin):
         # 1. Get Host Logic (Support Header and Hostname)
         tenant_header = request.META.get('HTTP_X_TENANT_ID')
         host = request.get_host().split(':')[0] # Remove port
+        print(f"📡 Middleware Request: Host={host}, Header={tenant_header}")
         
         # 2. Identify Tenant
         try:
@@ -35,6 +36,7 @@ class TenantMiddleware(MiddlewareMixin):
             
             _thread_locals.tenant = tenant
             _thread_locals.db_alias = tenant.db_alias
+            print(f"✅ Resolved Tenant: {tenant.name} -> DB: {tenant.db_alias}")
 
             # 3. Dynamic Database Registration (If needed)
             if tenant.db_alias not in settings.DATABASES:
@@ -56,6 +58,7 @@ class TenantMiddleware(MiddlewareMixin):
             request.db_alias = 'default'
             _thread_locals.tenant = None
             _thread_locals.db_alias = 'default'
+            print(f"⚠️ Tenant Not Found for {host}. Fallback to default.")
 
     def process_response(self, request, response):
         # Clean up thread locals

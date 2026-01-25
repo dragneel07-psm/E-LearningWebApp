@@ -11,7 +11,41 @@ from core.mixins import TenantScopedQuerysetMixin
 from .services.tutor_service import AITutorService
 from .services.personalization_service import PersonalizationService
 from .services.predictive_service import PredictiveAnalyticsService
+from .services.predictive_service import PredictiveAnalyticsService
 from .services.reporting_service import ReportingService
+from .services.schedule_service import ScheduleService
+from .models import StudyEvent
+from .serializers import StudyEventSerializer
+
+class StudyEventViewSet(TenantScopedQuerysetMixin, viewsets.ModelViewSet):
+    """
+    Manage student study schedule.
+    """
+    queryset = StudyEvent.objects.all()
+    serializer_class = StudyEventSerializer
+    permission_classes = [IsAuthenticated]
+    tenant_field = 'tenant'
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        # If student, only see own
+        if hasattr(self.request.user, 'student_profile'):
+             qs = qs.filter(student=self.request.user.student_profile)
+        return qs.order_by('start_time')
+
+    @action(detail=False, methods=['post'])
+    def generate(self, request):
+        try:
+            student = Student.objects.get(user=request.user)
+            service = ScheduleService()
+            events = service.generate_study_schedule(student)
+            serializer = self.get_serializer(events, many=True)
+            return Response(serializer.data)
+        except Student.DoesNotExist:
+             return Response({'error': 'Student profile not found'}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
 
 class AIInteractionLogViewSet(TenantScopedQuerysetMixin, viewsets.ReadOnlyModelViewSet):
     """

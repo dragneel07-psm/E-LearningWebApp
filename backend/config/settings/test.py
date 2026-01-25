@@ -1,0 +1,20 @@
+from .base import *
+import dj_database_url
+
+DEBUG = False
+
+# Use a faster password hasher for tests
+PASSWORD_HASHERS = [
+    'django.contrib.auth.hashers.MD5PasswordHasher',
+]
+
+# Ensure we're using a proper secret key for tests
+SECRET_KEY = 'test-secret-key-for-ci-'
+
+# Test-specific settings
+DATABASES = {
+    'default': dj_database_url.config(
+        default='sqlite:///db.sqlite3',
+        conn_max_age=600
+    )
+}

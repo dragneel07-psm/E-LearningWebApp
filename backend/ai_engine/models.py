@@ -71,3 +71,25 @@ class LearningNode(models.Model):
 
     def __str__(self):
         return f"{self.order}. {self.title}"
+
+class StudyEvent(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid_lib.uuid4, editable=False)
+    tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE, db_constraint=False)
+    student = models.ForeignKey('academic.Student', on_delete=models.CASCADE, related_name='study_events')
+    title = models.CharField(max_length=255)
+    description = models.TextField(null=True, blank=True)
+    start_time = models.DateTimeField()
+    end_time = models.DateTimeField()
+    event_type = models.CharField(max_length=50, choices=[
+        ('class', 'Class Session'),
+        ('study', 'Self Study'),
+        ('assignment', 'Assignment due'),
+        ('exam', 'Exam Prep'),
+        ('break', 'Break')
+    ], default='study')
+    subject = models.ForeignKey('academic.Subject', on_delete=models.SET_NULL, null=True, blank=True)
+    is_completed = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.title} ({self.start_time})"

@@ -15,7 +15,7 @@ import os
 from dotenv import load_dotenv
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
-BASE_DIR = Path(__file__).resolve().parent.parent
+BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
 # Load environment variables from .env file
 load_dotenv(BASE_DIR.parent / '.env')
@@ -30,7 +30,7 @@ SECRET_KEY = "django-insecure-3lap^-36=51#lal1a^aaimkz_@a9tb=j##w!zj@n@r%7b)ypgf
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = ["*"]
+ALLOWED_HOSTS = ["*", "demo.localhost"]
 
 
 # Application definition
@@ -52,6 +52,7 @@ INSTALLED_APPS = [
     "reports",
     "notifications",
     "library",
+    "gamification",
 ]
 
 # Multi-Tenancy Configuration
@@ -77,6 +78,7 @@ TENANT_APPS = [
     "reports",
     "notifications",
     "library",
+    "gamification",
 ]
 
 AUTH_USER_MODEL = 'users.UserAccount'

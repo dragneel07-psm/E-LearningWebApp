@@ -36,6 +36,7 @@ export function LessonDialog({ open, onOpenChange, lesson, chapterId, onSuccess 
 
     // Materials state
     const [materials, setMaterials] = useState<LessonMaterial[]>([]);
+    const [pendingMaterials, setPendingMaterials] = useState<{ title: string, file: File | null, link: string, type: string }[]>([]);
     const [newMaterialTitle, setNewMaterialTitle] = useState('');
     const [newMaterialLink, setNewMaterialLink] = useState('');
     const [newMaterialFile, setNewMaterialFile] = useState<File | null>(null);
@@ -59,6 +60,7 @@ export function LessonDialog({ open, onOpenChange, lesson, chapterId, onSuccess 
             setOrder(0);
             setMaterials([]);
         }
+        setPendingMaterials([]);
         setActiveTab('content');
     }, [lesson, open]);
 
@@ -80,12 +82,34 @@ export function LessonDialog({ open, onOpenChange, lesson, chapterId, onSuccess 
                 chapter: chapterId
             };
 
+            let savedLesson: Lesson;
             if (lesson) {
-                await academicAPI.updateLesson(lesson.id, data);
+                savedLesson = await academicAPI.updateLesson(lesson.id, data);
                 toast.success('Lesson updated');
             } else {
-                await academicAPI.createLesson(data);
-                toast.success('Lesson created');
+                savedLesson = await academicAPI.createLesson(data);
+
+                // Process pending materials for new lesson
+                if (pendingMaterials.length > 0) {
+                    toast.loading(`Uploading ${pendingMaterials.length} materials...`);
+                    for (const pm of pendingMaterials) {
+                        const formData = new FormData();
+                        formData.append('lesson', savedLesson.id.toString());
+                        formData.append('title', pm.title);
+                        if (pm.file) {
+                            formData.append('file', pm.file);
+                            formData.append('material_type', pm.type);
+                        } else if (pm.link) {
+                            formData.append('link', pm.link);
+                            formData.append('material_type', 'link');
+                        }
+                        await academicAPI.createMaterial(formData);
+                    }
+                    toast.dismiss();
+                    toast.success('Lesson created with materials');
+                } else {
+                    toast.success('Lesson created');
+                }
             }
             onSuccess();
             onOpenChange(false);
@@ -98,12 +122,29 @@ export function LessonDialog({ open, onOpenChange, lesson, chapterId, onSuccess 
     };
 
     const handleAddMaterial = async () => {
-        if (!lesson) {
-            toast.error('Please save the lesson first before adding materials');
-            return;
-        }
         if (!newMaterialTitle.trim()) {
             toast.error('Material title is required');
+            return;
+        }
+
+        if (!newMaterialFile && !newMaterialLink) {
+            toast.error('Please provide a file or a link');
+            return;
+        }
+
+        if (!lesson) {
+            // Local queueing for new lessons
+            const type = newMaterialFile ? getMaterialType(newMaterialFile.name) : 'link';
+            setPendingMaterials([...pendingMaterials, {
+                title: newMaterialTitle,
+                file: newMaterialFile,
+                link: newMaterialLink,
+                type: type
+            }]);
+            setNewMaterialTitle('');
+            setNewMaterialLink('');
+            setNewMaterialFile(null);
+            toast.success('Material added to queue');
             return;
         }
 
@@ -119,9 +160,6 @@ export function LessonDialog({ open, onOpenChange, lesson, chapterId, onSuccess 
             } else if (newMaterialLink) {
                 formData.append('link', newMaterialLink);
                 formData.append('material_type', 'link');
-            } else {
-                toast.error('Please provide a file or a link');
-                return;
             }
 
             const material = await academicAPI.createMaterial(formData);
@@ -129,7 +167,7 @@ export function LessonDialog({ open, onOpenChange, lesson, chapterId, onSuccess 
             setNewMaterialTitle('');
             setNewMaterialLink('');
             setNewMaterialFile(null);
-            toast.success('Material added');
+            toast.success('Material uploaded');
         } catch (error) {
             console.error('Failed to upload material:', error);
             toast.error('Failed to upload material');
@@ -167,7 +205,7 @@ export function LessonDialog({ open, onOpenChange, lesson, chapterId, onSuccess 
                     <TabsList className="grid w-full grid-cols-3">
                         <TabsTrigger value="content">Content</TabsTrigger>
                         <TabsTrigger value="settings">Settings</TabsTrigger>
-                        <TabsTrigger value="materials" disabled={!lesson}>Materials</TabsTrigger>
+                        <TabsTrigger value="materials">Materials {pendingMaterials.length > 0 && `(${pendingMaterials.length})`}</TabsTrigger>
                     </TabsList>
 
                     <div className="flex-1 overflow-y-auto py-4 px-1">
@@ -300,11 +338,32 @@ export function LessonDialog({ open, onOpenChange, lesson, chapterId, onSuccess 
                             </div>
 
                             <div className="space-y-2">
-                                <Label className="text-slate-500">Existing Materials</Label>
-                                {materials.length === 0 ? (
+                                <Label className="text-slate-500">
+                                    {lesson ? 'Existing Materials' : 'Materials to Upload'}
+                                </Label>
+                                {materials.length === 0 && pendingMaterials.length === 0 ? (
                                     <p className="text-center py-8 text-slate-400 text-sm italic">No materials added to this lesson yet.</p>
                                 ) : (
                                     <div className="grid gap-2">
+                                        {/* Pending Materials */}
+                                        {pendingMaterials.map((pm, i) => (
+                                            <div key={`pending-${i}`} className="flex items-center justify-between p-3 bg-indigo-50/30 border border-indigo-100 rounded-lg">
+                                                <div className="flex items-center gap-3">
+                                                    <div className="bg-indigo-100 p-2 rounded">
+                                                        <Plus className="h-4 w-4 text-indigo-600 animate-pulse" />
+                                                    </div>
+                                                    <div>
+                                                        <p className="font-medium text-sm text-slate-800">{pm.title}</p>
+                                                        <p className="text-[10px] text-indigo-500 font-bold uppercase">Pending Upload</p>
+                                                    </div>
+                                                </div>
+                                                <Button variant="ghost" size="icon" className="h-7 w-7 text-red-400 hover:text-red-600" onClick={() => setPendingMaterials(pendingMaterials.filter((_, idx) => idx !== i))}>
+                                                    <Trash2 className="h-3.5 w-3.5" />
+                                                </Button>
+                                            </div>
+                                        ))}
+
+                                        {/* Existing Materials */}
                                         {materials.map((m) => (
                                             <div key={m.id} className="flex items-center justify-between p-3 bg-white border rounded-lg hover:shadow-sm transition-shadow">
                                                 <div className="flex items-center gap-3">

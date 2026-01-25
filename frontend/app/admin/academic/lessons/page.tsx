@@ -34,7 +34,7 @@ export default function LessonPlanReviewPage() {
         }
     }
 
-    async function handleDelete(id: string) {
+    async function handleDelete(id: number) {
         if (!confirm('Are you sure you want to delete this lesson?')) return;
         try {
             await academicAPI.deleteLesson(id);
@@ -44,14 +44,13 @@ export default function LessonPlanReviewPage() {
         }
     }
 
-    const getSubjectName = (id: string) => {
-        const s = subjects.find(sub => sub.id.toString() === id);
+    const getSubjectName = (id: string | number) => {
+        const s = subjects.find(sub => sub.id.toString() === id.toString());
         return s ? s.name : 'Unknown Subject';
     };
 
     const filteredLessons = lessons.filter(l =>
-        l.title.toLowerCase().includes(filter.toLowerCase()) ||
-        getSubjectName(l.course).toLowerCase().includes(filter.toLowerCase())
+        l.title.toLowerCase().includes(filter.toLowerCase())
     );
 
     return (
@@ -112,23 +111,24 @@ export default function LessonPlanReviewPage() {
                                 </TableRow>
                             ) : (
                                 filteredLessons.map((l) => (
-                                    <TableRow key={l.lesson_id}>
+                                    <TableRow key={l.id}>
                                         <TableCell className="font-medium text-slate-800">
                                             {l.title}
                                         </TableCell>
                                         <TableCell>
                                             <span className="inline-flex items-center px-2 py-0.5 rounded text-xs bg-slate-100 text-slate-800">
-                                                {getSubjectName(l.course)}
+                                                {/* Lesson doesn't have direct course/subject link in the basic Lesson interface */}
+                                                Chapter {l.chapter}
                                             </span>
                                         </TableCell>
                                         <TableCell>
-                                            <span className="capitalize text-sm text-slate-600">{l.content_type}</span>
+                                            <span className="text-sm text-slate-600">{l.duration_minutes} mins</span>
                                         </TableCell>
                                         <TableCell className="text-right flex justify-end gap-2">
                                             <Button variant="ghost" size="icon" className="h-8 w-8 text-blue-600">
                                                 <Eye className="h-4 w-4" />
                                             </Button>
-                                            <Button variant="ghost" size="icon" className="h-8 w-8 text-red-600" onClick={() => handleDelete(l.lesson_id)}>
+                                            <Button variant="ghost" size="icon" className="h-8 w-8 text-red-600" onClick={() => handleDelete(l.id)}>
                                                 <Trash2 className="h-4 w-4" />
                                             </Button>
                                         </TableCell>

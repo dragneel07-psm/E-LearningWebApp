@@ -70,6 +70,9 @@ export interface Subject {
     is_elective: boolean;
     teacher?: string | null; // UUID
     teacher_name?: string;
+    total_lessons?: number;
+    completed_lessons?: number;
+    progress_percentage?: number;
 }
 
 export interface Section {
@@ -98,14 +101,43 @@ export interface Student {
     section: number | null;
     parent_email?: string;
     password?: string;
+
+    // Gamification
+    current_streak: number;
+    total_minutes_learned: number;
+    focus_score: number;
+
     // Preferences
     learning_style?: 'visual' | 'reading' | 'practice';
     daily_study_goal?: number;
     ai_explanation_level?: 'simple' | 'normal' | 'exam';
     language_preference?: string;
     is_active?: boolean;
-    current_streak?: number;
-    focus_score?: number;
+}
+
+export interface Badge {
+    id: string;
+    name: string;
+    description: string;
+    icon_name: string;
+    criteria_type: string;
+    criteria_value: number;
+    xp_reward: number;
+}
+
+export interface StudentBadge {
+    id: string;
+    badge: string;
+    badge_details?: Badge;
+    earned_at: string;
+}
+
+export interface PointTransaction {
+    id: string;
+    points: number;
+    description: string;
+    activity_type: string;
+    timestamp: string;
 }
 
 export interface Teacher {
@@ -1126,10 +1158,23 @@ const api = {
     academic: academicAPI,
     billing: billingAPI,
     library: libraryAPI,
-    ai: aiAPI,
+    ai: {
+        getTeacherAnalytics: () => apiRequest<any>('/ai/analytics/teacher/'),
+        tutorChat: (data: { message: string; history: any[] }) =>
+            apiRequest<any>('/ai/tutor/chat/', {
+                method: 'POST',
+                body: JSON.stringify(data)
+            }),
+        getStudySchedule: () => apiRequest<any[]>('/ai/study-schedule/'),
+        generateStudySchedule: () => apiRequest<any[]>('/ai/study-schedule/generate/', { method: 'POST' }),
+        updateStudyEvent: (id: string, updates: any) =>
+            apiRequest<any>(`/ai/study-schedule/${id}/`, {
+                method: 'PATCH',
+                body: JSON.stringify(updates)
+            })
+    },
     notifications: notificationsAPI,
 
-    // Learning Path API
     learningPaths: {
         getPaths: () => apiRequest<any[]>('/ai/learning-paths/'),
         generatePath: (data: { student_id: string; subject_id?: number; topic_focus?: string }) =>
@@ -1143,7 +1188,16 @@ const api = {
             }),
     },
 
+    gamification: {
+        getStudentBadges: () => apiRequest<StudentBadge[]>('/gamification/student-badges/'),
+        getLeaderboard: () => apiRequest<any[]>('/gamification/leaderboard/'),
+        getPointTransactions: () => apiRequest<PointTransaction[]>('/gamification/student-points/'),
+    },
+
     helpers,
 };
+
+export const learningPathsAPI = api.learningPaths;
+export const gamificationAPI = api.gamification;
 
 export default api;

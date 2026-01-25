@@ -29,7 +29,7 @@ export default function AssessmentQuestionsPage() {
             setLoading(true);
             const [assessmentData, questionsData] = await Promise.all([
                 academicAPI.getAssessment(assessmentId),
-                academicAPI.getQuestions(assessmentId)
+                academicAPI.getQuestionsByAssessment(assessmentId)
             ]);
             setAssessment(assessmentData);
             setQuestions(questionsData);

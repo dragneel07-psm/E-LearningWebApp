@@ -20,6 +20,7 @@ urlpatterns = [
     path('api/ai/', include('ai_engine.urls')),
     path('api/notifications/', include('notifications.urls')),
     path('api/library/', include('library.urls')),
+    path('api/gamification/', include('gamification.urls')),
     
     # JWT Auth
     path('api/token/', MyTokenObtainPairView.as_view(), name='token_obtain_pair'),

@@ -97,6 +97,15 @@ class LessonViewSet(viewsets.ModelViewSet):
                 progress.completed_at = None
             
             progress.save()
+            
+            # Award gamification rewards if completed
+            if progress.completed:
+                try:
+                    from gamification.services.gamification_service import GamificationService
+                    GamificationService.on_lesson_complete(student, lesson)
+                except ImportError:
+                    pass # App might not be fully ready in all environments
+
             return Response({'completed': progress.completed})
         except Student.DoesNotExist:
             return Response({'error': 'Student profile not found'}, status=404)

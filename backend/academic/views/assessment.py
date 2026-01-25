@@ -91,6 +91,13 @@ class SubmissionViewSet(viewsets.ModelViewSet):
                 is_correct = True
                 points_earned = q.points
                 total_score += points_earned
+            elif q.type == 'short_answer':
+                # Basic case-insensitive matching for short answers
+                if user_answer and q.correct_answer and \
+                   user_answer.strip().lower() == q.correct_answer.strip().lower():
+                    is_correct = True
+                    points_earned = q.points
+                    total_score += points_earned
             
             graded_answers[str(q.question_id)] = {
                 'answer': user_answer,
@@ -109,6 +116,13 @@ class SubmissionViewSet(viewsets.ModelViewSet):
                 'answers_data': graded_answers
             }
         )
+
+        # Award gamification rewards
+        try:
+            from gamification.services.gamification_service import GamificationService
+            GamificationService.on_assessment_complete(student, result)
+        except ImportError:
+            pass
 
         return Response({
             'score': total_score,

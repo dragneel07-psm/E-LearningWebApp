@@ -78,7 +78,14 @@ jobs:
       run: |
         cd backend
         python -m pip install --upgrade pip
-        pip install -r requirements.txt
+        pip install -r requirements/base.txt
+        
+    - name: Check for missing migrations
+      env:
+        DJANGO_SETTINGS_MODULE: config.settings.test
+      run: |
+        cd backend
+        python manage.py makemigrations --check --dry-run
         
     - name: Run migrations
       env:
@@ -134,7 +141,7 @@ jobs:
     name: Build Docker Image
     runs-on: ubuntu-latest
     needs: [test, security]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop')
     
     steps:
     - uses: actions/checkout@v4
@@ -154,7 +161,7 @@ jobs:
         context: ./backend
         push: true
         tags: |
-          ${{ secrets.DOCKER_USERNAME }}/elearning-backend:latest
+          ${{ secrets.DOCKER_USERNAME }}/elearning-backend:${{ github.ref_name }}
           ${{ secrets.DOCKER_USERNAME }}/elearning-backend:${{ github.sha }}
         cache-from: type=registry,ref=${{ secrets.DOCKER_USERNAME }}/elearning-backend:buildcache
         cache-to: type=registry,ref=${{ secrets.DOCKER_USERNAME }}/elearning-backend:buildcache,mode=max

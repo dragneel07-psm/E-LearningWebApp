@@ -7,6 +7,7 @@ router.register(r'logs', views.AIInteractionLogViewSet)
 router.register(r'reports', views.StudentAIReportViewSet, basename='student-reports')
 router.register(r'learning-paths', views.LearningPathViewSet, basename='learning-paths')
 router.register(r'learning-nodes', views.LearningNodeViewSet, basename='learning-nodes')
+router.register(r'study-schedule', views.StudyEventViewSet, basename='study-schedule')
 
 urlpatterns = [
     path('', include(router.urls)),

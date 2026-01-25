@@ -92,7 +92,7 @@ export default function CreateAssignmentPage() {
         setLoading(true);
         try {
             await academicAPI.createAssessment({
-                course: selectedCourseId,
+                subject: parseInt(selectedCourseId),
                 title: title,
                 description: description,
                 type: 'assignment',

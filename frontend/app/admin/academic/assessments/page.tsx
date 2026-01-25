@@ -44,15 +44,15 @@ export default function AssessmentOversightPage() {
         }
     }
 
-    const getSubjectName = (id: string) => {
-        // Assessment.course is string, Subject.id is number
-        const s = subjects.find(sub => sub.id.toString() === id);
+    const getSubjectName = (id: string | number) => {
+        // Assessment.subject can be string or number, Subject.id is number
+        const s = subjects.find(sub => sub.id.toString() === id.toString());
         return s ? s.name : 'Unknown Subject';
     };
 
     const filteredAssessments = assessments.filter(a =>
         a.title.toLowerCase().includes(filter.toLowerCase()) ||
-        getSubjectName(a.course).toLowerCase().includes(filter.toLowerCase())
+        getSubjectName(a.subject).toLowerCase().includes(filter.toLowerCase())
     );
 
     return (
@@ -121,7 +121,7 @@ export default function AssessmentOversightPage() {
                                         </TableCell>
                                         <TableCell>
                                             <span className="inline-flex items-center px-2 py-0.5 rounded text-xs bg-slate-100 text-slate-800">
-                                                {getSubjectName(a.course)}
+                                                {getSubjectName(a.subject)}
                                             </span>
                                         </TableCell>
                                         <TableCell>

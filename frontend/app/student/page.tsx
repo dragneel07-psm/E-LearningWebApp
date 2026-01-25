@@ -13,6 +13,8 @@ import {
 } from 'lucide-react';
 import { academicAPI, aiAPI, helpers, Subject } from '@/lib/api';
 import { AITutorChat } from '@/components/ai-tutor-chat';
+import { GamificationWidget } from '@/components/student/GamificationWidget';
+import { SmartPathWidget } from '@/components/student/SmartPathWidget';
 
 export default function StudentDashboard() {
     const router = useRouter();
@@ -153,20 +155,27 @@ export default function StudentDashboard() {
                     </CardContent>
                 </Card>
 
-                {/* Learning Streak */}
-                <Card className="border-none shadow-sm bg-white hover:shadow-md transition-shadow">
-                    <CardContent className="p-5 flex items-center justify-between">
+                {/* AI Tutor Quick Access */}
+                <Card
+                    className="border-none shadow-sm bg-indigo-600 text-white hover:bg-indigo-700 transition-colors cursor-pointer"
+                    onClick={() => setShowAITutor(true)}
+                >
+                    <CardContent className="p-5 flex items-center justify-between h-full">
                         <div>
-                            <p className="text-sm font-medium text-slate-500 mb-1">Learning Streak</p>
-                            <h3 className="text-2xl font-bold text-slate-900">7 Days</h3>
-                            <p className="text-xs text-purple-600 font-medium mt-1">Keep it up! 🔥</p>
+                            <p className="text-sm font-medium opacity-80 mb-1">AI Tutor</p>
+                            <h3 className="text-xl font-bold">Ask Anything</h3>
                         </div>
-                        <div className="h-12 w-12 rounded-full bg-purple-50 flex items-center justify-center">
-                            <BrainCircuit className="h-6 w-6 text-purple-600" />
+                        <div className="h-12 w-12 rounded-full bg-white/20 flex items-center justify-center backdrop-blur-sm">
+                            <BrainCircuit className="h-6 w-6 text-white" />
                         </div>
                     </CardContent>
                 </Card>
             </div>
+
+            {/* 1. AI Smart Path - High Visibility */}
+            {recommendations && recommendations.recommendations.length > 0 && (
+                <SmartPathWidget recommendation={recommendations.recommendations[0]} />
+            )}
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
@@ -177,27 +186,35 @@ export default function StudentDashboard() {
                     <Card className="border-none shadow-sm">
                         <CardHeader className="flex flex-row items-center justify-between pb-2">
                             <CardTitle className="text-lg font-bold text-slate-800">My Learning Progress</CardTitle>
-                            <Button variant="ghost" size="sm" className="text-indigo-600 text-xs hover:text-indigo-700 hover:bg-indigo-50">
-                                View All
-                            </Button>
                         </CardHeader>
                         <CardContent className="grid gap-4">
                             {courses.slice(0, 3).map((course, idx) => (
-                                <div key={course.id} className="group flex items-center gap-4 p-3 rounded-xl hover:bg-slate-50 transition-colors border border-transparent hover:border-slate-100 cursor-pointer">
-                                    <div className={`h-12 w-12 rounded-lg flex items-center justify-center shrink-0 
+                                <div
+                                    key={course.id}
+                                    className="group flex items-center gap-4 p-4 rounded-2xl hover:bg-slate-50 transition-all border border-transparent hover:border-slate-100 cursor-pointer shadow-sm hover:shadow-md"
+                                    onClick={() => router.push(`/student/courses/${course.id}/lessons`)}
+                                >
+                                    <div className={`h-14 w-14 rounded-2xl flex items-center justify-center shrink-0 
                                         ${idx === 0 ? 'bg-indigo-100 text-indigo-600' :
                                             idx === 1 ? 'bg-emerald-100 text-emerald-600' :
                                                 'bg-amber-100 text-amber-600'}`}>
-                                        <BookOpen className="h-6 w-6" />
+                                        <BookOpen className="h-7 w-7" />
                                     </div>
                                     <div className="flex-1 min-w-0">
-                                        <div className="flex justify-between mb-1">
-                                            <h4 className="font-semibold text-slate-900 truncate">{course.name}</h4>
-                                            <span className="text-xs font-bold text-slate-600">{(idx + 1) * 24}%</span>
+                                        <div className="flex justify-between mb-2">
+                                            <div>
+                                                <h4 className="font-bold text-slate-900 truncate">{course.name}</h4>
+                                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                                                    {course.total_lessons || 0} Lessons
+                                                </p>
+                                            </div>
+                                            <span className="text-sm font-black text-slate-700">{course.progress_percentage || 0}%</span>
                                         </div>
-                                        <Progress value={(idx + 1) * 24} className="h-2 bg-slate-100" />
+                                        <Progress value={course.progress_percentage || 0} className="h-2.5 bg-slate-100" />
                                     </div>
-                                    <ChevronRight className="h-5 w-5 text-slate-300 group-hover:text-slate-500" />
+                                    <div className="h-8 w-8 rounded-full bg-slate-50 flex items-center justify-center group-hover:bg-indigo-600 group-hover:text-white transition-all">
+                                        <ChevronRight className="h-4 w-4" />
+                                    </div>
                                 </div>
                             ))}
                             {courses.length === 0 && (
@@ -250,6 +267,12 @@ export default function StudentDashboard() {
 
                 {/* 3. Right Sidebar (1/3 width) */}
                 <div className="space-y-6">
+
+                    {/* Achievement & Stats */}
+                    <GamificationWidget
+                        streak={recommendations?.stats?.streak || 0}
+                        totalPoints={recommendations?.stats?.lessons_completed * 20 || 0}
+                    />
 
                     {/* AI Recommendations */}
                     {recommendations && recommendations.recommendations.length > 0 && (

@@ -1,5 +1,11 @@
 from rest_framework import serializers
-from .models import AIInteractionLog, StudentAIReport, LearningPath, LearningNode
+from .models import AIInteractionLog, StudentAIReport, LearningPath, LearningNode, StudyEvent
+
+class StudyEventSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = StudyEvent
+        fields = '__all__'
+        read_only_fields = ['id', 'created_at']
 
 class AIInteractionLogSerializer(serializers.ModelSerializer):
     class Meta:

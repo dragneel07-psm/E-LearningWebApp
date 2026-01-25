@@ -68,7 +68,7 @@ export default function QuestionEditor({ initialData, onSave, onCancel }: Questi
                 type,
                 points,
                 options: type === 'mcq' ? options : [],
-                correct_answer: type === 'mcq' ? correctAnswer : null
+                correct_answer: type === 'mcq' ? correctAnswer : undefined
             });
         } catch (error) {
             console.error(error);

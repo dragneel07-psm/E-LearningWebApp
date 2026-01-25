@@ -36,7 +36,8 @@ def verify_api():
     print(f"Tenant: {tenant.subdomain}")
 
     # Register DB if needed
-    db_path = settings.BASE_DIR / tenant.db_name
+    # Tenant DBs are stored in backend/config/
+    db_path = settings.BASE_DIR / "config" / tenant.db_name
     if tenant.db_alias not in settings.DATABASES:
         new_db_config = settings.DATABASES['default'].copy()
         new_db_config['NAME'] = db_path
