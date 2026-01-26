@@ -176,7 +176,7 @@ class PasswordResetView(views.APIView):
             
             # Construct Link (Frontend URL)
             frontend_url = getattr(settings, 'FRONTEND_URL', 'http://localhost:3000')
-            reset_link = f"{frontend_url}/reset-password/{uid}/{token}"
+            reset_link = f"{frontend_url}/reset-password?uidb64={uid}&token={token}"
             
             # Send Email (Mock/Console)
             print(f"--- PASSWORD RESET EMAIL ---\nTo: {email}\nLink: {reset_link}\n----------------------------")

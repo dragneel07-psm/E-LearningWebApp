@@ -57,6 +57,7 @@ class LearningNode(models.Model):
         ('topic', 'Topic Concept')
     ], default='topic')
     resource_link = models.CharField(max_length=500, null=True, blank=True) # Could be internal URL or external
+    lesson = models.ForeignKey('academic.Lesson', on_delete=models.SET_NULL, null=True, blank=True, related_name='learning_nodes')
     estimated_minutes = models.IntegerField(default=15)
     status = models.CharField(max_length=20, choices=[
         ('locked', 'Locked'),

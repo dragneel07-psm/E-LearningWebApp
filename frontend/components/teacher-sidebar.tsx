@@ -22,7 +22,7 @@ const navigation = [
     { name: 'Dashboard', href: '/teacher', icon: LayoutDashboard },
     { name: 'My Classes', href: '/teacher/classes', icon: School },
     { name: 'Students', href: '/teacher/students', icon: Users }, // Enhance later
-    { name: 'Assignments', href: '/teacher/assignments', icon: ClipboardList }, // Enhance later
+    { name: 'Assessments', href: '/teacher/assessments', icon: ClipboardList },
     { name: 'Grading', href: '/teacher/grading', icon: FileText },
     { name: 'Timetable', href: '/teacher/timetable', icon: Calendar },
     { name: 'Library', href: '/teacher/library', icon: BookOpen },

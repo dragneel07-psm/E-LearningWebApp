@@ -111,15 +111,17 @@ class BookIssue(models.Model):
         """Update book availability when issuing - with transaction safety"""
         from django.db import transaction
         
-        with transaction.atomic():
+        using_db = kwargs.get('using') or self._state.db or 'default'
+        
+        with transaction.atomic(using=using_db):
             # New issue - decrement available copies
             if self._state.adding:
                 # Lock the book row to prevent race conditions
-                book = Book.objects.select_for_update().get(pk=self.book.pk)
+                book = Book.objects.using(using_db).select_for_update().get(pk=self.book.pk)
                 
                 if book.available_copies > 0:
                     book.available_copies -= 1
-                    book.save(update_fields=['available_copies'])
+                    book.save(using=using_db, update_fields=['available_copies'])
                 else:
                     raise ValidationError('No copies available for this book')
             

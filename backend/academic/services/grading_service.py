@@ -8,7 +8,8 @@ class GradingService:
         answers_data: { question_id: user_answer_text_or_key }
         Returns: (total_score, max_possible, graded_answers_dict)
         """
-        questions = Question.objects.filter(assessment=assessment)
+        using_db = assessment._state.db or 'default'
+        questions = Question.objects.using(using_db).filter(assessment=assessment)
         total_score = 0
         max_possible = 0
         graded_answers = {}
@@ -26,7 +27,7 @@ class GradingService:
             elif q.type == 'short_answer':
                 # Basic case-insensitive matching for short answers
                 if user_answer and q.correct_answer and \
-                   user_answer.strip().lower() == q.correct_answer.strip().lower():
+                   str(user_answer).strip().lower() == str(q.correct_answer).strip().lower():
                     is_correct = True
                     points_earned = q.points
             # Long answers/essays require manual grading or AI grading later

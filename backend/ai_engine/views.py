@@ -1,3 +1,4 @@
+# Forced reload - V2
 from rest_framework import viewsets, status, permissions
 from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.response import Response
@@ -89,40 +90,37 @@ class LearningPathViewSet(TenantScopedQuerysetMixin, viewsets.ModelViewSet):
     @action(detail=False, methods=['post'])
     def generate(self, request):
         """
-        Generate a learning path for a student/subject.
-        In a real scenario, this would call an LLM.
+        Generate a learning path for a student based on recent performance.
         """
         student_id = request.data.get('student_id')
         subject_id = request.data.get('subject_id')
-        topic_focus = request.data.get('topic_focus') # Optional keyword
-
+        
         if not student_id:
-            return Response({'error': 'Student ID required'}, status=status.HTTP_400_BAD_REQUEST)
+             # Auto-detect if student user
+            if hasattr(request.user, 'role') and request.user.role == 'student':
+                 try:
+                    student = Student.objects.get(user=request.user)
+                    student_id = student.id
+                 except:
+                    return Response({'error': 'Student profile not found'}, status=400)
+            else:
+                 return Response({'error': 'student_id is required'}, status=400)
 
         try:
             student = Student.objects.get(pk=student_id)
-            tenant = student.user.tenant # Use student's user tenant
+            tenant = student.user.tenant
         except Student.DoesNotExist:
-            # Try to get from logged in user if not provided or valid
-            try:
-                student = Student.objects.get(user=request.user)
-                tenant = student.user.tenant
-            except Student.DoesNotExist:
-                return Response({'error': 'Student not found'}, status=status.HTTP_404_NOT_FOUND)
+            return Response({'error': 'Student not found'}, status=404)
 
         # Generate Title
-        title = f"Path for {student.user.first_name}"
+        title = f"Path for {student.user.first_name} - {timezone.now().date()}"
+        subject = None
         if subject_id:
             try:
                 subject = Subject.objects.get(pk=subject_id)
                 title = f"{subject.name} Mastery Path"
             except Subject.DoesNotExist:
-                subject = None
-        else:
-            subject = None
-
-        if topic_focus:
-            title += f": {topic_focus}"
+                pass
 
         try:
             # Create Path
@@ -131,34 +129,71 @@ class LearningPathViewSet(TenantScopedQuerysetMixin, viewsets.ModelViewSet):
                 student=student,
                 subject=subject,
                 title=title,
-                description=f"AI-generated personalized learning path based on recent performance."
+                description="AI-generated personalized learning path based on recent performance."
             )
+            
+            nodes_created = 0
+            
+            # Strategy A: Remedial (Low Scores)
+            # Find assessments with score < 70%
+            subject_filter = {}
+            if subject_id:
+                subject_filter['assessment__subject_id'] = subject_id
 
-            # Mock Nodes Generation (simulating AI Logic)
-            nodes_data = [
-                {"title": "Foundational Concepts", "type": "article", "time": 10},
-                {"title": f"Introduction to {topic_focus if topic_focus else 'Topic'}", "type": "video", "time": 15},
-                {"title": "Practice Quiz: Basics", "type": "quiz", "time": 20},
-                {"title": "Advanced Application", "type": "topic", "time": 30},
-                {"title": "Mastery Challenge", "type": "assignment", "time": 45},
-            ]
-
-            for i, node in enumerate(nodes_data):
+            low_results = Result.objects.filter(
+                student=student, 
+                score__lt=70,
+                **subject_filter
+            ).select_related('assessment').order_by('-submitted_at')[:3]
+            
+            for res in low_results:
+                assessment = res.assessment
                 LearningNode.objects.create(
                     learning_path=path,
-                    title=node['title'],
-                    order=i + 1,
-                    resource_type=node['type'],
-                    estimated_minutes=node['time'],
-                    status='unlocked' if i == 0 else 'locked' # Unlock first node
+                    title=f"Review: {assessment.title}",
+                    description=f"Score: {res.score}%. Recommended review.",
+                    resource_type='topic',
+                    order=nodes_created + 1,
+                    status='unlocked' if nodes_created == 0 else 'locked',
+                    estimated_minutes=30
                 )
+                nodes_created += 1
+                
+            # Strategy B: Next Uncompleted Lessons
+            # If subject is specified, pick next lessons. If not, pick from enrolled class subjects.
+            from academic.models import Lesson
+            
+            lesson_filter = {}
+            if subject_id:
+                lesson_filter['chapter__subject_id'] = subject_id
+            elif student.academic_class:
+                lesson_filter['chapter__subject__academic_class'] = student.academic_class
+            
+            # This serves as a simple recommendation: grab first 3 lessons
+            # In a real app, we'd filter out lessons the student has already completed (LessonProgress)
+            rec_lessons = Lesson.objects.filter(**lesson_filter).order_by('chapter__subject', 'order')[:3]
+            
+            for lesson in rec_lessons:
+                 # Avoid duplicates if we already added a node for this (unlikely in this simple logic but good practice)
+                 LearningNode.objects.create(
+                    learning_path=path,
+                    title=f"Learn: {lesson.title}",
+                    description="Recommended new topic.",
+                    resource_type='video', # Defaulting to video
+                    lesson=lesson,
+                    order=nodes_created + 1,
+                    status='unlocked' if nodes_created == 0 else 'locked',
+                    estimated_minutes=lesson.duration_minutes
+                )
+                 nodes_created += 1
 
             serializer = self.get_serializer(path)
             return Response(serializer.data, status=status.HTTP_201_CREATED)
+            
         except Exception as e:
             import traceback
             traceback.print_exc()
-            return Response({'error': str(e), 'trace': traceback.format_exc()}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 class LearningNodeViewSet(TenantScopedQuerysetMixin, viewsets.ModelViewSet):
     queryset = LearningNode.objects.all()
@@ -264,48 +299,72 @@ def ai_tutor_chat(request):
         return Response({'error': 'Message is required'}, status=status.HTTP_400_BAD_REQUEST)
         
     try:
-        # Get student context for personalization
-        student = Student.objects.get(user=request.user)
+        # Get tenant and DB alias from request (Middleware sets these)
+        tenant = getattr(request, 'tenant', None)
+        db_alias = getattr(request, 'db_alias', 'default')
         
-        # Identify weak topics from results
-        results = Result.objects.filter(student=student).select_related('assessment', 'assessment__subject')
-        weak_topics = []
-        for res in results:
-            if (res.score / res.assessment.total_marks) < 0.6:
-                weak_topics.append(res.assessment.subject.name)
-        
-        # Deduplicate and limit
-        weak_topics = list(set(weak_topics))[:3]
-        
-        # Get enrolled courses
-        # Note: In this project subjects are linked to Class. 
-        # Students belong to a Class. So courses are subjects of their class.
-        courses = [s.name for s in student.academic_class.subjects.all()] if student.academic_class else []
-        
-        context = {
-            'learning_style': student.learning_style,
-            'ai_explanation_level': student.ai_explanation_level,
-            'courses': courses,
-            'weak_topics': weak_topics
-        }
-        
+        # Fallback to user's tenant if request.tenant is missing (some contexts)
+        if not tenant and hasattr(request.user, 'tenant'):
+            tenant = request.user.tenant
+
+        context = {}
+        try:
+            # Explicitly use db_alias for all queries
+            student = Student.objects.using(db_alias).get(user=request.user)
+            
+            # Identify weak topics from results - Explicit DB
+            results = Result.objects.using(db_alias).filter(student=student).select_related('assessment', 'assessment__subject')
+            weak_topics = []
+            for res in results:
+                try:
+                    # Calculate percentage safely
+                    if res.assessment.total_marks > 0:
+                        if (res.score / res.assessment.total_marks) < 0.6:
+                            weak_topics.append(res.assessment.subject.name)
+                except:
+                    continue
+            
+            # Deduplicate and limit
+            weak_topics = list(set(weak_topics))[:3]
+            
+            # Get enrolled courses - Explicit DB on related manager
+            courses = []
+            if student.academic_class:
+                courses = [s.name for s in student.academic_class.subjects.using(db_alias).all()]
+            
+            context = {
+                'learning_style': student.learning_style,
+                'ai_explanation_level': student.ai_explanation_level,
+                'courses': courses,
+                'weak_topics': weak_topics
+            }
+        except Exception as context_err:
+            print(f"⚠️ Context gathering warning: {context_err}")
+            # Non-fatal, proceed with empty context
+
         service = AITutorService()
-        response_text = service.get_chat_response(history + [{"role": "user", "content": message}], context)
+        response_data = service.generate_tutor_response(
+            message, 
+            student_context=context, 
+            conversation_history=history
+        )
+        response_text = response_data['response']
         
         # Log interaction (simplified)
-        AIInteractionLog.objects.create(
-            tenant=request.user.tenant,
-            user=request.user,
-            feature_used='tutor',
-            total_tokens=len(message) // 4 + len(response_text) // 4 # Very rough estimation
-        )
+        if tenant:
+            try:
+                AIInteractionLog.objects.using(db_alias).create(
+                    tenant=tenant,
+                    user=request.user,
+                    feature_used='tutor',
+                    total_tokens=response_data.get('tokens_used', 0)
+                )
+            except Exception as log_err:
+                print(f"⚠️ Interaction logging failed: {log_err}")
         
         return Response({'response': response_text})
         
-    except Student.DoesNotExist:
-        # Fallback for non-student users (e.g. teachers/admins)
-        service = AITutorService()
-        response_text = service.get_chat_response(history + [{"role": "user", "content": message}])
-        return Response({'response': response_text})
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { academicAPI, Lesson, helpers } from '@/lib/api';
 import { toast } from 'sonner';
+import { AIStudentAssistant } from '@/components/ai-student-assistant';
 
 export default function StudentLessonViewPage() {
     const params = useParams();
@@ -279,6 +280,8 @@ export default function StudentLessonViewPage() {
                     </div>
                 </div>
             </div>
+            {/* AI Assistant Overlay */}
+            <AIStudentAssistant lesson={lesson || undefined} />
         </div>
     );
 }

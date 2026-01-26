@@ -167,5 +167,55 @@ Let's work through this together!"""
         result = self.generate_tutor_response(current_message, context, history)
         return result['response']
 
+    def generate_teacher_insights(self, data: Dict) -> List[str]:
+        """
+        Generate pedagogical insights for a teacher based on class performance data.
+        """
+        if not self.client:
+            # Fallback for demo mode
+            insights = []
+            if data.get('at_risk_students'):
+                insights.append(f"Action required: Several students are showing signs of academic risk. Focus on personalized support.")
+            if data.get('topic_mastery'):
+                weak_topics = [t['topic'] for t in data['topic_mastery'] if t['score'] < 65]
+                if weak_topics:
+                    insights.append(f"Curriculum Alert: Class performance is below benchmarks in {', '.join(weak_topics)}.")
+            return insights or ["Class performance is currently meeting all benchmarks."]
+
+        try:
+            prompt = f"""
+            You are an expert pedagogical analyst. Analyze the following class performance data and provide 2-3 specific, actionable insights for the teacher.
+            
+            Data:
+            - Students at Risk: {data.get('at_risk_count')}
+            - Risk Details: {data.get('at_risk_students')}
+            - Topic Mastery: {data.get('topic_mastery')}
+            
+            Guidelines:
+            - Keep insights concise and professional.
+            - Provide specific recommendations (e.g., "Revisit Topic X", "Check in with Student Y").
+            - Focus on identifying patterns or urgent needs.
+            - Return the insights as a bulleted list.
+            """
+
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {"role": "system", "content": "You are a helpful pedagogical assistant for teachers."},
+                    {"role": "user", "content": prompt}
+                ],
+                max_tokens=300,
+                temperature=0.7
+            )
+
+            content = response.choices[0].message.content
+            # Split into list of strings, removing bullets
+            insights = [line.strip().lstrip('- ').lstrip('* ') for line in content.split('\n') if line.strip()]
+            return insights[:3] # Ensure at most 3 insights
+
+        except Exception as e:
+            print(f"AI Teacher Insight Error: {e}")
+            return ["Analysis inhibited by service interruption. Please check student risk reports manually."]
+
 # Singleton instance
 ai_tutor_service = AITutorService()

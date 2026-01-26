@@ -8,7 +8,8 @@ import { usePathname, useRouter } from 'next/navigation';
 import {
     LayoutDashboard, BookOpen, FileText, Calendar,
     User as UserIcon, LogOut, Menu, X, MessageSquare,
-    GraduationCap, Clock, FileBarChart, CreditCard
+    GraduationCap, Clock, FileBarChart, CreditCard,
+    BrainCircuit
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -38,11 +39,12 @@ export default function StudentLayout({ children }: { children: React.ReactNode 
 
     const navItems = [
         { label: 'Dashboard', href: '/student', icon: LayoutDashboard },
+        { label: 'Learning Path', href: '/student/learning-path', icon: BrainCircuit },
         { label: 'My Classes', href: '/student/classes', icon: BookOpen },
         { label: 'Assignments', href: '/student/assignments', icon: FileText },
         { label: 'Library', href: '/student/library', icon: BookOpen },
         { label: 'Attendance', href: '/student/attendance', icon: Calendar },
-        { label: 'Exams & Results', href: '/student/exams', icon: GraduationCap },
+        { label: 'Assessments', href: '/student/assessments', icon: GraduationCap },
         { label: 'Fees & Payments', href: '/student/fees', icon: CreditCard },
         { label: 'Timetable', href: '/student/timetable', icon: Clock },
         { label: 'Notices', href: '/student/notices', icon: FileBarChart }, // Using FileBarChart as closest generic for notices/reports

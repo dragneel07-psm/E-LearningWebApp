@@ -266,6 +266,34 @@ export interface Question {
     order: number;
 }
 
+export interface LearningNode {
+    id: string;
+    learning_path: string;
+    title: string;
+    description?: string;
+    order: number;
+    resource_type: 'video' | 'article' | 'quiz' | 'assignment' | 'topic';
+    resource_link?: string;
+    lesson?: number;
+    estimated_minutes: number;
+    status: 'locked' | 'unlocked' | 'in_progress' | 'completed';
+    completed_at?: string;
+}
+
+export interface LearningPath {
+    id: string;
+    tenant: string;
+    student: string;
+    subject?: number | null;
+    title: string;
+    description?: string;
+    created_at: string;
+    updated_at: string;
+    is_active: boolean;
+    generated_by_ai: boolean;
+    nodes: LearningNode[];
+}
+
 // (Moved definitions to top)
 
 export interface Subscription {
@@ -612,6 +640,16 @@ export const usersAPI = {
         apiRequest<{ message: string }>('/users/accounts/change-password/', {
             method: 'POST',
             body: JSON.stringify({ old_password: oldPassword, new_password: newPassword })
+        }),
+    forgotPassword: (email: string) =>
+        apiRequest<{ message: string }>('/users/password-reset/', {
+            method: 'POST',
+            body: JSON.stringify({ email })
+        }),
+    confirmPasswordReset: (data: { password: string; token: string; uidb64: string }) =>
+        apiRequest<{ message: string }>('/users/password-reset-confirm/', {
+            method: 'POST',
+            body: JSON.stringify(data)
         }),
     resetUserPassword: (userId: string, newPassword: string) =>
         apiRequest<{ message: string }>('/users/admin/reset-password/', {
@@ -1152,7 +1190,7 @@ export const helpers = {
     },
 };
 
-const api = {
+export const api = {
     core: coreAPI,
     users: usersAPI,
     academic: academicAPI,
@@ -1179,14 +1217,14 @@ const api = {
     },
     notifications: notificationsAPI,
     learningPaths: {
-        getPaths: () => apiRequest<any[]>('/ai/learning-paths/'),
+        getPaths: () => apiRequest<LearningPath[]>('/ai/learning-paths/'),
         generatePath: (data: { student_id: string; subject_id?: number; topic_focus?: string }) =>
-            apiRequest<any>('/ai/learning-paths/generate/', {
+            apiRequest<LearningPath>('/ai/learning-paths/generate/', {
                 method: 'POST',
                 body: JSON.stringify(data)
             }),
         updateNodeStatus: (nodeId: string, status: string) =>
-            apiRequest<any>(`/ai/learning-nodes/${nodeId}/complete/`, { // Using custom action
+            apiRequest<{ status: string; next_node_unlocked: boolean }>(`/ai/learning-nodes/${nodeId}/complete/`, {
                 method: 'POST'
             }),
     },

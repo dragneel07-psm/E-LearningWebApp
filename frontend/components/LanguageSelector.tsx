@@ -1,5 +1,6 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import { useTranslation } from '@/lib/localization';
 import { Button } from '@/components/ui/button';
 import {
@@ -12,6 +13,19 @@ import { Globe } from 'lucide-react';
 
 export function LanguageSelector() {
     const { locale, setLocale } = useTranslation();
+    const [mounted, setMounted] = useState(false);
+
+    useEffect(() => {
+        setMounted(true);
+    }, []);
+
+    if (!mounted) {
+        return (
+            <Button variant="ghost" size="icon" className="h-9 w-9 rounded-xl hover:bg-slate-100">
+                <Globe className="h-5 w-5 text-slate-500" />
+            </Button>
+        );
+    }
 
     return (
         <DropdownMenu>

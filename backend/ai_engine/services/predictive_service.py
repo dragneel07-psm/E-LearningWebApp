@@ -163,18 +163,16 @@ class PredictiveAnalyticsService:
 
     def _generate_ai_insights(self, risk_students, topic_mastery):
         """
-        Generate text insights based on data.
+        Generate text insights based on data using AI.
         """
-        insights = []
-        if risk_students:
-            insights.append(f"Action required: {len(risk_students)} students are showing signs of academic risk. Priority focus on {risk_students[0]['name']}.")
+        from .tutor_service import ai_tutor_service
         
-        weak_topics = [t['topic'] for t in topic_mastery if t['score'] < 65]
-        if weak_topics:
-            insights.append(f"Curriculum Alert: Class performance is below benchmarks in {', '.join(weak_topics)}. Potential need for supplementary materials.")
-        else:
-            insights.append("Curriculum Progress: All topics are currently meeting mastery benchmarks.")
-            
-        return insights
+        data = {
+            "at_risk_count": len(risk_students),
+            "at_risk_students": risk_students[:5],
+            "topic_mastery": topic_mastery
+        }
+        
+        return ai_tutor_service.generate_teacher_insights(data)
 
 predictive_service = PredictiveAnalyticsService()

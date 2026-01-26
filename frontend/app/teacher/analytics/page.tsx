@@ -61,18 +61,33 @@ export default function TeacherAnalyticsPage() {
             </header>
 
             {/* AI Insight Bar */}
-            <div className="p-1 rounded-3xl bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 animate-gradient-xy">
-                <div className="bg-white rounded-[22px] p-4 flex items-center gap-4">
-                    <div className="h-10 w-10 rounded-2xl bg-indigo-100 flex items-center justify-center shrink-0">
-                        <Sparkles className="h-5 w-5 text-indigo-600" />
+            <div className="grid grid-cols-1 gap-4">
+                {data?.ai_insights.map((insight, i) => (
+                    <div key={i} className="p-1 rounded-3xl bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500">
+                        <div className="bg-white rounded-[22px] p-4 flex items-center gap-4">
+                            <div className="h-10 w-10 rounded-2xl bg-indigo-100 flex items-center justify-center shrink-0">
+                                <Sparkles className="h-5 w-5 text-indigo-600" />
+                            </div>
+                            <div className="flex-1">
+                                <p className="text-sm font-bold text-slate-900 leading-snug">
+                                    {insight}
+                                </p>
+                            </div>
+                        </div>
                     </div>
-                    <div className="flex-1">
-                        <p className="text-sm font-bold text-slate-900 leading-snug">
-                            {data?.ai_insights[0] || "AI is analyzing your class performance trends..."}
-                        </p>
+                ))}
+                {(!data || data.ai_insights.length === 0) && (
+                    <div className="p-1 rounded-3xl bg-slate-100">
+                        <div className="bg-white rounded-[22px] p-4 flex items-center gap-4">
+                            <div className="h-10 w-10 rounded-2xl bg-slate-50 flex items-center justify-center shrink-0">
+                                <Sparkles className="h-5 w-5 text-slate-300" />
+                            </div>
+                            <div className="flex-1 text-slate-400 text-sm font-medium">
+                                AI is analyzing your class performance trends...
+                            </div>
+                        </div>
                     </div>
-                    <ChevronRight className="h-5 w-5 text-slate-300" />
-                </div>
+                )}
             </div>
 
             {/* Score Grid */}

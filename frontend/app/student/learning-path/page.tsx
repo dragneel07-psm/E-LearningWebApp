@@ -1,299 +1,255 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Brain, CheckCircle, Circle, Play, FileText, HelpCircle, Lock, ArrowRight, Star, Sparkles } from 'lucide-react';
-import api, { Subject } from '@/lib/api'; // Using default export as 'api'
+import { api, LearningPath, LearningNode } from '@/lib/api';
 import { toast } from 'sonner';
-
-// Interfaces (locally defined to match API response)
-interface LearningNode {
-    id: string;
-    title: string;
-    description: string;
-    resource_type: 'video' | 'article' | 'quiz' | 'assignment' | 'topic';
-    resource_link?: string;
-    estimated_minutes: number;
-    status: 'locked' | 'unlocked' | 'in_progress' | 'completed';
-    order: number;
-}
-
-interface LearningPath {
-    id: string;
-    title: string;
-    description: string;
-    subject: number | null;
-    nodes: LearningNode[];
-    created_at: string;
-    is_active: boolean;
-}
+import {
+    BrainCircuit, BookOpen, PlayCircle, FileText, CheckCircle2,
+    Lock, ArrowRight, Loader2, Sparkles
+} from 'lucide-react';
+import { cn } from '@/lib/utils';
+import { useRouter } from 'next/navigation';
 
 export default function LearningPathPage() {
-    const [paths, setPaths] = useState<LearningPath[]>([]);
-    const [subjects, setSubjects] = useState<Subject[]>([]);
     const [loading, setLoading] = useState(true);
+    const [path, setPath] = useState<LearningPath | null>(null);
     const [generating, setGenerating] = useState(false);
-    const [selectedPath, setSelectedPath] = useState<LearningPath | null>(null);
-
-    // Generate Dialog
-    const [openGenerate, setOpenGenerate] = useState(false);
-    const [genSubject, setGenSubject] = useState<string>('');
-    const [genTopic, setGenTopic] = useState('');
+    const router = useRouter();
 
     useEffect(() => {
-        loadData();
+        loadPath();
     }, []);
 
-    const loadData = async () => {
+    async function loadPath() {
         try {
-            setLoading(true);
-            const [myPaths, mySubjects] = await Promise.all([
-                api.learningPaths.getPaths(),
-                api.helpers.getStudentSubjects()
-            ]);
-            setPaths(myPaths);
-            setSubjects(mySubjects);
-
-            if (myPaths.length > 0) {
-                // Select the most recent active path
-                setSelectedPath(myPaths[0]); // Setup sorting by date ideally
-            }
+            const paths = await api.learningPaths.getPaths();
+            // Get the most recent active path
+            const activePath = paths.find(p => p.is_active) || paths[0];
+            setPath(activePath || null);
         } catch (error) {
-            console.error(error);
-            toast.error('Failed to load learning paths');
+            console.error('Failed to load learning path', error);
+            toast.error('Failed to load your learning path');
         } finally {
             setLoading(false);
         }
-    };
+    }
 
-    const handleGenerate = async () => {
-        if (!genSubject && !genTopic) {
-            toast.error('Please select a subject or enter a topic');
-            return;
-        }
-
+    const handleGeneratePath = async () => {
+        setGenerating(true);
         try {
-            setGenerating(true);
             const student = await api.academic.getMyStudent();
-            const data = {
-                student_id: student.id,
-                subject_id: genSubject ? parseInt(genSubject) : undefined,
-                topic_focus: genTopic
-            };
-
-            await api.learningPaths.generatePath(data);
-            toast.success('Learning path generated successfully!');
-            setOpenGenerate(false);
-            setGenSubject('');
-            setGenTopic('');
-            loadData(); // Reload to see new path
+            const newPath = await api.learningPaths.generatePath({
+                student_id: student.id
+            });
+            setPath(newPath);
+            toast.success("New learning path generated successfully!");
         } catch (error) {
-            console.error(error);
-            toast.error('Failed to generate path');
+            console.error('Failed to generate path', error);
+            toast.error('Failed to generate learning path');
         } finally {
             setGenerating(false);
         }
     };
 
-    const handleNodeAction = async (node: LearningNode) => {
+    const handleStartNode = async (node: LearningNode) => {
         if (node.status === 'locked') return;
 
-        if (node.status === 'completed') {
-            toast.info('Already completed!');
+        // If it links to a lesson, go there
+        if (node.lesson) {
+            // Need to fetch lesson to get subject/chapter info ideally, 
+            // but for now we might redirect to a lesson viewer.
+            // Simplified: redirect to lesson reader (assuming we have a route)
+            // Or just mark complete for "Topic" nodes that are conceptual.
+            router.push(`/student/courses/lessons/${node.lesson}`);
             return;
         }
 
-        // Simulate "Doing" the task...
-        // In real app, this might navigate to a player
-
-        // For demo: Mark complete
-        try {
-            await api.learningPaths.updateNodeStatus(node.id, 'completed');
-            toast.success('Topic completed! Next node unlocked.');
-
-            // Optimistic update or reload
-            loadData();
-        } catch (error) {
-            console.error(error);
-            toast.error('Failed to update progress');
+        // For now, if it's a "Topic" or "Video" without direct lesson link in frontend router,
+        // we simulate "starting" it by showing a modal or just marking complete for MVP demo.
+        if (confirm(`Start "${node.title}"? (Click OK to simulate completion for demo)`)) {
+            try {
+                const res = await api.learningPaths.updateNodeStatus(node.id, 'completed');
+                toast.success("Activity completed!");
+                // Optimistic update
+                if (path) {
+                    const updatedNodes = path.nodes.map(n => {
+                        if (n.id === node.id) return { ...n, status: 'completed' as const };
+                        if (n.order === node.order + 1 && res.next_node_unlocked) return { ...n, status: 'unlocked' as const };
+                        return n;
+                    });
+                    setPath({ ...path, nodes: updatedNodes });
+                }
+            } catch (error) {
+                toast.error("Failed to update progress");
+            }
         }
     };
 
     const getNodeIcon = (type: string) => {
         switch (type) {
-            case 'video': return <Play className="h-4 w-4" />;
-            case 'article': return <FileText className="h-4 w-4" />;
-            case 'quiz': return <HelpCircle className="h-4 w-4" />;
-            default: return <Star className="h-4 w-4" />;
+            case 'video': return <PlayCircle className="h-5 w-5" />;
+            case 'quiz': return <FileText className="h-5 w-5" />;
+            case 'assignment': return <BookOpen className="h-5 w-5" />;
+            default: return <BrainCircuit className="h-5 w-5" />;
         }
     };
 
-    if (loading) return <div className="p-8 flex justify-center"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div></div>;
+    if (loading) return <div className="p-12 text-center text-slate-400">Loading your path...</div>;
 
-    return (
-        <div className="space-y-6">
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                <div>
-                    <h1 className="text-3xl font-bold tracking-tight flex items-center gap-2">
-                        <Brain className="h-8 w-8 text-indigo-600" />
-                        AI Learning Paths
-                    </h1>
-                    <p className="text-muted-foreground">Personalized curriculum tailored to your performance.</p>
+    if (!path) {
+        return (
+            <div className="flex flex-col items-center justify-center min-h-[60vh] text-center space-y-6 animate-in fade-in zoom-in duration-500">
+                <div className="h-24 w-24 bg-indigo-50 rounded-full flex items-center justify-center">
+                    <Sparkles className="h-10 w-10 text-indigo-500" />
                 </div>
-                <Button onClick={() => setOpenGenerate(true)} className="gap-2 bg-indigo-600 hover:bg-indigo-700">
-                    <Sparkles className="h-4 w-4" /> Generate New Path
+                <div className="max-w-md space-y-2">
+                    <h1 className="text-2xl font-bold text-slate-900">No Learning Path Found</h1>
+                    <p className="text-slate-500">
+                        Our AI can analyze your performance and create a personalized study plan just for you.
+                    </p>
+                </div>
+                <Button
+                    size="lg"
+                    className="bg-indigo-600 hover:bg-indigo-700 shadow-lg shadow-indigo-200"
+                    onClick={handleGeneratePath}
+                    disabled={generating}
+                >
+                    {generating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <BrainCircuit className="mr-2 h-4 w-4" />}
+                    Generate My Path
                 </Button>
             </div>
+        );
+    }
 
-            {paths.length === 0 ? (
-                <Card className="min-h-[300px] flex flex-col justify-center items-center text-center p-8 border-dashed">
-                    <div className="bg-indigo-50 p-4 rounded-full mb-4">
-                        <Sparkles className="h-12 w-12 text-indigo-600" />
+    const completedNodes = path.nodes.filter(n => n.status === 'completed').length;
+    const progress = Math.round((completedNodes / path.nodes.length) * 100);
+
+    return (
+        <div className="space-y-8 animate-in fade-in duration-500 max-w-4xl mx-auto">
+            {/* Header */}
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div>
+                    <h1 className="text-3xl font-bold text-slate-900 flex items-center gap-3">
+                        <BrainCircuit className="h-8 w-8 text-indigo-600" /> Learning Path
+                    </h1>
+                    <p className="text-slate-500 mt-1">{path.title}</p>
+                </div>
+                <div className="flex items-center gap-4 bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
+                    <div className="text-right">
+                        <div className="text-xs font-medium text-slate-500">Progress</div>
+                        <div className="text-lg font-bold text-indigo-600">{progress}%</div>
                     </div>
-                    <h3 className="text-xl font-semibold mb-2">No learning paths yet</h3>
-                    <p className="text-muted-foreground max-w-md mb-6">
-                        Our AI can analyze your performance and generate a personalized study plan for you.
-                    </p>
-                    <Button onClick={() => setOpenGenerate(true)}>Generate My First Path</Button>
-                </Card>
-            ) : (
-                <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-                    {/* Sidebar: Path Selector */}
-                    <Card className="lg:col-span-1 h-fit">
-                        <CardHeader>
-                            <CardTitle className="text-lg">Your Paths</CardTitle>
-                        </CardHeader>
-                        <CardContent className="space-y-2 p-4">
-                            {paths.map(path => (
-                                <button
-                                    key={path.id}
-                                    onClick={() => setSelectedPath(path)}
-                                    className={`w-full text-left p-3 rounded-lg text-sm transition-colors ${selectedPath?.id === path.id ? 'bg-indigo-50 text-indigo-700 border border-indigo-200' : 'hover:bg-gray-50 border border-transparent'}`}
-                                >
-                                    <div className="font-medium line-clamp-1">{path.title}</div>
-                                    <div className="text-xs opacity-70 mt-1">
-                                        {path.nodes.filter(n => n.status === 'completed').length} / {path.nodes.length} Steps
-                                    </div>
-                                    <Progress value={(path.nodes.filter(n => n.status === 'completed').length / path.nodes.length) * 100} className="h-1 mt-2" />
-                                </button>
-                            ))}
-                        </CardContent>
-                    </Card>
+                    <Progress value={progress} className="w-24 h-2" />
+                </div>
+            </div>
 
-                    {/* Main Content: Timeline */}
-                    <Card className="lg:col-span-3">
-                        {selectedPath && (
-                            <>
-                                <CardHeader>
-                                    <div className="flex justify-between items-start">
-                                        <div>
-                                            <CardTitle>{selectedPath.title}</CardTitle>
-                                            <CardDescription>{selectedPath.description}</CardDescription>
+            {/* Path Visualization */}
+            <div className="relative space-y-8 before:absolute before:inset-0 before:left-8 md:before:left-1/2 before:w-0.5 before:-ml-px before:bg-slate-200 before:z-0">
+                {path.nodes.map((node, index) => {
+                    const isLeft = index % 2 === 0;
+                    const isLocked = node.status === 'locked';
+                    const isCompleted = node.status === 'completed';
+                    const isActive = node.status === 'unlocked' || node.status === 'in_progress';
+
+                    return (
+                        <div key={node.id} className={cn(
+                            "relative flex items-center md:justify-between",
+                            !isLeft && "md:flex-row-reverse"
+                        )}>
+                            {/* Timeline Node Connector */}
+                            <div className={cn(
+                                "absolute left-8 md:left-1/2 -ml-3 md:-ml-4 w-6 h-6 md:w-8 md:h-8 rounded-full border-4 z-10 flex items-center justify-center transition-colors shadow-sm",
+                                isCompleted ? "bg-green-500 border-green-100 ring-4 ring-green-50" :
+                                    isActive ? "bg-indigo-600 border-indigo-100 ring-4 ring-indigo-50" :
+                                        "bg-slate-200 border-slate-100"
+                            )}>
+                                {isCompleted && <CheckCircle2 className="h-3 w-3 md:h-4 md:w-4 text-white" />}
+                                {isLocked && <Lock className="h-3 w-3 md:h-4 md:w-4 text-slate-400" />}
+                            </div>
+
+                            {/* Content Card */}
+                            <div className={cn(
+                                "ml-20 md:ml-0 md:w-[45%]",  // Mobile left align, Desktop alternating
+                            )}>
+                                <Card className={cn(
+                                    "transition-all hover:shadow-md cursor-pointer border-slate-200",
+                                    isActive && "border-indigo-200 shadow-indigo-50 ring-1 ring-indigo-100",
+                                    isLocked && "opacity-70 bg-slate-50 grayscale-[0.5]"
+                                )} onClick={() => handleStartNode(node)}>
+                                    <div className="p-4 flex items-start gap-4">
+                                        <div className={cn(
+                                            "p-3 rounded-lg flex-shrink-0",
+                                            isCompleted ? "bg-green-100 text-green-600" :
+                                                isActive ? "bg-indigo-100 text-indigo-600" :
+                                                    "bg-slate-100 text-slate-400"
+                                        )}>
+                                            {getNodeIcon(node.resource_type)}
                                         </div>
-                                        <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">Active</Badge>
-                                    </div>
-                                </CardHeader>
-                                <CardContent>
-                                    <div className="relative border-l-2 border-gray-200 ml-4 space-y-8 my-4">
-                                        {selectedPath.nodes.sort((a, b) => a.order - b.order).map((node, index) => {
-                                            const isComplete = node.status === 'completed';
-                                            const isLocked = node.status === 'locked';
-                                            const isNext = node.status === 'unlocked' || node.status === 'in_progress';
-
-                                            return (
-                                                <div key={node.id} className="relative pl-8">
-                                                    {/* Timeline Dot */}
-                                                    <div className={`absolute -left-[9px] top-1 h-5 w-5 rounded-full border-2 flex items-center justify-center bg-white 
-                                                        ${isComplete ? 'border-green-500 text-green-500' :
-                                                            isNext ? 'border-indigo-600 text-indigo-600 ring-4 ring-indigo-50' :
-                                                                'border-gray-300 text-gray-300'}`}>
-                                                        {isComplete ? <CheckCircle className="h-3 w-3" /> :
-                                                            isLocked ? <Lock className="h-3 w-3" /> :
-                                                                <Circle className="h-3 w-3 fill-current" />}
-                                                    </div>
-
-                                                    <div className={`p-4 rounded-lg border transition-all ${isNext ? 'bg-white border-indigo-200 shadow-sm' : 'bg-gray-50 border-gray-100 opacity-80'}`}>
-                                                        <div className="flex justify-between items-start mb-2">
-                                                            <div className="flex items-center gap-2">
-                                                                <span className={`p-1.5 rounded-md ${isNext ? 'bg-indigo-100 text-indigo-700' : 'bg-gray-200 text-gray-500'}`}>
-                                                                    {getNodeIcon(node.resource_type)}
-                                                                </span>
-                                                                <h4 className={`font-semibold ${isComplete ? 'text-gray-700' : 'text-gray-900'}`}>{node.title}</h4>
-                                                            </div>
-                                                            <span className="text-xs font-mono text-muted-foreground">{node.estimated_minutes} min</span>
-                                                        </div>
-
-                                                        {isNext && (
-                                                            <div className="mt-4 flex gap-3">
-                                                                <Button size="sm" onClick={() => handleNodeAction(node)} className="gap-1">
-                                                                    Start Learning <ArrowRight className="h-3 w-3" />
-                                                                </Button>
-                                                            </div>
-                                                        )}
-                                                        {isComplete && (
-                                                            <div className="mt-2 text-xs text-green-600 font-medium flex items-center gap-1">
-                                                                <CheckCircle className="h-3 w-3" /> Completed
-                                                            </div>
-                                                        )}
-                                                    </div>
+                                        <div className="space-y-1 flex-1">
+                                            <div className="flex items-center justify-between">
+                                                <div className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                                                    Step {node.order} • {node.estimated_minutes} min
                                                 </div>
-                                            );
-                                        })}
+                                                {isActive && (
+                                                    <Badge variant="secondary" className="bg-indigo-100 text-indigo-700 text-[10px]">
+                                                        Current
+                                                    </Badge>
+                                                )}
+                                            </div>
+                                            <h3 className="font-bold text-slate-900 group-hover:text-indigo-600 transition-colors">
+                                                {node.title}
+                                            </h3>
+                                            <p className="text-sm text-slate-500 line-clamp-2">
+                                                {node.description}
+                                            </p>
+
+                                            {!isLocked && (
+                                                <Button
+                                                    size="sm"
+                                                    variant={isActive ? "default" : "outline"}
+                                                    className={cn(
+                                                        "mt-3 h-8 w-full",
+                                                        isActive && "bg-indigo-600 hover:bg-indigo-700",
+                                                        isCompleted && "text-green-600 border-green-200 hover:bg-green-50"
+                                                    )}
+                                                >
+                                                    {isCompleted ? "Review Again" : "Start Learning"}
+                                                    {!isCompleted && <ArrowRight className="ml-1 h-3 w-3" />}
+                                                </Button>
+                                            )}
+                                        </div>
                                     </div>
-                                </CardContent>
-                            </>
-                        )}
-                    </Card>
+                                </Card>
+                            </div>
+
+                            {/* Empty space for alternating layout matching */}
+                            <div className="hidden md:block md:w-[45%]" />
+                        </div>
+                    );
+                })}
+            </div>
+
+            {/* Empty State / Completion */}
+            {path.nodes.length > 0 && completedNodes === path.nodes.length && (
+                <div className="text-center py-12 bg-green-50 rounded-2xl border border-green-100 animate-in fade-in zoom-in duration-700">
+                    <div className="inline-flex p-4 bg-green-100 rounded-full mb-4">
+                        <Sparkles className="h-8 w-8 text-green-600" />
+                    </div>
+                    <h2 className="text-2xl font-bold text-green-800">Path Completed!</h2>
+                    <p className="text-green-700 mt-2">You've mastered this learning path. Great job!</p>
+                    <Button
+                        onClick={handleGeneratePath}
+                        className="mt-6 bg-green-600 hover:bg-green-700 text-white"
+                        disabled={generating}
+                    >
+                        {generating ? "Generating..." : "Generate New Challenge"}
+                    </Button>
                 </div>
             )}
-
-            {/* Generate Dialog */}
-            <Dialog open={openGenerate} onOpenChange={setOpenGenerate}>
-                <DialogContent>
-                    <DialogHeader>
-                        <DialogTitle>Generate Personalized Path</DialogTitle>
-                        <DialogDescription>
-                            Our AI will analyze your past performance to create a custom curriculum.
-                        </DialogDescription>
-                    </DialogHeader>
-                    <div className="space-y-4 py-4">
-                        <div className="space-y-2">
-                            <Label>Subject (Optional)</Label>
-                            <Select value={genSubject} onValueChange={setGenSubject}>
-                                <SelectTrigger>
-                                    <SelectValue placeholder="Focus on a specific subject..." />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {subjects.map(s => (
-                                        <SelectItem key={s.id} value={s.id.toString()}>{s.name}</SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        </div>
-                        <div className="space-y-2">
-                            <Label>Topic Focus (Optional)</Label>
-                            <Input
-                                placeholder="e.g. Algebra, World War II, Photosynthesis"
-                                value={genTopic}
-                                onChange={(e) => setGenTopic(e.target.value)}
-                            />
-                        </div>
-                    </div>
-                    <DialogFooter>
-                        <Button variant="outline" onClick={() => setOpenGenerate(false)}>Cancel</Button>
-                        <Button onClick={handleGenerate} disabled={generating} className="bg-indigo-600">
-                            {generating ? 'Generating...' : 'Generate Path'}
-                        </Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
         </div>
     );
 }
