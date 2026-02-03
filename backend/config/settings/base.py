@@ -53,6 +53,7 @@ INSTALLED_APPS = [
     "notifications",
     "library",
     "gamification",
+    "auditlog",
 ]
 
 # Multi-Tenancy Configuration
@@ -94,6 +95,7 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    "auditlog.middleware.AuditlogMiddleware",
 ]
 
 DATABASE_ROUTERS = ['core.routers.TenantDatabaseRouter']
@@ -208,3 +210,13 @@ SIMPLE_JWT = {
     'BLACKLIST_AFTER_ROTATION': False,
 }
 
+# Caching Configuration
+CACHES = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+        "LOCATION": "unique-snowflake",
+    }
+}
+
+# Audit Log Configuration
+AUDITLOG_LOGENTRY_MODEL = 'auditlog.LogEntry'

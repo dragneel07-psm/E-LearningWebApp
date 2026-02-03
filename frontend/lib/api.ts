@@ -232,8 +232,10 @@ export interface Lesson {
     id: number;
     chapter: number;
     title: string;
+    content_type: 'text' | 'video' | 'interactive' | 'quiz';
     content?: string;
     video_url?: string | null;
+    interactive_data?: any;
     order: number;
     is_published: boolean;
     duration_minutes: number;
@@ -398,10 +400,11 @@ export interface Attendance {
     attendance_id: number;
     student: string;
     academic_class: string;
+    subject: number;
     date: string;
     status: 'present' | 'absent' | 'late';
     remarks?: string;
-    course_name?: string; // Optional expansion
+    subject_name?: string; // Correctly maps to backend
 }
 
 export interface FeeStructure {
@@ -729,6 +732,22 @@ export const academicAPI = {
         method: 'DELETE'
     }),
 
+    // Reports
+    getAttendanceSummaryPdf: (sectionId: number, startDate?: string, endDate?: string) => {
+        const params = new URLSearchParams();
+        if (startDate) params.append('start_date', startDate);
+        if (endDate) params.append('end_date', endDate);
+        return `/api/academic/reports/attendance-summary/${sectionId}/?${params.toString()}`;
+    },
+    getAttendanceSummaryExcel: (sectionId: number, startDate?: string, endDate?: string) => {
+        const params = new URLSearchParams();
+        if (startDate) params.append('start_date', startDate);
+        if (endDate) params.append('end_date', endDate);
+        return `/api/academic/reports/attendance-summary-excel/${sectionId}/?${params.toString()}`;
+    },
+    getStudentPerformancePdf: (studentId: string) => `/api/academic/reports/student-performance/${studentId}/`,
+    getStudentPerformanceExcel: (studentId: string) => `/api/academic/reports/student-performance-excel/${studentId}/`,
+
 
 
     // Attendance
@@ -882,6 +901,7 @@ export const academicAPI = {
     deleteAssessment: (id: string) => apiRequest<void>(`/academic/assessments/${id}/`, {
         method: 'DELETE'
     }),
+
 
     // Results
     getResults: (studentId?: string) => {
@@ -1101,6 +1121,7 @@ export const aiAPI = {
         ai_insights: string[];
     }>('/ai/analytics/teacher/'),
     getStudentReport: (studentId: string) => apiRequest<any>(`/ai/reports/student/${studentId}/`),
+    getActivePath: () => apiRequest<LearningPath>('/ai/learning-paths/active/'),
 };
 
 // Notifications API
@@ -1228,18 +1249,49 @@ export const api = {
                 method: 'POST'
             }),
     },
-    gamification: {
-        getStudentBadges: () => apiRequest<StudentBadge[]>('/gamification/student-badges/'),
-        getLeaderboard: () => apiRequest<any[]>('/gamification/leaderboard/'),
-        getPointTransactions: () => apiRequest<PointTransaction[]>('/gamification/student-points/'),
-    },
     reports: {
         getStudentPerformancePDF: (studentId: string) => `${API_BASE_URL}/academic/reports/student-performance/${studentId}/`,
         getStudentPerformanceExcel: (studentId: string) => `${API_BASE_URL}/academic/reports/student-performance-excel/${studentId}/`,
         getAttendanceSummaryPDF: (sectionId: string | number) => `${API_BASE_URL}/academic/reports/attendance-summary/${sectionId}/`,
         getAttendanceSummaryExcel: (sectionId: string | number) => `${API_BASE_URL}/academic/reports/attendance-summary-excel/${sectionId}/`,
-        getFeeCollectionPDF: () => `${API_BASE_URL}/billing/reports/fee-collection/`,
-        getFeeCollectionExcel: () => `${API_BASE_URL}/billing/reports/fee-collection-excel/`,
+        getFeeCollectionPDF: (start?: string, end?: string) => {
+            const query = new URLSearchParams();
+            if (start) query.append('start_date', start);
+            if (end) query.append('end_date', end);
+            return `${API_BASE_URL}/billing/reports/fee-collection/?${query.toString()}`;
+        },
+        getFeeCollectionExcel: (start?: string, end?: string) => {
+            const query = new URLSearchParams();
+            if (start) query.append('start_date', start);
+            if (end) query.append('end_date', end);
+            return `${API_BASE_URL}/billing/reports/fee-collection-excel/?${query.toString()}`;
+        },
+        getPendingFeesPDF: () => `${API_BASE_URL}/billing/reports/pending-fees/`,
+        getPendingFeesExcel: () => `${API_BASE_URL}/billing/reports/pending-fees-excel/`,
+    },
+    settings: {
+        get: () => apiRequest('/core/settings/'),
+        update: (data: any) => apiRequest('/core/settings/', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        }),
+    },
+    backups: {
+        list: () => apiRequest('/core/backups/'),
+        create: (data?: any) => apiRequest('/core/backups/', {
+            method: 'POST',
+            body: JSON.stringify(data || {})
+        }),
+    },
+    auditLogs: {
+        list: () => apiRequest('/core/audit-logs/'),
+    },
+    gamification: {
+        getBadges: () => apiRequest<Badge[]>('/gamification/available-badges/'),
+        getMyBadges: () => apiRequest<StudentBadge[]>('/gamification/student-badges/'),
+        getStudentBadges: () => apiRequest<StudentBadge[]>('/gamification/student-badges/'),
+        getLeaderboard: () => apiRequest<any[]>('/gamification/leaderboard/'),
     },
     helpers: {
         ...helpers,

@@ -9,6 +9,8 @@ from .serializers import (
     FeeStructureSerializer, StudentFeeSerializer, PaymentSerializer, ExpenseSerializer
 )
 from core.mixins import TenantScopedQuerysetMixin
+from django.utils.decorators import method_decorator
+from django.views.decorators.cache import cache_page
 
 class SubscriptionPlanViewSet(viewsets.ModelViewSet):
     queryset = SubscriptionPlan.objects.all()
@@ -141,6 +143,9 @@ class FinanceDashboardViewSet(viewsets.ViewSet):
     """
     permission_classes = [permissions.IsAuthenticated]
     
+    permission_classes = [permissions.IsAuthenticated]
+    
+    @method_decorator(cache_page(60 * 5)) # Cache for 5 minutes
     def list(self, request):
         user = request.user
         tenant = getattr(user, 'tenant', None)
@@ -161,24 +166,45 @@ class FinanceDashboardViewSet(viewsets.ViewSet):
                 'notice': 'No school tenant identified for this session. Showing summary only.'
             })
         
+        # Date Filtering
+        start_date = request.query_params.get('start_date')
+        end_date = request.query_params.get('end_date')
+
+        payments_qs = Payment.objects.filter(tenant=tenant)
+        expenses_qs = Expense.objects.filter(tenant=tenant)
+
+        if start_date:
+            payments_qs = payments_qs.filter(payment_date__date__gte=start_date)
+            expenses_qs = expenses_qs.filter(date__gte=start_date)
+        if end_date:
+            payments_qs = payments_qs.filter(payment_date__date__lte=end_date)
+            expenses_qs = expenses_qs.filter(date__lte=end_date)
+
         # Calculate totals safely
-        revenue_agg = Payment.objects.filter(tenant=tenant).aggregate(total=Sum('amount'))
+        revenue_agg = payments_qs.aggregate(total=Sum('amount'))
         total_revenue = revenue_agg['total'] or 0
         
-        # Pending calculation: Sum(amount_due) - Sum(amount_paid) for unpaid/partial
-        pending_fees = StudentFee.objects.filter(
+        # Pending calculation check (Pending is usually point-in-time, date filtering might mean "fees due in this range"?)
+        # For simplicity, pending is usually 'current status', so we might not strict filter by date unless 'due_date' is in range.
+        # Let's Apply date filter to due_date for pending fees
+        pending_fees_qs = StudentFee.objects.filter(
             tenant=tenant,
-            status__in=['pending', 'partial']
+            status__in=['pending', 'partial', 'overdue']
         )
-        total_due = pending_fees.aggregate(total=Sum('amount_due'))['total'] or 0
-        total_paid_against_pending = pending_fees.aggregate(total=Sum('amount_paid'))['total'] or 0
+        if start_date:
+            pending_fees_qs = pending_fees_qs.filter(due_date__gte=start_date)
+        if end_date:
+            pending_fees_qs = pending_fees_qs.filter(due_date__lte=end_date)
+
+        total_due = pending_fees_qs.aggregate(total=Sum('amount_due'))['total'] or 0
+        total_paid_against_pending = pending_fees_qs.aggregate(total=Sum('amount_paid'))['total'] or 0
         total_pending = max(0, total_due - total_paid_against_pending)
         
-        expense_agg = Expense.objects.filter(tenant=tenant).aggregate(total=Sum('amount'))
+        expense_agg = expenses_qs.aggregate(total=Sum('amount'))
         total_expenses = expense_agg['total'] or 0
         
         # Recent activity
-        recent_payments = Payment.objects.filter(tenant=tenant).select_related('student__user').order_by('-payment_date')[:5]
+        recent_payments = Payment.objects.filter(tenant=tenant).select_related('student__user', 'student_fee__fee_structure').order_by('-payment_date')[:5]
         recent_expenses = Expense.objects.filter(tenant=tenant).order_by('-date')[:5]
         
         return Response({

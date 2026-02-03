@@ -8,7 +8,8 @@ import { Badge } from '@/components/ui/badge';
 import {
     Search, Plus, Filter, Trash2, Edit3,
     Database, Tag, Layers, ChevronRight,
-    CheckCircle2, XCircle, HelpCircle
+    CheckCircle2, XCircle, HelpCircle,
+    ListChecks, Type, FileText
 } from 'lucide-react';
 import { academicAPI, Question } from '@/lib/api';
 import { toast } from 'sonner';
@@ -189,9 +190,3 @@ export default function QuestionBankPage() {
     );
 }
 
-// Stub for FileText which was missing in imports but referenced in thoughts
-function FileText({ className }: { className?: string }) {
-    return <HelpCircle className={className} />;
-}
-
-// Local ListChecks/Type stubs if needed, but they are imported from lucide-react

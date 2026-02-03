@@ -16,7 +16,7 @@ class LessonSummarySerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Lesson
-        fields = ['id', 'chapter', 'title', 'order', 'is_published', 'duration_minutes', 'updated_at', 'completed']
+        fields = ['id', 'chapter', 'title', 'content_type', 'order', 'is_published', 'duration_minutes', 'updated_at', 'completed']
 
     def get_completed(self, obj):
         request = self.context.get('request')
@@ -38,7 +38,8 @@ class LessonDetailSerializer(serializers.ModelSerializer):
     class Meta:
         model = Lesson
         fields = [
-            'id', 'chapter', 'title', 'content', 'video_url', 
+            'id', 'chapter', 'title', 'content_type', 'content', 'video_url', 
+            'interactive_data', 'assessment',
             'order', 'is_published', 'duration_minutes', 'materials', 
             'user_progress', 'created_at', 'updated_at'
         ]

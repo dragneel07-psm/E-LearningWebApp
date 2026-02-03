@@ -111,7 +111,7 @@ export default function LibrarianDashboard() {
     };
 
     const filteredIssues = issues.filter(issue => {
-        const matchesSearch = issue.book_title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        const matchesSearch = (issue.book_title || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
             issue.student_name?.toLowerCase().includes(searchTerm.toLowerCase());
 
         if (activeTab === 'issued') {
@@ -280,7 +280,7 @@ export default function LibrarianDashboard() {
                                             <div className="text-right space-y-1">
                                                 <p className="text-xs text-slate-400">Due Date</p>
                                                 <p className={`text-sm font-medium ${new Date(issue.due_date) < new Date() && issue.status !== 'returned'
-                                                        ? 'text-rose-600' : 'text-slate-700'
+                                                    ? 'text-rose-600' : 'text-slate-700'
                                                     }`}>
                                                     {new Date(issue.due_date).toLocaleDateString()}
                                                 </p>

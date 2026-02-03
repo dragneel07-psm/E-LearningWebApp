@@ -7,3 +7,4 @@ from .profiles import (
     StudentUpdateSerializer,
     ParentSerializer
 )
+from .notice import NoticeSerializer

@@ -1,5 +1,5 @@
 from django.db import models
-from .academic_class import AcademicClass
+from .class_section import AcademicClass
 from .student import Student
 
 class Notice(models.Model):
@@ -15,7 +15,7 @@ class Notice(models.Model):
         ('student', 'Specific Student'),
     ]
 
-    notice_id = models.AutoField(primary_key=True)
+
     title = models.CharField(max_length=255)
     content = models.TextField()
     category = models.CharField(max_length=50, default='General') # e.g., Academic, Event, Holiday

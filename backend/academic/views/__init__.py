@@ -4,5 +4,5 @@ from .lesson import ChapterViewSet, LessonViewSet, LessonMaterialViewSet
 from .assessment import AssessmentViewSet, QuestionViewSet, SubmissionViewSet, ResultViewSet
 from .attendance import AttendanceViewSet
 from .timetable import TimetableViewSet
-from .communications import NoticeViewSet
+from .notice import NoticeViewSet
 from .reports import ReportViewSet

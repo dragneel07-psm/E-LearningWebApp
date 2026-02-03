@@ -13,6 +13,7 @@ import { CreateLessonDialog } from '@/components/create-lesson-dialog';
 import { academicAPI, User, usersAPI, coreAPI, aiAPI } from '@/lib/api';
 import { AITeachingAssistant } from '@/components/ai-teaching-assistant';
 import { MyProfileDialog } from '@/components/my-profile-dialog';
+import { AttendanceTrends } from '@/components/attendance-trends';
 import Link from 'next/link';
 import { BarChart, Bar, XAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
 
@@ -226,34 +227,7 @@ export default function TeacherDashboard() {
                                 </ResponsiveContainer>
                             </CardContent>
                         </Card>
-                        <Card className="border-slate-200 shadow-sm">
-                            <CardHeader className="pb-2">
-                                <CardTitle className="text-sm font-bold text-slate-700">Engagement</CardTitle>
-                            </CardHeader>
-                            <CardContent className="h-[200px] w-full flex items-center justify-center">
-                                <ResponsiveContainer width="100%" height="100%">
-                                    <PieChart>
-                                        <Pie
-                                            data={[
-                                                { name: 'High', value: 45, fill: '#10b981' },
-                                                { name: 'Medium', value: 30, fill: '#3b82f6' },
-                                                { name: 'Low', value: 25, fill: '#f59e0b' }
-                                            ]}
-                                            innerRadius={40}
-                                            outerRadius={60}
-                                            paddingAngle={5}
-                                            dataKey="value"
-                                        >
-                                            <Cell fill="#10b981" />
-                                            <Cell fill="#3b82f6" />
-                                            <Cell fill="#f59e0b" />
-                                        </Pie>
-                                        <Legend iconType="circle" fontSize={10} />
-                                        <Tooltip />
-                                    </PieChart>
-                                </ResponsiveContainer>
-                            </CardContent>
-                        </Card>
+                        <AttendanceTrends />
                     </div>
                 </div>
 

@@ -1,6 +1,9 @@
 from django.contrib import admin
-from .models import AcademicYear, AcademicClass, Section, Student, Teacher, Parent
-# from .models import Course, Lesson, Assessment, Result
+from .models import (
+    AcademicYear, AcademicClass, Section, Student, Teacher, Parent,
+    Subject, Chapter, Lesson, LessonMaterial, LessonProgress,
+    Attendance, Timetable, Assessment, Result, Notice
+)
 
 @admin.register(AcademicYear)
 class AcademicYearAdmin(admin.ModelAdmin):
@@ -33,3 +36,59 @@ class ParentAdmin(admin.ModelAdmin):
     list_display = ('user',)
     raw_id_fields = ('user',)
     filter_horizontal = ('students',)
+
+@admin.register(Subject)
+class SubjectAdmin(admin.ModelAdmin):
+    list_display = ('name', 'academic_class', 'teacher')
+    list_filter = ('academic_class', 'teacher')
+    search_fields = ('name',)
+
+@admin.register(Chapter)
+class ChapterAdmin(admin.ModelAdmin):
+    list_display = ('title', 'subject', 'order')
+    list_filter = ('subject',)
+    ordering = ('subject', 'order')
+
+@admin.register(Lesson)
+class LessonAdmin(admin.ModelAdmin):
+    list_display = ('title', 'chapter', 'content_type', 'order', 'is_published')
+    list_filter = ('chapter__subject', 'content_type', 'is_published')
+    search_fields = ('title', 'content')
+
+@admin.register(LessonMaterial)
+class LessonMaterialAdmin(admin.ModelAdmin):
+    list_display = ('title', 'lesson', 'material_type')
+    list_filter = ('material_type', 'lesson__chapter__subject')
+
+@admin.register(LessonProgress)
+class LessonProgressAdmin(admin.ModelAdmin):
+    list_display = ('student', 'lesson', 'completed', 'last_accessed')
+    list_filter = ('completed', 'lesson__chapter__subject')
+
+@admin.register(Attendance)
+class AttendanceAdmin(admin.ModelAdmin):
+    list_display = ('student', 'subject', 'date', 'status')
+    list_filter = ('status', 'date', 'subject')
+    search_fields = ('student__user__first_name', 'student__user__last_name')
+
+@admin.register(Timetable)
+class TimetableAdmin(admin.ModelAdmin):
+    list_display = ('academic_class', 'day_of_week', 'start_time', 'end_time', 'subject_name')
+    list_filter = ('day_of_week', 'academic_class')
+
+@admin.register(Assessment)
+class AssessmentAdmin(admin.ModelAdmin):
+    list_display = ('title', 'subject', 'type', 'total_marks', 'due_date')
+    list_filter = ('type', 'subject')
+    search_fields = ('title', 'description')
+
+@admin.register(Result)
+class ResultAdmin(admin.ModelAdmin):
+    list_display = ('assessment', 'student', 'score', 'submitted_at')
+    list_filter = ('assessment__subject',)
+
+@admin.register(Notice)
+class NoticeAdmin(admin.ModelAdmin):
+    list_display = ('title', 'category', 'priority', 'published_date')
+    list_filter = ('category', 'priority')
+    search_fields = ('title', 'content')

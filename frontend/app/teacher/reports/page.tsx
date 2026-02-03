@@ -6,9 +6,14 @@ import { Button } from '@/components/ui/button';
 import {
     FileText, Sparkles, Download,
     Send, Filter, Search, ChevronRight,
-    Printer, Loader2, CheckCircle2, BrainCircuit
+    Printer, Loader2, CheckCircle2, BrainCircuit,
+    Calendar, Users, Table as TableIcon
 } from 'lucide-react';
-import { academicAPI, aiAPI, Student } from '@/lib/api';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { academicAPI, aiAPI, Student, AcademicClass, Section } from '@/lib/api';
+import { toast } from 'sonner';
+import { AttendanceTrends } from '@/components/attendance-trends';
 
 export default function TeacherReportsPage() {
     const [students, setStudents] = useState<Student[]>([]);
@@ -34,10 +39,11 @@ export default function TeacherReportsPage() {
     const generateReport = async (studentId: string) => {
         setGenerating(studentId);
         try {
-            const report = await aiAPI.generateStudentReport(studentId);
+            const report = await aiAPI.getStudentReport(studentId);
             setReports(prev => ({ ...prev, [studentId]: report }));
         } catch (err) {
             console.error("Failed to generate report:", err);
+            toast.error("Failed to generate AI report");
         } finally {
             setGenerating(null);
         }
@@ -47,80 +53,280 @@ export default function TeacherReportsPage() {
         <div className="p-8 max-w-7xl mx-auto space-y-8">
             <header className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div className="space-y-1">
-                    <h1 className="text-3xl font-black text-slate-900 tracking-tight">AI Report Manager</h1>
-                    <p className="text-slate-500 font-medium">Generate professional academic summaries in seconds.</p>
-                </div>
-                <div className="flex gap-3">
-                    <Button variant="outline" className="rounded-2xl border-slate-200 font-bold flex gap-2">
-                        <Filter className="h-4 w-4" />
-                        All Classes
-                    </Button>
-                    <Button className="bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-bold flex gap-2 shadow-lg shadow-indigo-100">
-                        <Sparkles className="h-4 w-4" />
-                        Batch Generate
-                    </Button>
+                    <h1 className="text-3xl font-black text-slate-900 tracking-tight">Report Manager</h1>
+                    <p className="text-slate-500 font-medium">Generate professional academic and attendance summaries.</p>
                 </div>
             </header>
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                {/* Student List */}
-                <Card className="lg:col-span-1 border-none shadow-sm rounded-3xl overflow-hidden">
-                    <CardHeader className="border-b border-slate-50">
-                        <div className="relative">
-                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+            <Tabs defaultValue="ai-narrative" className="space-y-6">
+                <TabsList className="bg-slate-100/50 p-1 rounded-2xl border border-slate-200">
+                    <TabsTrigger value="ai-narrative" className="rounded-xl px-6 py-2 font-bold data-[state=active]:bg-white data-[state=active]:shadow-sm">
+                        <Sparkles className="h-4 w-4 mr-2 text-indigo-600" />
+                        AI Narrative
+                    </TabsTrigger>
+                    <TabsTrigger value="attendance" className="rounded-xl px-6 py-2 font-bold data-[state=active]:bg-white data-[state=active]:shadow-sm">
+                        <FileText className="h-4 w-4 mr-2 text-emerald-600" />
+                        Attendance Reports
+                    </TabsTrigger>
+                </TabsList>
+
+                <TabsContent value="ai-narrative">
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                        {/* Student List */}
+                        <Card className="lg:col-span-1 border-none shadow-sm rounded-3xl overflow-hidden">
+                            <CardHeader className="border-b border-slate-50">
+                                <div className="relative">
+                                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                                    <input
+                                        className="w-full pl-10 pr-4 py-2 bg-slate-50 rounded-xl text-sm border-none focus:ring-2 focus:ring-indigo-100 font-medium"
+                                        placeholder="Search students..."
+                                    />
+                                </div>
+                            </CardHeader>
+                            <CardContent className="p-0">
+                                <div className="max-h-[600px] overflow-y-auto divide-y divide-slate-100">
+                                    {students.map((student) => (
+                                        <div
+                                            key={student.id}
+                                            className="p-4 flex items-center justify-between group hover:bg-slate-50 transition-all cursor-pointer"
+                                            onClick={() => generateReport(student.student_id)}
+                                        >
+                                            <div className="flex items-center gap-3">
+                                                <div className="h-10 w-10 rounded-xl bg-indigo-50 flex items-center justify-center font-bold text-indigo-600">
+                                                    {student.first_name.charAt(0)}
+                                                </div>
+                                                <div>
+                                                    <p className="text-sm font-bold text-slate-900">{student.first_name} {student.last_name}</p>
+                                                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-none">Class {student.academic_class}</p>
+                                                </div>
+                                            </div>
+                                            {reports[student.student_id] ? (
+                                                <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                                            ) : (
+                                                <ChevronRight className="h-4 w-4 text-slate-300 group-hover:text-indigo-600 transition-colors" />
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+                            </CardContent>
+                        </Card>
+
+                        {/* Report Preview */}
+                        <div className="lg:col-span-2 space-y-6">
+                            {Object.keys(reports).length === 0 && !generating ? (
+                                <div className="h-full flex flex-col items-center justify-center py-20 bg-slate-50 rounded-[40px] border-4 border-dashed border-white">
+                                    <div className="h-20 w-20 rounded-full bg-white flex items-center justify-center shadow-xl mb-6">
+                                        <FileText className="h-10 w-10 text-slate-200" />
+                                    </div>
+                                    <h3 className="text-xl font-bold text-slate-800">Select a student to begin</h3>
+                                    <p className="text-sm text-slate-500">AI will generate a narrative summary based on all academic data.</p>
+                                </div>
+                            ) : (
+                                <ReportPreview
+                                    student={students.find(s => s.student_id === Object.keys(reports)[0]) as any}
+                                    report={reports[Object.keys(reports)[0]]}
+                                    loading={!!generating}
+                                />
+                            )}
+                        </div>
+                    </div>
+                </TabsContent>
+
+                <TabsContent value="attendance">
+                    <AttendanceReportSection />
+                </TabsContent>
+            </Tabs>
+        </div>
+    );
+}
+
+function AttendanceReportSection() {
+    const [classes, setClasses] = useState<AcademicClass[]>([]);
+    const [selectedClassId, setSelectedClassId] = useState<string>('');
+    const [sections, setSections] = useState<Section[]>([]);
+    const [selectedSectionId, setSelectedSectionId] = useState<string>('');
+    const [loading, setLoading] = useState(true);
+    const [dates, setDates] = useState({
+        start: new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0],
+        end: new Date().toISOString().split('T')[0]
+    });
+
+    useEffect(() => {
+        async function loadClasses() {
+            try {
+                const data = await academicAPI.getClasses();
+                setClasses(data);
+                if (data.length > 0) {
+                    setSelectedClassId(data[0].id.toString());
+                }
+            } catch (err) {
+                console.error("Failed to load classes:", err);
+            } finally {
+                setLoading(false);
+            }
+        }
+        loadClasses();
+    }, []);
+
+    useEffect(() => {
+        if (selectedClassId) {
+            const cls = classes.find(c => c.id.toString() === selectedClassId);
+            if (cls && cls.sections) {
+                setSections(cls.sections);
+                if (cls.sections.length > 0) {
+                    setSelectedSectionId(cls.sections[0].id.toString());
+                } else {
+                    setSelectedSectionId('');
+                }
+            }
+        }
+    }, [selectedClassId, classes]);
+
+    const handleDownload = (format: 'pdf' | 'excel') => {
+        if (!selectedSectionId) {
+            toast.error("Please select a section");
+            return;
+        }
+
+        const url = format === 'pdf'
+            ? academicAPI.getAttendanceSummaryPdf(parseInt(selectedSectionId), dates.start, dates.end)
+            : academicAPI.getAttendanceSummaryExcel(parseInt(selectedSectionId), dates.start, dates.end);
+
+        window.open(url, '_blank');
+    };
+
+    if (loading) {
+        return (
+            <div className="flex justify-center items-center h-64">
+                <Loader2 className="h-8 w-8 animate-spin text-emerald-600" />
+            </div>
+        );
+    }
+
+    return (
+        <div className="space-y-8">
+            <Card className="border-none shadow-sm rounded-3xl overflow-hidden bg-white">
+                <CardHeader className="p-8 border-b border-slate-50 bg-emerald-50/30">
+                    <div className="flex items-center gap-4 mb-2">
+                        <div className="h-12 w-12 rounded-2xl bg-emerald-100 flex items-center justify-center">
+                            <Calendar className="h-6 w-6 text-emerald-600" />
+                        </div>
+                        <div>
+                            <CardTitle className="text-xl font-black text-slate-900">Attendance Summary</CardTitle>
+                            <p className="text-sm text-slate-500 font-medium">Generate point-in-time attendance availability reports.</p>
+                        </div>
+                    </div>
+                </CardHeader>
+                <CardContent className="p-8 space-y-8">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                        <div className="space-y-2">
+                            <label className="text-xs font-black uppercase tracking-widest text-slate-400">Class</label>
+                            <Select value={selectedClassId} onValueChange={setSelectedClassId}>
+                                <SelectTrigger className="rounded-xl border-slate-200">
+                                    <SelectValue placeholder="Select Class" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {classes.map(c => (
+                                        <SelectItem key={c.id} value={c.id.toString()}>{c.name}</SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        <div className="space-y-2">
+                            <label className="text-xs font-black uppercase tracking-widest text-slate-400">Section</label>
+                            <Select value={selectedSectionId} onValueChange={setSelectedSectionId}>
+                                <SelectTrigger className="rounded-xl border-slate-200">
+                                    <SelectValue placeholder="Select Section" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {sections.map(s => (
+                                        <SelectItem key={s.id} value={s.id.toString()}>{s.name}</SelectItem>
+                                    ))}
+                                    {sections.length === 0 && <SelectItem value="none" disabled>No sections</SelectItem>}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        <div className="space-y-2">
+                            <label className="text-xs font-black uppercase tracking-widest text-slate-400">Start Date</label>
                             <input
-                                className="w-full pl-10 pr-4 py-2 bg-slate-50 rounded-xl text-sm border-none focus:ring-2 focus:ring-indigo-100 font-medium"
-                                placeholder="Search students..."
+                                type="date"
+                                className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-100"
+                                value={dates.start}
+                                onChange={(e) => setDates(prev => ({ ...prev, start: e.target.value }))}
                             />
                         </div>
-                    </CardHeader>
-                    <CardContent className="p-0">
-                        <div className="max-h-[600px] overflow-y-auto divide-y divide-slate-100">
-                            {students.map((student) => (
-                                <div
-                                    key={student.id}
-                                    className="p-4 flex items-center justify-between group hover:bg-slate-50 transition-all cursor-pointer"
-                                    onClick={() => generateReport(student.student_id)}
-                                >
-                                    <div className="flex items-center gap-3">
-                                        <div className="h-10 w-10 rounded-xl bg-indigo-50 flex items-center justify-center font-bold text-indigo-600">
-                                            {student.first_name.charAt(0)}
-                                        </div>
-                                        <div>
-                                            <p className="text-sm font-bold text-slate-900">{student.first_name} {student.last_name}</p>
-                                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-none">Class {student.academic_class}</p>
-                                        </div>
-                                    </div>
-                                    {reports[student.student_id] ? (
-                                        <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-                                    ) : (
-                                        <ChevronRight className="h-4 w-4 text-slate-300 group-hover:text-indigo-600 transition-colors" />
-                                    )}
-                                </div>
-                            ))}
+                        <div className="space-y-2">
+                            <label className="text-xs font-black uppercase tracking-widest text-slate-400">End Date</label>
+                            <input
+                                type="date"
+                                className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-100"
+                                value={dates.end}
+                                onChange={(e) => setDates(prev => ({ ...prev, end: e.target.value }))}
+                            />
                         </div>
-                    </CardContent>
-                </Card>
+                    </div>
 
-                {/* Report Preview */}
-                <div className="lg:col-span-2 space-y-6">
-                    {Object.keys(reports).length === 0 && !generating ? (
-                        <div className="h-full flex flex-col items-center justify-center py-20 bg-slate-50 rounded-[40px] border-4 border-dashed border-white">
-                            <div className="h-20 w-20 rounded-full bg-white flex items-center justify-center shadow-xl mb-6">
-                                <FileText className="h-10 w-10 text-slate-200" />
-                            </div>
-                            <h3 className="text-xl font-bold text-slate-800">Select a student to begin</h3>
-                            <p className="text-sm text-slate-500">AI will generate a narrative summary based on all academic data.</p>
+                    <div className="flex flex-wrap gap-4 pt-4">
+                        <Button
+                            onClick={() => handleDownload('pdf')}
+                            className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl font-bold px-8 h-12 flex gap-2 shadow-lg shadow-emerald-100"
+                        >
+                            <Download className="h-4 w-4" />
+                            Download PDF Summary
+                        </Button>
+                        <Button
+                            variant="outline"
+                            onClick={() => handleDownload('excel')}
+                            className="border-slate-200 hover:bg-slate-50 rounded-2xl font-bold px-8 h-12 flex gap-2"
+                        >
+                            <TableIcon className="h-4 w-4 text-emerald-600" />
+                            Export to Excel
+                        </Button>
+                    </div>
+
+                    <div className="bg-slate-50 rounded-3xl p-6 border border-slate-100">
+                        <h4 className="text-sm font-bold text-slate-700 mb-4 flex items-center gap-2">
+                            <Users className="h-4 w-4 text-emerald-500" />
+                            What's included in this report?
+                        </h4>
+                        <ul className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            {[
+                                "Student-wise attendance percentages",
+                                "Total present, absent, and late counts",
+                                "Date range filtering",
+                                "Formatted for professional printing",
+                                "Excel compatible data export",
+                                "Automated percentage calculations"
+                            ].map((item, i) => (
+                                <li key={i} className="text-xs text-slate-500 flex items-center gap-2 font-medium">
+                                    <div className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                                    {item}
+                                </li>
+                            ))}
+                        </ul>
+                    </div>
+                </CardContent>
+            </Card>
+
+            {selectedSectionId && (
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                    <AttendanceTrends sectionId={parseInt(selectedSectionId)} />
+                    <div className="bg-gradient-to-br from-slate-900 to-indigo-950 rounded-[40px] p-10 text-white flex flex-col justify-center items-center text-center space-y-6">
+                        <div className="h-16 w-16 rounded-2xl bg-white/10 flex items-center justify-center backdrop-blur-md">
+                            <Sparkles className="h-8 w-8 text-indigo-300" />
                         </div>
-                    ) : (
-                        <ReportPreview
-                            student={students.find(s => s.student_id === Object.keys(reports)[0]) as any}
-                            report={reports[Object.keys(reports)[0]]}
-                            loading={!!generating}
-                        />
-                    )}
+                        <div className="space-y-2">
+                            <h3 className="text-2xl font-black italic">AI Attendance Insights</h3>
+                            <p className="text-slate-400 font-medium max-w-xs">
+                                Switch to the AI Narrative tab to see detailed behavioral analysis including attendance streaks and focus metrics.
+                            </p>
+                        </div>
+                        <Button variant="outline" className="rounded-2xl border-white/20 hover:bg-white/10 text-white font-bold h-12 px-8">
+                            View Behavioral AI
+                        </Button>
+                    </div>
                 </div>
-            </div>
+            )}
         </div>
     );
 }

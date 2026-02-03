@@ -117,6 +117,39 @@ class SubmissionViewSet(viewsets.ModelViewSet):
             'result_id': result.result_id
         })
 
+    @action(detail=True, methods=['post'])
+    def grade(self, request, pk=None):
+        """
+        Manually grade a submission (Teacher only).
+        """
+        submission = self.get_object()
+        score = request.data.get('score')
+        feedback = request.data.get('feedback')
+        status_val = request.data.get('status', 'graded')
+        
+        # Update Result
+        result = Result.objects.filter(assessment=submission.assessment, student=submission.student).first()
+        if not result:
+            # Create if missing
+            result = Result.objects.create(
+                assessment=submission.assessment, 
+                student=submission.student, 
+                score=score or 0
+            )
+        
+        if score is not None:
+            result.score = int(score)
+        if feedback:
+            result.teacher_feedback = feedback
+        result.save()
+        
+        # Update Submission Status
+        if hasattr(submission, 'status'):
+            submission.status = status_val
+            submission.save()
+            
+        return Response({'status': 'graded', 'score': result.score})
+
 class ResultViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = Result.objects.all()
     serializer_class = ResultSerializer

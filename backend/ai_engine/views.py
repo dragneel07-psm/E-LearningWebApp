@@ -6,11 +6,13 @@ from rest_framework.permissions import IsAuthenticated
 from django.shortcuts import get_object_or_404
 from .models import AIInteractionLog, StudentAIReport, LearningPath, LearningNode
 from .serializers import AIInteractionLogSerializer, StudentAIReportSerializer, LearningPathSerializer, LearningNodeSerializer
+from users.models import UserAccount
 from academic.models import Student, Subject, Teacher, Result
 from django.utils import timezone
 from core.mixins import TenantScopedQuerysetMixin
 from .services.tutor_service import AITutorService
 from .services.personalization_service import PersonalizationService
+from .services.learning_path_service import LearningPathService
 from .services.predictive_service import PredictiveAnalyticsService
 from .services.predictive_service import PredictiveAnalyticsService
 from .services.reporting_service import ReportingService
@@ -36,14 +38,15 @@ class StudyEventViewSet(TenantScopedQuerysetMixin, viewsets.ModelViewSet):
 
     @action(detail=False, methods=['post'])
     def generate(self, request):
+        db_alias = getattr(request, 'db_alias', 'default')
         try:
-            student = Student.objects.get(user=request.user)
+            student = Student.objects.using(db_alias).get(user=request.user)
             service = ScheduleService()
-            events = service.generate_study_schedule(student)
+            events = service.generate_study_schedule(student, using=db_alias)
             serializer = self.get_serializer(events, many=True)
             return Response(serializer.data)
         except Student.DoesNotExist:
-             return Response({'error': 'Student profile not found'}, status=status.HTTP_404_NOT_FOUND)
+             return Response({'error': 'Student profile not found'}, status=404)
         except Exception as e:
             return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
@@ -95,100 +98,55 @@ class LearningPathViewSet(TenantScopedQuerysetMixin, viewsets.ModelViewSet):
         student_id = request.data.get('student_id')
         subject_id = request.data.get('subject_id')
         
-        if not student_id:
-             # Auto-detect if student user
-            if hasattr(request.user, 'role') and request.user.role == 'student':
-                 try:
-                    student = Student.objects.get(user=request.user)
-                    student_id = student.id
-                 except:
-                    return Response({'error': 'Student profile not found'}, status=400)
-            else:
-                 return Response({'error': 'student_id is required'}, status=400)
+        db_alias = getattr(request, 'db_alias', 'default')
 
         try:
-            student = Student.objects.get(pk=student_id)
-            tenant = student.user.tenant
+            if student_id:
+                student = Student.objects.using(db_alias).get(pk=student_id)
+            else:
+                student = Student.objects.using(db_alias).get(user=request.user)
         except Student.DoesNotExist:
             return Response({'error': 'Student not found'}, status=404)
 
-        # Generate Title
-        title = f"Path for {student.user.first_name} - {timezone.now().date()}"
         subject = None
         if subject_id:
             try:
-                subject = Subject.objects.get(pk=subject_id)
-                title = f"{subject.name} Mastery Path"
+                subject = Subject.objects.using(db_alias).get(pk=subject_id)
             except Subject.DoesNotExist:
                 pass
 
         try:
-            # Create Path
-            path = LearningPath.objects.create(
-                tenant=tenant,
-                student=student,
-                subject=subject,
-                title=title,
-                description="AI-generated personalized learning path based on recent performance."
-            )
+            service = LearningPathService()
+            path = service.generate_path(student, subject)
             
-            nodes_created = 0
-            
-            # Strategy A: Remedial (Low Scores)
-            # Find assessments with score < 70%
-            subject_filter = {}
-            if subject_id:
-                subject_filter['assessment__subject_id'] = subject_id
-
-            low_results = Result.objects.filter(
-                student=student, 
-                score__lt=70,
-                **subject_filter
-            ).select_related('assessment').order_by('-submitted_at')[:3]
-            
-            for res in low_results:
-                assessment = res.assessment
-                LearningNode.objects.create(
-                    learning_path=path,
-                    title=f"Review: {assessment.title}",
-                    description=f"Score: {res.score}%. Recommended review.",
-                    resource_type='topic',
-                    order=nodes_created + 1,
-                    status='unlocked' if nodes_created == 0 else 'locked',
-                    estimated_minutes=30
-                )
-                nodes_created += 1
-                
-            # Strategy B: Next Uncompleted Lessons
-            # If subject is specified, pick next lessons. If not, pick from enrolled class subjects.
-            from academic.models import Lesson
-            
-            lesson_filter = {}
-            if subject_id:
-                lesson_filter['chapter__subject_id'] = subject_id
-            elif student.academic_class:
-                lesson_filter['chapter__subject__academic_class'] = student.academic_class
-            
-            # This serves as a simple recommendation: grab first 3 lessons
-            # In a real app, we'd filter out lessons the student has already completed (LessonProgress)
-            rec_lessons = Lesson.objects.filter(**lesson_filter).order_by('chapter__subject', 'order')[:3]
-            
-            for lesson in rec_lessons:
-                 # Avoid duplicates if we already added a node for this (unlikely in this simple logic but good practice)
-                 LearningNode.objects.create(
-                    learning_path=path,
-                    title=f"Learn: {lesson.title}",
-                    description="Recommended new topic.",
-                    resource_type='video', # Defaulting to video
-                    lesson=lesson,
-                    order=nodes_created + 1,
-                    status='unlocked' if nodes_created == 0 else 'locked',
-                    estimated_minutes=lesson.duration_minutes
-                )
-                 nodes_created += 1
-
             serializer = self.get_serializer(path)
             return Response(serializer.data, status=status.HTTP_201_CREATED)
+            
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    @action(detail=False, methods=['get'])
+    def active(self, request):
+        """
+        Get the current active learning path for the student.
+        """
+        db_alias = getattr(request, 'db_alias', 'default')
+        try:
+            student = Student.objects.using(db_alias).get(user=request.user)
+            service = LearningPathService()
+            path = service.get_active_path(student)
+            
+            if not path:
+                return Response({'detail': 'No active path found'}, status=status.HTTP_404_NOT_FOUND)
+                
+            serializer = self.get_serializer(path)
+            return Response(serializer.data)
+        except Student.DoesNotExist:
+            return Response({'error': 'Student not found'}, status=404)
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
             
         except Exception as e:
             import traceback
@@ -227,17 +185,41 @@ def teacher_analytics(request):
     Teacher-facing predictive analytics.
     """
     try:
-        # Check if user is a teacher
-        teacher = Teacher.objects.get(user=request.user)
-        class_ids = teacher.assigned_classes.values_list('id', flat=True)
+        # Get tenant and DB alias from request
+        db_alias = getattr(request, 'db_alias', 'default')
+        
+        # 1. Try Lookup by PK (Direct FK)
+        teacher = Teacher.objects.using(db_alias).filter(user_id=request.user.pk).first()
+        
+        # 2. Fallback to Email lookup in Local DB
+        if not teacher:
+             try:
+                 local_user = UserAccount.objects.using(db_alias).get(email=request.user.email)
+                 teacher = Teacher.objects.using(db_alias).filter(user=local_user).first()
+             except UserAccount.DoesNotExist:
+                 pass
+        
+        if not teacher:
+             return Response({
+                 'error': 'Teacher profile not found in this tenant',
+                 'debug': {
+                     'user_id': str(request.user.pk),
+                     'email': request.user.email,
+                     'db_alias': db_alias
+                 }
+             }, status=404)
+
+        class_ids = teacher.assigned_classes.using(db_alias).values_list('id', flat=True)
         
         service = PredictiveAnalyticsService()
-        data = service.get_teacher_dashboard_data(list(class_ids))
+        data = service.get_teacher_dashboard_data(list(class_ids), using=db_alias)
         return Response(data)
     except Teacher.DoesNotExist:
-        return Response({'error': 'Teacher profile not found'}, status=status.HTTP_404_NOT_FOUND)
+        return Response({'error': 'Teacher profile not found'}, status=404)
     except Exception as e:
-        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        import traceback
+        traceback.print_exc()
+        return Response({'error': str(e)}, status=500)
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])

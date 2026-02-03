@@ -23,10 +23,21 @@ class Lesson(models.Model):
     """
     A specific Lesson within a Chapter. Contains the core content.
     """
+    CONTENT_TYPE_CHOICES = [
+        ('text', 'Text/Article'),
+        ('video', 'Video'),
+        ('interactive', 'Interactive'),
+        ('quiz', 'Quiz/Assessment'),
+    ]
+
     chapter = models.ForeignKey(Chapter, on_delete=models.CASCADE, related_name='lessons')
     title = models.CharField(max_length=200)
+    content_type = models.CharField(max_length=20, choices=CONTENT_TYPE_CHOICES, default='text')
     content = models.TextField(blank=True, help_text="Rich text content (HTML/Markdown)")
     video_url = models.URLField(blank=True, null=True, help_text="Link to video lecture (YouTube/Vimeo)")
+    interactive_data = models.JSONField(blank=True, null=True, help_text="JSON payload for interactive content")
+    assessment = models.ForeignKey('academic.Assessment', on_delete=models.SET_NULL, null=True, blank=True, related_name='linked_lessons', help_text="Linked Quiz/Assessment")
+    
     order = models.PositiveIntegerField(default=0)
     is_published = models.BooleanField(default=False)
     duration_minutes = models.PositiveIntegerField(default=45, help_text="Estimated duration")

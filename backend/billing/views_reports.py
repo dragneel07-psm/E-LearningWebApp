@@ -2,8 +2,9 @@ from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from django.utils import timezone
-from django.db.models import Sum
-from .models import Payment
+from django.db.models import Sum, Q, F
+from django.db import models
+from .models import Payment, StudentFee
 from core.reports import generate_pdf_response, generate_excel_response
 
 class BillingReportViewSet(viewsets.ViewSet):
@@ -13,8 +14,16 @@ class BillingReportViewSet(viewsets.ViewSet):
     
     @action(detail=False, methods=['get'], url_path='fee-collection')
     def fee_collection_pdf(self, request):
-        # Optional date filtering could be added here
+        start_date = request.query_params.get('start_date')
+        end_date = request.query_params.get('end_date')
+        
         payments = Payment.objects.all().select_related('student', 'student_fee__fee_structure').order_by('-payment_date')
+        
+        if start_date:
+            payments = payments.filter(payment_date__date__gte=start_date)
+        if end_date:
+            payments = payments.filter(payment_date__date__lte=end_date)
+            
         
         total_amount = payments.aggregate(total=Sum('amount'))['total'] or 0
         
@@ -29,7 +38,7 @@ class BillingReportViewSet(viewsets.ViewSet):
             'currency': 'USD', # Should be dynamic from settings/plan
             'school_name': request.headers.get('x-tenant-id', 'Our School').capitalize(),
             'date': timezone.now().strftime("%B %d, %Y"),
-            'start_date': "All Time",
+            'start_date': start_date or "All Time",
             'end_date': timezone.now().strftime("%Y-%m-%d")
         }
         
@@ -42,7 +51,15 @@ class BillingReportViewSet(viewsets.ViewSet):
 
     @action(detail=False, methods=['get'], url_path='fee-collection-excel')
     def fee_collection_excel(self, request):
+        start_date = request.query_params.get('start_date')
+        end_date = request.query_params.get('end_date')
+        
         payments = Payment.objects.all().select_related('student', 'student_fee__fee_structure').order_by('-payment_date')
+        
+        if start_date:
+            payments = payments.filter(payment_date__date__gte=start_date)
+        if end_date:
+            payments = payments.filter(payment_date__date__lte=end_date)
         
         data = []
         for p in payments:
@@ -57,5 +74,54 @@ class BillingReportViewSet(viewsets.ViewSet):
             
         columns = ['Date', 'Student', 'Fee Type', 'Method', 'Transaction ID', 'Amount']
         filename = f"fee_collection_report_{timezone.now().strftime('%Y%m%d')}.xlsx"
+        
+        return generate_excel_response(data, columns, filename)
+
+    @action(detail=False, methods=['get'], url_path='pending-fees')
+    def pending_fees_pdf(self, request):
+        # List all pending fees
+        pending_fees = StudentFee.objects.filter(
+            status__in=['pending', 'partial', 'overdue']
+        ).select_related('student', 'fee_structure').order_by('due_date')
+        
+        total_due = pending_fees.aggregate(
+            total=Sum(models.F('amount_due') - models.F('amount_paid'))
+        )['total'] or 0
+        
+        context = {
+            'pending_fees': pending_fees,
+            'total_due': total_due,
+            'count': pending_fees.count(),
+            'school_name': request.headers.get('x-tenant-id', 'Our School').capitalize(),
+            'date': timezone.now().strftime("%B %d, %Y"),
+        }
+        
+        filename = f"pending_fees_report_{timezone.now().strftime('%Y%m%d')}.pdf"
+        response = generate_pdf_response('reports/pending_fees.html', context, filename)
+        
+        if response:
+            return response
+        return Response({"error": "Failed to generate report"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    @action(detail=False, methods=['get'], url_path='pending-fees-excel')
+    def pending_fees_excel(self, request):
+        pending_fees = StudentFee.objects.filter(
+            status__in=['pending', 'partial', 'overdue']
+        ).select_related('student', 'fee_structure').order_by('due_date')
+        
+        data = []
+        for f in pending_fees:
+            data.append({
+                'Student': f"{f.student.first_name} {f.student.last_name}",
+                'Fee Type': f.fee_structure.name,
+                'Due Date': f.due_date.strftime("%Y-%m-%d"),
+                'Status': f.get_status_display(),
+                'Amount Due': float(f.amount_due),
+                'Amount Paid': float(f.amount_paid),
+                'Balance': float(f.amount_due - f.amount_paid)
+            })
+            
+        columns = ['Student', 'Fee Type', 'Due Date', 'Status', 'Amount Due', 'Amount Paid', 'Balance']
+        filename = f"pending_fees_report_{timezone.now().strftime('%Y%m%d')}.xlsx"
         
         return generate_excel_response(data, columns, filename)

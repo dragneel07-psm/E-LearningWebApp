@@ -10,7 +10,12 @@ import random
 
 from .utils.tenant_db import provision_tenant_db, get_tenant_db_alias
 from .utils.tenant_users import create_tenant_admin
+from .utils.tenant_users import create_tenant_admin
 from django.conf import settings
+from django.core.management import call_command
+import os
+import glob
+from datetime import datetime
 
 class TenantCheckView(APIView):
     permission_classes = [permissions.AllowAny]
@@ -101,6 +106,15 @@ class GlobalSettingsViewSet(viewsets.ViewSet):
             serializer.save()
             return Response(serializer.data)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def update(self, request, pk=None):
+        # Handle PUT/PATCH explicitly if router calls it
+        settings, _ = GlobalSettings.objects.get_or_create(pk=1)
+        serializer = GlobalSettingsSerializer(settings, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
     # We can also support update/partial_update if the router expects it, but 'list' and 'create' covers GET/POST for singleton.
     # Actually, often 'list' is mapped to GET / and 'create' to POST /.
@@ -136,3 +150,51 @@ class SystemStatusView(APIView):
                 "percent": round((used / total) * 100, 1)
             }
         })
+
+class BackupViewSet(viewsets.ViewSet):
+    permission_classes = [permissions.IsAdminUser]
+
+    def list(self, request):
+        backup_dir = os.path.join(settings.BASE_DIR, 'backups')
+        os.makedirs(backup_dir, exist_ok=True)
+        
+        files = glob.glob(os.path.join(backup_dir, "*.sqlite3"))
+        files.sort(key=os.path.getmtime, reverse=True)
+        
+        backups = []
+        for f in files:
+            stats = os.stat(f)
+            backups.append({
+                "filename": os.path.basename(f),
+                "created_at": datetime.fromtimestamp(stats.st_mtime),
+                "size_bytes": stats.st_size,
+                "size_mb": round(stats.st_size / (1024 * 1024), 2)
+            })
+            
+        return Response(backups)
+
+    def create(self, request):
+        # Trigger backup for current tenant or all?
+        # For simplicity, let's backup ALL or allow param.
+        # User might be on a tenant domain -> backup that tenant.
+        
+        schema = request.data.get('schema')
+        
+        try:
+            if schema:
+                call_command('backup_tenant', schema=schema)
+            elif request.tenant.schema_name != 'public':
+                call_command('backup_tenant', schema=request.tenant.schema_name)
+            else:
+                # If on public/admin, maybe backup all? Or require schema.
+                # Let's default to backing up 'demo' if nothing specified for ease of use in dev
+                # Or better: verify 'all' param
+                if request.data.get('all'):
+                    call_command('backup_tenant', all=True)
+                else:
+                    # Default behavior for admin panel: Backup demo tenant if no schema
+                    call_command('backup_tenant', schema='demo') 
+                    
+            return Response({"status": "Backup created successfully"})
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

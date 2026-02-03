@@ -117,37 +117,62 @@ export default function StudentSchedulePage() {
                                 {format(parseISO(date), 'EEEE, MMMM do')}
                             </h3>
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                                {groupedEvents[date].map((event: any) => (
-                                    <Card key={event.id} className={`transition-all ${event.is_completed ? 'opacity-60 bg-muted/50' : 'hover:shadow-md'}`}>
-                                        <CardHeader className="pb-2">
-                                            <div className="flex justify-between items-start">
-                                                <Badge variant={event.event_type === 'study' ? 'default' : 'secondary'}>
-                                                    {event.event_type === 'study' ? 'Self Study' : event.event_type}
-                                                </Badge>
-                                                <Checkbox
-                                                    checked={event.is_completed}
-                                                    onCheckedChange={() => toggleComplete(event.id, event.is_completed)}
-                                                />
-                                            </div>
-                                            <CardTitle className={`text-base mt-2 ${event.is_completed ? 'line-through' : ''}`}>
-                                                {event.title}
-                                            </CardTitle>
-                                            <CardDescription>
-                                                {format(parseISO(event.start_time), 'h:mm a')} - {format(parseISO(event.end_time), 'h:mm a')}
-                                            </CardDescription>
-                                        </CardHeader>
-                                        <CardContent>
-                                            <p className="text-sm text-foreground/80 mb-3 line-clamp-2">
-                                                {event.description}
-                                            </p>
-                                            {event.is_completed && (
-                                                <div className="flex items-center text-green-600 text-xs font-medium">
-                                                    <CheckCircle2 className="h-3 w-3 mr-1" /> Completed
+                                {groupedEvents[date].map((event: any) => {
+                                    const isExam = event.event_type === 'exam';
+                                    const isRemedial = event.title.includes('Remedial');
+
+                                    return (
+                                        <Card key={event.id} className={`transition-all ${event.is_completed ? 'opacity-60 bg-muted/50' : 'hover:shadow-md border-l-4'} ${isExam ? 'border-l-destructive' : isRemedial ? 'border-l-orange-500' : 'border-l-primary'
+                                            }`}>
+                                            <CardHeader className="pb-2">
+                                                <div className="flex justify-between items-start">
+                                                    <Badge className={
+                                                        isExam ? 'bg-destructive hover:bg-destructive' :
+                                                            isRemedial ? 'bg-orange-500 hover:bg-orange-600' :
+                                                                'bg-primary'
+                                                    }>
+                                                        {isExam ? 'High Priority: Exam' : isRemedial ? 'Remedial Focus' : 'Self Study'}
+                                                    </Badge>
+                                                    <Checkbox
+                                                        checked={event.is_completed}
+                                                        onCheckedChange={() => toggleComplete(event.id, event.is_completed)}
+                                                    />
                                                 </div>
-                                            )}
-                                        </CardContent>
-                                    </Card>
-                                ))}
+                                                <CardTitle className={`text-base mt-2 ${event.is_completed ? 'line-through' : ''}`}>
+                                                    {event.title}
+                                                </CardTitle>
+                                                <CardDescription className="flex items-center gap-1">
+                                                    <Loader2 className="h-3 w-3 animate-pulse text-muted-foreground" />
+                                                    {format(parseISO(event.start_time), 'h:mm a')} - {format(parseISO(event.end_time), 'h:mm a')}
+                                                </CardDescription>
+                                            </CardHeader>
+                                            <CardContent>
+                                                <div className="space-y-3">
+                                                    <p className="text-sm text-foreground/80 line-clamp-2">
+                                                        {event.description.split('\nFocus:')[0]}
+                                                    </p>
+
+                                                    {event.description.includes('Focus:') && (
+                                                        <div className="bg-primary/5 p-2 rounded-md border border-primary/10">
+                                                            <p className="text-xs font-semibold text-primary mb-1 uppercase tracking-wider flex items-center gap-1">
+                                                                <BookOpen className="h-3 w-3" /> Learning Path Focus
+                                                            </p>
+                                                            <p className="text-xs text-foreground/90 italic">
+                                                                {event.description.split('Focus:')[1]}
+                                                            </p>
+                                                        </div>
+                                                    )}
+
+                                                    {event.is_completed && (
+                                                        <div className="flex items-center text-green-600 text-xs font-medium">
+                                                            <CheckCircle2 className="h-3 w-3 mr-1" /> Completed
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </CardContent>
+                                        </Card>
+                                    );
+                                })}
                             </div>
                         </div>
                     ))}

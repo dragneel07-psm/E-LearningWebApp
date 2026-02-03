@@ -16,7 +16,7 @@ import { toast } from 'sonner';
 export default function teacherAssessmentResultsPage() {
     const router = useRouter();
     const params = useParams();
-    const assessmentId = params.id as string;
+    const assessmentId = params.assessmentId as string;
 
     const [loading, setLoading] = useState(true);
     const [assessment, setAssessment] = useState<Assessment | null>(null);

@@ -36,6 +36,7 @@
     "@types/react-syntax-highlighter": "^15.5.13",
     "@types/recharts": "^2.0.1",
     "axios": "^1.13.2",
+    "canvas-confetti": "^1.9.4",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "date-fns": "^4.1.0",
@@ -52,6 +53,7 @@
     "react-dom": "19.2.3",
     "react-hook-form": "^7.71.1",
     "react-markdown": "^10.1.0",
+    "react-player": "^2.16.1",
     "react-quill": "^2.0.0",
     "react-syntax-highlighter": "^16.1.0",
     "recharts": "^3.6.0",
@@ -61,6 +63,7 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
+    "@types/canvas-confetti": "^1.9.0",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",

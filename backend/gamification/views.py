@@ -41,8 +41,8 @@ class LeaderboardViewSet(viewsets.ViewSet):
                 return Response({'error': 'Student not assigned to a class'}, status=400)
 
             # Aggregate points and badge counts per student in the same class
-            # This is a bit complex in multi-db setup, assuming we are in correct context
-            leaderboard_data = Student.objects.filter(academic_class=academic_class).annotate(
+            # We use select_related('user') to optimize and also to inadvertently filter out orphaned students (INNER JOIN)
+            leaderboard_data = Student.objects.filter(academic_class=academic_class).select_related('user').annotate(
                 total_points=Sum('points__points'),
                 badges_count=Count('badges', distinct=True)
             ).order_by('-total_points')[:50]

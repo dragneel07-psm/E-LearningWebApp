@@ -11,35 +11,31 @@ class PredictiveAnalyticsService:
         """
         Generate predictive analytics for a list of academic class IDs.
         """
-        try:
-            if not class_ids:
-                return {
-                    "at_risk_count": 0,
-                    "at_risk_students": [],
-                    "performance_trends": [],
-                    "topic_mastery": [],
-                    "ai_insights": ["You haven't been assigned any classes yet."]
-                }
-
-            # 1. Identify Students at Risk
-            risk_students = self._identify_at_risk_students(class_ids, using=using)
-            
-            # 2. Performance Trends (Last 4 weeks)
-            trends = self._calculate_performance_trends(class_ids, using=using)
-            
-            # 3. Topic Mastery Predictions
-            topic_mastery = self._calculate_topic_mastery(class_ids, using=using)
-
+        if not class_ids:
             return {
-                "at_risk_count": len(risk_students),
-                "at_risk_students": risk_students[:5], # Top 5 highest risk
-                "performance_trends": trends,
-                "topic_mastery": topic_mastery,
-                "ai_insights": self._generate_ai_insights(risk_students, topic_mastery)
+                "at_risk_count": 0,
+                "at_risk_students": [],
+                "performance_trends": [],
+                "topic_mastery": [],
+                "ai_insights": ["You haven't been assigned any classes yet."]
             }
-        except Exception as e:
-            print(f"Predictive Analytics Error: {e}")
-            return {"error": str(e)}
+
+        # 1. Identify Students at Risk
+        risk_students = self._identify_at_risk_students(class_ids, using=using)
+        
+        # 2. Performance Trends (Last 4 weeks)
+        trends = self._calculate_performance_trends(class_ids, using=using)
+        
+        # 3. Topic Mastery Predictions
+        topic_mastery = self._calculate_topic_mastery(class_ids, using=using)
+
+        return {
+            "at_risk_count": len(risk_students),
+            "at_risk_students": risk_students[:5], # Top 5 highest risk
+            "performance_trends": trends,
+            "topic_mastery": topic_mastery,
+            "ai_insights": self._generate_ai_insights(risk_students, topic_mastery)
+        }
 
     def get_teacher_analytics(self, teacher_user, using='default'):
         """
@@ -63,19 +59,29 @@ class PredictiveAnalyticsService:
         Identify students with low grades or declining attendance.
         """
         risk_list = []
-        students = Student.objects.using(using).filter(academic_class_id__in=class_ids)
+        # Use select_related to join with user table and avoid DoesNotExist later
+        students = Student.objects.using(using).filter(academic_class_id__in=class_ids).select_related('user')
         
         for student in students:
+            # Skip students without a valid user record in this DB
+            try:
+                if not student.user:
+                    continue
+            except Exception:
+                continue
+
             reasons = []
             risk_score = 0
             
             # Check Grades (avg < 50%)
             results = Result.objects.using(using).filter(student=student).select_related('assessment')
             if results.exists():
-                total_percentage = sum((r.score / r.assessment.total_marks) * 100 for r in results) / results.count()
-                if total_percentage < 55:
-                    risk_score += 35
-                    reasons.append(f"Low average grade ({round(total_percentage)}%)")
+                valid_results = [r for r in results if r.assessment.total_marks > 0]
+                if valid_results:
+                    total_percentage = sum((r.score / r.assessment.total_marks) * 100 for r in valid_results) / len(valid_results)
+                    if total_percentage < 55:
+                        risk_score += 35
+                        reasons.append(f"Low average grade ({round(total_percentage)}%)")
             
             # Check Attendance (last 30 days)
             thirty_days_ago = timezone.now() - timedelta(days=30)
@@ -131,12 +137,20 @@ class PredictiveAnalyticsService:
             
             if avg.exists():
                 # Percentages
-                p_avg = sum((r.score / r.assessment.total_marks) * 100 for r in avg) / avg.count()
-                weeks.append({
-                    "week": f"Week {5-i}",
-                    "avgScore": round(p_avg),
-                    "classAvg": 70 # Standard/Target
-                })
+                valid_avg = [r for r in avg if r.assessment.total_marks > 0]
+                if valid_avg:
+                    p_avg = sum((r.score / r.assessment.total_marks) * 100 for r in valid_avg) / len(valid_avg)
+                    weeks.append({
+                        "week": f"Week {5-i}",
+                        "avgScore": round(p_avg),
+                        "classAvg": 70 # Standard/Target
+                    })
+                else:
+                    weeks.append({
+                        "week": f"Week {5-i}",
+                        "avgScore": 0,
+                        "classAvg": 70
+                    })
             else:
                 weeks.append({
                     "week": f"Week {5-i}",
@@ -154,11 +168,13 @@ class PredictiveAnalyticsService:
         for sub in subjects:
             results = Result.objects.using(using).filter(assessment__subject=sub).select_related('assessment')
             if results.exists():
-                avg_p = sum((r.score / r.assessment.total_marks) * 100 for r in results) / results.count()
-                mastery.append({
-                    "topic": sub.name,
-                    "score": round(avg_p)
-                })
+                valid_res = [r for r in results if r.assessment.total_marks > 0]
+                if valid_res:
+                    avg_p = sum((r.score / r.assessment.total_marks) * 100 for r in valid_res) / len(valid_res)
+                    mastery.append({
+                        "topic": sub.name,
+                        "score": round(avg_p)
+                    })
         return mastery
 
     def _generate_ai_insights(self, risk_students, topic_mastery):

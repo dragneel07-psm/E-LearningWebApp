@@ -1,253 +1,277 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
-import { api, LearningPath, LearningNode } from '@/lib/api';
-import { toast } from 'sonner';
 import {
-    BrainCircuit, BookOpen, PlayCircle, FileText, CheckCircle2,
-    Lock, ArrowRight, Loader2, Sparkles
+    BrainCircuit, Sparkles, ChevronRight, CheckCircle2,
+    Lock, PlayCircle, Clock, RefreshCw, AlertCircle,
+    BookOpen, Video, FileText, HelpCircle
 } from 'lucide-react';
-import { cn } from '@/lib/utils';
-import { useRouter } from 'next/navigation';
+import { aiAPI, learningPathsAPI, academicAPI, LearningPath, LearningNode } from '@/lib/api';
+import { toast } from 'sonner';
 
 export default function LearningPathPage() {
-    const [loading, setLoading] = useState(true);
-    const [path, setPath] = useState<LearningPath | null>(null);
-    const [generating, setGenerating] = useState(false);
     const router = useRouter();
+    const [path, setPath] = useState<LearningPath | null>(null);
+    const [loading, setLoading] = useState(true);
+    const [generating, setGenerating] = useState(false);
+    const [studentId, setStudentId] = useState('');
 
     useEffect(() => {
-        loadPath();
+        loadData();
     }, []);
 
-    async function loadPath() {
+    const loadData = async () => {
         try {
-            const paths = await api.learningPaths.getPaths();
-            // Get the most recent active path
-            const activePath = paths.find(p => p.is_active) || paths[0];
-            setPath(activePath || null);
-        } catch (error) {
-            console.error('Failed to load learning path', error);
-            toast.error('Failed to load your learning path');
+            setLoading(true);
+            const student = await academicAPI.getMyStudent();
+            setStudentId(student.id);
+
+            const activePath = await aiAPI.getActivePath();
+            setPath(activePath);
+        } catch (error: any) {
+            console.error("Path load error:", error);
+            if (error.status !== 404) {
+                toast.error("Failed to load learning path.");
+            }
         } finally {
             setLoading(false);
         }
-    }
+    };
 
-    const handleGeneratePath = async () => {
-        setGenerating(true);
+    const handleGenerate = async () => {
+        if (!studentId) return;
         try {
-            const student = await api.academic.getMyStudent();
-            const newPath = await api.learningPaths.generatePath({
-                student_id: student.id
-            });
+            setGenerating(true);
+            const newPath = await learningPathsAPI.generatePath({ student_id: studentId });
             setPath(newPath);
-            toast.success("New learning path generated successfully!");
+            toast.success("New learning path generated!");
         } catch (error) {
-            console.error('Failed to generate path', error);
-            toast.error('Failed to generate learning path');
+            toast.error("Failed to generate path.");
         } finally {
             setGenerating(false);
         }
     };
 
-    const handleStartNode = async (node: LearningNode) => {
-        if (node.status === 'locked') return;
+    const handleNodeComplete = async (nodeId: string) => {
+        try {
+            const result = await learningPathsAPI.updateNodeStatus(nodeId, 'completed');
 
-        // If it links to a lesson, go there
-        if (node.lesson) {
-            // Need to fetch lesson to get subject/chapter info ideally, 
-            // but for now we might redirect to a lesson viewer.
-            // Simplified: redirect to lesson reader (assuming we have a route)
-            // Or just mark complete for "Topic" nodes that are conceptual.
-            router.push(`/student/courses/lessons/${node.lesson}`);
-            return;
-        }
+            // Refresh path data
+            const activePath = await aiAPI.getActivePath();
+            setPath(activePath);
 
-        // For now, if it's a "Topic" or "Video" without direct lesson link in frontend router,
-        // we simulate "starting" it by showing a modal or just marking complete for MVP demo.
-        if (confirm(`Start "${node.title}"? (Click OK to simulate completion for demo)`)) {
-            try {
-                const res = await api.learningPaths.updateNodeStatus(node.id, 'completed');
-                toast.success("Activity completed!");
-                // Optimistic update
-                if (path) {
-                    const updatedNodes = path.nodes.map(n => {
-                        if (n.id === node.id) return { ...n, status: 'completed' as const };
-                        if (n.order === node.order + 1 && res.next_node_unlocked) return { ...n, status: 'unlocked' as const };
-                        return n;
-                    });
-                    setPath({ ...path, nodes: updatedNodes });
-                }
-            } catch (error) {
-                toast.error("Failed to update progress");
+            if (result.next_node_unlocked) {
+                toast.success("Task completed! Next step unlocked.");
+            } else {
+                toast.success("Path completed! Great job.");
             }
+        } catch (error) {
+            toast.error("Failed to update status.");
         }
     };
 
-    const getNodeIcon = (type: string) => {
+    const getIconForType = (type: string) => {
         switch (type) {
-            case 'video': return <PlayCircle className="h-5 w-5" />;
-            case 'quiz': return <FileText className="h-5 w-5" />;
-            case 'assignment': return <BookOpen className="h-5 w-5" />;
+            case 'video': return <Video className="h-5 w-5" />;
+            case 'quiz': return <HelpCircle className="h-5 w-5" />;
+            case 'assignment': return <FileText className="h-5 w-5" />;
+            case 'article': return <BookOpen className="h-5 w-5" />;
             default: return <BrainCircuit className="h-5 w-5" />;
         }
     };
 
-    if (loading) return <div className="p-12 text-center text-slate-400">Loading your path...</div>;
+    const getStatusColor = (status: string) => {
+        switch (status) {
+            case 'completed': return 'bg-emerald-500';
+            case 'unlocked': return 'bg-indigo-500';
+            case 'in_progress': return 'bg-amber-500';
+            default: return 'bg-slate-300';
+        }
+    };
 
-    if (!path) {
-        return (
-            <div className="flex flex-col items-center justify-center min-h-[60vh] text-center space-y-6 animate-in fade-in zoom-in duration-500">
-                <div className="h-24 w-24 bg-indigo-50 rounded-full flex items-center justify-center">
-                    <Sparkles className="h-10 w-10 text-indigo-500" />
-                </div>
-                <div className="max-w-md space-y-2">
-                    <h1 className="text-2xl font-bold text-slate-900">No Learning Path Found</h1>
-                    <p className="text-slate-500">
-                        Our AI can analyze your performance and create a personalized study plan just for you.
-                    </p>
-                </div>
-                <Button
-                    size="lg"
-                    className="bg-indigo-600 hover:bg-indigo-700 shadow-lg shadow-indigo-200"
-                    onClick={handleGeneratePath}
-                    disabled={generating}
-                >
-                    {generating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <BrainCircuit className="mr-2 h-4 w-4" />}
-                    Generate My Path
-                </Button>
-            </div>
-        );
-    }
-
-    const completedNodes = path.nodes.filter(n => n.status === 'completed').length;
-    const progress = Math.round((completedNodes / path.nodes.length) * 100);
+    if (loading) return <div className="p-8 text-center text-slate-500">Loading your learning path...</div>;
 
     return (
-        <div className="space-y-8 animate-in fade-in duration-500 max-w-4xl mx-auto">
+        <div className="max-w-4xl mx-auto space-y-8">
             {/* Header */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
-                    <h1 className="text-3xl font-bold text-slate-900 flex items-center gap-3">
-                        <BrainCircuit className="h-8 w-8 text-indigo-600" /> Learning Path
-                    </h1>
-                    <p className="text-slate-500 mt-1">{path.title}</p>
-                </div>
-                <div className="flex items-center gap-4 bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
-                    <div className="text-right">
-                        <div className="text-xs font-medium text-slate-500">Progress</div>
-                        <div className="text-lg font-bold text-indigo-600">{progress}%</div>
+                    <div className="flex items-center gap-2 mb-2">
+                        <Sparkles className="h-6 w-6 text-indigo-600" />
+                        <h1 className="text-3xl font-bold text-slate-900 tracking-tight">AI Learning Path</h1>
                     </div>
-                    <Progress value={progress} className="w-24 h-2" />
+                    <p className="text-slate-500">Your personalized roadmap for academic mastery.</p>
                 </div>
+                <Button
+                    onClick={handleGenerate}
+                    disabled={generating}
+                    className="bg-indigo-600 hover:bg-indigo-700 text-white shadow-lg shadow-indigo-200"
+                >
+                    {generating ? (
+                        <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                    ) : (
+                        <RefreshCw className="h-4 w-4 mr-2" />
+                    )}
+                    Regenerate My Path
+                </Button>
             </div>
 
-            {/* Path Visualization */}
-            <div className="relative space-y-8 before:absolute before:inset-0 before:left-8 md:before:left-1/2 before:w-0.5 before:-ml-px before:bg-slate-200 before:z-0">
-                {path.nodes.map((node, index) => {
-                    const isLeft = index % 2 === 0;
-                    const isLocked = node.status === 'locked';
-                    const isCompleted = node.status === 'completed';
-                    const isActive = node.status === 'unlocked' || node.status === 'in_progress';
-
-                    return (
-                        <div key={node.id} className={cn(
-                            "relative flex items-center md:justify-between",
-                            !isLeft && "md:flex-row-reverse"
-                        )}>
-                            {/* Timeline Node Connector */}
-                            <div className={cn(
-                                "absolute left-8 md:left-1/2 -ml-3 md:-ml-4 w-6 h-6 md:w-8 md:h-8 rounded-full border-4 z-10 flex items-center justify-center transition-colors shadow-sm",
-                                isCompleted ? "bg-green-500 border-green-100 ring-4 ring-green-50" :
-                                    isActive ? "bg-indigo-600 border-indigo-100 ring-4 ring-indigo-50" :
-                                        "bg-slate-200 border-slate-100"
-                            )}>
-                                {isCompleted && <CheckCircle2 className="h-3 w-3 md:h-4 md:w-4 text-white" />}
-                                {isLocked && <Lock className="h-3 w-3 md:h-4 md:w-4 text-slate-400" />}
+            {!path ? (
+                <Card className="border-dashed border-2 bg-slate-50/50">
+                    <CardContent className="flex flex-col items-center justify-center py-16 space-y-4">
+                        <div className="h-16 w-16 rounded-full bg-indigo-100 flex items-center justify-center">
+                            <BrainCircuit className="h-8 w-8 text-indigo-600" />
+                        </div>
+                        <div className="text-center">
+                            <h3 className="text-xl font-bold text-slate-900">No Active Path</h3>
+                            <p className="text-slate-500 max-w-sm mt-2">
+                                Let AI analyze your recent performance and create a custom learning roadmap for you.
+                            </p>
+                        </div>
+                        <Button onClick={handleGenerate} disabled={generating}>
+                            Get Started
+                        </Button>
+                    </CardContent>
+                </Card>
+            ) : (
+                <div className="space-y-6">
+                    {/* Path Info Card */}
+                    <Card className="border-none shadow-sm overflow-hidden">
+                        <div className="h-2 bg-indigo-600"></div>
+                        <CardHeader>
+                            <div className="flex justify-between items-start">
+                                <div>
+                                    <Badge variant="outline" className="mb-2 bg-indigo-50 text-indigo-700 border-indigo-100">
+                                        Personalized for You
+                                    </Badge>
+                                    <CardTitle className="text-2xl">{path.title}</CardTitle>
+                                    <CardDescription className="mt-2">{path.description}</CardDescription>
+                                </div>
+                                <div className="text-right">
+                                    <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Progress</p>
+                                    <p className="text-2xl font-black text-slate-900">
+                                        {Math.round((path.nodes.filter(n => n.status === 'completed').length / path.nodes.length) * 100)}%
+                                    </p>
+                                </div>
                             </div>
+                            <Progress
+                                value={(path.nodes.filter(n => n.status === 'completed').length / path.nodes.length) * 100}
+                                className="h-2 mt-4"
+                            />
+                        </CardHeader>
+                    </Card>
 
-                            {/* Content Card */}
-                            <div className={cn(
-                                "ml-20 md:ml-0 md:w-[45%]",  // Mobile left align, Desktop alternating
-                            )}>
-                                <Card className={cn(
-                                    "transition-all hover:shadow-md cursor-pointer border-slate-200",
-                                    isActive && "border-indigo-200 shadow-indigo-50 ring-1 ring-indigo-100",
-                                    isLocked && "opacity-70 bg-slate-50 grayscale-[0.5]"
-                                )} onClick={() => handleStartNode(node)}>
-                                    <div className="p-4 flex items-start gap-4">
-                                        <div className={cn(
-                                            "p-3 rounded-lg flex-shrink-0",
-                                            isCompleted ? "bg-green-100 text-green-600" :
-                                                isActive ? "bg-indigo-100 text-indigo-600" :
-                                                    "bg-slate-100 text-slate-400"
-                                        )}>
-                                            {getNodeIcon(node.resource_type)}
-                                        </div>
-                                        <div className="space-y-1 flex-1">
-                                            <div className="flex items-center justify-between">
-                                                <div className="text-xs font-semibold uppercase tracking-wider text-slate-500">
-                                                    Step {node.order} • {node.estimated_minutes} min
+                    {/* Roadmap Timeline */}
+                    <div className="space-y-6 relative">
+                        {/* Connecting Line */}
+                        <div className="absolute left-[2.25rem] top-8 bottom-8 w-1 bg-slate-100 -z-10"></div>
+
+                        {path.nodes.map((node, index) => (
+                            <div key={node.id} className="flex gap-6 group">
+                                {/* Node Indicator */}
+                                <div className="relative shrink-0 flex flex-col items-center">
+                                    <div className={`h-12 w-12 rounded-full border-4 flex items-center justify-center z-10 transition-all
+                                        ${node.status === 'completed' ? 'bg-emerald-500 border-emerald-100 shadow-lg shadow-emerald-100' :
+                                            node.status === 'locked' ? 'bg-slate-100 border-white text-slate-400' :
+                                                'bg-white border-indigo-600 text-indigo-600 shadow-lg shadow-indigo-100'}
+                                    `}>
+                                        {node.status === 'completed' ? (
+                                            <CheckCircle2 className="h-6 w-6 text-white" />
+                                        ) : node.status === 'locked' ? (
+                                            <Lock className="h-5 w-5" />
+                                        ) : (
+                                            <span className="font-bold">{index + 1}</span>
+                                        )}
+                                    </div>
+                                    {index === 0 && node.status !== 'completed' && (
+                                        <Badge className="absolute -top-6 whitespace-nowrap bg-amber-500 shadow-lg animate-bounce">
+                                            Start Here
+                                        </Badge>
+                                    )}
+                                </div>
+
+                                {/* Node Content Card */}
+                                <Card className={`flex-1 transition-all border-none ${node.status === 'locked' ? 'bg-slate-50/50 opacity-80' : 'bg-white shadow-sm hover:shadow-md'
+                                    }`}>
+                                    <CardContent className="p-6">
+                                        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                                            <div className="flex gap-4">
+                                                <div className={`h-12 w-12 rounded-xl flex items-center justify-center shrink-0
+                                                    ${node.status === 'completed' ? 'bg-emerald-50 text-emerald-600' :
+                                                        node.status === 'locked' ? 'bg-slate-50 text-slate-400' : 'bg-indigo-50 text-indigo-600'}
+                                                `}>
+                                                    {getIconForType(node.resource_type)}
                                                 </div>
-                                                {isActive && (
-                                                    <Badge variant="secondary" className="bg-indigo-100 text-indigo-700 text-[10px]">
-                                                        Current
-                                                    </Badge>
+                                                <div>
+                                                    <div className="flex items-center gap-2 mb-1">
+                                                        <h4 className={`font-bold text-lg ${node.status === 'locked' ? 'text-slate-400' : 'text-slate-900'}`}>
+                                                            {node.title}
+                                                        </h4>
+                                                        {node.status === 'in_progress' && (
+                                                            <Badge variant="secondary" className="bg-amber-100 text-amber-700 border-amber-200">
+                                                                Recent
+                                                            </Badge>
+                                                        )}
+                                                    </div>
+                                                    <p className={`text-sm ${node.status === 'locked' ? 'text-slate-400' : 'text-slate-500'} line-clamp-2`}>
+                                                        {node.description}
+                                                    </p>
+                                                    <div className="flex items-center gap-4 mt-3">
+                                                        <div className="flex items-center gap-1.5 text-xs font-medium text-slate-400">
+                                                            <Clock className="h-3.5 w-3.5" />
+                                                            {node.estimated_minutes} mins
+                                                        </div>
+                                                        <Badge variant="outline" className={`text-[10px] uppercase font-bold tracking-wider
+                                                            ${node.resource_type === 'video' ? 'text-blue-600 bg-blue-50' :
+                                                                node.resource_type === 'quiz' ? 'text-purple-600 bg-purple-50' : 'text-slate-600 bg-slate-50'}
+                                                        `}>
+                                                            {node.resource_type}
+                                                        </Badge>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <div className="flex items-center gap-2">
+                                                {node.status === 'locked' ? (
+                                                    <Button variant="ghost" disabled size="sm" className="text-slate-400">
+                                                        Locked
+                                                    </Button>
+                                                ) : node.status === 'completed' ? (
+                                                    <Button variant="ghost" size="sm" className="text-emerald-600 font-semibold cursor-default">
+                                                        <CheckCircle2 className="h-4 w-4 mr-2" />
+                                                        Done
+                                                    </Button>
+                                                ) : (
+                                                    <div className="flex gap-2 w-full md:w-auto">
+                                                        {node.lesson && (
+                                                            <Button
+                                                                variant="outline"
+                                                                className="flex-1 md:flex-none border-indigo-200 text-indigo-600 hover:bg-indigo-50"
+                                                                onClick={() => router.push(`/student/courses/${node.lesson}/view`)}
+                                                            >
+                                                                Go to Lesson
+                                                            </Button>
+                                                        )}
+                                                        <Button
+                                                            className="flex-1 md:flex-none bg-indigo-600 hover:bg-indigo-700"
+                                                            onClick={() => handleNodeComplete(node.id)}
+                                                        >
+                                                            Mark Complete
+                                                        </Button>
+                                                    </div>
                                                 )}
                                             </div>
-                                            <h3 className="font-bold text-slate-900 group-hover:text-indigo-600 transition-colors">
-                                                {node.title}
-                                            </h3>
-                                            <p className="text-sm text-slate-500 line-clamp-2">
-                                                {node.description}
-                                            </p>
-
-                                            {!isLocked && (
-                                                <Button
-                                                    size="sm"
-                                                    variant={isActive ? "default" : "outline"}
-                                                    className={cn(
-                                                        "mt-3 h-8 w-full",
-                                                        isActive && "bg-indigo-600 hover:bg-indigo-700",
-                                                        isCompleted && "text-green-600 border-green-200 hover:bg-green-50"
-                                                    )}
-                                                >
-                                                    {isCompleted ? "Review Again" : "Start Learning"}
-                                                    {!isCompleted && <ArrowRight className="ml-1 h-3 w-3" />}
-                                                </Button>
-                                            )}
                                         </div>
-                                    </div>
+                                    </CardContent>
                                 </Card>
                             </div>
-
-                            {/* Empty space for alternating layout matching */}
-                            <div className="hidden md:block md:w-[45%]" />
-                        </div>
-                    );
-                })}
-            </div>
-
-            {/* Empty State / Completion */}
-            {path.nodes.length > 0 && completedNodes === path.nodes.length && (
-                <div className="text-center py-12 bg-green-50 rounded-2xl border border-green-100 animate-in fade-in zoom-in duration-700">
-                    <div className="inline-flex p-4 bg-green-100 rounded-full mb-4">
-                        <Sparkles className="h-8 w-8 text-green-600" />
+                        ))}
                     </div>
-                    <h2 className="text-2xl font-bold text-green-800">Path Completed!</h2>
-                    <p className="text-green-700 mt-2">You've mastered this learning path. Great job!</p>
-                    <Button
-                        onClick={handleGeneratePath}
-                        className="mt-6 bg-green-600 hover:bg-green-700 text-white"
-                        disabled={generating}
-                    >
-                        {generating ? "Generating..." : "Generate New Challenge"}
-                    </Button>
                 </div>
             )}
         </div>

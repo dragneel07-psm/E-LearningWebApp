@@ -148,10 +148,10 @@ export default function AttendancePage() {
                                 <div key={record.attendance_id} className="flex items-center justify-between p-4 rounded-lg bg-slate-50 border border-slate-100 hover:border-indigo-100 transition-colors">
                                     <div className="flex items-center gap-4">
                                         <div className="h-10 w-10 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 font-medium">
-                                            {record.course_name ? record.course_name.charAt(0) : 'C'}
+                                            {record.subject_name ? record.subject_name.charAt(0) : 'S'}
                                         </div>
                                         <div>
-                                            <h4 className="font-medium text-slate-800">{record.course_name || 'Class'}</h4>
+                                            <h4 className="font-medium text-slate-800">{record.subject_name || 'Subject'}</h4>
                                             <div className="flex items-center gap-2 text-sm text-slate-500">
                                                 {record.remarks && <span>Note: {record.remarks}</span>}
                                             </div>
