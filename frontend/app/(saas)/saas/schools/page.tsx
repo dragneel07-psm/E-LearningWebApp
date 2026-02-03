@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import {
     Table,
     TableBody,
@@ -12,7 +12,7 @@ import {
     TableHeader,
     TableRow,
 } from "@/components/ui/table";
-import { MoreHorizontal, ArrowUpCircle, AlertCircle, Loader2 } from "lucide-react";
+import { MoreHorizontal, ArrowUpCircle, AlertCircle, Loader2, Search, Filter, ShieldCheck, Globe } from "lucide-react";
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -25,6 +25,8 @@ import { saasApi, Tenant } from "@/lib/api/saas";
 import { toast } from "sonner";
 import Link from 'next/link';
 import { CreateSchoolDialog } from "@/components/saas/create-school-dialog";
+import { motion } from "framer-motion";
+import { Input } from "@/components/ui/input";
 
 type TenantSummary = Tenant & {
     plan_name?: string;
@@ -37,6 +39,7 @@ type TenantSummary = Tenant & {
 export default function SaasSchoolsPage() {
     const [schools, setSchools] = useState<TenantSummary[]>([]);
     const [isLoading, setIsLoading] = useState(true);
+    const [searchQuery, setSearchQuery] = useState('');
 
     useEffect(() => {
         loadSchools();
@@ -54,107 +57,157 @@ export default function SaasSchoolsPage() {
         }
     };
 
+    const filteredSchools = schools.filter(school =>
+        school.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        school.subdomain.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+
     if (isLoading) {
-        return <div className="p-8 flex items-center justify-center h-full"><Loader2 className="w-8 h-8 animate-spin text-slate-400" /></div>;
+        return (
+            <div className="h-full flex flex-col items-center justify-center space-y-4">
+                <Loader2 className="w-12 h-12 animate-spin text-indigo-500" />
+                <p className="text-slate-500 dark:text-slate-400 font-mono text-sm animate-pulse">Scanning Tenant Network...</p>
+            </div>
+        );
     }
 
     return (
-        <div className="p-8 space-y-8">
-            <div className="flex items-center justify-between">
-                <h2 className="text-3xl font-bold tracking-tight">School Subscriptions</h2>
+        <div className="p-8 lg:p-10 space-y-8 min-h-full">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div>
+                    <h2 className="text-3xl font-bold tracking-tight text-slate-900 dark:text-white">School Management</h2>
+                    <p className="text-slate-500 dark:text-slate-400 mt-1">Manage and monitor all onboarded education tenants.</p>
+                </div>
                 <CreateSchoolDialog onCreated={loadSchools} />
             </div>
 
-            <Card>
-                <CardHeader>
-                    <CardTitle>Onboarded Tenants ({schools.length})</CardTitle>
-                </CardHeader>
-                <CardContent>
+            <Card className="bg-white dark:bg-[#111114] border-slate-200 dark:border-white/10 shadow-xl dark:shadow-none backdrop-blur-3xl overflow-hidden">
+                <div className="p-6 border-b border-slate-200 dark:border-white/10 flex flex-col sm:flex-row gap-4 justify-between items-center">
+                    <div className="relative w-full sm:w-96">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                        <Input
+                            placeholder="Search schools, domains..."
+                            className="pl-10 bg-slate-50 dark:bg-white/5 border-slate-200 dark:border-white/10 focus:ring-indigo-500 dark:focus:ring-indigo-500/20"
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                        />
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <Button variant="outline" size="sm" className="border-slate-200 dark:border-white/10 text-slate-700 dark:text-slate-300">
+                            <Filter className="w-4 h-4 mr-2" /> Filter
+                        </Button>
+                        <Badge variant="secondary" className="h-9 px-4 bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-500/20">
+                            Total: {filteredSchools.length}
+                        </Badge>
+                    </div>
+                </div>
+
+                <div className="relative overflow-x-auto">
                     <Table>
                         <TableHeader>
-                            <TableRow>
-                                <TableHead>School Name</TableHead>
-                                <TableHead>Domain/Subdomain</TableHead>
-                                <TableHead>Current Plan</TableHead>
-                                <TableHead>Students</TableHead>
-                                <TableHead>AI Usage</TableHead>
-                                <TableHead>Billing Cycle</TableHead>
-                                <TableHead>Status</TableHead>
-                                <TableHead className="text-right">Actions</TableHead>
+                            <TableRow className="hover:bg-transparent border-slate-200 dark:border-white/5">
+                                <TableHead className="text-slate-500 dark:text-slate-400 uppercase text-xs font-bold tracking-wider pl-6">School Details</TableHead>
+                                <TableHead className="text-slate-500 dark:text-slate-400 uppercase text-xs font-bold tracking-wider">Plan & Usage</TableHead>
+                                <TableHead className="text-slate-500 dark:text-slate-400 uppercase text-xs font-bold tracking-wider">Statistics</TableHead>
+                                <TableHead className="text-slate-500 dark:text-slate-400 uppercase text-xs font-bold tracking-wider">Status</TableHead>
+                                <TableHead className="text-right text-slate-500 dark:text-slate-400 uppercase text-xs font-bold tracking-wider pr-6">Actions</TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
-                            {schools.length === 0 ? (
+                            {filteredSchools.length === 0 ? (
                                 <TableRow>
-                                    <TableCell colSpan={8} className="text-center py-8 text-slate-500">
-                                        No schools found. Onboard a school to get started.
+                                    <TableCell colSpan={5} className="text-center py-16 text-slate-400">
+                                        <div className="flex flex-col items-center gap-3">
+                                            <div className="w-12 h-12 rounded-full bg-slate-100 dark:bg-white/5 flex items-center justify-center">
+                                                <Search className="w-6 h-6 text-slate-400" />
+                                            </div>
+                                            <p>No schools found matching your search.</p>
+                                        </div>
                                     </TableCell>
                                 </TableRow>
                             ) : (
-                                schools.map((school) => (
-                                    <TableRow key={school.tenant_id}>
-                                        <TableCell className="font-medium">
-                                            <div>
-                                                <div className="font-bold">{school.name}</div>
-                                                <div className="text-xs text-slate-500 font-mono">{school.tenant_id.slice(0, 8)}...</div>
-                                            </div>
-                                        </TableCell>
-                                        <TableCell>
-                                            <Badge variant="secondary" className="font-mono text-xs">
-                                                {school.subdomain}.domain.com
-                                            </Badge>
-                                        </TableCell>
-                                        <TableCell>
-                                            <Badge variant="outline">{school.plan_name}</Badge>
-                                        </TableCell>
-                                        <TableCell>{school.student_count}</TableCell>
-                                        <TableCell>
-                                            <div className="flex items-center gap-2">
-                                                <div className="w-16 h-2 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
-                                                    <div
-                                                        className={`h-full rounded-full ${parseInt(school.ai_usage || '0') > 90 ? 'bg-red-500' : 'bg-blue-500'}`}
-                                                        style={{ width: school.ai_usage }}
-                                                    ></div>
+                                filteredSchools.map((school, index) => (
+                                    <motion.tr
+                                        key={school.tenant_id}
+                                        initial={{ opacity: 0, y: 10 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        transition={{ delay: index * 0.05 }}
+                                        className="group border-b border-slate-100 dark:border-white/5 hover:bg-slate-50 dark:hover:bg-white/[0.02] transition-colors"
+                                    >
+                                        <TableCell className="pl-6 py-4">
+                                            <div className="flex items-center gap-4">
+                                                <div className="w-10 h-10 rounded-lg bg-indigo-600 flex items-center justify-center text-white font-bold text-lg shadow-lg shadow-indigo-500/20">
+                                                    {school.name.charAt(0)}
                                                 </div>
-                                                <span className="text-xs text-slate-500">{school.ai_usage}</span>
+                                                <div>
+                                                    <div className="font-bold text-slate-900 dark:text-white group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
+                                                        {school.name}
+                                                    </div>
+                                                    <div className="flex items-center gap-2 mt-1">
+                                                        <Globe className="w-3 h-3 text-slate-400" />
+                                                        <span className="text-xs text-slate-500 dark:text-slate-400 font-mono tracking-tight">
+                                                            {school.subdomain}.domain.com
+                                                        </span>
+                                                    </div>
+                                                </div>
                                             </div>
                                         </TableCell>
-                                        <TableCell className="capitalize">{school.billing_cycle}</TableCell>
-                                        <TableCell>
-                                            <Badge variant={school.subscription_status === 'active' ? 'default' : 'destructive'} className="capitalize">
-                                                {school.subscription_status}
-                                            </Badge>
+                                        <TableCell className="py-4">
+                                            <div className="space-y-2">
+                                                <Badge variant="outline" className="border-indigo-200 dark:border-indigo-500/30 text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-500/10">
+                                                    {school.plan_name || 'Standard Plan'}
+                                                </Badge>
+                                                <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+                                                    <div className="w-16 h-1.5 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+                                                        <div
+                                                            className={`h-full rounded-full ${parseInt(school.ai_usage || '0') > 90 ? 'bg-red-500' : 'bg-emerald-500'}`}
+                                                            style={{ width: school.ai_usage || '30%' }}
+                                                        ></div>
+                                                    </div>
+                                                    <span>{school.ai_usage || '30%'} AI Load</span>
+                                                </div>
+                                            </div>
                                         </TableCell>
-                                        <TableCell className="text-right">
+                                        <TableCell className="py-4">
+                                            <div className="text-sm">
+                                                <div className="font-semibold text-slate-900 dark:text-white">{school.student_count || 0} Students</div>
+                                                <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Billing: {school.billing_cycle || 'Monthly'}</div>
+                                            </div>
+                                        </TableCell>
+                                        <TableCell className="py-4">
+                                            <div className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-100 dark:bg-emerald-500/10 text-emerald-800 dark:text-emerald-400">
+                                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 mr-2 animate-pulse"></span>
+                                                {school.subscription_status || 'Active'}
+                                            </div>
+                                        </TableCell>
+                                        <TableCell className="text-right pr-6 py-4">
                                             <DropdownMenu>
                                                 <DropdownMenuTrigger asChild>
-                                                    <Button variant="ghost" size="icon">
+                                                    <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-slate-900 dark:hover:text-white">
                                                         <MoreHorizontal className="h-4 w-4" />
                                                     </Button>
                                                 </DropdownMenuTrigger>
-                                                <DropdownMenuContent align="end">
-                                                    <DropdownMenuLabel>Subscription Actions</DropdownMenuLabel>
+                                                <DropdownMenuContent align="end" className="w-48">
+                                                    <DropdownMenuLabel>Manage Tenant</DropdownMenuLabel>
                                                     <DropdownMenuItem>
-                                                        <ArrowUpCircle className="mr-2 h-4 w-4" /> Upgrade Plan
+                                                        <ShieldCheck className="mr-2 h-4 w-4 text-indigo-500" /> Admin Access
                                                     </DropdownMenuItem>
                                                     <DropdownMenuItem>
-                                                        <Link href={`/saas/schools/${school.tenant_id}`} className="w-full h-full flex items-center">
-                                                            View Details
-                                                        </Link>
+                                                        <ArrowUpCircle className="mr-2 h-4 w-4 text-emerald-500" /> Upgrade Plan
                                                     </DropdownMenuItem>
                                                     <DropdownMenuSeparator />
-                                                    <DropdownMenuItem className="text-red-600">
-                                                        <AlertCircle className="mr-2 h-4 w-4" /> Suspend
+                                                    <DropdownMenuItem className="text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/10">
+                                                        <AlertCircle className="mr-2 h-4 w-4" /> Suspend Account
                                                     </DropdownMenuItem>
                                                 </DropdownMenuContent>
                                             </DropdownMenu>
                                         </TableCell>
-                                    </TableRow>
+                                    </motion.tr>
                                 ))
                             )}
                         </TableBody>
                     </Table>
-                </CardContent>
+                </div>
             </Card>
         </div>
     );

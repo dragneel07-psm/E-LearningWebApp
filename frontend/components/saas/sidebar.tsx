@@ -64,7 +64,7 @@ export function SaasSidebar() {
     ];
 
     return (
-        <div className="space-y-4 py-4 flex flex-col h-full bg-slate-900 text-white">
+        <div className="space-y-4 py-4 flex flex-col h-full bg-white dark:bg-slate-900 text-slate-900 dark:text-white border-r border-slate-200 dark:border-slate-800">
             <div className="px-3 py-2 flex-1">
                 <Link href="/saas" className="flex items-center pl-3 mb-14">
                     <div className="relative w-8 h-8 mr-4">
@@ -82,7 +82,9 @@ export function SaasSidebar() {
                         <Link
                             key={route.href}
                             href={route.href}
-                            className={`text-sm group flex p-3 w-full justify-start font-medium cursor-pointer hover:text-white hover:bg-white/10 rounded-lg transition ${pathname === route.href ? 'text-white bg-white/10' : 'text-zinc-400'
+                            className={`text-sm group flex p-3 w-full justify-start font-medium cursor-pointer hover:bg-slate-100 dark:hover:bg-white/10 rounded-lg transition ${pathname === route.href
+                                ? 'text-indigo-600 dark:text-white bg-slate-100 dark:bg-white/10'
+                                : 'text-slate-600 dark:text-zinc-400'
                                 }`}
                         >
                             <div className="flex items-center flex-1">
@@ -96,7 +98,7 @@ export function SaasSidebar() {
             <div className="px-3 py-2">
                 <Button
                     variant="ghost"
-                    className="w-full justify-start text-zinc-400 hover:text-white hover:bg-white/10"
+                    className="w-full justify-start text-slate-600 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/10"
                     onClick={() => {
                         // Clear auth token
                         removeTokens();
@@ -108,6 +110,6 @@ export function SaasSidebar() {
                     Logout
                 </Button>
             </div>
-        </div>
+        </div >
     );
 }

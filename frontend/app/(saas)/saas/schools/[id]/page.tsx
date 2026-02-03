@@ -72,7 +72,7 @@ export default function SchoolDetailsPage() {
                             {school.status}
                         </Badge>
                     </div>
-                    <p className="text-slate-500 pl-6">
+                    <p className="text-slate-400 pl-6">
                         {school.subdomain}.domain.com • ID: <span className="font-mono text-xs">{school.tenant_id}</span>
                     </p>
                 </div>
@@ -151,7 +151,7 @@ export default function SchoolDetailsPage() {
                             </CardDescription>
                         </CardHeader>
                         <CardContent className="space-y-4">
-                            <div className="text-sm text-slate-500">No recent activity logs available.</div>
+                            <div className="text-sm text-slate-400">No recent activity logs available.</div>
                         </CardContent>
                     </Card>
                 </TabsContent>
@@ -163,7 +163,7 @@ export default function SchoolDetailsPage() {
                             <CardDescription>Manage users for this school.</CardDescription>
                         </CardHeader>
                         <CardContent>
-                            <p className="text-sm text-slate-500">User list component coming soon...</p>
+                            <p className="text-sm text-slate-400">User list component coming soon...</p>
                         </CardContent>
                     </Card>
                 </TabsContent>

@@ -13,70 +13,14 @@ import {
     Clock, ChevronLeft, ChevronRight, Send,
     AlertCircle, CheckCircle2, Save, Info
 } from 'lucide-react';
-import { academicAPI, Assessment, Question } from '@/lib/api';
-import { toast } from 'sonner';
+import { useGamification } from '@/components/providers/gamification-provider';
+
+// ...
 
 export default function TakeAssessmentPage() {
     const router = useRouter();
-    const params = useParams();
-    const assessmentId = params.id as string;
-
-    const [loading, setLoading] = useState(true);
-    const [submitting, setSubmitting] = useState(false);
-    const [assessment, setAssessment] = useState<Assessment | null>(null);
-    const [questions, setQuestions] = useState<Question[]>([]);
-    const [currentIndex, setCurrentIndex] = useState(0);
-    const [answers, setAnswers] = useState<Record<string, string>>({});
-    const [startTime] = useState(Date.now());
-    const [timeLeft, setTimeLeft] = useState(0);
-
-    useEffect(() => {
-        async function loadAssessment() {
-            try {
-                const [assessmentData, questionsData] = await Promise.all([
-                    academicAPI.getAssessment(assessmentId),
-                    academicAPI.getQuestionsByAssessment(assessmentId)
-                ]);
-                setAssessment(assessmentData);
-                setQuestions(questionsData.sort((a, b) => a.order - b.order));
-                setTimeLeft(assessmentData.duration_minutes * 60);
-                setLoading(false);
-            } catch (error) {
-                console.error('Failed to load assessment', error);
-                toast.error('Failed to load assessment');
-                router.back();
-            }
-        }
-        loadAssessment();
-    }, [assessmentId, router]);
-
-    useEffect(() => {
-        if (timeLeft <= 0 && !loading && assessment) {
-            handleAutoSubmit();
-            return;
-        }
-
-        const timer = setInterval(() => {
-            setTimeLeft(prev => prev - 1);
-        }, 1000);
-
-        return () => clearInterval(timer);
-    }, [timeLeft, loading, assessment]);
-
-    const formatTime = (seconds: number) => {
-        const mins = Math.floor(seconds / 60);
-        const secs = seconds % 60;
-        return `${mins}:${secs.toString().padStart(2, '0')}`;
-    };
-
-    const handleAnswerChange = (questionId: string, answer: string) => {
-        setAnswers(prev => ({ ...prev, [questionId]: answer }));
-    };
-
-    const handleAutoSubmit = () => {
-        toast.info("Time's up! Submitting your answers automatically.");
-        submitAssessment();
-    };
+    const { awardXP } = useGamification();
+    // ...
 
     const submitAssessment = async () => {
         if (submitting) return;
@@ -85,6 +29,11 @@ export default function TakeAssessmentPage() {
         try {
             const timeTaken = Math.floor((Date.now() - startTime) / 60000);
             const res = await academicAPI.submitExam(assessmentId, answers, timeTaken);
+
+            // Calculate XP based on score (e.g., 10 XP per point) or flat bonus
+            const earnedXP = res.score ? res.score * 10 : 100;
+            awardXP(earnedXP, `Assessment Completed`);
+
             toast.success(`Assessment submitted! Score: ${res.score}/${res.max_score}`);
             router.push(`/student/assessments/${assessmentId}/results?result_id=${res.result_id}`);
         } catch (error) {

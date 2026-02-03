@@ -316,10 +316,16 @@ export interface SubscriptionPlan {
     description?: string;
     price_monthly: number;
     price_yearly: number;
+    currency?: string;
     student_limit: number;
     teacher_limit: number;
     storage_limit_gb: number;
     ai_token_limit: number;
+    has_ai_tutor?: boolean;
+    has_ai_eval?: boolean;
+    has_parent_portal?: boolean;
+    has_analytics?: boolean;
+    has_career_guidance?: boolean;
     is_active: boolean;
 }
 
@@ -1026,28 +1032,6 @@ export const billingAPI = {
     getFinanceDashboard: () => apiRequest<FinanceDashboard>('/billing/dashboard/'),
 };
 
-export const saasApi = {
-    getTenants: () => coreAPI.getTenants(),
-    getTenant: (id: string) => coreAPI.getTenant(id),
-    createTenant: (data: Partial<Tenant>) => coreAPI.createTenant(data),
-    updateTenant: (id: string, data: Partial<Tenant>) => coreAPI.updateTenant(id, data),
-    getInvoices: () => apiRequest<Invoice[]>('/billing/invoices/'),
-    getPlans: () => apiRequest<SubscriptionPlan[]>('/billing/plans/'),
-    createPlan: (data: Partial<SubscriptionPlan>) =>
-        apiRequest<SubscriptionPlan>('/billing/plans/', {
-            method: 'POST',
-            body: JSON.stringify(data),
-        }),
-    deletePlan: (id: string) => apiRequest<void>(`/billing/plans/${id}/`, { method: 'DELETE' }),
-    getSettings: () => apiRequest<GlobalSettings>('/core/settings/'),
-    updateSettings: (data: Partial<GlobalSettings>) =>
-        apiRequest<GlobalSettings>('/core/settings/', {
-            method: 'POST',
-            body: JSON.stringify(data),
-        }),
-    getAuditLogs: () => coreAPI.getAuditLogs(),
-    getSystemStatus: () => coreAPI.getSystemStatus(),
-};
 
 // Library API
 export const libraryAPI = {
@@ -1209,6 +1193,56 @@ export const helpers = {
             return [];
         }
     },
+
+    downloadFile: async (url: string, filename: string) => {
+        const token = getAuthToken();
+        const response = await fetch(url, {
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'x-tenant-id': 'demo'
+            }
+        });
+        const blob = await response.blob();
+        const downloadUrl = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = downloadUrl;
+        link.setAttribute('download', filename);
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+    }
+};
+
+export const saasApi = {
+    getTenants: () => coreAPI.getTenants(),
+    getTenant: (id: string) => coreAPI.getTenant(id),
+    createTenant: (data: Partial<Tenant>) => coreAPI.createTenant(data),
+    updateTenant: (id: string, data: Partial<Tenant>) => coreAPI.updateTenant(id, data),
+    getInvoices: () => apiRequest<Invoice[]>('/billing/invoices/'),
+    getPlans: () => apiRequest<SubscriptionPlan[]>('/billing/plans/'),
+    getPlan: (id: string) => apiRequest<SubscriptionPlan>(`/billing/plans/${id}/`),
+    createPlan: (data: Partial<SubscriptionPlan>) =>
+        apiRequest<SubscriptionPlan>('/billing/plans/', {
+            method: 'POST',
+            body: JSON.stringify(data),
+        }),
+    updatePlan: (id: string, data: Partial<SubscriptionPlan>) =>
+        apiRequest<SubscriptionPlan>(`/billing/plans/${id}/`, {
+            method: 'PATCH',
+            body: JSON.stringify(data),
+        }),
+    deletePlan: (id: string) => apiRequest<void>(`/billing/plans/${id}/`, { method: 'DELETE' }),
+    getSettings: () => apiRequest<GlobalSettings>('/core/settings/'),
+    updateSettings: (data: Partial<GlobalSettings>) =>
+        apiRequest<GlobalSettings>('/core/settings/', {
+            method: 'POST',
+            body: JSON.stringify(data),
+        }),
+    getAuditLogs: () => coreAPI.getAuditLogs(),
+    getSystemStatus: () => coreAPI.getSystemStatus(),
+    getKPIs: () => apiRequest<{ kpis: any, revenue_trend: any[], tenant_activity: any[] }>('/core/saas-kpi/'),
+    getAIUsage: () => apiRequest<{ total_tokens: number, cost_estimate: number, usage_by_feature: any[] }>('/core/saas-ai-usage/'),
+    helpers: helpers,
 };
 
 export const api = {
@@ -1292,27 +1326,9 @@ export const api = {
         getMyBadges: () => apiRequest<StudentBadge[]>('/gamification/student-badges/'),
         getStudentBadges: () => apiRequest<StudentBadge[]>('/gamification/student-badges/'),
         getLeaderboard: () => apiRequest<any[]>('/gamification/leaderboard/'),
+        getMyStats: () => apiRequest<any>('/gamification/profile/my_stats/'),
     },
-    helpers: {
-        ...helpers,
-        downloadFile: async (url: string, filename: string) => {
-            const token = getAuthToken();
-            const response = await fetch(url, {
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'x-tenant-id': 'demo'
-                }
-            });
-            const blob = await response.blob();
-            const downloadUrl = window.URL.createObjectURL(blob);
-            const link = document.createElement('a');
-            link.href = downloadUrl;
-            link.setAttribute('download', filename);
-            document.body.appendChild(link);
-            link.click();
-            link.remove();
-        }
-    },
+    helpers: helpers,
 };
 
 export const learningPathsAPI = api.learningPaths;

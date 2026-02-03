@@ -1,6 +1,7 @@
 import { SaasSidebar } from '@/components/saas/sidebar';
 import { Bell, Search } from 'lucide-react';
 import { Input } from '@/components/ui/input';
+import { ThemeToggle } from '@/components/theme-toggle';
 
 export default function SaasLayout({
     children,
@@ -17,7 +18,7 @@ export default function SaasLayout({
                 <div className="flex items-center justify-between p-4 border-b h-16 bg-white dark:bg-slate-900/50 backdrop-blur-md sticky top-0 z-50">
                     <div className="w-full max-w-sm">
                         <div className="relative" suppressHydrationWarning>
-                            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-slate-500" />
+                            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-slate-400" />
                             <Input
                                 placeholder="Search schools, users..."
                                 className="pl-9 bg-slate-100 dark:bg-slate-800 border-none"
@@ -25,8 +26,9 @@ export default function SaasLayout({
                         </div>
                     </div>
                     <div className="flex items-center gap-x-4">
+                        <ThemeToggle />
                         <button className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full relative">
-                            <Bell className="h-5 w-5 text-slate-600 dark:text-slate-300" />
+                            <Bell className="h-5 w-5 text-slate-300" />
                             <span className="absolute top-1.5 right-1.5 h-2 w-2 bg-red-500 rounded-full"></span>
                         </button>
                         <div className="h-8 w-8 rounded-full bg-gradient-to-r from-indigo-500 to-purple-500 flex items-center justify-center text-white text-sm font-bold">

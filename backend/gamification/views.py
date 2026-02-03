@@ -68,3 +68,24 @@ class BadgeViewSet(TenantScopedQuerysetMixin, viewsets.ReadOnlyModelViewSet):
     serializer_class = BadgeSerializer
     permission_classes = [permissions.IsAuthenticated]
     tenant_field = 'tenant'
+
+from .models import GamificationProfile
+from .serializers import GamificationProfileSerializer
+from .services.gamification_service import GamificationService
+
+class GamificationProfileViewSet(viewsets.ReadOnlyModelViewSet):
+    serializer_class = GamificationProfileSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def get_queryset(self):
+        return GamificationProfile.objects.filter(student__user=self.request.user)
+    
+    @action(detail=False, methods=['get'])
+    def my_stats(self, request):
+        try:
+            student = Student.objects.get(user=request.user)
+            profile = GamificationService.get_or_create_profile(student)
+            serializer = self.get_serializer(profile)
+            return Response(serializer.data)
+        except Student.DoesNotExist:
+            return Response({'error': 'Not a student'}, status=403)

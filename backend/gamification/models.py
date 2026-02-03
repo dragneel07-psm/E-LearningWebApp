@@ -50,3 +50,39 @@ class PointTransaction(models.Model):
 
     def __str__(self):
         return f"{self.student}: {self.points} for {self.description}"
+
+class GamificationProfile(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE, db_constraint=False)
+    student = models.OneToOneField('academic.Student', on_delete=models.CASCADE, related_name='gamification_profile')
+    
+    current_level = models.IntegerField(default=1)
+    current_xp = models.IntegerField(default=0) # XP towards next level
+    total_xp = models.IntegerField(default=0)   # Lifetime XP
+    
+    current_streak = models.IntegerField(default=0)
+    longest_streak = models.IntegerField(default=0)
+    last_activity_date = models.DateField(null=True, blank=True)
+    
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.student} - Lvl {self.current_level}"
+
+    @property
+    def xp_for_next_level(self):
+        # Formula: Level * 100 * 1.5 (Example, can be tuned)
+        return int(self.current_level * 100 * 1.2)
+
+    def add_xp(self, amount):
+        self.total_xp += amount
+        self.current_xp += amount
+        
+        # Check for level up
+        while self.current_xp >= self.xp_for_next_level:
+            self.current_xp -= self.xp_for_next_level
+            self.current_level += 1
+            # Here we could trigger a level up event/notification
+        
+        self.save()
+        return self.current_level

@@ -1,15 +1,26 @@
-from .models import Badge, StudentBadge, PointTransaction
+from gamification.models import Badge, StudentBadge, PointTransaction, GamificationProfile
 from academic.models import Student, LessonProgress, Result
-from django.db.models import Count
+from django.db.models import Count, F
 from django.utils import timezone
+from datetime import timedelta
 
 class GamificationService:
     @staticmethod
+    def get_or_create_profile(student):
+        profile, created = GamificationProfile.objects.get_or_create(
+            student=student,
+            defaults={'tenant': student.academic_class.school if student.academic_class else student.user.tenant} # Fallback to user tenant
+        )
+        return profile
+
+    @staticmethod
     def award_points(student, points, description, activity_type):
         """
-        Record a point transaction for a student.
+        Record a point transaction and update profile stats.
         """
-        tenant = student.user.tenant
+        tenant = student.academic_class.school if student.academic_class else student.user.tenant
+        
+        # 1. Create Transaction Record
         PointTransaction.objects.create(
             tenant=tenant,
             student=student,
@@ -17,14 +28,47 @@ class GamificationService:
             description=description,
             activity_type=activity_type
         )
-        return True
+
+        # 2. Update Profile
+        profile = GamificationService.get_or_create_profile(student)
+        old_level = profile.current_level
+        new_level = profile.add_xp(points)
+        
+        # 3. Check for Streak (if activity is daily relevant)
+        if activity_type in ['lesson', 'assessment']:
+            GamificationService.update_streak(profile)
+
+        return {
+            "level_up": new_level > old_level,
+            "new_level": new_level,
+            "current_xp": profile.current_xp,
+            "next_level_xp": profile.xp_for_next_level
+        }
+
+    @staticmethod
+    def update_streak(profile):
+        today = timezone.now().date()
+        if profile.last_activity_date == today:
+            return
+        
+        if profile.last_activity_date == today - timedelta(days=1):
+            profile.current_streak += 1
+        else:
+            profile.current_streak = 1
+            
+        if profile.current_streak > profile.longest_streak:
+            profile.longest_streak = profile.current_streak
+            
+        profile.last_activity_date = today
+        profile.save()
 
     @staticmethod
     def check_badges(student):
         """
         Check and award badges based on student progress.
         """
-        tenant = student.user.tenant
+        profile = GamificationService.get_or_create_profile(student)
+        tenant = profile.tenant
         available_badges = Badge.objects.filter(tenant=tenant)
         earned_badge_ids = set(StudentBadge.objects.filter(student=student).values_list('badge_id', flat=True))
         
@@ -42,7 +86,7 @@ class GamificationService:
                     should_award = True
             
             elif badge.criteria_type == 'streak_days':
-                if student.current_streak >= badge.criteria_value:
+                if profile.current_streak >= badge.criteria_value:
                     should_award = True
             
             elif badge.criteria_type == 'perfect_score':
@@ -76,16 +120,22 @@ class GamificationService:
         Called when a lesson is marked completed.
         """
         # 1. Award base XP for lesson
-        GamificationService.award_points(
+        result = GamificationService.award_points(
             student, 
-            20, 
+            50, 
             f"Completed lesson: {lesson.title}", 
             'lesson'
         )
         
-        # 2. Update Minutes Learned (optional, already in student model?)
-        # 3. Check for new badges
-        return GamificationService.check_badges(student)
+        # 2. Check for new badges
+        new_badges = GamificationService.check_badges(student)
+        
+        return {
+            "xp_earned": 50,
+            "level_up": result['level_up'],
+            "new_level": result['new_level'],
+            "new_badges": [b.badge.name for b in new_badges]
+        }
 
     @staticmethod
     def on_assessment_complete(student, result):
@@ -94,13 +144,19 @@ class GamificationService:
         """
         # Award points based on percentage
         percentage = (result.score / result.assessment.total_marks) * 100
-        points = int(percentage * 0.5) # e.g. 100% -> 50 points
+        points = int(percentage * 1.0) # e.g. 100% -> 100 points
         
-        GamificationService.award_points(
+        res = GamificationService.award_points(
             student, 
             points, 
             f"Completed {result.assessment.type}: {result.assessment.title}", 
             'assessment'
         )
         
-        return GamificationService.check_badges(student)
+        new_badges = GamificationService.check_badges(student)
+        
+        return {
+            "xp_earned": points,
+            "level_up": res['level_up'],
+            "new_badges": [b.badge.name for b in new_badges]
+        }

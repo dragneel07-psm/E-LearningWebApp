@@ -6,53 +6,15 @@ import { useParams, useRouter } from 'next/navigation';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, CheckCircle, ChevronRight, Menu, FileText, Video as VideoIcon } from 'lucide-react';
-import { academicAPI, Lesson, Chapter, LessonMaterial } from '@/lib/api';
-import { toast } from 'sonner';
-import { Sheet, SheetContent, SheetTrigger, SheetHeader, SheetTitle } from '@/components/ui/sheet';
-import { VideoPlayer } from '@/components/lessons/video-player';
-import { InteractiveRenderer, LessonInteractiveRenderer, Interaction } from '@/components/lessons/interactive-renderer';
+import { useGamification } from '@/components/providers/gamification-provider';
 
-// Safe HTML render component
-const SafeHTML = ({ html }: { html: string }) => {
-    return <div className="prose prose-slate max-w-none" dangerouslySetInnerHTML={{ __html: html }} />;
-};
+// ...
 
 export default function LessonPlayerPage() {
     const params = useParams();
     const router = useRouter();
-    const courseId = params.courseId as string;
-    const lessonId = parseInt(params.lessonId as string);
-
-    const [lesson, setLesson] = useState<Lesson | null>(null);
-    const [chapters, setChapters] = useState<Chapter[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [completing, setCompleting] = useState(false);
-
-    // Interaction states
-    const [currentTime, setCurrentTime] = useState(0);
-    const [activeInteractionId, setActiveInteractionId] = useState<string | null>(null);
-    const [completedInteractions, setCompletedInteractions] = useState<Set<string>>(new Set());
-    const [isVideoPlaying, setIsVideoPlaying] = useState(true);
-
-    useEffect(() => {
-        const loadData = async () => {
-            try {
-                setLoading(true);
-                const [lessonData, chaptersData] = await Promise.all([
-                    academicAPI.getLesson(lessonId),
-                    academicAPI.getChapters(parseInt(courseId))
-                ]);
-                setLesson(lessonData);
-                setChapters(chaptersData);
-            } catch (error) {
-                console.error('Failed to load lesson:', error);
-                toast.error('Failed to load lesson content');
-            } finally {
-                setLoading(false);
-            }
-        };
-        loadData();
-    }, [lessonId, courseId]);
+    const { awardXP } = useGamification();
+    // ...
 
     const handleToggleComplete = async () => {
         if (!lesson) return;
@@ -60,12 +22,15 @@ export default function LessonPlayerPage() {
         try {
             const result = await academicAPI.toggleLessonProgress(lesson.id);
             setLesson(prev => prev ? { ...prev, completed: result.completed } : null);
-            toast.success(result.completed ? "Lesson marked complete!" : "Marked as incomplete");
 
-            // If completed, maybe auto-navigate to next?
             if (result.completed) {
+                toast.success("Lesson marked complete!");
+                awardXP(50, "Lesson Completed");
                 // Logic to find next lesson could go here
+            } else {
+                toast.success("Marked as incomplete");
             }
+
         } catch (error) {
             toast.error("Failed to update progress");
         } finally {

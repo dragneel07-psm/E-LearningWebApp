@@ -1,8 +1,11 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from .views import StudentBadgeViewSet, LeaderboardViewSet, BadgeViewSet
+from .views import StudentBadgeViewSet, LeaderboardViewSet, BadgeViewSet, GamificationProfileViewSet
 
 router = DefaultRouter()
+router.register(r'profile', GamificationProfileViewSet, basename='gamification-profile')
+
+
 router.register(r'student-badges', StudentBadgeViewSet, basename='student-badges')
 router.register(r'leaderboard', LeaderboardViewSet, basename='leaderboard')
 router.register(r'available-badges', BadgeViewSet, basename='available-badges')

@@ -9,6 +9,8 @@ from .serializers import (
     FeeStructureSerializer, StudentFeeSerializer, PaymentSerializer, ExpenseSerializer
 )
 from core.mixins import TenantScopedQuerysetMixin
+from core.reports import generate_pdf_response
+from django.utils import timezone
 from django.utils.decorators import method_decorator
 from django.views.decorators.cache import cache_page
 
@@ -26,6 +28,29 @@ class InvoiceViewSet(viewsets.ModelViewSet):
     queryset = Invoice.objects.all().order_by('-issued_date')
     serializer_class = InvoiceSerializer
     permission_classes = [permissions.IsAuthenticated]
+
+    @action(detail=True, methods=['get'])
+    def download(self, request, pk=None):
+        """
+        Generates and downloads a professional PDF invoice.
+        """
+        try:
+            invoice = self.get_object()
+            
+            context = {
+                'invoice': invoice,
+                'platform_name': 'Antigravity SaaS',
+                'current_year': timezone.now().year,
+            }
+            
+            filename = f"invoice_{invoice.invoice_id[:12]}_{timezone.now().strftime('%Y%m%d')}.pdf"
+            response = generate_pdf_response('reports/invoice.html', context, filename)
+            
+            if response:
+                return response
+            return Response({"error": "PDF engine failure"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 # ==========================================
 # SCHOOL FINANCE VIEWSETS

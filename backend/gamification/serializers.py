@@ -25,3 +25,13 @@ class LeaderboardEntrySerializer(serializers.Serializer):
     total_points = serializers.IntegerField()
     badges_count = serializers.IntegerField()
     rank = serializers.IntegerField()
+
+from .models import GamificationProfile
+
+class GamificationProfileSerializer(serializers.ModelSerializer):
+    next_level_xp = serializers.ReadOnlyField(source='xp_for_next_level')
+    
+    class Meta:
+        model = GamificationProfile
+        fields = ['current_level', 'current_xp', 'total_xp', 
+                 'current_streak', 'longest_streak', 'next_level_xp']

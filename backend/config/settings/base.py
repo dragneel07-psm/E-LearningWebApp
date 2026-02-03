@@ -69,6 +69,7 @@ SHARED_APPS = [
     "core",
     "billing",
     "users", # Hybrid App (Exists in both)
+    "gamification",
 ]
 
 TENANT_APPS = [
@@ -79,7 +80,6 @@ TENANT_APPS = [
     "reports",
     "notifications",
     "library",
-    "gamification",
 ]
 
 AUTH_USER_MODEL = 'users.UserAccount'

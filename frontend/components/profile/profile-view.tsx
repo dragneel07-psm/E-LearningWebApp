@@ -12,8 +12,9 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Loader2, User, Lock, Mail, Save, ShieldCheck } from 'lucide-react';
+import { Loader2, User, Lock, Mail, Save, ShieldCheck, Award } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { BadgesGallery } from '@/components/gamification/badges-gallery';
 
 const profileSchema = z.object({
     first_name: z.string().min(2, "First name is too short"),
@@ -60,7 +61,6 @@ export function ProfileView() {
         try {
             const data = await authService.getProfile();
             setUser(data);
-            // Manually reset because defaultValues are async
             resetProfile({
                 first_name: data.first_name,
                 last_name: data.last_name
@@ -98,7 +98,6 @@ export function ProfileView() {
             resetPass();
         } catch (error: any) {
             console.error(error);
-            // Handle specific backend error message if possible
             const msg = error.response?.data?.error || "Failed to change password. Check your current password.";
             toast.error(msg);
         } finally {
@@ -136,6 +135,9 @@ export function ProfileView() {
             <Tabs defaultValue="overview" className="space-y-6">
                 <TabsList className="bg-white/5 border border-white/10 p-1 rounded-xl">
                     <TabsTrigger value="overview" className="rounded-lg data-[state=active]:bg-violet-600 data-[state=active]:text-white">Overview</TabsTrigger>
+                    <TabsTrigger value="achievements" className="rounded-lg data-[state=active]:bg-violet-600 data-[state=active]:text-white flex gap-2 items-center">
+                        <Award className="w-4 h-4" /> Achievements
+                    </TabsTrigger>
                     <TabsTrigger value="edit" className="rounded-lg data-[state=active]:bg-violet-600 data-[state=active]:text-white">Edit Profile</TabsTrigger>
                     <TabsTrigger value="security" className="rounded-lg data-[state=active]:bg-violet-600 data-[state=active]:text-white">Security</TabsTrigger>
                 </TabsList>
@@ -168,6 +170,18 @@ export function ProfileView() {
                                     <div className="text-sm font-mono text-slate-500">{user.user_id}</div>
                                 </div>
                             </div>
+                        </CardContent>
+                    </Card>
+                </TabsContent>
+
+                <TabsContent value="achievements">
+                    <Card className="bg-white/5 border-white/10 text-white backdrop-blur-sm">
+                        <CardHeader>
+                            <CardTitle>Achievements & Badges</CardTitle>
+                            <CardDescription>Badges you've unlocked through your learning journey</CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                            <BadgesGallery />
                         </CardContent>
                     </Card>
                 </TabsContent>

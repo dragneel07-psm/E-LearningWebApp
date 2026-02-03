@@ -12,63 +12,15 @@ import {
     ChevronRight, ChevronLeft, Send,
     Loader2
 } from 'lucide-react';
-import { academicAPI, Assessment, Question } from '@/lib/api';
-import { toast } from 'sonner';
+import { useGamification } from '@/components/providers/gamification-provider';
+
+// ...
 
 export default function StudentQuizPage() {
     const params = useParams();
     const router = useRouter();
-    const id = params.id as string;
-
-    const [assessment, setAssessment] = useState<Assessment | null>(null);
-    const [questions, setQuestions] = useState<Question[]>([]);
-    const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
-    const [answers, setAnswers] = useState<Record<string, string>>({});
-    const [loading, setLoading] = useState(true);
-    const [submitting, setSubmitting] = useState(false);
-    const [timeLeft, setTimeLeft] = useState(0);
-    const [quizStarted, setQuizStarted] = useState(false);
-    const [quizFinished, setQuizFinished] = useState(false);
-    const [score, setScore] = useState<{ score: number; max_score: number } | null>(null);
-
-    const loadData = useCallback(async () => {
-        try {
-            setLoading(true);
-            const data = await academicAPI.getAssessment(id);
-            setAssessment(data);
-            if (data.questions) {
-                setQuestions(data.questions);
-            } else {
-                const qs = await academicAPI.getQuestionsByAssessment(id);
-                setQuestions(qs);
-            }
-            setTimeLeft(data.duration_minutes * 60);
-        } catch (error) {
-            console.error('Failed to load quiz:', error);
-            toast.error('Failed to load quiz');
-        } finally {
-            setLoading(false);
-        }
-    }, [id]);
-
-    useEffect(() => {
-        loadData();
-    }, [loadData]);
-
-    useEffect(() => {
-        if (quizStarted && timeLeft > 0 && !quizFinished) {
-            const timer = setInterval(() => {
-                setTimeLeft(prev => prev - 1);
-            }, 1000);
-            return () => clearInterval(timer);
-        } else if (timeLeft === 0 && quizStarted && !quizFinished) {
-            handleSubmit();
-        }
-    }, [quizStarted, timeLeft, quizFinished]);
-
-    const handleAnswerChange = (questionId: string, answer: string) => {
-        setAnswers(prev => ({ ...prev, [questionId]: answer }));
-    };
+    const { awardXP } = useGamification();
+    // ...
 
     const handleSubmit = async () => {
         if (submitting) return;
@@ -78,6 +30,11 @@ export default function StudentQuizPage() {
             const result = await academicAPI.submitExam(id, answers, timeTaken);
             setScore(result);
             setQuizFinished(true);
+
+            // Award XP
+            const earnedXP = result.score ? result.score * 10 : 100;
+            awardXP(earnedXP, `Quiz Completed`);
+
             toast.success('Quiz submitted successfully!');
         } catch (error) {
             console.error('Submission failed:', error);
@@ -234,13 +191,13 @@ export default function StudentQuizPage() {
                                     <Label
                                         htmlFor={`opt-${i}`}
                                         className={`flex items-center p-5 rounded-2xl border-2 transition-all cursor-pointer group hover:bg-slate-50 ${answers[currentQuestion.question_id] === option
-                                                ? 'border-indigo-600 bg-indigo-50/50'
-                                                : 'border-slate-100'
+                                            ? 'border-indigo-600 bg-indigo-50/50'
+                                            : 'border-slate-100'
                                             }`}
                                     >
                                         <div className={`h-6 w-6 rounded-full border-2 flex items-center justify-center mr-4 transition-all ${answers[currentQuestion.question_id] === option
-                                                ? 'border-indigo-600 bg-indigo-600 text-white'
-                                                : 'border-slate-200 group-hover:border-slate-300'
+                                            ? 'border-indigo-600 bg-indigo-600 text-white'
+                                            : 'border-slate-200 group-hover:border-slate-300'
                                             }`}>
                                             {answers[currentQuestion.question_id] === option && <div className="h-2 w-2 bg-white rounded-full" />}
                                         </div>

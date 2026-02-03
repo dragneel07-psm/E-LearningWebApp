@@ -48,7 +48,16 @@ export function LoginForm({ role, title, subtitle }: LoginFormProps) {
             await new Promise(resolve => setTimeout(resolve, 100));
 
             // Determine redirect path
-            const targetPath = redirectPath || (role ? `/${role}` : '/student');
+            let targetPath = redirectPath;
+            if (!targetPath) {
+                if (role === 'saas_admin') {
+                    targetPath = '/saas';
+                } else if (role) {
+                    targetPath = `/${role}`;
+                } else {
+                    targetPath = '/student';
+                }
+            }
 
             // Use window.location.href for hard navigation to ensure cookies are sent
             window.location.href = targetPath;
