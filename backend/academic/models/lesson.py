@@ -83,6 +83,7 @@ class LessonProgress(models.Model):
     student = models.ForeignKey('academic.Student', on_delete=models.CASCADE, related_name='lesson_progresses')
     lesson = models.ForeignKey(Lesson, on_delete=models.CASCADE, related_name='progresses')
     completed = models.BooleanField(default=False)
+    xp_awarded = models.BooleanField(default=False)
     last_accessed = models.DateTimeField(auto_now=True)
     completed_at = models.DateTimeField(null=True, blank=True)
 

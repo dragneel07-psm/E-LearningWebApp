@@ -6,7 +6,7 @@ class UserAccountSerializer(serializers.ModelSerializer):
     class Meta:
         model = UserAccount
         fields = ['user_id', 'username', 'email', 'first_name', 'last_name', 'role', 'tenant']
-        read_only_fields = ['user_id']
+        read_only_fields = ['user_id', 'email', 'role', 'tenant']
 
 from django.contrib.auth.models import Group, Permission
 

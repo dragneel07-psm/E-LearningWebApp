@@ -10,6 +10,7 @@ class Subject(models.Model):
     
     # Optional: If subjects are purely elective or core
     is_elective = models.BooleanField(default=False)
+    is_active = models.BooleanField(default=False)
     teacher = models.ForeignKey('academic.Teacher', on_delete=models.SET_NULL, null=True, blank=True, related_name='subjects')
 
     class Meta:

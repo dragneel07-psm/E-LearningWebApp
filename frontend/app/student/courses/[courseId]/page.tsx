@@ -52,7 +52,7 @@ export default function StudentCoursePage() {
     if (!subject) return <div>Course not found</div>;
 
     const totalLessons = chapters.reduce((acc, c) => acc + (c.lessons?.filter(l => l.is_published).length || 0), 0);
-    const completedLessons = 0; // TODO: Calculate from progress
+    const completedLessons = chapters.reduce((acc, c) => acc + (c.lessons?.filter(l => l.is_published && l.completed).length || 0), 0);
     const progress = totalLessons > 0 ? Math.round((completedLessons / totalLessons) * 100) : 0;
 
     return (
@@ -77,7 +77,35 @@ export default function StudentCoursePage() {
                         </div>
                     </div>
 
-                    <div className="mt-8">
+                    <div className="mt-8 flex gap-4">
+                        {progress < 100 && (
+                            <Button
+                                className="bg-white text-indigo-600 hover:bg-indigo-50 font-bold border-none"
+                                onClick={() => {
+                                    const allLessons = chapters.flatMap(c => c.lessons || []).filter(l => l.is_published);
+                                    const firstIncomplete = allLessons.find(l => !l.completed);
+                                    const targetLesson = firstIncomplete || allLessons[0];
+                                    if (targetLesson) handleStartLesson(targetLesson.id);
+                                }}
+                            >
+                                <PlayCircle className="mr-2 h-5 w-5" />
+                                {progress > 0 ? "Resume Learning" : "Start Course"}
+                            </Button>
+                        )}
+                        {progress === 100 && (
+                            <Button
+                                className="bg-white/20 text-white hover:bg-white/30 font-bold border-none"
+                                onClick={() => {
+                                    const allLessons = chapters.flatMap(c => c.lessons || []).filter(l => l.is_published);
+                                    if (allLessons.length > 0) handleStartLesson(allLessons[0].id);
+                                }}
+                            >
+                                <CheckCircle2 className="mr-2 h-5 w-5" /> Review Course
+                            </Button>
+                        )}
+                    </div>
+
+                    <div className="mt-6">
                         <div className="mb-2 flex justify-between text-sm font-bold">
                             <span>Your Progress</span>
                             <span>{progress}% Completed</span>

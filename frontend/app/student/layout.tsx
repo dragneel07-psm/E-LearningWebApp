@@ -9,7 +9,7 @@ import {
     LayoutDashboard, BookOpen, FileText, Calendar,
     User as UserIcon, LogOut, Menu, X, MessageSquare,
     GraduationCap, Clock, FileBarChart, CreditCard,
-    BrainCircuit
+    BrainCircuit, Trophy
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -49,6 +49,7 @@ export default function StudentLayout({ children }: { children: React.ReactNode 
         { label: 'Assessments', href: '/student/assessments', icon: GraduationCap },
         { label: 'Fees & Payments', href: '/student/fees', icon: CreditCard },
         { label: 'Timetable', href: '/student/timetable', icon: Clock },
+        { label: 'Leaderboard', href: '/student/leaderboard', icon: Trophy },
         { label: 'Notices', href: '/student/notices', icon: FileBarChart }, // Using FileBarChart as closest generic for notices/reports
         { label: 'Messages', href: '/student/messages', icon: MessageSquare },
         { label: 'Profile', href: '/student/profile', icon: UserIcon },

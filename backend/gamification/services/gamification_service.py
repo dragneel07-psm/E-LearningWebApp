@@ -9,7 +9,7 @@ class GamificationService:
     def get_or_create_profile(student):
         profile, created = GamificationProfile.objects.get_or_create(
             student=student,
-            defaults={'tenant': student.academic_class.school if student.academic_class else student.user.tenant} # Fallback to user tenant
+            defaults={'tenant': student.user.tenant} # Always use user tenant as source of truth
         )
         return profile
 
@@ -18,7 +18,7 @@ class GamificationService:
         """
         Record a point transaction and update profile stats.
         """
-        tenant = student.academic_class.school if student.academic_class else student.user.tenant
+        tenant = student.user.tenant
         
         # 1. Create Transaction Record
         PointTransaction.objects.create(

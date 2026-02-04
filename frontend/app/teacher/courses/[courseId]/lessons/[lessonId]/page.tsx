@@ -1,0 +1,211 @@
+'use client';
+
+import { useState, useEffect } from 'react';
+import { useParams, useRouter } from 'next/navigation';
+import { academicAPI, Lesson } from '@/lib/api';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Card, CardContent } from '@/components/ui/card';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import { toast } from 'sonner';
+import { Loader2, Save, ArrowLeft, Eye } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { Switch } from '@/components/ui/switch';
+
+// Editor Components
+import { RichTextEditor } from '@/components/editor/rich-text-editor';
+import { LessonMaterialsManager } from '@/components/courses/lesson-materials-manager';
+
+export default function LessonEditorPage() {
+    const params = useParams();
+    const courseId = params.courseId as string;
+    const lessonId = params.lessonId as string;
+    const router = useRouter();
+
+    const [loading, setLoading] = useState(true);
+    const [saving, setSaving] = useState(false);
+    const [lesson, setLesson] = useState<Lesson | null>(null);
+
+    // Form State
+    const [title, setTitle] = useState('');
+    const [contentType, setContentType] = useState<'text' | 'video' | 'quiz' | 'interactive'>('text');
+    const [content, setContent] = useState('');
+    const [videoUrl, setVideoUrl] = useState('');
+    const [isPublished, setIsPublished] = useState(false);
+    const [duration, setDuration] = useState(15);
+
+    useEffect(() => {
+        if (lessonId === 'new') {
+            setLoading(false);
+            return;
+        }
+
+        const loadLesson = async () => {
+            try {
+                const data = await academicAPI.getLesson(parseInt(lessonId));
+                setLesson(data);
+                setTitle(data.title);
+                setContentType(data.content_type);
+                setContent(data.content || '');
+                setVideoUrl(data.video_url || '');
+                setIsPublished(data.is_published);
+                setDuration(data.duration_minutes || 15);
+            } catch (error) {
+                console.error("Failed to load lesson", error);
+                toast.error("Failed to load lesson details");
+            } finally {
+                setLoading(false);
+            }
+        };
+        loadLesson();
+    }, [lessonId]);
+
+    const handleSave = async () => {
+        try {
+            setSaving(true);
+            const data = {
+                title,
+                content_type: contentType,
+                content,
+                video_url: videoUrl,
+                is_published: isPublished,
+                duration_minutes: duration,
+            };
+
+            if (lessonId === 'new') {
+                toast.error("Create flow not fully supported in standalone editor yet.");
+                return;
+            }
+
+            await academicAPI.updateLesson(parseInt(lessonId), data);
+            toast.success("Lesson saved successfully");
+            router.refresh();
+        } catch (error) {
+            console.error("Failed to save lesson", error);
+            toast.error("Failed to save lesson");
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    if (loading) {
+        return <div className="flex justify-center p-10"><Loader2 className="animate-spin h-8 w-8 text-indigo-500" /></div>;
+    }
+
+    return (
+        <div className="max-w-5xl mx-auto py-6 animate-in fade-in duration-500">
+            {/* Header */}
+            <div className="flex items-center justify-between mb-8 sticky top-0 bg-slate-50/95 backdrop-blur z-20 py-4 border-b border-slate-200">
+                <div className="flex items-center gap-4">
+                    <Button variant="ghost" size="icon" onClick={() => router.back()}>
+                        <ArrowLeft className="h-5 w-5" />
+                    </Button>
+                    <div>
+                        <h1 className="text-xl font-bold text-slate-900">{title || 'Untitled Lesson'}</h1>
+                        <div className="flex items-center gap-2 text-xs text-slate-500">
+                            <Badge variant="outline">{contentType.toUpperCase()}</Badge>
+                            <span>{duration} mins</span>
+                        </div>
+                    </div>
+                </div>
+                <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-2 mr-4 bg-white px-3 py-1.5 rounded-full border border-slate-200">
+                        <span className="text-xs font-medium text-slate-600">Published</span>
+                        <Switch checked={isPublished} onCheckedChange={setIsPublished} />
+                    </div>
+                    <Button variant="outline" size="sm" onClick={() => window.open(`/student/courses/${courseId}/lessons/${lessonId}`, '_blank')}>
+                        <Eye className="h-4 w-4 mr-2" /> Preview
+                    </Button>
+                    <Button onClick={handleSave} disabled={saving} className="bg-indigo-600 hover:bg-indigo-700">
+                        {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
+                        Save Changes
+                    </Button>
+                </div>
+            </div>
+
+            {/* Main Editor */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                {/* Left: Content Editor */}
+                <div className="lg:col-span-2 space-y-6">
+                    <Card>
+                        <CardContent className="p-6 space-y-6">
+                            <div className="space-y-2">
+                                <Label>Lesson Title</Label>
+                                <Input
+                                    value={title}
+                                    onChange={(e) => setTitle(e.target.value)}
+                                    className="text-lg font-bold"
+                                    placeholder="Enter lesson title..."
+                                />
+                            </div>
+
+                            <Tabs value={contentType} onValueChange={(v) => setContentType(v as any)} className="w-full">
+                                <TabsList className="grid w-full grid-cols-4 mb-4">
+                                    <TabsTrigger value="text">Text & Media</TabsTrigger>
+                                    <TabsTrigger value="video">Video</TabsTrigger>
+                                    <TabsTrigger value="quiz" disabled>Quiz</TabsTrigger>
+                                    <TabsTrigger value="interactive" disabled>Interactive</TabsTrigger>
+                                </TabsList>
+
+                                <TabsContent value="text" className="space-y-4">
+                                    <RichTextEditor
+                                        content={content}
+                                        onChange={setContent}
+                                    />
+                                </TabsContent>
+
+                                <TabsContent value="video" className="space-y-4">
+                                    <div className="space-y-2">
+                                        <Label>Video URL (YouTube/Vimeo)</Label>
+                                        <Input
+                                            value={videoUrl}
+                                            onChange={(e) => setVideoUrl(e.target.value)}
+                                            placeholder="https://www.youtube.com/watch?v=..."
+                                        />
+                                    </div>
+                                    {videoUrl && (
+                                        <div className="aspect-video bg-black rounded-lg overflow-hidden mt-4">
+                                            <iframe
+                                                src={videoUrl.replace('watch?v=', 'embed/')}
+                                                className="w-full h-full"
+                                                allowFullScreen
+                                            />
+                                        </div>
+                                    )}
+                                </TabsContent>
+                            </Tabs>
+                        </CardContent>
+                    </Card>
+                </div>
+
+                {/* Right: Settings & Materials */}
+                <div className="space-y-6">
+                    <Card>
+                        <CardContent className="p-6 space-y-4">
+                            <h3 className="font-bold text-slate-900 border-b pb-2 mb-2">Lesson Settings</h3>
+                            <div className="space-y-2">
+                                <Label>Duration (minutes)</Label>
+                                <Input
+                                    type="number"
+                                    min={1}
+                                    value={duration}
+                                    onChange={(e) => setDuration(parseInt(e.target.value))}
+                                />
+                            </div>
+                        </CardContent>
+                    </Card>
+
+                    <Card>
+                        <CardContent className="p-6 space-y-4">
+                            <div className="flex items-center justify-between border-b pb-2 mb-2">
+                                <h3 className="font-bold text-slate-900">Materials</h3>
+                            </div>
+                            <LessonMaterialsManager lessonId={parseInt(lessonId)} />
+                        </CardContent>
+                    </Card>
+                </div>
+            </div>
+        </div>
+    );
+}

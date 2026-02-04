@@ -9,25 +9,78 @@ import { Badge } from '@/components/ui/badge';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { toast } from 'sonner';
 import {
     Clock, ChevronLeft, ChevronRight, Send,
-    AlertCircle, CheckCircle2, Save, Info
+    AlertCircle, Save, Info
 } from 'lucide-react';
 import { useGamification } from '@/components/providers/gamification-provider';
-
-// ...
+import { academicAPI, Assessment, Question } from '@/lib/api';
 
 export default function TakeAssessmentPage() {
     const router = useRouter();
+    const params = useParams();
+    const assessmentId = params.id as string;
     const { awardXP } = useGamification();
-    // ...
+
+    const [loading, setLoading] = useState(true);
+    const [submitting, setSubmitting] = useState(false);
+    const [assessment, setAssessment] = useState<Assessment | null>(null);
+    const [questions, setQuestions] = useState<Question[]>([]);
+
+    // Quiz State
+    const [currentIndex, setCurrentIndex] = useState(0);
+    const [answers, setAnswers] = useState<Record<string, any>>({});
+    const [timeLeft, setTimeLeft] = useState(0); // in seconds
+    const [startTime] = useState(Date.now());
+
+    useEffect(() => {
+        const loadData = async () => {
+            try {
+                const [assessmentData, questionsData] = await Promise.all([
+                    academicAPI.getAssessment(assessmentId),
+                    academicAPI.getQuestionsByAssessment(assessmentId)
+                ]);
+                setAssessment(assessmentData);
+                setQuestions(questionsData);
+                setTimeLeft(assessmentData.duration_minutes * 60);
+            } catch (error) {
+                console.error("Failed to load assessment", error);
+                toast.error("Failed to load assessment");
+            } finally {
+                setLoading(false);
+            }
+        };
+        loadData();
+    }, [assessmentId]);
+
+    // Timer
+    useEffect(() => {
+        if (!loading && timeLeft > 0) {
+            const timer = setInterval(() => {
+                setTimeLeft((prev) => {
+                    if (prev <= 1) {
+                        clearInterval(timer);
+                        submitAssessment(); // Auto submit
+                        return 0;
+                    }
+                    return prev - 1;
+                });
+            }, 1000);
+            return () => clearInterval(timer);
+        }
+    }, [loading, timeLeft]);
+
+    const handleAnswerChange = (questionId: string, value: any) => {
+        setAnswers(prev => ({ ...prev, [questionId]: value }));
+    };
 
     const submitAssessment = async () => {
         if (submitting) return;
         setSubmitting(true);
 
         try {
-            const timeTaken = Math.floor((Date.now() - startTime) / 60000);
+            const timeTaken = Math.floor((Date.now() - startTime) / 60000); // minutes
             const res = await academicAPI.submitExam(assessmentId, answers, timeTaken);
 
             // Calculate XP based on score (e.g., 10 XP per point) or flat bonus
@@ -39,13 +92,19 @@ export default function TakeAssessmentPage() {
         } catch (error) {
             console.error('Submission failed', error);
             toast.error('Failed to submit assessment');
-        } finally {
             setSubmitting(false);
         }
     };
 
+    const formatTime = (seconds: number) => {
+        const mins = Math.floor(seconds / 60);
+        const secs = seconds % 60;
+        return `${mins}:${secs.toString().padStart(2, '0')}`;
+    };
+
     if (loading) return <div className="p-8 text-center text-slate-400">Loading assessment...</div>;
-    if (!assessment) return null;
+    if (!assessment) return <div className="p-8 text-center text-red-400">Assessment not found</div>;
+    if (questions.length === 0) return <div className="p-8 text-center text-slate-400">No questions in this assessment.</div>;
 
     const currentQuestion = questions[currentIndex];
     const progress = ((currentIndex + 1) / questions.length) * 100;
@@ -89,16 +148,16 @@ export default function TakeAssessmentPage() {
                         <CardContent className="flex-1">
                             {currentQuestion.type === 'mcq' && (
                                 <RadioGroup
-                                    value={answers[currentQuestion.id] || ''}
-                                    onValueChange={(val) => handleAnswerChange(currentQuestion.id, val)}
+                                    value={answers[currentQuestion.question_id] || ''}
+                                    onValueChange={(val) => handleAnswerChange(currentQuestion.question_id, val)}
                                     className="space-y-4 pt-4"
                                 >
                                     {currentQuestion.options.map((option, idx) => (
                                         <Label
                                             key={idx}
-                                            className={`flex items-center space-x-3 p-4 rounded-xl border cursor-pointer transition-all ${answers[currentQuestion.id] === option ? 'border-indigo-500 bg-indigo-50/50 ring-1 ring-indigo-500' : 'border-slate-100 hover:border-slate-200 hover:bg-slate-50'}`}
+                                            className={`flex items-center space-x-3 p-4 rounded-xl border cursor-pointer transition-all ${answers[currentQuestion.question_id] === option ? 'border-indigo-500 bg-indigo-50/50 ring-1 ring-indigo-500' : 'border-slate-100 hover:border-slate-200 hover:bg-slate-50'}`}
                                         >
-                                            <RadioGroupItem value={option} id={`q${currentQuestion.id}-opt${idx}`} />
+                                            <RadioGroupItem value={option} id={`q${currentQuestion.question_id}-opt${idx}`} />
                                             <span className="text-slate-700">{option}</span>
                                         </Label>
                                     ))}
@@ -111,8 +170,8 @@ export default function TakeAssessmentPage() {
                                     <Textarea
                                         placeholder="Type your answer here..."
                                         className={`min-h-[200px] text-base ${currentQuestion.type === 'code' ? 'font-mono bg-slate-900 text-slate-100 focus:bg-slate-900' : ''}`}
-                                        value={answers[currentQuestion.id] || ''}
-                                        onChange={(e) => handleAnswerChange(currentQuestion.id, e.target.value)}
+                                        value={answers[currentQuestion.question_id] || ''}
+                                        onChange={(e) => handleAnswerChange(currentQuestion.question_id, e.target.value)}
                                     />
                                     {currentQuestion.type === 'code' && (
                                         <p className="text-[10px] text-slate-400 flex items-center gap-1">
@@ -167,12 +226,12 @@ export default function TakeAssessmentPage() {
                         </CardHeader>
                         <CardContent>
                             <div className="grid grid-cols-4 gap-2">
-                                {questions.map((_, idx) => (
+                                {questions.map((q, idx) => (
                                     <Button
                                         key={idx}
-                                        variant={currentIndex === idx ? 'default' : answers[questions[idx].id] ? 'secondary' : 'outline'}
+                                        variant={currentIndex === idx ? 'default' : answers[q.question_id] ? 'secondary' : 'outline'}
                                         size="sm"
-                                        className={`h-10 w-10 p-0 rounded-lg ${currentIndex === idx ? 'bg-indigo-600' : answers[questions[idx].id] ? 'bg-indigo-50 text-indigo-600 border-indigo-100' : 'text-slate-400'}`}
+                                        className={`h-10 w-10 p-0 rounded-lg ${currentIndex === idx ? 'bg-indigo-600' : answers[q.question_id] ? 'bg-indigo-50 text-indigo-600 border-indigo-100' : 'text-slate-400'}`}
                                         onClick={() => setCurrentIndex(idx)}
                                     >
                                         {idx + 1}

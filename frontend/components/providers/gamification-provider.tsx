@@ -59,9 +59,20 @@ export function GamificationProvider({ children }: { children: React.ReactNode }
     };
 
     const awardXP = (amount: number, reason?: string) => {
-        // Optimistic update could go here, but for now just animate
+        // 1. Optimistic Update
+        setStats(prev => ({
+            ...prev,
+            currentXP: prev.currentXP + amount,
+            totalXP: prev.totalXP + amount,
+            // We don't optimistically level up here as that's complex logic (thresholds)
+            // We rely on the backend refresh for the level-up modal trigger.
+        }));
+
+        // 2. Trigger Animation
         setXpAnimation({ amount, reason });
-        // Refresh stats to get actual new totals (with a slight delay to let backend process)
+
+        // 3. Reconcile with Server (Refresh)
+        // Give backend time to process the transaction
         setTimeout(refreshStats, 1000);
     };
 

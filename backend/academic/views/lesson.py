@@ -98,11 +98,13 @@ class LessonViewSet(viewsets.ModelViewSet):
             
             progress.save()
             
-            # Award gamification rewards if completed
-            if progress.completed:
+            # Award gamification rewards if completed AND not previously awarded
+            if progress.completed and not progress.xp_awarded:
                 try:
                     from gamification.services.gamification_service import GamificationService
                     GamificationService.on_lesson_complete(student, lesson)
+                    progress.xp_awarded = True
+                    progress.save(update_fields=['xp_awarded'])
                 except ImportError:
                     pass # App might not be fully ready in all environments
 

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Badge as BadgeType, StudentBadge, academicAPI } from '@/lib/api';
+import { Badge as BadgeType, StudentBadge, gamificationAPI } from '@/lib/api';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Loader2, Lock } from 'lucide-react';
 import * as LucideIcons from 'lucide-react';
@@ -29,8 +29,8 @@ export function BadgesGallery() {
         const loadBadges = async () => {
             try {
                 const [allBadges, myBadges] = await Promise.all([
-                    academicAPI.gamification.getBadges(),
-                    academicAPI.gamification.getMyBadges()
+                    gamificationAPI.getBadges(),
+                    gamificationAPI.getMyBadges()
                 ]);
                 setBadges(allBadges);
                 setEarnedBadges(new Set(myBadges.map(b => b.badge))); // Assuming b.badge is the ID

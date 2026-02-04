@@ -29,7 +29,7 @@ class Badge(models.Model):
 class StudentBadge(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE, db_constraint=False)
-    student = models.ForeignKey('academic.Student', on_delete=models.CASCADE, related_name='badges')
+    student = models.ForeignKey('academic.Student', on_delete=models.CASCADE, related_name='badges', db_constraint=False)
     badge = models.ForeignKey(Badge, on_delete=models.CASCADE)
     earned_at = models.DateTimeField(auto_now_add=True)
 
@@ -42,7 +42,7 @@ class StudentBadge(models.Model):
 class PointTransaction(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE, db_constraint=False)
-    student = models.ForeignKey('academic.Student', on_delete=models.CASCADE, related_name='points')
+    student = models.ForeignKey('academic.Student', on_delete=models.CASCADE, related_name='points', db_constraint=False)
     points = models.IntegerField()
     description = models.CharField(max_length=255)
     activity_type = models.CharField(max_length=50) # 'lesson', 'quiz', 'badge', 'streak'
@@ -54,7 +54,7 @@ class PointTransaction(models.Model):
 class GamificationProfile(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE, db_constraint=False)
-    student = models.OneToOneField('academic.Student', on_delete=models.CASCADE, related_name='gamification_profile')
+    student = models.OneToOneField('academic.Student', on_delete=models.CASCADE, related_name='gamification_profile', db_constraint=False)
     
     current_level = models.IntegerField(default=1)
     current_xp = models.IntegerField(default=0) # XP towards next level
@@ -64,6 +64,8 @@ class GamificationProfile(models.Model):
     longest_streak = models.IntegerField(default=0)
     last_activity_date = models.DateField(null=True, blank=True)
     
+    is_public = models.BooleanField(default=True, help_text="Show in leaderboards")
+
     updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):

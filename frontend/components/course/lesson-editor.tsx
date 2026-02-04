@@ -4,13 +4,14 @@ import { useState, useRef } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Save, Loader2, Trash2, FileUp, Video, Paperclip, X } from 'lucide-react';
-import dynamic from 'next/dynamic';
-import { Lesson, LessonMaterial, academicAPI } from '@/lib/api';
+import { Save, Loader2, Trash2, FileUp, Video, Paperclip, X, Layout, FileText, HelpCircle, Eye } from 'lucide-react';
+import { RichTextEditor } from '@/components/editor/rich-text-editor';
+import { QuizBuilder } from '@/components/lessons/quiz-builder';
+import { academicAPI, Lesson, LessonMaterial } from '@/lib/api';
+import { cn } from '@/lib/utils';
+import { Switch } from '@/components/ui/switch';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
-
-const ReactQuill = dynamic(() => import('react-quill'), { ssr: false });
-import 'react-quill/dist/quill.snow.css';
 
 interface LessonEditorProps {
     lesson: Lesson;
@@ -94,21 +95,33 @@ export default function LessonEditor({ lesson, chapterTitle, onSave, onDelete }:
                     <p className="text-sm text-slate-500">In Chapter: {chapterTitle}</p>
                 </div>
                 <div className="flex gap-2">
+                    <div className="flex items-center gap-4 px-3 py-1.5 bg-white rounded-full border border-slate-200 shadow-sm mr-2">
+                        <div className="flex items-center gap-2">
+                            <span className={cn("text-[10px] font-black uppercase tracking-wider", localLesson.is_published ? "text-emerald-600" : "text-amber-600")}>
+                                {localLesson.is_published ? "Published" : "Draft"}
+                            </span>
+                            <Switch
+                                checked={localLesson.is_published}
+                                onCheckedChange={(val) => handleChange('is_published', val)}
+                                className="data-[state=checked]:bg-emerald-500 scale-75"
+                            />
+                        </div>
+                    </div>
                     {onDelete && (
-                        <Button variant="destructive" size="icon" className="h-10 w-10" onClick={onDelete}>
+                        <Button variant="ghost" size="icon" className="h-10 w-10 text-slate-400 hover:text-red-500 hover:bg-red-50" onClick={onDelete}>
                             <Trash2 className="h-4 w-4" />
                         </Button>
                     )}
                     <Button
                         onClick={handleSave}
                         disabled={isSaving}
-                        className="bg-indigo-600 hover:bg-indigo-700"
+                        className="bg-indigo-600 hover:bg-indigo-700 shadow-lg shadow-indigo-200 rounded-full px-6"
                     >
                         {isSaving ? (
                             <Loader2 className="h-4 w-4 animate-spin" />
                         ) : (
                             <>
-                                <Save className="mr-2 h-4 w-4" /> Save Changes
+                                <Save className="mr-2 h-4 w-4" /> Save Lesson
                             </>
                         )}
                     </Button>
@@ -117,26 +130,58 @@ export default function LessonEditor({ lesson, chapterTitle, onSave, onDelete }:
 
             <Card>
                 <CardContent className="p-6 space-y-6">
-                    {/* Rich Text Editor */}
-                    <div>
-                        <label className="mb-2 block text-sm font-bold text-slate-700">Lesson Content</label>
-                        <div className="h-[400px]">
-                            <ReactQuill
-                                theme="snow"
-                                value={localLesson.content || ''}
-                                onChange={(val) => handleChange('content', val)}
-                                className="h-[350px]"
-                                modules={{
-                                    toolbar: [
-                                        [{ 'header': [1, 2, false] }],
-                                        ['bold', 'italic', 'underline', 'strike', 'blockquote'],
-                                        [{ 'list': 'ordered' }, { 'list': 'bullet' }],
-                                        ['link', 'image', 'code-block'],
-                                        ['clean']
-                                    ],
-                                }}
-                            />
+                    {/* Content Type Selector */}
+                    <div className="pb-6 border-b border-slate-100">
+                        <label className="mb-3 block text-xs font-black uppercase tracking-widest text-slate-400">Content Module Type</label>
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                            {[
+                                { id: 'text', label: 'Article / Text', icon: FileText },
+                                { id: 'video', label: 'Video Lecture', icon: Video },
+                                { id: 'quiz', label: 'Interactive Quiz', icon: HelpCircle },
+                                { id: 'interactive', label: 'Interactive Lab', icon: Layout }
+                            ].map((type) => (
+                                <button
+                                    key={type.id}
+                                    type="button"
+                                    onClick={() => handleChange('content_type', type.id)}
+                                    className={cn(
+                                        "flex flex-col items-center justify-center p-4 rounded-2xl border-2 transition-all gap-2",
+                                        localLesson.content_type === type.id
+                                            ? "bg-indigo-50 border-indigo-500 text-indigo-700 shadow-sm"
+                                            : "bg-white border-slate-100 text-slate-500 hover:border-slate-200"
+                                    )}
+                                >
+                                    <type.icon className={cn("h-5 w-5", localLesson.content_type === type.id ? "text-indigo-600" : "text-slate-400")} />
+                                    <span className="text-xs font-bold leading-none">{type.label}</span>
+                                </button>
+                            ))}
                         </div>
+                    </div>
+
+                    {/* Lesson Content / Quiz Builder */}
+                    <div className="space-y-6">
+                        {localLesson.content_type === 'quiz' ? (
+                            <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
+                                <label className="mb-2 block text-sm font-bold text-slate-700">Quiz Configuration</label>
+                                <QuizBuilder
+                                    data={localLesson.interactive_data}
+                                    onChange={(data) => handleChange('interactive_data', data)}
+                                />
+                            </div>
+                        ) : (
+                            <div>
+                                <label className="mb-2 block text-sm font-bold text-slate-700">
+                                    {localLesson.content_type === 'video' ? 'Video Description / Notes' : 'Lesson Content'}
+                                </label>
+                                <div className="min-h-[400px]">
+                                    <RichTextEditor
+                                        content={localLesson.content || ''}
+                                        onChange={(val) => handleChange('content', val)}
+                                        editable={true}
+                                    />
+                                </div>
+                            </div>
+                        )}
                     </div>
 
                     {/* Metadata Fields */}
@@ -228,6 +273,6 @@ export default function LessonEditor({ lesson, chapterTitle, onSave, onDelete }:
                     </div>
                 </CardContent>
             </Card>
-        </div>
+        </div >
     );
 }

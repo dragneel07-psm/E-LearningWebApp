@@ -15,6 +15,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Loader2, User, Lock, Mail, Save, ShieldCheck, Award } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { BadgesGallery } from '@/components/gamification/badges-gallery';
+import { Switch } from '@/components/ui/switch';
+import { gamificationAPI } from '@/lib/api';
+import { PrivacyToggle } from './privacy-toggle';
 
 const profileSchema = z.object({
     first_name: z.string().min(2, "First name is too short"),
@@ -135,9 +138,11 @@ export function ProfileView() {
             <Tabs defaultValue="overview" className="space-y-6">
                 <TabsList className="bg-white/5 border border-white/10 p-1 rounded-xl">
                     <TabsTrigger value="overview" className="rounded-lg data-[state=active]:bg-violet-600 data-[state=active]:text-white">Overview</TabsTrigger>
-                    <TabsTrigger value="achievements" className="rounded-lg data-[state=active]:bg-violet-600 data-[state=active]:text-white flex gap-2 items-center">
-                        <Award className="w-4 h-4" /> Achievements
-                    </TabsTrigger>
+                    {user.role === 'student' && (
+                        <TabsTrigger value="achievements" className="rounded-lg data-[state=active]:bg-violet-600 data-[state=active]:text-white flex gap-2 items-center">
+                            <Award className="w-4 h-4" /> Achievements
+                        </TabsTrigger>
+                    )}
                     <TabsTrigger value="edit" className="rounded-lg data-[state=active]:bg-violet-600 data-[state=active]:text-white">Edit Profile</TabsTrigger>
                     <TabsTrigger value="security" className="rounded-lg data-[state=active]:bg-violet-600 data-[state=active]:text-white">Security</TabsTrigger>
                 </TabsList>
@@ -174,17 +179,19 @@ export function ProfileView() {
                     </Card>
                 </TabsContent>
 
-                <TabsContent value="achievements">
-                    <Card className="bg-white/5 border-white/10 text-white backdrop-blur-sm">
-                        <CardHeader>
-                            <CardTitle>Achievements & Badges</CardTitle>
-                            <CardDescription>Badges you've unlocked through your learning journey</CardDescription>
-                        </CardHeader>
-                        <CardContent>
-                            <BadgesGallery />
-                        </CardContent>
-                    </Card>
-                </TabsContent>
+                {user.role === 'student' && (
+                    <TabsContent value="achievements">
+                        <Card className="bg-white/5 border-white/10 text-white backdrop-blur-sm">
+                            <CardHeader>
+                                <CardTitle>Achievements & Badges</CardTitle>
+                                <CardDescription>Badges you've unlocked through your learning journey</CardDescription>
+                            </CardHeader>
+                            <CardContent>
+                                <BadgesGallery />
+                            </CardContent>
+                        </Card>
+                    </TabsContent>
+                )}
 
                 <TabsContent value="edit">
                     <Card className="bg-white/5 border-white/10 text-white backdrop-blur-sm">
@@ -192,35 +199,52 @@ export function ProfileView() {
                             <CardTitle>Edit Profile</CardTitle>
                             <CardDescription>Update your personal details</CardDescription>
                         </CardHeader>
-                        <form onSubmit={handleProfileSubmit(onUpdateProfile)}>
-                            <CardContent className="space-y-4">
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <div className="space-y-2">
-                                        <Label htmlFor="first_name">First Name</Label>
-                                        <Input id="first_name" className="bg-white/5 border-white/10" {...registerProfile('first_name')} />
-                                        {/* @ts-ignore */}
-                                        {profileErrors.first_name && <p className="text-red-400 text-xs">{profileErrors.first_name.message as string}</p>}
+                        <CardContent className="space-y-6">
+                            <form onSubmit={handleProfileSubmit(onUpdateProfile)} id="profile-form">
+                                <div className="space-y-4">
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div className="space-y-2">
+                                            <Label htmlFor="first_name">First Name</Label>
+                                            <Input id="first_name" className="bg-white/5 border-white/10" {...registerProfile('first_name')} />
+                                            {/* @ts-ignore */}
+                                            {profileErrors.first_name && <p className="text-red-400 text-xs">{profileErrors.first_name.message as string}</p>}
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Label htmlFor="last_name">Last Name</Label>
+                                            <Input id="last_name" className="bg-white/5 border-white/10" {...registerProfile('last_name')} />
+                                            {/* @ts-ignore */}
+                                            {profileErrors.last_name && <p className="text-red-400 text-xs">{profileErrors.last_name.message as string}</p>}
+                                        </div>
                                     </div>
                                     <div className="space-y-2">
-                                        <Label htmlFor="last_name">Last Name</Label>
-                                        <Input id="last_name" className="bg-white/5 border-white/10" {...registerProfile('last_name')} />
-                                        {/* @ts-ignore */}
-                                        {profileErrors.last_name && <p className="text-red-400 text-xs">{profileErrors.last_name.message as string}</p>}
+                                        <Label>Email</Label>
+                                        <Input value={user.email} disabled className="bg-white/5 border-white/10 opacity-50 cursor-not-allowed" />
+                                        <p className="text-xs text-slate-500">Email cannot be changed.</p>
                                     </div>
                                 </div>
-                                <div className="space-y-2">
-                                    <Label>Email</Label>
-                                    <Input value={user.email} disabled className="bg-white/5 border-white/10 opacity-50 cursor-not-allowed" />
-                                    <p className="text-xs text-slate-500">Email cannot be changed.</p>
+                            </form>
+
+                            {user.role === 'student' && (
+                                <div className="pt-6 border-t border-white/10">
+                                    <h3 className="text-lg font-medium mb-4">Privacy Settings</h3>
+                                    <div className="flex items-center justify-between p-4 rounded-lg bg-white/5 border border-white/10">
+                                        <div className="space-y-0.5">
+                                            <Label className="text-base">Public Leaderboard</Label>
+                                            <p className="text-sm text-slate-400">
+                                                Allow your name and score to appear on class leaderboards.
+                                            </p>
+                                        </div>
+                                        <PrivacyToggle />
+                                    </div>
                                 </div>
-                            </CardContent>
-                            <CardFooter>
-                                <Button type="submit" disabled={isSaving} className="bg-violet-600 hover:bg-violet-500">
-                                    {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-                                    Save Changes
-                                </Button>
-                            </CardFooter>
-                        </form>
+                            )}
+                        </CardContent>
+                        <CardFooter>
+                            <Button type="submit" form="profile-form" disabled={isSaving} className="bg-violet-600 hover:bg-violet-500">
+                                {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+                                Save Changes
+                            </Button>
+                        </CardFooter>
                     </Card>
                 </TabsContent>
 

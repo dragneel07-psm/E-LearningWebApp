@@ -73,6 +73,7 @@ export interface Subject {
     total_lessons?: number;
     completed_lessons?: number;
     progress_percentage?: number;
+    is_active?: boolean;
 }
 
 export interface Section {
@@ -1325,8 +1326,12 @@ export const api = {
         getBadges: () => apiRequest<Badge[]>('/gamification/available-badges/'),
         getMyBadges: () => apiRequest<StudentBadge[]>('/gamification/student-badges/'),
         getStudentBadges: () => apiRequest<StudentBadge[]>('/gamification/student-badges/'),
-        getLeaderboard: () => apiRequest<any[]>('/gamification/leaderboard/'),
+        getLeaderboard: (scope: 'class' | 'school' = 'class') => apiRequest<any[]>(`/gamification/leaderboard/?scope=${scope}`),
         getMyStats: () => apiRequest<any>('/gamification/profile/my_stats/'),
+        updateProfile: (id: string, data: any) => apiRequest<any>(`/gamification/profile/${id}/`, {
+            method: 'PATCH',
+            body: JSON.stringify(data)
+        }),
     },
     helpers: helpers,
 };

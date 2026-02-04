@@ -1,26 +1,79 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
 import { Progress } from '@/components/ui/progress';
+import { toast } from 'sonner';
 import {
     Clock, CheckCircle2, AlertCircle,
     ChevronRight, ChevronLeft, Send,
     Loader2
 } from 'lucide-react';
 import { useGamification } from '@/components/providers/gamification-provider';
-
-// ...
+import { academicAPI, Assessment, Question } from '@/lib/api';
 
 export default function StudentQuizPage() {
     const params = useParams();
     const router = useRouter();
+    const id = params.id as string;
     const { awardXP } = useGamification();
-    // ...
+
+    const [loading, setLoading] = useState(true);
+    const [submitting, setSubmitting] = useState(false);
+    const [assessment, setAssessment] = useState<Assessment | null>(null);
+    const [questions, setQuestions] = useState<Question[]>([]);
+
+    // Quiz State
+    const [quizStarted, setQuizStarted] = useState(false);
+    const [quizFinished, setQuizFinished] = useState(false);
+    const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
+    const [answers, setAnswers] = useState<Record<string, any>>({});
+    const [timeLeft, setTimeLeft] = useState(0);
+    const [score, setScore] = useState<any>(null);
+
+    useEffect(() => {
+        const loadData = async () => {
+            try {
+                const [assessmentData, questionsData] = await Promise.all([
+                    academicAPI.getAssessment(id),
+                    academicAPI.getQuestionsByAssessment(id)
+                ]);
+                setAssessment(assessmentData);
+                setQuestions(questionsData);
+                setTimeLeft(assessmentData.duration_minutes * 60);
+            } catch (error) {
+                console.error("Failed to load quiz", error);
+                toast.error("Failed to load quiz");
+            } finally {
+                setLoading(false);
+            }
+        };
+        loadData();
+    }, [id]);
+
+    useEffect(() => {
+        if (quizStarted && !quizFinished && timeLeft > 0) {
+            const timer = setInterval(() => {
+                setTimeLeft((prev) => {
+                    if (prev <= 1) {
+                        clearInterval(timer);
+                        handleSubmit(); // Auto submit
+                        return 0;
+                    }
+                    return prev - 1;
+                });
+            }, 1000);
+            return () => clearInterval(timer);
+        }
+    }, [quizStarted, quizFinished, timeLeft]);
+
+    const handleAnswerChange = (questionId: string, value: any) => {
+        setAnswers(prev => ({ ...prev, [questionId]: value }));
+    };
 
     const handleSubmit = async () => {
         if (submitting) return;

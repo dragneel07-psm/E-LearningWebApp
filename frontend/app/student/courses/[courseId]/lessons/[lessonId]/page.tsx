@@ -8,13 +8,91 @@ import { Button } from '@/components/ui/button';
 import { ArrowLeft, CheckCircle, ChevronRight, Menu, FileText, Video as VideoIcon } from 'lucide-react';
 import { useGamification } from '@/components/providers/gamification-provider';
 
-// ...
+// Additional Imports
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import { VideoPlayer } from "@/components/lessons/video-player";
+import { InteractiveRenderer, LessonInteractiveRenderer, Interaction } from "@/components/lessons/interactive-renderer";
+import { SafeHTML } from "@/components/ui/safe-html";
+import { toast } from "sonner";
+import { academicAPI, Lesson, Chapter } from "@/lib/api";
 
 export default function LessonPlayerPage() {
     const params = useParams();
     const router = useRouter();
     const { awardXP } = useGamification();
-    // ...
+
+    // -- STATE DEFINITIONS --
+    const courseId = params.courseId as string;
+    const lessonId = params.lessonId ? parseInt(params.lessonId as string) : null;
+
+    const [lesson, setLesson] = useState<Lesson | null>(null);
+    const [chapters, setChapters] = useState<Chapter[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [completing, setCompleting] = useState(false);
+
+    // Video & Interactive State
+    const [isVideoPlaying, setIsVideoPlaying] = useState(false);
+    const [currentTime, setCurrentTime] = useState(0);
+    const [activeInteractionId, setActiveInteractionId] = useState<string | null>(null);
+    const [completedInteractions, setCompletedInteractions] = useState<Set<string>>(new Set());
+
+    // -- HELPERS --
+    // Helper to find next lesson
+    const navigateToNextLesson = () => {
+        if (!chapters.length || !lesson) return;
+
+        // Flatten ONLY published lessons for navigation
+        const allLessons = chapters.flatMap(c => (c.lessons || []).filter(l => l.is_published));
+        const currentIndex = allLessons.findIndex(l => l.id === lesson.id);
+
+        if (currentIndex !== -1 && currentIndex < allLessons.length - 1) {
+            const nextLesson = allLessons[currentIndex + 1];
+            router.push(`/student/courses/${courseId}/lessons/${nextLesson.id}`);
+        } else {
+            toast.success("Congratulations! You've reached the end of the available content.");
+            router.push(`/student/courses/${courseId}`);
+        }
+    };
+
+    // -- DATA FETCHING --
+    useEffect(() => {
+        const loadData = async () => {
+            if (!courseId || !lessonId) return;
+
+            setLoading(true);
+            try {
+                // Fetch lesson details and course chapters (for sidebar)
+                // Note: We might need a specific endpoint to get chapters with lessons included
+                // verify api.getChapters in api.ts
+
+                const [lessonData, chaptersData] = await Promise.all([
+                    academicAPI.getLesson(lessonId),
+                    academicAPI.getChapters(undefined) // TODO: Filter by subject/course if possible. For now fetching all or handled by backend context?
+                    // academicAPI.getChapters definitions says `getChapters: (subjectId?: number)`
+                    // We need to parse courseId to number if it's subjectId
+                ]);
+
+                // Correction: fetching chapters for specific subject
+                const subjectId = parseInt(courseId);
+                const properChapters = await academicAPI.getChapters(subjectId);
+
+                // For each chapter, we might need to fetch lessons if not included
+                // The Chapter type has lessons?: Lesson[]
+                // If backend returns them, great. If not, we iterate.
+                // Assuming backend returns nested lessons for now based on UI requirements
+
+                setLesson(lessonData);
+                setChapters(properChapters);
+            } catch (error) {
+                console.error("Failed to load lesson context", error);
+                toast.error("Failed to load lesson content");
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        loadData();
+    }, [courseId, lessonId]);
 
     const handleToggleComplete = async () => {
         if (!lesson) return;
@@ -94,8 +172,27 @@ export default function LessonPlayerPage() {
                         <ArrowLeft className="h-5 w-5 text-slate-500" />
                     </Button>
                     <div>
-                        <h1 className="text-sm font-bold text-slate-900 lg:text-lg">{lesson.title}</h1>
-                        <p className="hidden text-xs text-slate-500 lg:block">Chapter: {chapters.find(c => c.id === lesson.chapter)?.title}</p>
+                        <div className="flex items-center gap-2">
+                            <h1 className="text-sm font-bold text-slate-900 lg:text-lg line-clamp-1">{lesson.title}</h1>
+                            <div className="hidden lg:flex items-center gap-2 px-2 py-0.5 rounded-full bg-slate-100 border border-slate-200">
+                                <span className="text-[10px] font-black text-slate-500 uppercase">
+                                    {Math.round((chapters.flatMap(c => c.lessons || []).filter(l => l.completed).length / Math.max(1, chapters.flatMap(c => c.lessons || []).length)) * 100)}% Complete
+                                </span>
+                            </div>
+                        </div>
+                        <p className="hidden text-xs text-slate-500 lg:block">
+                            {chapters.find(c => c.id === lesson.chapter)?.title || 'Course Content'}
+                        </p>
+                    </div>
+                </div>
+
+                <div className="hidden md:flex flex-1 max-w-xs mx-8 items-center gap-3">
+                    <div className="h-2 flex-1 bg-slate-100 rounded-full overflow-hidden">
+                        <motion.div
+                            initial={{ width: 0 }}
+                            animate={{ width: `${(chapters.flatMap(c => c.lessons || []).filter(l => l.completed).length / Math.max(1, chapters.flatMap(c => c.lessons || []).length)) * 100}%` }}
+                            className="h-full bg-indigo-600"
+                        />
                     </div>
                 </div>
 
@@ -139,178 +236,205 @@ export default function LessonPlayerPage() {
                 </aside>
 
                 {/* Main Content Area */}
-                <main className="flex-1 overflow-y-auto p-6 lg:p-10">
-                    <div className="mx-auto max-w-3xl space-y-8">
-                        {/* Video Content with Interactivity */}
-                        {lesson.content_type === 'video' && lesson.video_url && (
-                            <div className="space-y-6">
-                                <div className="relative isolate">
-                                    <VideoPlayer
-                                        url={lesson.video_url}
-                                        playing={isVideoPlaying && !activeInteractionId}
-                                        onProgress={(state) => {
-                                            setCurrentTime(state.playedSeconds);
-
-                                            // Check for interactions
-                                            if (lesson.interactive_data?.interactions) {
-                                                const interactions = lesson.interactive_data.interactions as Interaction[];
-                                                const triggered = interactions.find(i =>
-                                                    i.timestamp !== undefined &&
-                                                    Math.abs(i.timestamp - state.playedSeconds) < 1 &&
-                                                    !completedInteractions.has(i.id)
-                                                );
-
-                                                if (triggered && triggered.id !== activeInteractionId) {
-                                                    setActiveInteractionId(triggered.id);
-                                                    setIsVideoPlaying(false);
-                                                }
-                                            }
-                                        }}
-                                        onComplete={() => {
-                                            if (!lesson.completed) handleToggleComplete();
-                                        }}
-                                    />
-
-                                    {/* Interaction Overlay */}
-                                    <AnimatePresence>
-                                        {activeInteractionId && (
-                                            <motion.div
-                                                initial={{ opacity: 0 }}
-                                                animate={{ opacity: 1 }}
-                                                exit={{ opacity: 0 }}
-                                                className="absolute inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4 lg:p-8"
-                                            >
-                                                <div className="w-full max-w-2xl">
-                                                    <LessonInteractiveRenderer
-                                                        interactions={lesson.interactive_data?.interactions || []}
-                                                        activeInteractionId={activeInteractionId}
-                                                        onComplete={(id) => {
-                                                            setCompletedInteractions(prev => new Set(prev).add(id));
-                                                            setActiveInteractionId(null);
-                                                            setIsVideoPlaying(true);
-                                                        }}
-                                                    />
-                                                </div>
-                                            </motion.div>
-                                        )}
-                                    </AnimatePresence>
-                                </div>
-                                <div className="space-y-4">
-                                    <h2 className="text-3xl font-black text-slate-900">{lesson.title}</h2>
-                                    {lesson.content && (
-                                        <div className="rounded-2xl border border-slate-100 bg-white p-8 shadow-sm">
-                                            <SafeHTML html={lesson.content} />
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
-                        )}
-
-                        {(lesson.content_type === 'interactive' || lesson.content_type === 'quiz') && lesson.interactive_data && (
-                            <div className="space-y-8">
-                                <div className="space-y-2">
-                                    <h2 className="text-3xl font-black text-slate-900">{lesson.title}</h2>
-                                    <p className="text-slate-500 font-medium">Interactive Learning Session</p>
-                                </div>
-                                <InteractiveRenderer
-                                    type={lesson.content_type}
-                                    data={lesson.interactive_data}
-                                    onComplete={() => {
-                                        if (!lesson.completed) handleToggleComplete();
-                                    }}
-                                />
-                                {lesson.content && (
-                                    <div className="mt-8 rounded-2xl border border-slate-100 bg-white p-8 shadow-sm">
-                                        <SafeHTML html={lesson.content} />
-                                    </div>
-                                )}
-                            </div>
-                        )}
-
-                        {lesson.content_type === 'text' && (
-                            <div className="space-y-4">
-                                <h2 className="text-3xl font-black text-slate-900">{lesson.title}</h2>
+                <main className="flex-1 overflow-y-auto p-6 lg:p-10 scroll-smooth">
+                    <AnimatePresence mode="wait">
+                        <motion.div
+                            key={lesson.id}
+                            initial={{ opacity: 0, x: 20 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            exit={{ opacity: 0, x: -20 }}
+                            transition={{ duration: 0.3, ease: "easeOut" }}
+                            className="mx-auto max-w-3xl space-y-8"
+                        >
+                            {/* Video Content with Interactivity */}
+                            {lesson.content_type === 'video' && lesson.video_url && (
                                 <div className="space-y-6">
-                                    {/* Start Interactions */}
-                                    {lesson.interactive_data?.interactions?.filter((i: any) => i.position === 'start').map((i: any) => (
-                                        <LessonInteractiveRenderer
-                                            key={i.id}
-                                            interactions={lesson.interactive_data.interactions}
-                                            activeInteractionId={i.id}
-                                            onComplete={(id) => setCompletedInteractions(prev => new Set(prev).add(id))}
-                                        />
-                                    ))}
+                                    <div className="relative isolate">
+                                        <VideoPlayer
+                                            url={lesson.video_url}
+                                            playing={isVideoPlaying && !activeInteractionId}
+                                            onProgress={(state) => {
+                                                setCurrentTime(state.playedSeconds);
 
-                                    <div className="rounded-2xl border border-slate-100 bg-white p-8 shadow-sm">
-                                        {lesson.content ? (
-                                            <SafeHTML html={lesson.content} />
-                                        ) : (
-                                            <p className="text-slate-500 italic">No text content available for this lesson.</p>
-                                        )}
-                                    </div>
+                                                // Check for interactions
+                                                if (lesson.interactive_data?.interactions) {
+                                                    const interactions = lesson.interactive_data.interactions as Interaction[];
+                                                    const triggered = interactions.find(i =>
+                                                        i.timestamp !== undefined &&
+                                                        Math.abs(i.timestamp - state.playedSeconds) < 1 &&
+                                                        !completedInteractions.has(i.id)
+                                                    );
 
-                                    {/* Legacy Interactive Rendering (if no interactions array) */}
-                                    {!lesson.interactive_data?.interactions && lesson.interactive_data && (
-                                        <InteractiveRenderer
-                                            type={lesson.content_type}
-                                            data={lesson.interactive_data}
+                                                    if (triggered && triggered.id !== activeInteractionId) {
+                                                        setActiveInteractionId(triggered.id);
+                                                        setIsVideoPlaying(false);
+                                                    }
+                                                }
+                                            }}
                                             onComplete={() => {
                                                 if (!lesson.completed) handleToggleComplete();
                                             }}
                                         />
+
+                                        {/* Interaction Overlay */}
+                                        <AnimatePresence>
+                                            {activeInteractionId && (
+                                                <motion.div
+                                                    initial={{ opacity: 0 }}
+                                                    animate={{ opacity: 1 }}
+                                                    exit={{ opacity: 0 }}
+                                                    className="absolute inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4 lg:p-8"
+                                                >
+                                                    <div className="w-full max-w-2xl">
+                                                        <LessonInteractiveRenderer
+                                                            interactions={lesson.interactive_data?.interactions || []}
+                                                            activeInteractionId={activeInteractionId}
+                                                            onComplete={(id) => {
+                                                                setCompletedInteractions(prev => new Set(prev).add(id));
+                                                                setActiveInteractionId(null);
+                                                                setIsVideoPlaying(true);
+                                                            }}
+                                                        />
+                                                    </div>
+                                                </motion.div>
+                                            )}
+                                        </AnimatePresence>
+                                    </div>
+                                    <div className="space-y-4">
+                                        <h2 className="text-3xl font-black text-slate-900">{lesson.title}</h2>
+                                        {lesson.content && (
+                                            <div className="rounded-2xl border border-slate-100 bg-white p-8 shadow-sm">
+                                                <SafeHTML html={lesson.content} />
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
+
+                            {(lesson.content_type === 'interactive' || lesson.content_type === 'quiz') && lesson.interactive_data && (
+                                <div className="space-y-8">
+                                    <div className="space-y-2">
+                                        <h2 className="text-3xl font-black text-slate-900">{lesson.title}</h2>
+                                        <p className="text-slate-500 font-medium">Interactive Learning Session</p>
+                                    </div>
+                                    <InteractiveRenderer
+                                        type={lesson.content_type}
+                                        data={lesson.interactive_data}
+                                        onComplete={() => {
+                                            if (!lesson.completed) handleToggleComplete();
+                                        }}
+                                    />
+                                    {lesson.content && (
+                                        <div className="mt-8 rounded-2xl border border-slate-100 bg-white p-8 shadow-sm">
+                                            <SafeHTML html={lesson.content} />
+                                        </div>
                                     )}
-
-                                    {/* End / Unspecified Interactions */}
-                                    {lesson.interactive_data?.interactions?.filter((i: any) => i.position !== 'start' && i.timestamp === undefined).map((i: any) => (
-                                        <LessonInteractiveRenderer
-                                            key={i.id}
-                                            interactions={lesson.interactive_data.interactions}
-                                            activeInteractionId={i.id}
-                                            onComplete={(id) => setCompletedInteractions(prev => new Set(prev).add(id))}
-                                        />
-                                    ))}
                                 </div>
-                            </div>
-                        )}
+                            )}
 
-                        {/* Materials */}
-                        {lesson.materials && lesson.materials.length > 0 && (
-                            <div className="space-y-4 pt-4 border-t">
-                                <h3 className="text-lg font-bold flex items-center gap-2">
-                                    <FileText className="h-5 w-5 text-indigo-600" /> Lesson Materials
-                                </h3>
-                                <div className="grid gap-3 sm:grid-cols-2">
-                                    {lesson.materials.map((material) => (
-                                        <a
-                                            key={material.id}
-                                            href={material.file || material.link || '#'}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-3 transition-colors hover:border-indigo-300 hover:bg-indigo-50"
-                                        >
-                                            <div className="h-10 w-10 shrink-0 rounded-lg bg-indigo-100 text-indigo-700 flex items-center justify-center font-bold text-xs uppercase">
-                                                {material.material_type === 'pdf' ? 'PDF' : 'FILE'}
-                                            </div>
-                                            <div className="min-w-0">
-                                                <p className="truncate text-sm font-bold text-slate-800">{material.title}</p>
-                                                <p className="text-xs text-slate-500">Download Resource</p>
-                                            </div>
-                                        </a>
-                                    ))}
+                            {lesson.content_type === 'text' && (
+                                <div className="space-y-4">
+                                    <h2 className="text-3xl font-black text-slate-900">{lesson.title}</h2>
+                                    <div className="space-y-6">
+                                        {/* Start Interactions */}
+                                        {lesson.interactive_data?.interactions?.filter((i: any) => i.position === 'start').map((i: any) => (
+                                            <LessonInteractiveRenderer
+                                                key={i.id}
+                                                interactions={lesson.interactive_data.interactions}
+                                                activeInteractionId={i.id}
+                                                onComplete={(id) => setCompletedInteractions(prev => new Set(prev).add(id))}
+                                            />
+                                        ))}
+
+                                        <div className="rounded-2xl border border-slate-100 bg-white p-8 shadow-sm">
+                                            {lesson.content ? (
+                                                <SafeHTML html={lesson.content} />
+                                            ) : (
+                                                <p className="text-slate-500 italic">No text content available for this lesson.</p>
+                                            )}
+                                        </div>
+
+                                        {/* Legacy Interactive Rendering (if no interactions array) */}
+                                        {!lesson.interactive_data?.interactions && lesson.interactive_data && (
+                                            <InteractiveRenderer
+                                                type={lesson.content_type}
+                                                data={lesson.interactive_data}
+                                                onComplete={() => {
+                                                    if (!lesson.completed) handleToggleComplete();
+                                                }}
+                                            />
+                                        )}
+
+                                        {/* End / Unspecified Interactions */}
+                                        {lesson.interactive_data?.interactions?.filter((i: any) => i.position !== 'start' && i.timestamp === undefined).map((i: any) => (
+                                            <LessonInteractiveRenderer
+                                                key={i.id}
+                                                interactions={lesson.interactive_data.interactions}
+                                                activeInteractionId={i.id}
+                                                onComplete={(id) => setCompletedInteractions(prev => new Set(prev).add(id))}
+                                            />
+                                        ))}
+                                    </div>
                                 </div>
-                            </div>
-                        )}
+                            )}
 
-                        {/* Navigation Footer */}
-                        <div className="flex justify-between pt-10 pb-20">
-                            <Button variant="ghost" disabled>
-                                <ArrowLeft className="mr-2 h-4 w-4" /> Previous
-                            </Button>
-                            <Button className="bg-slate-900 text-white hover:bg-slate-800">
-                                Next Lesson <ChevronRight className="ml-2 h-4 w-4" />
-                            </Button>
-                        </div>
-                    </div>
+                            {/* Materials */}
+                            {lesson.materials && lesson.materials.length > 0 && (
+                                <div className="space-y-4 pt-4 border-t">
+                                    <h3 className="text-lg font-bold flex items-center gap-2">
+                                        <FileText className="h-5 w-5 text-indigo-600" /> Lesson Materials
+                                    </h3>
+                                    <div className="grid gap-3 sm:grid-cols-2">
+                                        {lesson.materials.map((material) => (
+                                            <a
+                                                key={material.id}
+                                                href={material.file || material.link || '#'}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-3 transition-colors hover:border-indigo-300 hover:bg-indigo-50"
+                                            >
+                                                <div className="h-10 w-10 shrink-0 rounded-lg bg-indigo-100 text-indigo-700 flex items-center justify-center font-bold text-xs uppercase">
+                                                    {material.material_type === 'pdf' ? 'PDF' : 'FILE'}
+                                                </div>
+                                                <div className="min-w-0">
+                                                    <p className="truncate text-sm font-bold text-slate-800">{material.title}</p>
+                                                    <p className="text-xs text-slate-500">Download Resource</p>
+                                                </div>
+                                            </a>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Navigation Footer */}
+                            <div className="flex justify-between items-center pt-10 pb-20 border-t border-slate-100">
+                                <Button
+                                    variant="outline"
+                                    className="rounded-full px-6"
+                                    onClick={() => {
+                                        const allLessons = chapters.flatMap(c => (c.lessons || []).filter(l => l.is_published));
+                                        const currentIndex = allLessons.findIndex(l => l.id === lesson.id);
+                                        if (currentIndex > 0) {
+                                            handleNavigate(allLessons[currentIndex - 1].id);
+                                        }
+                                    }}
+                                    disabled={chapters.flatMap(c => (c.lessons || []).filter(l => l.is_published)).findIndex(l => l.id === lesson.id) <= 0}
+                                >
+                                    <ArrowLeft className="mr-2 h-4 w-4" /> Previous
+                                </Button>
+
+                                <Button
+                                    className="bg-indigo-600 text-white hover:bg-indigo-700 shadow-xl shadow-indigo-100 rounded-full px-8 h-12 font-bold"
+                                    onClick={navigateToNextLesson}
+                                >
+                                    {chapters.flatMap(c => (c.lessons || []).filter(l => l.is_published)).findIndex(l => l.id === lesson.id) === chapters.flatMap(c => (c.lessons || []).filter(l => l.is_published)).length - 1
+                                        ? "Finish Course"
+                                        : "Next Lesson"}
+                                    <ChevronRight className="ml-2 h-4 w-4" />
+                                </Button>
+                            </div>
+                        </motion.div>
+                    </AnimatePresence>
                 </main>
             </div>
         </div>

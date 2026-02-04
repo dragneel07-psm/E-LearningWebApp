@@ -20,6 +20,7 @@ import { Button } from '@/components/ui/button';
 
 const navigation = [
     { name: 'Dashboard', href: '/teacher', icon: LayoutDashboard },
+    { name: 'Courses', href: '/teacher/courses', icon: BookOpen },
     { name: 'My Classes', href: '/teacher/classes', icon: School },
     { name: 'Students', href: '/teacher/students', icon: Users }, // Enhance later
     { name: 'Assessments', href: '/teacher/assessments', icon: ClipboardList },

@@ -22,12 +22,22 @@ class LessonSummarySerializer(serializers.ModelSerializer):
         request = self.context.get('request')
         if request and request.user.is_authenticated:
             try:
-                # Need to find the student associated with the user
+                # Optimized lookup
                 from academic.models.student import Student
-                student = Student.objects.get(user=request.user)
-                progress = LessonProgress.objects.filter(student=student, lesson=obj).first()
-                return progress.completed if progress else False
-            except Student.DoesNotExist:
+                from academic.models.lesson import LessonProgress
+                
+                # Try to get student from user relation first if available
+                # Or query filtering by user (safer than get() in multi-tenant if oddities exist)
+                student = None
+                if hasattr(request.user, 'student_profile'):
+                    student = request.user.student_profile
+                
+                if not student:
+                    student = Student.objects.filter(user=request.user).first()
+                
+                if student:
+                    return LessonProgress.objects.filter(student=student, lesson=obj, completed=True).exists()
+            except Exception:
                 return False
         return False
 

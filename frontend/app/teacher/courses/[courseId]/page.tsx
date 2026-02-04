@@ -80,35 +80,7 @@ export default function TeacherCourseDashboard() {
 
     return (
         <div className="max-w-7xl mx-auto p-6 space-y-8 animate-in fade-in duration-500">
-            {/* Header Navigation */}
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <div className="flex items-center gap-4">
-                    <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => router.push('/teacher/courses')}
-                        className="rounded-full hover:bg-slate-100"
-                    >
-                        <ArrowLeft className="h-5 w-5" />
-                    </Button>
-                    <div>
-                        <h1 className="text-3xl font-black text-slate-900 tracking-tight">{subject?.name}</h1>
-                        <p className="text-slate-500 font-medium">Teacher Control Panel</p>
-                    </div>
-                </div>
-                <div className="flex items-center gap-2">
-                    <Button variant="outline" className="gap-2 border-slate-200" onClick={() => router.push(`/student/courses/${courseId}/lessons`)}>
-                        <Eye className="h-4 w-4" />
-                        Student Preview
-                    </Button>
-                    <Link href={`/teacher/courses/${courseId}/lessons`}>
-                        <Button className="gap-2 bg-indigo-600 hover:bg-indigo-700">
-                            <Settings className="h-4 w-4" />
-                            Manage Curriculum
-                        </Button>
-                    </Link>
-                </div>
-            </div>
+            {/* Header Navigation removed - handled by layout.tsx */}
 
             {/* Quick Stats Grid */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">

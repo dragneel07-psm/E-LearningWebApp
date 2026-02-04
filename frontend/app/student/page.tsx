@@ -271,10 +271,7 @@ export default function StudentDashboard() {
                 <div className="space-y-6">
 
                     {/* Achievement & Stats */}
-                    <GamificationWidget
-                        streak={recommendations?.stats?.streak || 0}
-                        totalPoints={recommendations?.stats?.lessons_completed * 20 || 0}
-                    />
+                    <GamificationWidget />
 
                     {/* AI Recommendations */}
                     {recommendations && recommendations.recommendations.length > 0 && (
