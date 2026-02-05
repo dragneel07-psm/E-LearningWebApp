@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { billingAPI, FinanceDashboard } from '@/lib/api';
-import { Loader2, DollarSign, TrendingUp, TrendingDown, CreditCard, Download, Calendar } from 'lucide-react';
+import { Loader2, DollarSign, TrendingUp, TrendingDown, CreditCard, Download, Calendar, Wallet } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
 
@@ -59,29 +59,12 @@ export default function FinanceDashboardPage() {
                     <h1 className="text-3xl font-black text-slate-900">Finance Overview</h1>
                     <p className="text-slate-500">Track revenue, expenses, and pending fees.</p>
                 </div>
-                <div className="flex items-center gap-2 bg-white p-2 rounded-lg border shadow-sm">
-                    <div className="flex items-center gap-2 px-2">
-                        <Calendar className="h-4 w-4 text-slate-400" />
-                        <span className="text-sm font-medium text-slate-600">Reports:</span>
-                    </div>
-                    <Input
-                        type="date"
-                        className="w-auto h-8 text-xs"
-                        value={dateRange.start}
-                        onChange={e => setDateRange(prev => ({ ...prev, start: e.target.value }))}
-                    />
-                    <span className="text-slate-300">-</span>
-                    <Input
-                        type="date"
-                        className="w-auto h-8 text-xs"
-                        value={dateRange.end}
-                        onChange={e => setDateRange(prev => ({ ...prev, end: e.target.value }))}
-                    />
-                    <Button size="sm" variant="outline" className="h-8" onClick={() => handleDownloadReport('pdf')}>
-                        <Download className="h-3 w-3 mr-1" /> PDF
+                <div className="flex gap-2">
+                    <Button onClick={() => window.location.href = '/admin/finance/fees'} variant="outline" className="border-indigo-200 text-indigo-700 hover:bg-indigo-50 font-bold">
+                        <Wallet className="h-4 w-4 mr-2" /> Fee Structures
                     </Button>
-                    <Button size="sm" variant="outline" className="h-8" onClick={() => handleDownloadReport('excel')}>
-                        <Download className="h-3 w-3 mr-1" /> Excel
+                    <Button onClick={() => window.location.href = '/admin/finance/collect'} className="bg-emerald-600 hover:bg-emerald-700 font-bold shadow-md">
+                        <DollarSign className="h-4 w-4 mr-1" /> Collect Payments
                     </Button>
                 </div>
             </header>

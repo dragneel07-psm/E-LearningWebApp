@@ -12,6 +12,7 @@ import { ChevronLeft, Save, Sparkles, Upload, FileText, ListChecks, LayoutTempla
 import Link from 'next/link';
 import { academicAPI, AcademicClass, Subject, Chapter } from '@/lib/api';
 import { useEffect } from 'react';
+import { toast } from 'sonner';
 
 export default function CreateLessonPage() {
     const params = useParams();
@@ -70,24 +71,26 @@ export default function CreateLessonPage() {
     };
 
     const handleSave = async () => {
-        if (!title || !selectedChapterId) {
-            alert("Please provide a title and select a chapter.");
+        if (!selectedSubjectId || !selectedChapterId || !title) {
+            toast.error("Please fill in title, subject and chapter");
             return;
         }
+
         setLoading(true);
         try {
-            await academicAPI.createLesson({
+            const newLesson = await academicAPI.createLesson({
                 chapter: parseInt(selectedChapterId),
                 title: title,
                 content: content,
                 is_published: true, // Default to true for demo
                 order: 0
             });
-            alert("Lesson created successfully!");
-            router.push(`/teacher/classes/${classId}`);
+            toast.success("Lesson created! Opening advanced editor...");
+            // Redirect to the unified course lesson editor
+            router.push(`/teacher/courses/${selectedSubjectId}/lessons/${newLesson.id}`);
         } catch (error) {
             console.error("Failed to create lesson", error);
-            alert("Failed to create lesson.");
+            toast.error("Failed to create lesson.");
         } finally {
             setLoading(false);
         }

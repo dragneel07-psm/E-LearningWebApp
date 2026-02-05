@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, Users, GraduationCap, School, CreditCard, BarChart3, Settings, LogOut, Bell, BookOpen, Calendar, Library } from 'lucide-react';
+import { LayoutDashboard, Users, GraduationCap, School, CreditCard, BarChart3, Settings, LogOut, Bell, BookOpen, Calendar, Library, Wallet, DollarSign } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 const navigation = [
@@ -14,6 +14,8 @@ const navigation = [
     { name: 'Teachers', href: '/admin/academic/teachers', icon: Users },
     { name: 'Library', href: '/admin/library', icon: Library },
     { name: 'Finance', href: '/admin/finance', icon: CreditCard },
+    { name: 'Fee Structures', href: '/admin/finance/fees', icon: Wallet, indent: true },
+    { name: 'Collect Payments', href: '/admin/finance/collect', icon: DollarSign, indent: true },
     { name: 'Reports', href: '/admin/reports', icon: BarChart3 },
     { name: 'Notices', href: '/admin/notices', icon: Bell },
     { name: 'Settings', href: '/admin/settings', icon: Settings },
@@ -40,12 +42,12 @@ export function AdminSidebar() {
                         <Link
                             key={item.name}
                             href={item.href}
-                            className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${isActive
+                            className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${(item as any).indent ? 'ml-6 text-xs py-1.5' : ''} ${isActive
                                 ? 'bg-indigo-600 text-white shadow-md'
                                 : 'text-slate-400 hover:text-white hover:bg-slate-800'
                                 }`}
                         >
-                            <item.icon className={`h-5 w-5 ${isActive ? 'text-white' : 'text-slate-400'}`} />
+                            <item.icon className={`h-5 w-5 ${isActive ? 'text-white' : 'text-slate-400'} ${(item as any).indent ? 'h-4 w-4' : ''}`} />
                             {item.name}
                         </Link>
                     );

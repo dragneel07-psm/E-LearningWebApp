@@ -14,7 +14,8 @@ import {
     LogOut,
     GraduationCap,
     School,
-    Bell
+    Bell,
+    Award
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
@@ -25,6 +26,7 @@ const navigation = [
     { name: 'Students', href: '/teacher/students', icon: Users }, // Enhance later
     { name: 'Assessments', href: '/teacher/assessments', icon: ClipboardList },
     { name: 'Grading', href: '/teacher/grading', icon: FileText },
+    { name: 'Gradebook', href: '/teacher/grades', icon: Award },
     { name: 'Timetable', href: '/teacher/timetable', icon: Calendar },
     { name: 'Library', href: '/teacher/library', icon: BookOpen },
     { name: 'Notices', href: '/teacher/notices', icon: Bell },

@@ -6,12 +6,13 @@ import { academicAPI, Lesson } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Card, CardContent } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { toast } from 'sonner';
-import { Loader2, Save, ArrowLeft, Eye } from 'lucide-react';
+import { Loader2, Save, ArrowLeft, Eye, BrainCircuit, Sparkles, FileText, ListChecks } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
+import { useSearchParams } from 'next/navigation';
 
 // Editor Components
 import { RichTextEditor } from '@/components/editor/rich-text-editor';
@@ -19,8 +20,10 @@ import { LessonMaterialsManager } from '@/components/courses/lesson-materials-ma
 
 export default function LessonEditorPage() {
     const params = useParams();
+    const searchParams = useSearchParams();
     const courseId = params.courseId as string;
     const lessonId = params.lessonId as string;
+    const chapterId = searchParams.get('chapterId');
     const router = useRouter();
 
     const [loading, setLoading] = useState(true);
@@ -34,10 +37,14 @@ export default function LessonEditorPage() {
     const [videoUrl, setVideoUrl] = useState('');
     const [isPublished, setIsPublished] = useState(false);
     const [duration, setDuration] = useState(15);
+    const [isGenerating, setIsGenerating] = useState(false);
 
     useEffect(() => {
         if (lessonId === 'new') {
             setLoading(false);
+            if (!chapterId) {
+                toast.error("Missing chapter identification");
+            }
             return;
         }
 
@@ -59,9 +66,32 @@ export default function LessonEditorPage() {
             }
         };
         loadLesson();
-    }, [lessonId]);
+    }, [lessonId, chapterId]);
+
+    const handleAIGenerate = (type: 'outline' | 'summary' | 'questions') => {
+        setIsGenerating(true);
+        // Mock AI Generation delay
+        setTimeout(() => {
+            let addition = "";
+            if (type === 'outline') {
+                addition = "<h2>Lesson Outline</h2><ul><li>Introduction to Concept</li><li>Key Formulas</li><li>Real-world Examples</li><li>Practice Problems</li><li>Summary</li></ul>";
+            } else if (type === 'summary') {
+                addition = "<p><strong>Summary:</strong> This lesson covers the fundamental principles of the topic, emphasizing key definitions and core concepts.</p>";
+            } else if (type === 'questions') {
+                addition = "<h3>Review Questions</h3><ol><li>Explain the main concept in your own words.</li><li>What are the primary applications of this principle?</li><li>Describe a common use case.</li></ol>";
+            }
+            setContent(prev => prev + addition);
+            setIsGenerating(false);
+            toast.success(`AI ${type} generated`);
+        }, 1500);
+    };
 
     const handleSave = async () => {
+        if (!title.trim()) {
+            toast.error("Please enter a title");
+            return;
+        }
+
         try {
             setSaving(true);
             const data = {
@@ -71,10 +101,18 @@ export default function LessonEditorPage() {
                 video_url: videoUrl,
                 is_published: isPublished,
                 duration_minutes: duration,
+                chapter: lesson?.chapter || (chapterId ? parseInt(chapterId) : 0)
             };
 
             if (lessonId === 'new') {
-                toast.error("Create flow not fully supported in standalone editor yet.");
+                if (!chapterId) {
+                    toast.error("Cannot create lesson without a chapter");
+                    setSaving(false);
+                    return;
+                }
+                const newLesson = await academicAPI.createLesson(data);
+                toast.success("Lesson created successfully");
+                router.push(`/teacher/courses/${courseId}/lessons/${newLesson.id}`);
                 return;
             }
 
@@ -181,6 +219,45 @@ export default function LessonEditorPage() {
 
                 {/* Right: Settings & Materials */}
                 <div className="space-y-6">
+                    <Card className="border-indigo-100 shadow-sm overflow-hidden">
+                        <div className="h-1 bg-gradient-to-r from-indigo-500 to-purple-500"></div>
+                        <CardHeader className="pb-3 bg-indigo-50/30">
+                            <CardTitle className="flex items-center gap-2 text-indigo-800 text-base">
+                                <BrainCircuit className="h-5 w-5" /> AI Copilot
+                            </CardTitle>
+                            <CardDescription>Accelerate your workflow</CardDescription>
+                        </CardHeader>
+                        <CardContent className="space-y-3 pt-4">
+                            <Button
+                                variant="outline"
+                                className="w-full justify-start text-slate-700"
+                                onClick={() => handleAIGenerate('outline')}
+                                disabled={isGenerating}
+                            >
+                                <Sparkles className="h-4 w-4 mr-2 text-indigo-500" />
+                                {isGenerating ? 'Generating...' : 'Generate Outline'}
+                            </Button>
+                            <Button
+                                variant="outline"
+                                className="w-full justify-start text-slate-700"
+                                onClick={() => handleAIGenerate('summary')}
+                                disabled={isGenerating}
+                            >
+                                <FileText className="h-4 w-4 mr-2 text-indigo-500" />
+                                Summarize Content
+                            </Button>
+                            <Button
+                                variant="outline"
+                                className="w-full justify-start text-slate-700"
+                                onClick={() => handleAIGenerate('questions')}
+                                disabled={isGenerating}
+                            >
+                                <ListChecks className="h-4 w-4 mr-2 text-indigo-500" />
+                                Create Quiz Questions
+                            </Button>
+                        </CardContent>
+                    </Card>
+
                     <Card>
                         <CardContent className="p-6 space-y-4">
                             <h3 className="font-bold text-slate-900 border-b pb-2 mb-2">Lesson Settings</h3>
@@ -201,7 +278,11 @@ export default function LessonEditorPage() {
                             <div className="flex items-center justify-between border-b pb-2 mb-2">
                                 <h3 className="font-bold text-slate-900">Materials</h3>
                             </div>
-                            <LessonMaterialsManager lessonId={parseInt(lessonId)} />
+                            {lessonId !== 'new' ? (
+                                <LessonMaterialsManager lessonId={parseInt(lessonId)} />
+                            ) : (
+                                <p className="text-xs text-slate-500 italic">Save lesson first to manage materials</p>
+                            )}
                         </CardContent>
                     </Card>
                 </div>

@@ -116,21 +116,49 @@ export default function GradingPage() {
                             </CardTitle>
                         </CardHeader>
                         <CardContent className="space-y-3">
-                            <div className="flex justify-between items-center text-sm font-medium">
-                                <span className="text-slate-600">Suggested Score:</span>
-                                <span className="text-indigo-700 bg-indigo-100 px-2 py-0.5 rounded">{result?.score}/100</span>
-                            </div>
-                            <div className="text-sm text-slate-700 bg-white p-3 rounded border border-indigo-100">
-                                {result?.ai_feedback || "No AI feedback available."}
-                            </div>
-                            <div className="flex gap-2">
-                                <Button size="sm" variant="outline" className="text-xs h-7 border-indigo-200 text-indigo-700 bg-white" onClick={() => {
-                                    setGrade(result?.score || 0);
-                                    setFeedback(result?.ai_feedback || '');
-                                }}>
-                                    Use AI Suggestion
-                                </Button>
-                            </div>
+                            {result?.answers_data ? (
+                                <>
+                                    <div className="flex justify-between items-center text-sm font-medium">
+                                        <span className="text-slate-600">Suggested Score:</span>
+                                        <span className="text-indigo-700 bg-indigo-100 px-2 py-0.5 rounded">{result?.score}/100</span>
+                                    </div>
+                                    <div className="text-sm text-slate-700 bg-white p-3 rounded border border-indigo-100 italic">
+                                        &quot;{result?.ai_feedback || "No overall AI feedback. Review individual answers for details."}&quot;
+                                    </div>
+                                    <div className="flex gap-2">
+                                        <Button size="sm" variant="outline" className="text-xs h-7 border-indigo-200 text-indigo-700 bg-white" onClick={() => {
+                                            setGrade(result?.score || 0);
+                                            setFeedback(result?.ai_feedback || '');
+                                        }}>
+                                            Apply AI Score
+                                        </Button>
+                                    </div>
+                                </>
+                            ) : (
+                                <div className="text-center py-4">
+                                    <p className="text-xs text-slate-500 mb-3">AI grading has not been performed for this submission yet.</p>
+                                    <Button
+                                        size="sm"
+                                        className="bg-indigo-600 hover:bg-indigo-700 h-8 text-xs"
+                                        onClick={async () => {
+                                            setSaving(true);
+                                            try {
+                                                const response = await academicAPI.triggerAIGrading(submissionId);
+                                                // Reload data
+                                                window.location.reload();
+                                            } catch (err) {
+                                                console.error(err);
+                                            } finally {
+                                                setSaving(false);
+                                            }
+                                        }}
+                                        disabled={saving}
+                                    >
+                                        <BrainCircuit className="h-3 w-3 mr-2" />
+                                        {saving ? 'Analyzing...' : 'Trigger AI Analysis'}
+                                    </Button>
+                                </div>
+                            )}
                         </CardContent>
                     </Card>
 

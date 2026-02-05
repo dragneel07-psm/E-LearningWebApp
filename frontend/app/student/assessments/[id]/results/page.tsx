@@ -2,14 +2,14 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter, useParams, useSearchParams } from 'next/navigation';
-import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import {
     Trophy, CheckCircle2, XCircle, Info,
     ChevronLeft, RefreshCw, BarChart3, MessageSquare,
-    Zap, Target, Award
+    Zap, Target, Award, ClipboardList, BrainCircuit
 } from 'lucide-react';
 import { academicAPI, Result, Assessment } from '@/lib/api';
 import confetti from 'canvas-confetti';
@@ -127,8 +127,8 @@ export default function AssessmentResultsPage() {
                 {/* AI Insights */}
                 <Card className="md:col-span-2 border-slate-200 shadow-sm overflow-hidden">
                     <CardHeader className="bg-indigo-50/50 border-b border-indigo-100">
-                        <CardTitle className="text-lg flex items-center gap-2 text-indigo-900">
-                            <Zap className="h-4 w-4 text-indigo-600 fill-indigo-600" /> AI Performance Analysis
+                        <CardTitle className="text-lg flex items-center gap-2 text-indigo-900 font-bold">
+                            <BrainCircuit className="h-4 w-4 text-indigo-600" /> AI Performance Analysis
                         </CardTitle>
                     </CardHeader>
                     <CardContent className="pt-6 space-y-6">
@@ -160,17 +160,17 @@ export default function AssessmentResultsPage() {
                 <div className="space-y-6">
                     <Card className="border-slate-200 shadow-sm bg-slate-50/50">
                         <CardHeader>
-                            <CardTitle className="text-sm font-bold uppercase tracking-wider text-slate-500">What&apos;s Next?</CardTitle>
+                            <CardTitle className="text-sm font-bold uppercase tracking-wider text-slate-500">Quick Links</CardTitle>
                         </CardHeader>
-                        <CardContent className="space-y-4">
-                            <Button className="w-full bg-white text-slate-900 border-border hover:bg-slate-50 shadow-sm group" variant="outline">
-                                <RefreshCw className="mr-2 h-4 w-4 group-hover:rotate-180 transition-transform duration-500" /> Review Answers
+                        <CardContent className="space-y-3">
+                            <Button className="w-full bg-white text-slate-900 border-border hover:bg-slate-50 shadow-sm" variant="outline" onClick={() => window.scrollTo({ top: 800, behavior: 'smooth' })}>
+                                <ClipboardList className="mr-2 h-4 w-4" /> Review Answers
                             </Button>
                             <Button className="w-full bg-white text-slate-900 border-border hover:bg-slate-50 shadow-sm" variant="outline">
-                                <Info className="mr-2 h-4 w-4" /> Recommended Lessons
+                                <Info className="mr-2 h-4 w-4" /> Study Plan
                             </Button>
-                            <Button className="w-full bg-indigo-600 hover:bg-indigo-700" onClick={() => router.push('/student/dashboard')}>
-                                Back to Dashboard
+                            <Button className="w-full bg-indigo-600 hover:bg-indigo-700" onClick={() => router.push('/student/assessments')}>
+                                Assessments Hub
                             </Button>
                         </CardContent>
                     </Card>
@@ -185,6 +185,78 @@ export default function AssessmentResultsPage() {
                         </div>
                     </div>
                 </div>
+            </div>
+
+            {/* Question Breakdown */}
+            <div className="space-y-6 pt-8">
+                <h3 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
+                    <ClipboardList className="h-6 w-6 text-indigo-600" /> Detailed Answer Review
+                </h3>
+
+                <div className="grid grid-cols-1 gap-6">
+                    {assessment.questions?.map((q, idx) => {
+                        const answerInfo = result.answers_data?.[q.question_id || q.id];
+                        const isCorrect = answerInfo?.correct;
+
+                        return (
+                            <Card key={q.id} className={`border-l-4 ${isCorrect ? 'border-l-emerald-500' : 'border-l-red-500'} shadow-sm bg-white overflow-hidden`}>
+                                <CardHeader className="pb-3 border-b bg-slate-50/30">
+                                    <div className="flex justify-between items-start gap-4">
+                                        <div className="flex gap-3">
+                                            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-slate-200 text-[10px] font-bold text-slate-600">
+                                                {idx + 1}
+                                            </span>
+                                            <div className="space-y-1">
+                                                <CardTitle className="text-base font-bold text-slate-800 leading-snug">{q.text}</CardTitle>
+                                                <Badge variant="outline" className="text-[10px] uppercase font-bold text-slate-400 border-slate-200 bg-white">
+                                                    {q.type.replace('_', ' ')}
+                                                </Badge>
+                                            </div>
+                                        </div>
+                                        <div className="text-right">
+                                            <div className={`text-lg font-black ${isCorrect ? 'text-emerald-600' : 'text-red-600'}`}>
+                                                {answerInfo?.points_earned || 0} / {q.points}
+                                            </div>
+                                            <div className="text-[10px] uppercase font-bold text-slate-400">Score</div>
+                                        </div>
+                                    </div>
+                                </CardHeader>
+                                <CardContent className="pt-5 space-y-5">
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                        <div className="p-4 rounded-xl bg-slate-50 border border-slate-100 space-y-2">
+                                            <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Your Response</p>
+                                            <p className={`text-sm font-semibold ${isCorrect ? 'text-emerald-700' : 'text-slate-800'}`}>
+                                                {answerInfo?.answer || 'No answer provided'}
+                                            </p>
+                                        </div>
+                                        {!isCorrect && q.correct_answer && (
+                                            <div className="p-4 rounded-xl bg-indigo-50 border border-indigo-100 space-y-2">
+                                                <p className="text-[10px] uppercase font-bold text-indigo-400 tracking-wider">Correct Solution</p>
+                                                <p className="text-sm font-semibold text-indigo-900">{q.correct_answer}</p>
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {answerInfo?.ai_feedback && (
+                                        <div className="p-4 bg-indigo-600/5 rounded-xl border border-indigo-100 flex items-start gap-3">
+                                            <BrainCircuit className="h-5 w-5 text-indigo-600 mt-0.5 shrink-0" />
+                                            <div className="space-y-1">
+                                                <p className="text-[10px] uppercase font-black text-indigo-600 tracking-tight">AI Insights & Corrections</p>
+                                                <p className="text-sm text-slate-700 italic leading-relaxed">{answerInfo.ai_feedback}</p>
+                                            </div>
+                                        </div>
+                                    )}
+                                </CardContent>
+                            </Card>
+                        );
+                    })}
+                </div>
+            </div>
+
+            <div className="flex justify-center pt-8 border-t border-slate-100">
+                <Button variant="ghost" onClick={() => router.back()} className="text-slate-500 gap-2">
+                    <ChevronLeft className="h-4 w-4" /> Back to Assessment List
+                </Button>
             </div>
         </div>
     );

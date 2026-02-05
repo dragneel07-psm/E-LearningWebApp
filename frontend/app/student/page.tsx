@@ -9,7 +9,7 @@ import { Progress } from '@/components/ui/progress';
 import {
     BookOpen, Trophy, BrainCircuit, Calendar,
     AlertCircle, TrendingUp, ChevronRight, PlayCircle,
-    Sparkles, Lightbulb
+    Sparkles, Lightbulb, Megaphone
 } from 'lucide-react';
 import { academicAPI, aiAPI, helpers, Subject } from '@/lib/api';
 import { AITutorChat } from '@/components/ai-tutor-chat';
@@ -41,6 +41,7 @@ export default function StudentDashboard() {
 
     const [upcomingExamsCount, setUpcomingExamsCount] = useState(0);
     const [pendingAssignmentsCount, setPendingAssignmentsCount] = useState(0);
+    const [notices, setNotices] = useState<any[]>([]);
 
     useEffect(() => {
         loadData();
@@ -79,6 +80,14 @@ export default function StudentDashboard() {
                 setRecommendations(recs);
             } catch (recError) {
                 console.warn("Could not fetch AI recommendations", recError);
+            }
+
+            // 5. Fetch Notices
+            try {
+                const noticesData = await academicAPI.getNotices();
+                setNotices(noticesData.slice(0, 3)); // Only show top 3 on dashboard
+            } catch (noticeError) {
+                console.warn("Could not fetch notices", noticeError);
             }
 
         } catch (e: any) {
@@ -329,21 +338,31 @@ export default function StudentDashboard() {
 
                     {/* Notice Board */}
                     <Card className="border-none shadow-sm">
-                        <CardHeader className="pb-3 border-b border-slate-50">
+                        <CardHeader className="pb-3 border-b border-slate-50 flex flex-row items-center justify-between">
                             <CardTitle className="text-base font-bold text-slate-800">Notice Board</CardTitle>
+                            <Megaphone className="h-4 w-4 text-slate-400" />
                         </CardHeader>
                         <CardContent className="pt-4 space-y-4">
-                            <div className="p-3 bg-amber-50 border border-amber-100 rounded-lg">
-                                <h4 className="text-sm font-semibold text-amber-900 mb-1">Science Fair Registration</h4>
-                                <p className="text-xs text-amber-700 mb-2">Registration deadline is extended till Friday.</p>
-                                <span className="text-[10px] text-amber-600 font-medium">Today, 10:00 AM</span>
-                            </div>
-                            <div className="p-3 bg-slate-50 border border-slate-100 rounded-lg">
-                                <h4 className="text-sm font-semibold text-slate-900 mb-1">School Holiday</h4>
-                                <p className="text-xs text-slate-600 mb-2">School will remain closed on Monday.</p>
-                                <span className="text-[10px] text-slate-500 font-medium">Yesterday</span>
-                            </div>
-                            <Button variant="link" className="w-full text-xs text-slate-500 h-auto py-1">View all notices</Button>
+                            {notices.length > 0 ? (
+                                notices.map((notice, idx) => (
+                                    <div key={idx} className={`p-3 rounded-lg border ${notice.priority === 'high' ? 'bg-red-50 border-red-100' : 'bg-slate-50 border-slate-100'}`}>
+                                        <h4 className={`text-sm font-semibold mb-1 ${notice.priority === 'high' ? 'text-red-900' : 'text-slate-900'}`}>
+                                            {notice.title}
+                                        </h4>
+                                        <p className="text-xs text-slate-600 mb-2 line-clamp-2">{notice.content}</p>
+                                        <span className="text-[10px] text-slate-500 font-medium whitespace-nowrap">
+                                            {new Date(notice.published_date).toLocaleDateString()}
+                                        </span>
+                                    </div>
+                                ))
+                            ) : (
+                                <div className="text-center py-4 text-xs text-slate-400">
+                                    No active notices.
+                                </div>
+                            )}
+                            <Button variant="link" className="w-full text-xs text-slate-500 h-auto py-1" onClick={() => router.push('/student/notices')}>
+                                View all notices
+                            </Button>
                         </CardContent>
                     </Card>
 

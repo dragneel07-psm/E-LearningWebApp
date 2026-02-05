@@ -14,10 +14,19 @@ class GradingService:
         max_possible = 0
         graded_answers = {}
 
+        # AI Grader initialization
+        ai_grader = None
+        try:
+            from ai_engine.services.grading_service import grading_service
+            ai_grader = grading_service
+        except ImportError:
+            pass
+
         for q in questions:
             user_answer = answers_data.get(str(q.question_id))
             is_correct = False
             points_earned = 0
+            feedback = ""
             
             if q.type == 'mcq':
                 # Exact match for MCQ
@@ -30,13 +39,24 @@ class GradingService:
                    str(user_answer).strip().lower() == str(q.correct_answer).strip().lower():
                     is_correct = True
                     points_earned = q.points
-            # Long answers/essays require manual grading or AI grading later
+            elif ai_grader and user_answer:
+                # Use AI for descriptive/long answers
+                ai_result = ai_grader.grade_submission(
+                    question_text=q.text,
+                    student_answer=user_answer,
+                    correct_answer=q.correct_answer,
+                    total_points=q.points
+                )
+                points_earned = ai_result.get('score', 0)
+                feedback = ai_result.get('feedback', '')
+                is_correct = points_earned >= (q.points * 0.5) # Arbitrary "correct" threshold for status
             
             graded_answers[str(q.question_id)] = {
                 'answer': user_answer,
                 'correct': is_correct,
                 'points_earned': points_earned,
-                'max_points': q.points
+                'max_points': q.points,
+                'ai_feedback': feedback
             }
             
             total_score += points_earned

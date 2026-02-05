@@ -1,113 +1,91 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Card } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Bell, Calendar, Info, AlertTriangle, Loader2, FileText } from 'lucide-react';
 import { academicAPI, Notice } from '@/lib/api';
-import { DocumentViewerModal } from '@/components/document-viewer-modal';
+import { Megaphone, Calendar, Info, AlertTriangle, Clock, Loader2 } from 'lucide-react';
 
-export default function NoticesPage() {
+export default function StudentNoticesPage() {
     const [notices, setNotices] = useState<Notice[]>([]);
     const [loading, setLoading] = useState(true);
-    const [viewerOpen, setViewerOpen] = useState(false);
-    const [selectedFile] = useState<string | null>(null);
 
     useEffect(() => {
         loadNotices();
     }, []);
 
     const loadNotices = async () => {
+        setLoading(true);
         try {
-            setLoading(true);
             const data = await academicAPI.getNotices();
             setNotices(data);
         } catch (error) {
-            console.error('Failed to load notices', error);
+            console.error(error);
         } finally {
             setLoading(false);
         }
     };
 
-    const getIcon = (category: string) => {
-        switch (category.toLowerCase()) {
-            case 'holiday': return <Calendar className="h-5 w-5 text-red-500" />;
-            case 'event': return <Bell className="h-5 w-5 text-indigo-500" />;
-            case 'urgent': return <AlertTriangle className="h-5 w-5 text-orange-500" />;
-            default: return <Info className="h-5 w-5 text-blue-500" />;
-        }
-    };
-
-    if (loading) return <div className="flex justify-center p-12"><Loader2 className="animate-spin" /></div>;
+    if (loading) return <div className="flex h-96 items-center justify-center"><Loader2 className="animate-spin h-8 w-8 text-indigo-600" /></div>;
 
     return (
-        <div className="p-6 max-w-5xl mx-auto">
-            <div className="mb-8">
-                <h1 className="text-3xl font-bold text-slate-800">Notices & Announcements</h1>
-                <p className="text-slate-600">Stay updated with the latest news from your school.</p>
-            </div>
+        <div className="max-w-4xl mx-auto space-y-8 p-4 md:p-6">
+            <header className="text-center space-y-2">
+                <div className="inline-flex items-center justify-center h-16 w-16 rounded-2xl bg-indigo-50 text-indigo-600 mb-2">
+                    <Megaphone className="h-8 w-8" />
+                </div>
+                <h1 className="text-3xl font-black text-slate-900 tracking-tight">Notice Board</h1>
+                <p className="text-slate-500 max-w-lg mx-auto">Latest announcements from your school and teachers.</p>
+            </header>
 
-            <div className="space-y-4">
-                {notices.length === 0 ? (
-                    <Card className="p-8 text-center text-slate-500">
-                        <Info className="h-10 w-10 mx-auto mb-3 opacity-20" />
-                        <p>No notices at the moment.</p>
-                    </Card>
-                ) : (
-                    notices.map(notice => (
-                        <Card key={notice.notice_id} className="p-6 hover:shadow-md transition-shadow">
-                            <div className="flex items-start gap-4">
-                                <div className={`p-3 rounded-full bg-slate-50 border border-slate-100 shrink-0`}>
-                                    {getIcon(notice.category)}
+            <div className="space-y-6">
+                {notices.length > 0 ? (
+                    notices.map((notice) => (
+                        <Card key={notice.notice_id} className={`border-none shadow-sm overflow-hidden transition-all hover:shadow-md ${notice.priority === 'high' ? 'bg-red-50/30 border-l-4 border-l-red-500' : 'bg-white border-l-4 border-l-indigo-500'}`}>
+                            <CardHeader className="pb-2">
+                                <div className="flex items-center justify-between mb-2">
+                                    <Badge variant="outline" className="capitalize text-[10px] font-bold tracking-widest px-2 py-0 border-slate-200 text-slate-500 uppercase">
+                                        {notice.category}
+                                    </Badge>
+                                    <div className="flex items-center gap-2 text-xs text-slate-400 font-medium">
+                                        <Calendar className="h-3 w-3" />
+                                        {notice.published_date ? new Date(notice.published_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : 'Recently'}
+                                    </div>
                                 </div>
-                                <div className="flex-1">
-                                    <div className="flex justify-between items-start">
-                                        <h3 className="font-bold text-lg text-slate-800">{notice.title}</h3>
-                                        <span className="text-xs text-slate-500 whitespace-nowrap">
-                                            {notice.published_date ? new Date(notice.published_date).toLocaleDateString() : 'N/A'}
-                                        </span>
-                                    </div>
+                                <CardTitle className={`text-xl font-bold ${notice.priority === 'high' ? 'text-red-900' : 'text-slate-900'}`}>{notice.title}</CardTitle>
+                            </CardHeader>
+                            <CardContent className="space-y-4">
+                                <p className="text-slate-600 leading-relaxed text-sm whitespace-pre-wrap">{notice.content}</p>
 
-                                    <div className="flex items-center gap-2 mt-1 mb-2">
-                                        <Badge variant="secondary" className="bg-slate-100 text-slate-600 hover:bg-slate-100">
-                                            {notice.category}
-                                        </Badge>
-                                        {notice.priority === 'high' && (
-                                            <Badge variant="destructive" className="bg-red-100 text-red-700 hover:bg-red-100 border-red-200">
-                                                Important
-                                            </Badge>
-                                        )}
+                                <div className="flex items-center justify-between pt-2 border-t border-slate-100/50">
+                                    <div className="flex items-center gap-4">
+                                        <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-500">
+                                            {notice.priority === 'high' ? <AlertTriangle className="h-3.5 w-3.5 text-red-500" /> : <Info className="h-3.5 w-3.5 text-indigo-500" />}
+                                            <span className="capitalize">{notice.priority} Priority</span>
+                                        </div>
                                     </div>
-
-                                    <p className="text-slate-600 leading-relaxed text-sm whitespace-pre-wrap">
-                                        {notice.content}
-                                    </p>
 
                                     {notice.attachment && (
-                                        <div className="mt-4 pt-4 border-t border-slate-200">
-                                            <a
-                                                href={`http://${typeof window !== 'undefined' ? window.location.hostname : 'localhost'}:8000${notice.attachment}`}
-                                                rel="noopener noreferrer"
-                                                className="inline-flex items-center gap-2 text-sm text-blue-600 hover:text-blue-800 hover:underline transition-colors"
-                                            >
-                                                <FileText className="h-4 w-4" />
-                                                Download Attachment
-                                            </a>
-                                        </div>
+                                        <a href={notice.attachment} target="_blank" rel="noopener noreferrer" className="text-xs font-bold text-indigo-600 hover:text-indigo-700 underline underline-offset-4">
+                                            View Attachment
+                                        </a>
                                     )}
                                 </div>
-                            </div>
+                            </CardContent>
                         </Card>
                     ))
+                ) : (
+                    <Card className="border-dashed border-2 border-slate-200 bg-transparent py-16 text-center">
+                        <CardContent>
+                            <div className="inline-flex h-12 w-12 items-center justify-center rounded-full bg-slate-100 text-slate-400 mb-4">
+                                <Clock className="h-6 w-6" />
+                            </div>
+                            <h3 className="text-lg font-bold text-slate-800">No active notices</h3>
+                            <p className="text-sm text-slate-500">You&apos;re all caught up! Check back later for updates.</p>
+                        </CardContent>
+                    </Card>
                 )}
             </div>
-
-            <DocumentViewerModal
-                open={viewerOpen}
-                onOpenChange={setViewerOpen}
-                fileUrl={selectedFile || ''}
-                fileName="Notice Attachment"
-            />
         </div>
     );
 }

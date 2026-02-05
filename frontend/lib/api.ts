@@ -613,6 +613,33 @@ async function apiRequest<T>(
     }
 }
 
+// Fetch wrapper for Blobs (PDFs, Excel, etc.)
+async function apiRequestBlob(
+    endpoint: string,
+    options: RequestInit = {}
+): Promise<Blob> {
+    const token = getAuthToken();
+    const headers: Record<string, string> = {
+        ...options.headers as Record<string, string>,
+    };
+
+    if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+    }
+    headers['x-tenant-id'] = 'demo';
+
+    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+        ...options,
+        headers,
+    });
+
+    if (!response.ok) {
+        throw new Error('Failed to download file');
+    }
+
+    return await response.blob();
+}
+
 // Core API
 export const coreAPI = {
     getTenants: () => apiRequest<Tenant[]>('/core/tenants/'),
@@ -944,6 +971,10 @@ export const academicAPI = {
             method: 'POST',
             body: JSON.stringify(data)
         }),
+    triggerAIGrading: (id: string) =>
+        apiRequest<any>(`/academic/submissions/${id}/ai_grade/`, {
+            method: 'POST'
+        }),
     submitExam: (assessmentId: string, answers: any, timeTaken: number) => apiRequest<{ score: number; max_score: number; result_id: string }>('/academic/submissions/submit_exam/', {
         method: 'POST',
         body: JSON.stringify({ assessment: assessmentId, answers, time_taken: timeTaken })
@@ -1031,6 +1062,8 @@ export const billingAPI = {
     }),
 
     getFinanceDashboard: () => apiRequest<FinanceDashboard>('/billing/dashboard/'),
+
+    downloadReceipt: (paymentId: string) => apiRequestBlob(`/billing/payments/${paymentId}/generate_receipt/`),
 };
 
 

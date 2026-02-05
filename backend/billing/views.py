@@ -13,6 +13,11 @@ from core.reports import generate_pdf_response
 from django.utils import timezone
 from django.utils.decorators import method_decorator
 from django.views.decorators.cache import cache_page
+from django.http import HttpResponse
+from reportlab.pdfgen import canvas
+from reportlab.lib.pagesizes import letter
+from reportlab.lib import colors
+import io
 
 class SubscriptionPlanViewSet(viewsets.ModelViewSet):
     queryset = SubscriptionPlan.objects.all()
@@ -146,6 +151,56 @@ class PaymentViewSet(TenantScopedQuerysetMixin, viewsets.ModelViewSet):
                 student_fee.status = 'partial'
             
             student_fee.save()
+
+    @action(detail=True, methods=['get'])
+    def generate_receipt(self, request, pk=None):
+        payment = self.get_object()
+        
+        buffer = io.BytesIO()
+        p = canvas.Canvas(buffer, pagesize=letter)
+        width, height = letter
+
+        # Header
+        p.setFont("Helvetica-Bold", 16)
+        p.drawString(100, height - 80, f"PAYMENT RECEIPT")
+        p.setFont("Helvetica", 12)
+        p.drawString(100, height - 100, f"School: {payment.tenant.name}")
+        p.drawString(100, height - 120, f"Date: {payment.payment_date.strftime('%Y-%m-%d %H:%M')}")
+        p.drawString(100, height - 140, f"Receipt No: REC-{str(payment.payment_id)[:8]}")
+        
+        p.line(100, height - 150, width - 100, height - 150)
+
+        # Body
+        p.setFont("Helvetica-Bold", 14)
+        p.drawString(100, height - 180, "Student Details")
+        p.setFont("Helvetica", 12)
+        p.drawString(100, height - 200, f"Name: {payment.student.user.get_full_name()}")
+        p.drawString(100, height - 220, f"Student ID: {payment.student.id}")
+        
+        p.setFont("Helvetica-Bold", 14)
+        p.drawString(100, height - 260, "Payment Details")
+        p.setFont("Helvetica", 12)
+        p.drawString(100, height - 280, f"Fee Title: {payment.student_fee.fee_structure.name if payment.student_fee else 'General Fee'}")
+        p.setFont("Helvetica-Bold", 14)
+        p.drawString(100, height - 310, f"Amount Paid: ${payment.amount}")
+        p.setFont("Helvetica", 12)
+        p.drawString(100, height - 330, f"Method: {payment.method.capitalize()}")
+        p.drawString(100, height - 350, f"Transaction ID: {payment.transaction_id or 'N/A'}")
+        
+        p.line(100, height - 380, width - 100, height - 380)
+        
+        # Footer
+        p.setFont("Helvetica-Oblique", 10)
+        p.drawString(100, height - 400, "This is a computer generated receipt.")
+        p.drawString(100, height - 415, f"Recorded by: {payment.recorded_by.get_full_name() if payment.recorded_by else 'Admin'}")
+
+        p.showPage()
+        p.save()
+
+        buffer.seek(0)
+        response = HttpResponse(buffer, content_type='application/pdf')
+        response['Content-Disposition'] = f'attachment; filename="receipt_{payment.payment_id}.pdf"'
+        return response
 
 class ExpenseViewSet(TenantScopedQuerysetMixin, viewsets.ModelViewSet):
     queryset = Expense.objects.all()

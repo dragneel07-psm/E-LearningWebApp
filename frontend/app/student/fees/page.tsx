@@ -5,14 +5,20 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { CreditCard, DollarSign, Calendar, History, Wallet, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { CreditCard, DollarSign, Calendar, History, Wallet, AlertCircle, CheckCircle2, Download, Loader2, Sparkles, Receipt } from 'lucide-react';
 import { billingAPI, academicAPI, usersAPI, StudentFee, Payment } from '@/lib/api';
 import { toast } from 'sonner';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
+import { Input } from '@/components/ui/input';
 
 export default function StudentFeesPage() {
     const [fees, setFees] = useState<StudentFee[]>([]);
     const [payments, setPayments] = useState<Payment[]>([]);
     const [loading, setLoading] = useState(true);
+    const [isPayDialogOpen, setIsPayDialogOpen] = useState(false);
+    const [selectedFee, setSelectedFee] = useState<StudentFee | null>(null);
+    const [payLoading, setPayLoading] = useState(false);
 
     useEffect(() => {
         loadData();
@@ -43,6 +49,51 @@ export default function StudentFeesPage() {
             toast.error('Failed to load fee data');
         } finally {
             setLoading(false);
+        }
+    };
+
+    const handlePayNow = async (fee: StudentFee) => {
+        setSelectedFee(fee);
+        setIsPayDialogOpen(true);
+    };
+
+    const confirmPayment = async () => {
+        if (!selectedFee) return;
+        setPayLoading(true);
+        try {
+            // Simulation of payment gateway redirect and success
+            await new Promise(resolve => setTimeout(resolve, 2000));
+
+            await billingAPI.recordPayment({
+                student: selectedFee.student,
+                student_fee: selectedFee.student_fee_id,
+                amount: selectedFee.amount_due - selectedFee.amount_paid,
+                method: 'online',
+                remarks: 'Self-paid via Student Portal'
+            });
+
+            toast.success('Payment successful! Your receipt is being generated.');
+            setIsPayDialogOpen(false);
+            loadData();
+        } catch (error) {
+            toast.error('Payment failed. Please try again.');
+        } finally {
+            setPayLoading(false);
+        }
+    };
+
+    const downloadReceipt = async (paymentId: string) => {
+        try {
+            const blob = await billingAPI.downloadReceipt(paymentId);
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `receipt_${paymentId.substring(0, 8)}.pdf`;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+        } catch (error) {
+            toast.error('Failed to download receipt');
         }
     };
 
@@ -156,7 +207,13 @@ export default function StudentFeesPage() {
                                                 </td>
                                                 <td className="px-6 py-4">
                                                     {fee.status !== 'paid' && (
-                                                        <Button size="sm" className="bg-indigo-600 hover:bg-indigo-700">Pay Now</Button>
+                                                        <Button
+                                                            size="sm"
+                                                            className="bg-indigo-600 hover:bg-indigo-700"
+                                                            onClick={() => handlePayNow(fee)}
+                                                        >
+                                                            Pay Now
+                                                        </Button>
                                                     )}
                                                 </td>
                                             </tr>
@@ -209,7 +266,12 @@ export default function StudentFeesPage() {
                                                     <Badge variant="outline" className="capitalize">{payment.method}</Badge>
                                                 </td>
                                                 <td className="px-6 py-4">
-                                                    <Button variant="ghost" size="sm" className="text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50">
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="sm"
+                                                        className="text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50"
+                                                        onClick={() => downloadReceipt(payment.payment_id)}
+                                                    >
                                                         Download
                                                     </Button>
                                                 </td>
@@ -229,6 +291,72 @@ export default function StudentFeesPage() {
                     </Card>
                 </TabsContent>
             </Tabs>
+
+            {/* Pay Now Simulation Dialog */}
+            <Dialog open={isPayDialogOpen} onOpenChange={setIsPayDialogOpen}>
+                <DialogContent className="sm:max-w-[425px] border-0 shadow-2xl">
+                    <DialogHeader>
+                        <DialogTitle className="text-2xl font-black text-slate-900 flex items-center gap-2">
+                            <Sparkles className="h-6 w-6 text-indigo-600" /> Secure Checkout
+                        </DialogTitle>
+                        <DialogDescription>
+                            Confirm payment for {selectedFee?.fee_name || 'School Fee'}.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <div className="py-6 space-y-6">
+                        <div className="bg-slate-50 p-4 rounded-xl border border-dashed border-slate-200">
+                            <div className="flex justify-between mb-2">
+                                <span className="text-slate-500 font-medium">Fee Amount:</span>
+                                <span className="font-bold text-slate-900">${selectedFee?.amount_due}</span>
+                            </div>
+                            <div className="flex justify-between mb-2">
+                                <span className="text-slate-500 font-medium">Already Paid:</span>
+                                <span className="font-bold text-emerald-600">-${selectedFee?.amount_paid}</span>
+                            </div>
+                            <div className="border-t border-slate-200 pt-2 flex justify-between">
+                                <span className="text-slate-900 font-black">Total to Pay:</span>
+                                <span className="font-black text-indigo-600 text-xl">
+                                    ${(selectedFee ? selectedFee.amount_due - selectedFee.amount_paid : 0).toLocaleString()}
+                                </span>
+                            </div>
+                        </div>
+
+                        <div className="space-y-4">
+                            <Label className="font-bold text-slate-700">Payment Method (Simulation)</Label>
+                            <div className="grid grid-cols-2 gap-3">
+                                <Button variant="outline" className="h-16 border-2 border-indigo-100 flex flex-col gap-1 active:border-indigo-600">
+                                    <CreditCard className="h-5 w-5 text-indigo-600" />
+                                    <span className="text-[10px] uppercase font-bold">Credit Card</span>
+                                </Button>
+                                <Button variant="outline" className="h-16 border-2 border-slate-100 flex flex-col gap-1 opacity-50 cursor-not-allowed">
+                                    <DollarSign className="h-5 w-5 text-slate-400" />
+                                    <span className="text-[10px] uppercase font-bold">Digital Wallet</span>
+                                </Button>
+                            </div>
+                        </div>
+
+                        <div className="flex items-center gap-3 p-3 bg-amber-50 rounded-lg border border-amber-100">
+                            <AlertCircle className="h-5 w-5 text-amber-600 shrink-0" />
+                            <p className="text-[10px] text-amber-700 leading-tight">
+                                This is a test environment. Clicking &apos;Confirm&apos; will simulate a successful transaction and update your records.
+                            </p>
+                        </div>
+                    </div>
+
+                    <DialogFooter>
+                        <Button variant="ghost" onClick={() => setIsPayDialogOpen(false)}>Cancel</Button>
+                        <Button
+                            className="bg-indigo-600 hover:bg-indigo-700 gap-2 font-bold px-8 shadow-md"
+                            onClick={confirmPayment}
+                            disabled={payLoading}
+                        >
+                            {payLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+                            {payLoading ? 'Processing...' : 'Confirm & Pay'}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }

@@ -119,16 +119,19 @@ export default function CourseCurriculumPage() {
     const handleLessonSubmit = async (data: { title: string; contentType: 'article' | 'video' | 'quiz' }) => {
         if (!activeChapterId) return;
         try {
+            // Instead of just creating, we might want to go to the full editor
+            // or create it and then go. Standard practice here is create a draft and redirect.
             const newLesson = await academicAPI.createLesson({
                 chapter: activeChapterId,
                 title: data.title,
                 content_type: data.contentType === 'article' ? 'text' : data.contentType,
-                order: 999 // Backend or standard logic needed for order
+                order: chapters.find(c => c.id === activeChapterId)?.lessons?.length || 0,
+                is_published: false // Draft by default
             });
 
-            toast.success('Lesson created');
+            toast.success('Lesson created, opening editor...');
 
-            // Redirect to edit page immediately for content population
+            // Redirect to unified editor page
             router.push(`/teacher/courses/${courseId}/lessons/${newLesson.id}`);
         } catch (error) {
             console.error(error);

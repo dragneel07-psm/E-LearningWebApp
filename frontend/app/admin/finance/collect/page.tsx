@@ -1,62 +1,68 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { billingAPI, academicAPI, Student, StudentFee } from '@/lib/api';
-import { toast } from 'sonner';
-import { Loader2, Search, DollarSign, CheckCircle } from 'lucide-react';
-import {
-    Dialog,
-    DialogContent,
-    DialogDescription,
-    DialogFooter,
-    DialogHeader,
-    DialogTitle,
-    DialogTrigger,
-} from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { billingAPI, academicAPI, Student, StudentFee, Payment, FeeStructure } from '@/lib/api';
+import { toast } from 'sonner';
+import { Search, Plus, Loader2, DollarSign, User, Calendar, CreditCard, Receipt, Filter } from 'lucide-react';
 
-export default function FeeCollectionPage() {
-    const [searchTerm, setSearchTerm] = useState('');
+export default function PaymentCollectionPage() {
     const [students, setStudents] = useState<Student[]>([]);
     const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
-    const [fees, setFees] = useState<StudentFee[]>([]);
+    const [pendingFees, setPendingFees] = useState<StudentFee[]>([]);
+    const [recentPayments, setRecentPayments] = useState<Payment[]>([]);
     const [loading, setLoading] = useState(false);
+    const [searchQuery, setSearchQuery] = useState('');
 
-    // Payment Dialog
+    // Payment Form
+    const [isPaymentDialogOpen, setIsPaymentDialogOpen] = useState(false);
     const [selectedFee, setSelectedFee] = useState<StudentFee | null>(null);
-    const [paymentAmount, setPaymentAmount] = useState('');
-    const [paymentMethod, setPaymentMethod] = useState('cash');
-    const [processing, setProcessing] = useState(false);
+    const [paymentData, setPaymentData] = useState<Partial<Payment>>({
+        amount: 0,
+        method: 'cash',
+        remarks: '',
+    });
 
-    // Debounced Search
     useEffect(() => {
-        const delayDebounceFn = setTimeout(() => {
-            if (searchTerm.length > 2) {
-                searchStudents();
-            }
-        }, 500);
-        return () => clearTimeout(delayDebounceFn);
-    }, [searchTerm]);
+        loadInitialData();
+    }, []);
 
-    const searchStudents = async () => {
+    const loadInitialData = async () => {
         setLoading(true);
         try {
-            // Need a search endpoint or filter basic list. 
-            // Assuming getStudents(query) exists or filtering client side for now if list is small.
-            // For robust app, use search query.
-            const allStudents = await academicAPI.getStudents();
-            const filtered = allStudents.filter(s =>
-                s.first_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                s.last_name.toLowerCase().includes(searchTerm.toLowerCase())
-            );
-            setStudents(filtered);
+            const studentsData = await academicAPI.getStudents();
+            setStudents(studentsData);
+            const paymentsData = await billingAPI.getPayments();
+            setRecentPayments(paymentsData.slice(0, 10));
         } catch (error) {
             console.error(error);
+            toast.error('Failed to load initial data');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleSearch = async () => {
+        if (!searchQuery) return;
+        setLoading(true);
+        try {
+            const results = await academicAPI.getStudents(); // Simplified: searching local list for now
+            const found = results.filter(s =>
+                s.first_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                s.last_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                s.email.toLowerCase().includes(searchQuery.toLowerCase())
+            );
+            setStudents(found);
+        } catch (error) {
+            toast.error('Search failed');
         } finally {
             setLoading(false);
         }
@@ -64,211 +70,266 @@ export default function FeeCollectionPage() {
 
     const handleSelectStudent = async (student: Student) => {
         setSelectedStudent(student);
-        setFees([]); // Clear prev
+        setLoading(true);
         try {
-            // Need endpoint to get fees for specific student
-            // Current list gets ALL fees. I should verify if filtering is supported.
-            // If API supports ?student_id=... use that.
-            // Assuming tenantScopedViewset, filtering by student would be standard in REST?
-            // If not, I might fetch all and filter client side (not ideal for prod)
-            // Ideally backend `StudentFeeViewSet` should standard filter fields.
-            // Let's try fetching all and filtering for this MVP step or check if I can modify backend quickly?
-            // I'll assume standard filtering `?student=ID` works if `filterset_fields` was set.
-            // If not, I'll update backend or rely on client filter.
-            // Checking `billing/views.py`: `StudentFeeViewSet` uses `TenantScopedQuerysetMixin`.
-            // Does it have filter_backends? DefaultRouter usually adds nothing unless configured.
-            // I'll fetch ALL and filter client side for Safety in this step, as DB is small.
             const allFees = await billingAPI.getStudentFees();
-            const studentFees = allFees.filter(f => {
-                // Determine student ID match. f.student might be object or ID depending on serializer.
-                // Serializer: `StudentFeeSerializer` likely has `student` as ID or nested?
-                // `views.py` has `select_related('student')` so it might be ID in default Serializer unless nested.
-                // Let's assume ID match.
-                // Actually `views.py` line 44: `queryset.select_related(...)`.
-                // Checking `serializers.py` (not visible but usually ModelSerializer).
-                // If it returns ID:
-                const fStudentId = typeof f.student === 'object' ? (f.student as any).id : f.student;
-                return fStudentId && fStudentId.toString() === student.id.toString();
-            });
-            setFees(studentFees);
+            const studentFees = allFees.filter(f => f.student === student.id && f.status !== 'paid');
+            setPendingFees(studentFees);
         } catch (error) {
             toast.error('Failed to load student fees');
+        } finally {
+            setLoading(false);
         }
     };
 
-    const handlePayment = async () => {
-        if (!selectedFee || !paymentAmount) return;
-        setProcessing(true);
+    const handleOpenPayment = (fee: StudentFee) => {
+        setSelectedFee(fee);
+        setPaymentData({
+            amount: fee.amount_due - fee.amount_paid,
+            method: 'cash',
+            remarks: `Payment for ${fee.fee_name || 'Fee'}`,
+        });
+        setIsPaymentDialogOpen(true);
+    };
+
+    const handleRecordPayment = async () => {
+        if (!selectedStudent || !paymentData.amount || paymentData.amount <= 0) {
+            toast.error('Invalid payment amount');
+            return;
+        }
+
         try {
             await billingAPI.recordPayment({
-                student: selectedStudent?.id, // Use string ID
-                student_fee: selectedFee.student_fee_id,
-                amount: parseFloat(paymentAmount),
-                method: paymentMethod as any
+                ...paymentData,
+                student: selectedStudent.id,
+                student_fee: selectedFee?.student_fee_id || null,
+                payment_date: new Date().toISOString(),
             });
-            toast.success('Payment recorded');
-            setSelectedFee(null);
-            setPaymentAmount('');
-            // Refresh fees
+            toast.success('Payment recorded successfully');
+            setIsPaymentDialogOpen(false);
             if (selectedStudent) handleSelectStudent(selectedStudent);
+            loadInitialData(); // Refresh recent payments
         } catch (error) {
-            toast.error('Payment failed');
-        } finally {
-            setProcessing(false);
-        }
-    };
-
-    const getStatusBadge = (status: string) => {
-        switch (status) {
-            case 'paid': return <Badge className="bg-emerald-500">Paid</Badge>;
-            case 'partial': return <Badge className="bg-amber-500">Partial</Badge>;
-            case 'pending': return <Badge variant="outline" className="text-slate-500 border-slate-300">Pending</Badge>;
-            case 'overdue': return <Badge variant="destructive">Overdue</Badge>;
-            default: return <Badge variant="secondary">{status}</Badge>;
+            console.error(error);
+            toast.error('Failed to record payment');
         }
     };
 
     return (
-        <div className="p-6 max-w-6xl mx-auto space-y-6">
-            <div>
-                <h1 className="text-2xl font-bold text-slate-900">Fee Collection</h1>
-                <p className="text-slate-500">Search for a student to view dues and record payments.</p>
-            </div>
+        <div className="space-y-6 max-w-7xl mx-auto p-4 md:p-6">
+            <header>
+                <h1 className="text-3xl font-black text-slate-900 flex items-center gap-3">
+                    <Receipt className="h-8 w-8 text-indigo-600" /> Collect Payments
+                </h1>
+                <p className="text-slate-500">Search students and record manual fee payments.</p>
+            </header>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                {/* Search Panel */}
-                <Card className="lg:col-span-1 h-fit">
+                {/* Search Sidebar */}
+                <Card className="lg:col-span-1 border-0 shadow-sm h-fit">
                     <CardHeader>
-                        <CardTitle>Find Student</CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                        <div className="relative">
-                            <Search className="absolute left-2 top-2.5 h-4 w-4 text-slate-400" />
-                            <Input
-                                placeholder="Search by name..."
-                                className="pl-8"
-                                value={searchTerm}
-                                onChange={e => setSearchTerm(e.target.value)}
-                            />
+                        <CardTitle className="text-lg">Student Search</CardTitle>
+                        <div className="flex gap-2 mt-2">
+                            <div className="relative flex-1">
+                                <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
+                                <Input
+                                    placeholder="Name or Email..."
+                                    className="pl-9 h-10 border-slate-200"
+                                    value={searchQuery}
+                                    onChange={e => setSearchQuery(e.target.value)}
+                                    onKeyDown={e => e.key === 'Enter' && handleSearch()}
+                                />
+                            </div>
+                            <Button size="icon" className="h-10 w-10 bg-slate-100 text-slate-600 hover:bg-slate-200" onClick={handleSearch}>
+                                <Filter className="h-4 w-4" />
+                            </Button>
                         </div>
-                        {loading && <div className="text-center py-4"><Loader2 className="animate-spin inline text-indigo-500" /></div>}
-
-                        <div className="space-y-2 max-h-[500px] overflow-y-auto">
+                    </CardHeader>
+                    <CardContent className="p-0">
+                        <div className="max-h-[500px] overflow-y-auto px-6 pb-6 space-y-2">
                             {students.map(student => (
                                 <div
                                     key={student.id}
-                                    className={`p-3 rounded-lg cursor-pointer transition-colors border ${selectedStudent?.id === student.id ? 'bg-indigo-50 border-indigo-200' : 'hover:bg-slate-50 border-transparent'}`}
                                     onClick={() => handleSelectStudent(student)}
+                                    className={`p-3 rounded-xl border transition-all cursor-pointer flex items-center gap-3 ${selectedStudent?.id === student.id ? 'bg-indigo-50 border-indigo-200 shadow-sm' : 'bg-white border-slate-100 hover:border-slate-300'}`}
                                 >
-                                    <p className="font-medium text-slate-900">{student.first_name} {student.last_name}</p>
-                                    <p className="text-xs text-slate-500">{student.email}</p>
+                                    <div className="h-10 w-10 rounded-full bg-slate-100 flex items-center justify-center font-bold text-slate-500">
+                                        {student.first_name[0]}{student.last_name[0]}
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                        <p className="font-bold text-sm text-slate-900 truncate">{student.first_name} {student.last_name}</p>
+                                        <p className="text-[10px] text-slate-500 font-medium">{student.email}</p>
+                                    </div>
+                                    <User className={`h-4 w-4 ${selectedStudent?.id === student.id ? 'text-indigo-600' : 'text-slate-300'}`} />
                                 </div>
                             ))}
-                            {!loading && students.length === 0 && searchTerm.length > 2 && (
-                                <p className="text-sm text-slate-400 text-center">No students found</p>
+                            {students.length === 0 && !loading && (
+                                <p className="text-center py-4 text-sm text-slate-400">No students found.</p>
                             )}
+                            {loading && <div className="py-4 flex justify-center"><Loader2 className="animate-spin h-5 w-5 text-indigo-500" /></div>}
                         </div>
                     </CardContent>
                 </Card>
 
-                {/* Fees Panel */}
-                <Card className="lg:col-span-2 min-h-[500px]">
-                    <CardHeader>
-                        <CardTitle>
-                            {selectedStudent ? `${selectedStudent.first_name}'s Fee Record` : 'Select a student'}
-                        </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        {!selectedStudent ? (
-                            <div className="flex flex-col items-center justify-center h-64 text-slate-400">
-                                <Search className="h-12 w-12 mb-2 opacity-20" />
-                                <p>Search and select a student to manage fees.</p>
-                            </div>
-                        ) : (
-                            <Table>
-                                <TableHeader>
-                                    <TableRow>
-                                        <TableHead>Fee Type</TableHead>
-                                        <TableHead>Due Date</TableHead>
-                                        <TableHead>Status</TableHead>
-                                        <TableHead className="text-right">Balance</TableHead>
-                                        <TableHead className="text-right">Action</TableHead>
-                                    </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                    {fees.map(fee => {
-                                        const balance = parseFloat((fee.amount_due - fee.amount_paid).toString());
-                                        const feeName = typeof fee.fee_structure === 'object' ? (fee.fee_structure as any).name : 'Fee'; // Robustness check
+                {/* Patient Details & Action Area */}
+                <div className="lg:col-span-2 space-y-6">
+                    {selectedStudent ? (
+                        <>
+                            <Card className="border-0 shadow-sm bg-indigo-600 text-white">
+                                <CardContent className="p-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                                    <div className="flex items-center gap-4">
+                                        <div className="h-16 w-16 rounded-2xl bg-white/20 flex items-center justify-center backdrop-blur-md">
+                                            <User className="h-8 w-8 text-white" />
+                                        </div>
+                                        <div>
+                                            <h2 className="text-2xl font-black">{selectedStudent.first_name} {selectedStudent.last_name}</h2>
+                                            <p className="text-indigo-100 font-medium">Class: {selectedStudent.academic_class || 'N/A'}</p>
+                                        </div>
+                                    </div>
+                                    <div className="text-right">
+                                        <p className="text-indigo-100 text-sm opacity-80 uppercase tracking-widest font-bold">Total Pending</p>
+                                        <p className="text-3xl font-black">
+                                            ${pendingFees.reduce((acc, f) => acc + (f.amount_due - f.amount_paid), 0).toLocaleString()}
+                                        </p>
+                                    </div>
+                                </CardContent>
+                            </Card>
 
-                                        return (
-                                            <TableRow key={fee.student_fee_id}>
-                                                <TableCell className="font-medium">{feeName}</TableCell>
-                                                <TableCell>{new Date(fee.due_date).toLocaleDateString()}</TableCell>
-                                                <TableCell>{getStatusBadge(fee.status)}</TableCell>
-                                                <TableCell className="text-right font-bold text-slate-700">
-                                                    ${balance.toFixed(2)}
-                                                </TableCell>
-                                                <TableCell className="text-right">
-                                                    {balance > 0 && (
-                                                        <Button size="sm" onClick={() => {
-                                                            setSelectedFee(fee);
-                                                            setPaymentAmount(balance.toString());
-                                                        }}>
-                                                            <DollarSign className="h-4 w-4 mr-1" /> Pay
-                                                        </Button>
-                                                    )}
-                                                </TableCell>
+                            <Card className="border-0 shadow-sm overflow-hidden">
+                                <CardHeader>
+                                    <CardTitle className="text-lg">Outstanding Dues</CardTitle>
+                                </CardHeader>
+                                <CardContent className="p-0">
+                                    <Table>
+                                        <TableHeader className="bg-slate-50 text-[10px] uppercase font-bold tracking-wider">
+                                            <TableRow>
+                                                <TableHead className="pl-6">Fee Description</TableHead>
+                                                <TableHead>Due Date</TableHead>
+                                                <TableHead>Amount</TableHead>
+                                                <TableHead>Balance</TableHead>
+                                                <TableHead className="text-right pr-6">Action</TableHead>
                                             </TableRow>
-                                        );
-                                    })}
-                                    {fees.length === 0 && (
-                                        <TableRow>
-                                            <TableCell colSpan={5} className="text-center py-8 text-slate-500">
-                                                No assigned fees found for this student.
+                                        </TableHeader>
+                                        <TableBody>
+                                            {pendingFees.map(fee => (
+                                                <TableRow key={fee.student_fee_id}>
+                                                    <TableCell className="pl-6 font-bold">{fee.fee_name || 'Regular Fee'}</TableCell>
+                                                    <TableCell className="text-sm font-medium text-slate-500">{new Date(fee.due_date).toLocaleDateString()}</TableCell>
+                                                    <TableCell className="font-medium">${fee.amount_due}</TableCell>
+                                                    <TableCell className="font-black text-rose-600">${fee.amount_due - fee.amount_paid}</TableCell>
+                                                    <TableCell className="text-right pr-6">
+                                                        <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700" onClick={() => handleOpenPayment(fee)}>
+                                                            Record
+                                                        </Button>
+                                                    </TableCell>
+                                                </TableRow>
+                                            ))}
+                                            {pendingFees.length === 0 && (
+                                                <TableRow>
+                                                    <TableCell colSpan={5} className="h-32 text-center text-slate-400 font-medium">
+                                                        No pending fees for this student.
+                                                    </TableCell>
+                                                </TableRow>
+                                            )}
+                                        </TableBody>
+                                    </Table>
+                                </CardContent>
+                            </Card>
+                        </>
+                    ) : (
+                        <Card className="border-0 border-dashed border-2 bg-slate-50 h-full flex flex-col items-center justify-center p-12 text-center">
+                            <Receipt className="h-12 w-12 text-slate-300 mb-4" />
+                            <h3 className="text-xl font-bold text-slate-600">No Student Selected</h3>
+                            <p className="text-slate-400 max-w-sm mt-2">Find a student using the search sidebar to view their fee status and record payments.</p>
+                        </Card>
+                    )}
+
+                    <Card className="border-0 shadow-sm">
+                        <CardHeader>
+                            <CardTitle className="text-lg">Recent Collections</CardTitle>
+                        </CardHeader>
+                        <CardContent className="p-0">
+                            <Table>
+                                <TableBody>
+                                    {recentPayments.map(payment => (
+                                        <TableRow key={payment.payment_id}>
+                                            <TableCell className="pl-6">
+                                                <div className="font-bold text-slate-900">{payment.student_name}</div>
+                                                <div className="text-[10px] text-slate-500 font-bold uppercase">{payment.method}</div>
                                             </TableCell>
+                                            <TableCell className="text-sm text-slate-500">{new Date(payment.payment_date).toLocaleDateString()}</TableCell>
+                                            <TableCell className="text-right pr-6 font-black text-emerald-600">
+                                                +${payment.amount}
+                                            </TableCell>
+                                        </TableRow>
+                                    ))}
+                                    {recentPayments.length === 0 && (
+                                        <TableRow>
+                                            <TableCell className="text-center py-8 text-slate-400">No recent transactions.</TableCell>
                                         </TableRow>
                                     )}
                                 </TableBody>
                             </Table>
-                        )}
-                    </CardContent>
-                </Card>
+                        </CardContent>
+                    </Card>
+                </div>
             </div>
 
             {/* Payment Dialog */}
-            <Dialog open={!!selectedFee} onOpenChange={(o) => !o && setSelectedFee(null)}>
-                <DialogContent>
+            <Dialog open={isPaymentDialogOpen} onOpenChange={setIsPaymentDialogOpen}>
+                <DialogContent className="sm:max-w-[450px] border-0 shadow-2xl">
                     <DialogHeader>
-                        <DialogTitle>Record Payment</DialogTitle>
+                        <DialogTitle className="text-2xl font-black text-slate-900 flex items-center gap-2">
+                            <CreditCard className="h-6 w-6 text-emerald-600" /> Record Payment
+                        </DialogTitle>
                         <DialogDescription>
-                            Enter the payment details below.
+                            Recording payment for {selectedStudent?.first_name} {selectedStudent?.last_name}
                         </DialogDescription>
                     </DialogHeader>
-                    {selectedFee && (
-                        <div className="space-y-4 py-4">
-                            <div className="flex justify-between items-center text-sm">
-                                <span className="text-slate-500">Total Due:</span>
-                                <span className="font-bold">${selectedFee.amount_due}</span>
-                            </div>
-                            <div className="flex justify-between items-center text-sm">
-                                <span className="text-slate-500">Already Paid:</span>
-                                <span className="font-bold">${selectedFee.amount_paid}</span>
-                            </div>
-                            <div className="border-t pt-2">
-                                <Label>Amount to Pay</Label>
+                    <div className="grid gap-6 py-4">
+                        <div className="space-y-2">
+                            <Label className="font-bold text-slate-700">Amount to Record</Label>
+                            <div className="relative">
+                                <DollarSign className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
                                 <Input
-                                    className="mt-1.5 font-bold text-lg"
                                     type="number"
-                                    value={paymentAmount}
-                                    onChange={e => setPaymentAmount(e.target.value)}
+                                    value={paymentData.amount}
+                                    onChange={e => setPaymentData({ ...paymentData, amount: parseFloat(e.target.value) })}
+                                    className="pl-9 text-lg font-black border-slate-200 focus:ring-emerald-500"
                                 />
                             </div>
                         </div>
-                    )}
+
+                        <div className="space-y-2">
+                            <Label className="font-bold text-slate-700">Payment Method</Label>
+                            <Select value={paymentData.method} onValueChange={v => setPaymentData({ ...paymentData, method: v as any })}>
+                                <SelectTrigger className="border-slate-200">
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="cash">Cash</SelectItem>
+                                    <SelectItem value="bank_transfer">Bank Transfer</SelectItem>
+                                    <SelectItem value="cheque">Cheque</SelectItem>
+                                    <SelectItem value="card">Card Payment</SelectItem>
+                                    <SelectItem value="online">Online Payment</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+
+                        <div className="space-y-2">
+                            <Label className="font-bold text-slate-700">Remarks</Label>
+                            <Input
+                                value={paymentData.remarks}
+                                onChange={e => setPaymentData({ ...paymentData, remarks: e.target.value })}
+                                placeholder="Any internal notes..."
+                                className="border-slate-200"
+                            />
+                        </div>
+                    </div>
                     <DialogFooter>
-                        <Button variant="outline" onClick={() => setSelectedFee(null)}>Cancel</Button>
-                        <Button onClick={handlePayment} disabled={processing} className="bg-emerald-600 hover:bg-emerald-700">
-                            {processing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Record Payment
+                        <Button variant="outline" onClick={() => setIsPaymentDialogOpen(false)} className="border-slate-200">Cancel</Button>
+                        <Button onClick={handleRecordPayment} className="bg-emerald-600 hover:bg-emerald-700 gap-2 font-bold px-8 shadow-md">
+                            Confirm Payment
                         </Button>
                     </DialogFooter>
                 </DialogContent>

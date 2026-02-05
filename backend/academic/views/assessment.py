@@ -147,8 +147,60 @@ class SubmissionViewSet(viewsets.ModelViewSet):
         if hasattr(submission, 'status'):
             submission.status = status_val
             submission.save()
+
+        # Award/Update gamification rewards
+        try:
+            from gamification.services.gamification_service import GamificationService
+            GamificationService.on_assessment_complete(submission.student, result)
+        except ImportError:
+            pass
             
         return Response({'status': 'graded', 'score': result.score})
+
+    @action(detail=True, methods=['post'])
+    def ai_grade(self, request, pk=None):
+        """
+        Trigger AI grading for a submission.
+        """
+        submission = self.get_object()
+        assessment = submission.assessment
+        
+        # Get answers from Result if available, or request data
+        result = Result.objects.filter(assessment=assessment, student=submission.student).first()
+        answers = {}
+        if result and result.answers_data:
+            # Extract answers from existing result
+            for q_id, data in result.answers_data.items():
+                answers[q_id] = data.get('answer')
+        
+        # Re-run grading with AI
+        total_score, max_possible, graded_answers = GradingService.grade_submission(assessment, answers)
+        
+        # Update/Create Result
+        if not result:
+            result = Result.objects.create(
+                assessment=assessment,
+                student=submission.student,
+                score=total_score,
+                answers_data=graded_answers
+            )
+        else:
+            result.score = total_score
+            result.answers_data = graded_answers
+            result.save()
+
+        # Award/Update gamification rewards
+        try:
+            from gamification.services.gamification_service import GamificationService
+            GamificationService.on_assessment_complete(submission.student, result)
+        except ImportError:
+            pass
+            
+        return Response({
+            'score': total_score,
+            'max_score': max_possible,
+            'graded_answers': graded_answers
+        })
 
 class ResultViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = Result.objects.all()
