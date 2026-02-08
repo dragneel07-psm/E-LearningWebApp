@@ -184,17 +184,35 @@ export interface Result {
     id: string;
     result_id: string;
     assessment: string;
-    student: string;
+    assessment_title?: string;
+    student: number;
+    student_name?: string;
     score: number;
     time_taken_minutes: number;
+    submitted_at: string;
     ai_feedback?: string;
     teacher_feedback?: string;
+    graded_by?: string;
     answers_data?: any;
-    assessment_title?: string;
-    assessment_type?: string;
-    total_marks?: number;
-    submitted_at?: string;
-    created_at?: string;
+}
+
+export interface GradebookData {
+    assessments: {
+        id: string;
+        title: string;
+        total_marks: number;
+        type: string;
+    }[];
+    students: {
+        id: number;
+        name: string;
+        email: string;
+        results: Record<string, {
+            score: number | null;
+            result_id: string | null;
+            submitted_at: string | null;
+        }>;
+    }[];
 }
 
 export interface Submission {
@@ -216,6 +234,7 @@ export interface Chapter {
     title: string;
     description?: string;
     order: number;
+    is_published: boolean;
     lessons?: Lesson[];
     created_at?: string;
 }
@@ -237,6 +256,7 @@ export interface Lesson {
     content?: string;
     video_url?: string | null;
     interactive_data?: any;
+    assessment?: string;
     order: number;
     is_published: boolean;
     duration_minutes: number;
@@ -441,6 +461,7 @@ export interface StudentFee {
 }
 
 export interface Payment {
+    id?: string;
     payment_id: string;
     tenant: string;
     student: string;
@@ -449,6 +470,7 @@ export interface Payment {
     amount: number;
     payment_date: string;
     method: 'cash' | 'bank_transfer' | 'cheque' | 'online' | 'card';
+    payment_method?: 'cash' | 'bank_transfer' | 'cheque' | 'online' | 'card';
     transaction_id?: string;
     recorded_by?: string;
     recorded_by_name?: string;
@@ -519,17 +541,20 @@ export interface Notification {
 }
 
 export interface Notice {
+    id?: number;
     notice_id?: number;
     title: string;
     content: string;
     category: string;
     priority: 'low' | 'normal' | 'high';
     target_audience: 'school' | 'class' | 'student';
-    target_class?: string | null;
+    target_class?: string | number | null;
+    target_class_name?: string;
     target_student?: string | null;
     published_date?: string;
     expiry_date?: string | null;
     attachment?: string | null;
+    attachment_url?: string | null;
 }
 
 // Helper function to get auth token
@@ -922,7 +947,13 @@ export const academicAPI = {
     }),
 
     // Assessments
-    getAssessments: () => apiRequest<Assessment[]>('/academic/assessments/'),
+    getAssessments: (subjectId?: number) => {
+        const query = subjectId ? `?subject=${subjectId}` : '';
+        return apiRequest<Assessment[]>(`/academic/assessments/${query}`);
+    },
+    getGradebook: (subjectId: number) => {
+        return apiRequest<GradebookData>(`/academic/assessments/gradebook/?subject=${subjectId}`);
+    },
     getAssessment: (id: string) => apiRequest<Assessment>(`/academic/assessments/${id}/`),
     createAssessment: (data: Partial<Assessment>) => apiRequest<Assessment>('/academic/assessments/', {
         method: 'POST',
@@ -950,6 +981,9 @@ export const academicAPI = {
     updateResult: (id: string, data: Partial<Result>) => apiRequest<Result>(`/academic/results/${id}/`, {
         method: 'PATCH',
         body: JSON.stringify(data)
+    }),
+    generateAIFeedback: (id: string) => apiRequest<{ ai_feedback: string }>(`/academic/results/${id}/generate_ai_feedback/`, {
+        method: 'POST'
     }),
 
     // Submissions
@@ -995,6 +1029,10 @@ export const academicAPI = {
     }),
     deleteQuestion: (id: string) => apiRequest<void>(`/academic/questions/${id}/`, {
         method: 'DELETE'
+    }),
+    reorderQuestions: (orders: { id: string; order: number }[]) => apiRequest<{ status: string }>('/academic/questions/reorder/', {
+        method: 'POST',
+        body: JSON.stringify({ orders })
     }),
 
     // Parent Profiles

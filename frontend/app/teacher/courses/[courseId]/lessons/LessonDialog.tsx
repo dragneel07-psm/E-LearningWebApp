@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useRouter, useParams } from 'next/navigation';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -8,6 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { academicAPI, Lesson, LessonMaterial } from '@/lib/api';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
 import { FileText, Video, Link as LinkIcon, Paperclip, Plus, Trash2, Eye } from 'lucide-react';
 import dynamic from 'next/dynamic';
@@ -22,17 +24,27 @@ interface LessonDialogProps {
     lesson: Lesson | null;
     chapterId: number;
     onSuccess: () => void;
+    initialType?: 'text' | 'video' | 'quiz';
 }
 
-export function LessonDialog({ open, onOpenChange, lesson, chapterId, onSuccess }: LessonDialogProps) {
+export function LessonDialog({ open, onOpenChange, lesson, chapterId, onSuccess, initialType }: LessonDialogProps) {
+    const router = useRouter();
+    const params = useParams();
+    const courseId = params.courseId as string;
+
     const [title, setTitle] = useState('');
     const [content, setContent] = useState('');
     const [videoUrl, setVideoUrl] = useState('');
     const [durationMinutes, setDurationMinutes] = useState(45);
     const [isPublished, setIsPublished] = useState(false);
     const [order, setOrder] = useState(0);
+    const [contentType, setContentType] = useState<'text' | 'video' | 'quiz'>('text');
     const [saving, setSaving] = useState(false);
     const [activeTab, setActiveTab] = useState('content');
+
+    // Quiz settings
+    const [quizTotalMarks, setQuizTotalMarks] = useState(10);
+    const [quizPassingMarks, setQuizPassingMarks] = useState(4);
 
     // Materials state
     const [materials, setMaterials] = useState<LessonMaterial[]>([]);
@@ -51,6 +63,7 @@ export function LessonDialog({ open, onOpenChange, lesson, chapterId, onSuccess 
             setIsPublished(lesson.is_published);
             setOrder(lesson.order);
             setMaterials(lesson.materials || []);
+            setContentType(lesson.content_type as any);
         } else {
             setTitle('');
             setContent('');
@@ -59,6 +72,7 @@ export function LessonDialog({ open, onOpenChange, lesson, chapterId, onSuccess 
             setIsPublished(false);
             setOrder(0);
             setMaterials([]);
+            setContentType(initialType || 'text');
         }
         setPendingMaterials([]);
         setActiveTab('content');
@@ -72,14 +86,32 @@ export function LessonDialog({ open, onOpenChange, lesson, chapterId, onSuccess 
 
         setSaving(true);
         try {
+            let assessmentId = lesson?.assessment;
+
+            // If it's a new quiz, create a draft assessment first
+            if (contentType === 'quiz' && !assessmentId) {
+                const assessment = await academicAPI.createAssessment({
+                    title: `Quiz: ${title}`,
+                    description: `Assessment for lesson ${title}`,
+                    type: 'quiz',
+                    subject: chapterId,
+                    total_marks: quizTotalMarks,
+                    passing_marks: quizPassingMarks,
+                    duration_minutes: durationMinutes
+                });
+                assessmentId = assessment.assessment_id;
+            }
+
             const data = {
                 title,
-                content,
-                video_url: videoUrl || null,
+                content: contentType === 'quiz' ? '' : content,
+                content_type: contentType,
+                video_url: contentType === 'video' ? videoUrl : null,
                 duration_minutes: durationMinutes,
                 is_published: isPublished,
                 order,
-                chapter: chapterId
+                chapter: chapterId,
+                assessment: assessmentId
             };
 
             let savedLesson: Lesson;
@@ -111,6 +143,12 @@ export function LessonDialog({ open, onOpenChange, lesson, chapterId, onSuccess 
                     toast.success('Lesson created');
                 }
             }
+
+            if (contentType === 'quiz' && assessmentId) {
+                toast.success('Redirecting to Quiz Builder...');
+                router.push(`/teacher/courses/${courseId}/quizzes/${assessmentId}`);
+            }
+
             onSuccess();
             onOpenChange(false);
         } catch (error) {
@@ -210,56 +248,131 @@ export function LessonDialog({ open, onOpenChange, lesson, chapterId, onSuccess 
 
                     <div className="flex-1 overflow-y-auto py-4 px-1">
                         <TabsContent value="content" className="space-y-4 mt-0 border-none p-0">
-                            <div className="space-y-2">
-                                <Label htmlFor="lesson-title">Lesson Title</Label>
-                                <Input
-                                    id="lesson-title"
-                                    placeholder="e.g. Solving Linear Equations"
-                                    value={title}
-                                    onChange={(e) => setTitle(e.target.value)}
-                                />
-                            </div>
-                            <div className="space-y-2">
-                                <Label>Lesson Content (Rich Text)</Label>
-                                <div className="h-[300px] mb-12">
-                                    <ReactQuill
-                                        theme="snow"
-                                        value={content}
-                                        onChange={setContent}
-                                        className="h-[250px]"
-                                        modules={{
-                                            toolbar: [
-                                                [{ 'header': [1, 2, 3, 4, 5, 6, false] }],
-                                                [{ 'font': [] }],
-                                                ['bold', 'italic', 'underline', 'strike'],
-                                                [{ 'color': [] }, { 'background': [] }],
-                                                [{ 'script': 'sub' }, { 'script': 'super' }],
-                                                ['blockquote', 'code-block'],
-                                                [{ 'list': 'ordered' }, { 'list': 'bullet' }],
-                                                [{ 'indent': '-1' }, { 'indent': '+1' }],
-                                                [{ 'direction': 'rtl' }],
-                                                [{ 'align': [] }],
-                                                ['link', 'image', 'video'],
-                                                ['clean']
-                                            ]
-                                        }}
-                                    />
-                                </div>
-                            </div>
-                            <div className="space-y-2 pt-4">
-                                <Label htmlFor="video-url">Video Lecture URL (YouTube/Vimeo)</Label>
-                                <div className="flex gap-2">
-                                    <div className="bg-slate-100 p-2 rounded border">
-                                        <Video className="h-5 w-5 text-red-500" />
-                                    </div>
+                            <div className="grid grid-cols-3 gap-4">
+                                <div className="col-span-2 space-y-2">
+                                    <Label htmlFor="lesson-title">Lesson Title</Label>
                                     <Input
-                                        id="video-url"
-                                        placeholder="https://www.youtube.com/watch?v=..."
-                                        value={videoUrl}
-                                        onChange={(e) => setVideoUrl(e.target.value)}
+                                        id="lesson-title"
+                                        placeholder="e.g. Solving Linear Equations"
+                                        value={title}
+                                        onChange={(e) => setTitle(e.target.value)}
                                     />
                                 </div>
+                                <div className="space-y-2">
+                                    <Label>Content Type</Label>
+                                    <Select value={contentType} onValueChange={(v: any) => setContentType(v)}>
+                                        <SelectTrigger>
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="text">Article / Text</SelectItem>
+                                            <SelectItem value="video">Video Lecture</SelectItem>
+                                            <SelectItem value="quiz">Quiz / Assessment</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
                             </div>
+
+                            {contentType === 'text' && (
+                                <div className="space-y-2">
+                                    <Label>Lesson Content (Rich Text)</Label>
+                                    <div className="h-[300px] mb-12">
+                                        <ReactQuill
+                                            theme="snow"
+                                            value={content}
+                                            onChange={setContent}
+                                            className="h-[250px]"
+                                            modules={{
+                                                toolbar: [
+                                                    [{ 'header': [1, 2, 3, 4, 5, 6, false] }],
+                                                    [{ 'font': [] }],
+                                                    ['bold', 'italic', 'underline', 'strike'],
+                                                    [{ 'color': [] }, { 'background': [] }],
+                                                    [{ 'script': 'sub' }, { 'script': 'super' }],
+                                                    ['blockquote', 'code-block'],
+                                                    [{ 'list': 'ordered' }, { 'list': 'bullet' }],
+                                                    [{ 'indent': '-1' }, { 'indent': '+1' }],
+                                                    [{ 'direction': 'rtl' }],
+                                                    [{ 'align': [] }],
+                                                    ['link', 'image', 'video'],
+                                                    ['clean']
+                                                ]
+                                            }}
+                                        />
+                                    </div>
+                                </div>
+                            )}
+
+                            {contentType === 'video' && (
+                                <div className="space-y-4 py-8">
+                                    <div className="bg-slate-50 p-8 rounded-2xl border-2 border-dashed border-slate-200 text-center">
+                                        <div className="bg-indigo-100 h-16 w-16 rounded-full flex items-center justify-center mx-auto mb-4">
+                                            <Video className="h-8 w-8 text-indigo-600" />
+                                        </div>
+                                        <h4 className="font-bold text-slate-800 mb-2">Configure Video Lecture</h4>
+                                        <p className="text-sm text-slate-500 mb-6">Enter the URL for your video lecture from YouTube, Vimeo, or a direct link.</p>
+
+                                        <div className="max-w-md mx-auto space-y-2 text-left">
+                                            <Label htmlFor="video-url">Video URL</Label>
+                                            <Input
+                                                id="video-url"
+                                                placeholder="https://www.youtube.com/watch?v=..."
+                                                value={videoUrl}
+                                                onChange={(e) => setVideoUrl(e.target.value)}
+                                                className="bg-white"
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            {contentType === 'quiz' && (
+                                <div className="space-y-4 py-8">
+                                    <div className="bg-emerald-50 p-8 rounded-2xl border-2 border-dashed border-emerald-200 text-center">
+                                        <div className="bg-emerald-100 h-16 w-16 rounded-full flex items-center justify-center mx-auto mb-4">
+                                            <FileText className="h-8 w-8 text-emerald-600" />
+                                        </div>
+                                        <h4 className="font-bold text-slate-800 mb-2">Quiz / Assessment</h4>
+                                        <p className="text-sm text-slate-500 mb-6">
+                                            You are creating a Quiz. After saving, you will be redirected to the Quiz Builder
+                                            to add questions and configure settings.
+                                        </p>
+
+                                        <div className="max-w-md mx-auto grid grid-cols-2 gap-4 mb-6 text-left">
+                                            <div className="space-y-2">
+                                                <Label htmlFor="quiz-total-marks">Total Marks</Label>
+                                                <Input
+                                                    id="quiz-total-marks"
+                                                    type="number"
+                                                    value={quizTotalMarks}
+                                                    onChange={(e) => setQuizTotalMarks(parseInt(e.target.value))}
+                                                    className="bg-white"
+                                                />
+                                            </div>
+                                            <div className="space-y-2">
+                                                <Label htmlFor="quiz-passing-marks">Passing Marks</Label>
+                                                <Input
+                                                    id="quiz-passing-marks"
+                                                    type="number"
+                                                    value={quizPassingMarks}
+                                                    onChange={(e) => setQuizPassingMarks(parseInt(e.target.value))}
+                                                    className="bg-white"
+                                                />
+                                            </div>
+                                        </div>
+
+                                        {lesson?.assessment && (
+                                            <Button
+                                                variant="outline"
+                                                className="border-emerald-200 text-emerald-700 hover:bg-emerald-100"
+                                                onClick={() => router.push(`/teacher/courses/${courseId}/quizzes/${lesson.assessment}`)}
+                                            >
+                                                Open Quiz Builder
+                                            </Button>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
                         </TabsContent>
 
                         <TabsContent value="settings" className="space-y-4 mt-0 border-none p-0">

@@ -42,5 +42,5 @@ class ResultSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'result_id', 'assessment', 'assessment_title', 'student', 'student_name', 
             'score', 'time_taken_minutes', 'submitted_at', 'ai_feedback', 
-            'teacher_feedback', 'answers_data'
+            'teacher_feedback', 'graded_by', 'answers_data'
         ]

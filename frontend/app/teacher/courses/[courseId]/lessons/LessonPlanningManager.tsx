@@ -8,11 +8,12 @@ import {
     Plus, Edit, Trash2, FileText, Video,
     ChevronDown, ChevronRight, FileUp,
     MoreVertical, GripVertical, PlayCircle,
-    BookOpen, Layers
+    BookOpen, Layers, Eye, EyeOff
 } from 'lucide-react';
 import { academicAPI, Chapter, Lesson, Subject, LessonMaterial } from '@/lib/api';
 import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
+import { Switch } from '@/components/ui/switch';
 import {
     Accordion,
     AccordionContent,
@@ -53,9 +54,10 @@ interface SortableLessonItemProps {
     lessonIndex: number;
     onEdit: (lesson: Lesson) => void;
     onDelete: (id: number) => void;
+    onTogglePublish: (lesson: Lesson) => void;
 }
 
-function SortableLessonItem({ lesson, chapterIndex, lessonIndex, onEdit, onDelete }: SortableLessonItemProps) {
+function SortableLessonItem({ lesson, chapterIndex, lessonIndex, onEdit, onDelete, onTogglePublish }: SortableLessonItemProps) {
     const {
         attributes,
         listeners,
@@ -75,32 +77,47 @@ function SortableLessonItem({ lesson, chapterIndex, lessonIndex, onEdit, onDelet
         <div
             ref={setNodeRef}
             style={style}
-            className={`group flex items-center justify-between p-3 rounded-xl border border-transparent hover:border-slate-200 hover:bg-slate-50 transition-all ${isDragging ? 'bg-indigo-50 border-indigo-200 shadow-lg' : ''}`}
+            className={`group flex items-center justify-between p-3 rounded-xl border border-transparent hover:border-slate-200 hover:bg-slate-50 transition-all ${isDragging ? 'bg-indigo-50 border-indigo-200 shadow-lg' : ''} ${!lesson.is_published ? 'bg-slate-50/50 opacity-80' : 'bg-white'}`}
         >
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-4 flex-1">
                 <div {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing p-1">
                     <GripVertical className="h-4 w-4 text-slate-300 group-hover:text-slate-500" />
                 </div>
-                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 group-hover:bg-white border border-transparent group-hover:border-slate-200 transition-colors">
-                    {lesson.video_url ? <PlayCircle className="h-5 w-5 text-red-500" /> : <FileText className="h-5 w-5 text-indigo-500" />}
+                <div className={`flex h-10 w-10 items-center justify-center rounded-full border transition-colors ${!lesson.is_published ? 'bg-slate-100 border-slate-200' : 'bg-indigo-50 border-indigo-100'}`}>
+                    {lesson.content_type === 'quiz' ? <BookOpen className="h-5 w-5 text-emerald-500" /> :
+                        lesson.video_url ? <PlayCircle className="h-5 w-5 text-red-500" /> :
+                            <FileText className="h-5 w-5 text-indigo-500" />}
                 </div>
-                <div>
-                    <h4 className="font-medium text-slate-800">{lesson.title}</h4>
+                <div className="flex-1">
+                    <h4 className={`font-medium transition-colors ${!lesson.is_published ? 'text-slate-500' : 'text-slate-800'}`}>{lesson.title}</h4>
                     <div className="flex items-center gap-3">
                         <span className="text-xs text-slate-500">{lesson.duration_minutes} mins</span>
                         {!lesson.is_published && (
-                            <Badge variant="outline" className="text-[10px] py-0 h-4 bg-slate-100">Draft</Badge>
+                            <Badge variant="outline" className="text-[10px] py-0 h-4 bg-slate-100 text-slate-500 border-slate-200">Draft</Badge>
+                        )}
+                        {lesson.is_published && (
+                            <Badge variant="outline" className="text-[10px] py-0 h-4 bg-emerald-50 text-emerald-600 border-emerald-100">Published</Badge>
                         )}
                     </div>
                 </div>
             </div>
-            <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-indigo-600" onClick={(e) => { e.stopPropagation(); onEdit(lesson); }}>
-                    <Edit className="h-4 w-4" />
-                </Button>
-                <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-red-600" onClick={(e) => { e.stopPropagation(); onDelete(lesson.id); }}>
-                    <Trash2 className="h-4 w-4" />
-                </Button>
+            <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2 mr-2">
+                    <span className="text-[10px] font-medium text-slate-400 uppercase tracking-wider">{lesson.is_published ? 'Live' : 'Draft'}</span>
+                    <Switch
+                        checked={lesson.is_published}
+                        onCheckedChange={() => onTogglePublish(lesson)}
+                        className="scale-75 data-[state=checked]:bg-emerald-500"
+                    />
+                </div>
+                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-indigo-600" onClick={(e) => { e.stopPropagation(); onEdit(lesson); }}>
+                        <Edit className="h-4 w-4" />
+                    </Button>
+                    <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-red-600" onClick={(e) => { e.stopPropagation(); onDelete(lesson.id); }}>
+                        <Trash2 className="h-4 w-4" />
+                    </Button>
+                </div>
             </div>
         </div>
     );
@@ -113,7 +130,10 @@ interface SortableChapterItemProps {
     onDeleteChapter: (id: number) => void;
     onEditLesson: (lesson: Lesson) => void;
     onDeleteLesson: (id: number) => void;
-    onCreateLesson: (chapterId: number) => void;
+    onCreateLesson: (chapterId: number, type?: 'text' | 'video' | 'quiz') => void;
+    onToggleLessonPublish: (lesson: Lesson) => void;
+    onToggleChapterPublish: (chapter: Chapter) => void;
+    onBatchPublish: (chapterId: number, publish: boolean) => void;
     sensors: any;
     handleLessonDragEnd: (event: DragEndEvent, chapterId: number) => void;
 }
@@ -126,6 +146,9 @@ function SortableChapterItem({
     onEditLesson,
     onDeleteLesson,
     onCreateLesson,
+    onToggleLessonPublish,
+    onToggleChapterPublish,
+    onBatchPublish,
     sensors,
     handleLessonDragEnd
 }: SortableChapterItemProps) {
@@ -154,16 +177,29 @@ function SortableChapterItem({
                         </div>
                         <AccordionTrigger className="hover:no-underline py-4 px-4 flex-1">
                             <div className="flex items-center gap-3 text-left">
-                                <div className="bg-white p-2 rounded-lg border shadow-sm">
-                                    <BookOpen className="h-5 w-5 text-indigo-600" />
+                                <div className={`p-2 rounded-lg border shadow-sm transition-colors ${!chapter.is_published ? 'bg-slate-100 border-slate-200' : 'bg-white border-slate-200'}`}>
+                                    <BookOpen className={`h-5 w-5 ${!chapter.is_published ? 'text-slate-400' : 'text-indigo-600'}`} />
                                 </div>
                                 <div>
-                                    <h3 className="font-bold text-slate-800">{chapter.title}</h3>
+                                    <div className="flex items-center gap-2">
+                                        <h3 className={`font-bold transition-colors ${!chapter.is_published ? 'text-slate-500' : 'text-slate-800'}`}>{chapter.title}</h3>
+                                        {!chapter.is_published && (
+                                            <Badge variant="outline" className="text-[10px] py-0 h-4 bg-slate-100 text-slate-500 border-slate-200">Draft</Badge>
+                                        )}
+                                    </div>
                                     <p className="text-xs text-slate-500">{chapter.lessons?.length || 0} Lessons</p>
                                 </div>
                             </div>
                         </AccordionTrigger>
-                        <div className="flex items-center gap-1">
+                        <div className="flex items-center gap-3">
+                            <div className="flex items-center gap-2 mr-2">
+                                <span className="text-[10px] font-medium text-slate-400 uppercase tracking-wider">{chapter.is_published ? 'Visible' : 'Hidden'}</span>
+                                <Switch
+                                    checked={chapter.is_published}
+                                    onCheckedChange={() => onToggleChapterPublish(chapter)}
+                                    className="scale-75 data-[state=checked]:bg-indigo-600"
+                                />
+                            </div>
                             <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-slate-600" onClick={(e) => { e.stopPropagation(); onEditChapter(chapter); }}>
                                 <Edit className="h-4 w-4" />
                             </Button>
@@ -173,22 +209,34 @@ function SortableChapterItem({
                                         <MoreVertical className="h-4 w-4" />
                                     </Button>
                                 </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end">
-                                    <DropdownMenuItem onClick={() => onCreateLesson(chapter.id)}>
-                                        Add Lesson
+                                <DropdownMenuContent align="end" className="w-48">
+                                    <DropdownMenuItem onClick={() => onCreateLesson(chapter.id, 'text')}>
+                                        <Plus className="h-4 w-4 mr-2" /> Add Article
                                     </DropdownMenuItem>
-                                    <DropdownMenuItem onClick={() => onEditChapter(chapter)}>
-                                        Edit Chapter
+                                    <DropdownMenuItem onClick={() => onCreateLesson(chapter.id, 'video')}>
+                                        <Video className="h-4 w-4 mr-2" /> Add Video
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem onClick={() => onCreateLesson(chapter.id, 'quiz')}>
+                                        <BookOpen className="h-4 w-4 mr-2" /> Add Quiz
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem className="border-t mt-1" onClick={() => onBatchPublish(chapter.id, true)}>
+                                        <Eye className="h-4 w-4 mr-2 text-emerald-600" /> Publish All Lessons
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem onClick={() => onBatchPublish(chapter.id, false)}>
+                                        <EyeOff className="h-4 w-4 mr-2 text-slate-500" /> Unpublish All Lessons
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem className="border-t mt-1" onClick={() => onEditChapter(chapter)}>
+                                        <Edit className="h-4 w-4 mr-2" /> Edit Chapter
                                     </DropdownMenuItem>
                                     <DropdownMenuItem className="text-red-600" onClick={() => onDeleteChapter(chapter.id)}>
-                                        Delete Chapter
+                                        <Trash2 className="h-4 w-4 mr-2" /> Delete Chapter
                                     </DropdownMenuItem>
                                 </DropdownMenuContent>
                             </DropdownMenu>
                         </div>
                     </div>
                     <AccordionContent className="p-0">
-                        <div className="bg-white border-t border-slate-100 p-4 space-y-2">
+                        <div className={`bg-white border-t border-slate-100 p-4 space-y-2 transition-opacity ${!chapter.is_published ? 'bg-slate-50/30' : ''}`}>
                             {chapter.lessons && chapter.lessons.length > 0 ? (
                                 <DndContext
                                     sensors={sensors}
@@ -209,6 +257,7 @@ function SortableChapterItem({
                                                     lessonIndex={lessonIndex}
                                                     onEdit={onEditLesson}
                                                     onDelete={onDeleteLesson}
+                                                    onTogglePublish={onToggleLessonPublish}
                                                 />
                                             ))}
                                         </div>
@@ -253,6 +302,7 @@ export default function LessonPlanningManager() {
     const [lessonDialogOpen, setLessonDialogOpen] = useState(false);
     const [selectedLesson, setSelectedLesson] = useState<Lesson | null>(null);
     const [targetChapterId, setTargetChapterId] = useState<number | null>(null);
+    const [lessonType, setLessonType] = useState<'text' | 'video' | 'quiz'>('text');
 
     const sensors = useSensors(
         useSensor(PointerSensor),
@@ -373,8 +423,9 @@ export default function LessonPlanningManager() {
         }
     };
 
-    const handleCreateLesson = (chapterId: number) => {
+    const handleCreateLesson = (chapterId: number, type: 'text' | 'video' | 'quiz' = 'text') => {
         setTargetChapterId(chapterId);
+        setLessonType(type);
         setSelectedLesson(null);
         setLessonDialogOpen(true);
     };
@@ -393,6 +444,65 @@ export default function LessonPlanningManager() {
             loadData();
         } catch (error) {
             toast.error('Failed to delete lesson');
+        }
+    };
+
+    const handleToggleLessonPublish = async (lesson: Lesson) => {
+        try {
+            const updated = await academicAPI.updateLesson(lesson.id, {
+                is_published: !lesson.is_published
+            });
+            toast.success(updated.is_published ? 'Lesson published' : 'Lesson set to draft');
+
+            // Update local state for immediate feedback
+            setChapters(prev => prev.map(ch => {
+                if (ch.id === lesson.chapter) {
+                    return {
+                        ...ch,
+                        lessons: ch.lessons?.map(l => l.id === lesson.id ? { ...l, is_published: updated.is_published } : l)
+                    };
+                }
+                return ch;
+            }));
+        } catch (error) {
+            toast.error('Failed to update lesson status');
+        }
+    };
+
+    const handleToggleChapterPublish = async (chapter: Chapter) => {
+        try {
+            const updated = await academicAPI.updateChapter(chapter.id, {
+                is_published: !chapter.is_published
+            });
+            toast.success(updated.is_published ? 'Chapter is now visible' : 'Chapter is now hidden');
+
+            setChapters(prev => prev.map(ch => ch.id === chapter.id ? { ...ch, is_published: updated.is_published } : ch));
+        } catch (error) {
+            toast.error('Failed to update chapter status');
+        }
+    };
+
+    const handleBatchPublish = async (chapterId: number, publish: boolean) => {
+        const chapter = chapters.find(c => c.id === chapterId);
+        if (!chapter || !chapter.lessons || chapter.lessons.length === 0) return;
+
+        const actionTerm = publish ? 'publish' : 'unpublish';
+        if (!confirm(`Are you sure you want to ${actionTerm} all lessons in "${chapter.title}"?`)) return;
+
+        toast.loading(`${publish ? 'Publishing' : 'Unpublishing'} all lessons...`);
+        try {
+            // Sequential updates for simplicity in MVP, but could be batch API if backend supports it
+            await Promise.all(chapter.lessons.map(lesson =>
+                academicAPI.updateLesson(lesson.id, { is_published: publish })
+            ));
+
+            toast.dismiss();
+            toast.success(`All lessons in "${chapter.title}" ${publish ? 'published' : 'set to draft'}`);
+            loadData();
+        } catch (error) {
+            toast.dismiss();
+            toast.error('Failed to update some lessons');
+            loadData();
         }
     };
 
@@ -448,6 +558,9 @@ export default function LessonPlanningManager() {
                                     onEditLesson={handleEditLesson}
                                     onDeleteLesson={handleDeleteLesson}
                                     onCreateLesson={handleCreateLesson}
+                                    onToggleLessonPublish={handleToggleLessonPublish}
+                                    onToggleChapterPublish={handleToggleChapterPublish}
+                                    onBatchPublish={handleBatchPublish}
                                     sensors={sensors}
                                     handleLessonDragEnd={handleLessonDragEnd}
                                 />
@@ -471,6 +584,7 @@ export default function LessonPlanningManager() {
                 lesson={selectedLesson}
                 chapterId={targetChapterId || 0}
                 onSuccess={loadData}
+                initialType={lessonType}
             />
         </div>
     );

@@ -1,193 +1,99 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { billingAPI, FinanceDashboard } from '@/lib/api';
-import { Loader2, DollarSign, TrendingUp, TrendingDown, CreditCard, Download, Calendar, Wallet } from 'lucide-react';
-import { toast } from 'sonner';
-import { api } from '@/lib/api';
+import { useState } from 'react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Card } from "@/components/ui/card";
+import { FinanceOverview } from './FinanceOverview';
+import { FeeStructureManager } from './FeeStructureManager';
+import { StudentFeeList } from './StudentFeeList';
+import {
+    LayoutDashboard,
+    Receipt,
+    Settings2,
+    TrendingUp,
+    Wallet,
+    Building2,
+    CalendarDays
+} from 'lucide-react';
 
 export default function FinanceDashboardPage() {
-    const [stats, setStats] = useState<FinanceDashboard | null>(null);
-    const [loading, setLoading] = useState(true);
-    const [dateRange, setDateRange] = useState({ start: '', end: '' });
-
-    useEffect(() => {
-        loadStats();
-    }, []);
-
-    const loadStats = async () => {
-        setLoading(true);
-        try {
-            // Need to update API definition in library to accept params if I want filtering
-            // For now, fetching default (all time) or I can manually append params if the library method allowed it.
-            // Since api.ts getFinanceDashboard doesn't take args yet, I'll rely on backend defaults 
-            // OR I should have updated the API method signature.
-            // Let's assume I'll come back to fix api.ts signature if I strictly need filtering here.
-            // For now, basic load.
-            const data = await billingAPI.getFinanceDashboard();
-            setStats(data);
-        } catch (error) {
-            console.error(error);
-            toast.error('Failed to load finance stats');
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const handleDownloadReport = (type: 'pdf' | 'excel') => {
-        const url = type === 'pdf'
-            ? api.reports.getFeeCollectionPDF(dateRange.start, dateRange.end)
-            : api.reports.getFeeCollectionExcel(dateRange.start, dateRange.end);
-
-        api.helpers.downloadFile(url, `fee_report.${type}`);
-    };
-
-    if (loading) return <div className="flex h-96 items-center justify-center"><Loader2 className="animate-spin h-8 w-8 text-indigo-600" /></div>;
-    if (!stats) return <div className="p-6">Failed to load data.</div>;
-
-    const formatMoney = (amount: number) => {
-        return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount);
-    };
+    const [activeTab, setActiveTab] = useState('overview');
 
     return (
-        <div className="p-6 space-y-8 max-w-7xl mx-auto">
-            <header className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="container mx-auto py-8 space-y-8 max-w-7xl px-4 md:px-6">
+            <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 border-b border-slate-100 pb-6">
                 <div>
-                    <h1 className="text-3xl font-black text-slate-900">Finance Overview</h1>
-                    <p className="text-slate-500">Track revenue, expenses, and pending fees.</p>
+                    <div className="flex items-center gap-2 text-indigo-600 font-bold mb-1">
+                        <Building2 className="h-4 w-4" />
+                        <span className="text-[10px] uppercase tracking-[0.2em]">Institutional Finance v1.0</span>
+                    </div>
+                    <h1 className="text-4xl font-black text-slate-900 tracking-tight">Financial Center</h1>
+                    <p className="text-slate-500 font-medium">Manage tuition, fee structures, and collection reports</p>
                 </div>
-                <div className="flex gap-2">
-                    <Button onClick={() => window.location.href = '/admin/finance/fees'} variant="outline" className="border-indigo-200 text-indigo-700 hover:bg-indigo-50 font-bold">
-                        <Wallet className="h-4 w-4 mr-2" /> Fee Structures
-                    </Button>
-                    <Button onClick={() => window.location.href = '/admin/finance/collect'} className="bg-emerald-600 hover:bg-emerald-700 font-bold shadow-md">
-                        <DollarSign className="h-4 w-4 mr-1" /> Collect Payments
-                    </Button>
+                <div className="flex items-center gap-3 bg-slate-50 p-1.5 rounded-xl border border-slate-100">
+                    <div className="flex items-center gap-2 px-3 py-1.5 bg-white rounded-lg shadow-sm border border-slate-100 text-xs font-bold text-slate-700">
+                        <CalendarDays className="h-3.5 w-3.5 text-indigo-500" />
+                        Term: Fall 2026
+                    </div>
                 </div>
-            </header>
-
-            {/* KPI Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                <Card className="border-l-4 border-l-emerald-500 shadow-sm hover:shadow-md transition-shadow">
-                    <CardHeader className="pb-2">
-                        <CardDescription>Total Revenue</CardDescription>
-                        <CardTitle className="text-2xl font-bold flex items-center text-emerald-700">
-                            {formatMoney(stats.total_revenue)}
-                        </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-xs text-slate-500 flex items-center gap-1">
-                            <TrendingUp className="h-3 w-3 text-emerald-500" /> Collected to date
-                        </div>
-                    </CardContent>
-                </Card>
-
-                <Card className="border-l-4 border-l-amber-500 shadow-sm hover:shadow-md transition-shadow">
-                    <CardHeader className="pb-2">
-                        <CardDescription>Pending Fees</CardDescription>
-                        <CardTitle className="text-2xl font-bold text-amber-600">
-                            {formatMoney(stats.total_pending)}
-                        </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-xs text-slate-500 flex items-center gap-1">
-                            <CreditCard className="h-3 w-3 text-amber-500" /> Outstanding balance
-                        </div>
-                    </CardContent>
-                </Card>
-
-                <Card className="border-l-4 border-l-red-500 shadow-sm hover:shadow-md transition-shadow">
-                    <CardHeader className="pb-2">
-                        <CardDescription>Total Expenses</CardDescription>
-                        <CardTitle className="text-2xl font-bold text-red-600">
-                            {formatMoney(stats.total_expenses)}
-                        </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-xs text-slate-500 flex items-center gap-1">
-                            <TrendingDown className="h-3 w-3 text-red-500" /> Operational costs
-                        </div>
-                    </CardContent>
-                </Card>
-
-                <Card className="border-l-4 border-l-indigo-500 shadow-sm hover:shadow-md transition-shadow bg-indigo-50/50">
-                    <CardHeader className="pb-2">
-                        <CardDescription>Net Balance</CardDescription>
-                        <CardTitle className="text-2xl font-bold text-indigo-700">
-                            {formatMoney(stats.net_balance)}
-                        </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-xs text-slate-500 flex items-center gap-1">
-                            <DollarSign className="h-3 w-3 text-indigo-500" /> Available funds
-                        </div>
-                    </CardContent>
-                </Card>
             </div>
 
-            {/* Recent Activity Grid */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                <Card>
-                    <CardHeader>
-                        <CardTitle className="text-lg">Recent Collections</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="space-y-4">
-                            {stats.recent_payments.length === 0 ? (
-                                <p className="text-sm text-slate-500 text-center py-4">No recent payments.</p>
-                            ) : (
-                                stats.recent_payments.map((p: any) => (
-                                    <div key={p.payment_id} className="flex justify-between items-center border-b last:border-0 pb-2 last:pb-0">
-                                        <div>
-                                            <p className="font-medium text-sm text-slate-900">
-                                                {p.student_name || 'Student'}
-                                            </p>
-                                            <p className="text-xs text-slate-500">
-                                                {new Date(p.payment_date).toLocaleDateString()} • {p.method}
-                                            </p>
-                                        </div>
-                                        <div className="font-bold text-emerald-600">
-                                            +{formatMoney(p.amount)}
-                                        </div>
-                                    </div>
-                                ))
-                            )}
-                        </div>
-                    </CardContent>
-                </Card>
+            <Tabs defaultValue="overview" className="space-y-6" onValueChange={setActiveTab}>
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <TabsList className="bg-slate-100 p-1 rounded-2xl border border-slate-200/60 overflow-x-auto h-auto min-w-80">
+                        <TabsTrigger
+                            value="overview"
+                            className="rounded-xl px-6 py-2.5 text-xs font-black uppercase tracking-wider data-[state=active]:bg-white data-[state=active]:text-indigo-700 data-[state=active]:shadow-md transition-all"
+                        >
+                            <LayoutDashboard className="h-3.5 w-3.5 mr-2" /> Overview
+                        </TabsTrigger>
+                        <TabsTrigger
+                            value="fees"
+                            className="rounded-xl px-6 py-2.5 text-xs font-black uppercase tracking-wider data-[state=active]:bg-white data-[state=active]:text-indigo-700 data-[state=active]:shadow-md transition-all"
+                        >
+                            <Receipt className="h-3.5 w-3.5 mr-2" /> Student Fees
+                        </TabsTrigger>
+                        <TabsTrigger
+                            value="structures"
+                            className="rounded-xl px-6 py-2.5 text-xs font-black uppercase tracking-wider data-[state=active]:bg-white data-[state=active]:text-indigo-700 data-[state=active]:shadow-md transition-all"
+                        >
+                            <Settings2 className="h-3.5 w-3.5 mr-2" /> Fee Matrix
+                        </TabsTrigger>
+                        <TabsTrigger
+                            value="reports"
+                            className="rounded-xl px-6 py-2.5 text-xs font-black uppercase tracking-wider data-[state=active]:bg-white data-[state=active]:text-indigo-700 data-[state=active]:shadow-md transition-all"
+                        >
+                            <TrendingUp className="h-3.5 w-3.5 mr-2" /> Reports
+                        </TabsTrigger>
+                    </TabsList>
+                </div>
 
-                <Card>
-                    <CardHeader>
-                        <CardTitle className="text-lg">Recent Expenses</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="space-y-4">
-                            {stats.recent_expenses.length === 0 ? (
-                                <p className="text-sm text-slate-500 text-center py-4">No recent expenses.</p>
-                            ) : (
-                                stats.recent_expenses.map((e: any) => (
-                                    <div key={e.expense_id} className="flex justify-between items-center border-b last:border-0 pb-2 last:pb-0">
-                                        <div>
-                                            <p className="font-medium text-sm text-slate-900">
-                                                {e.title}
-                                            </p>
-                                            <p className="text-xs text-slate-500">
-                                                {new Date(e.date).toLocaleDateString()} • {e.category}
-                                            </p>
-                                        </div>
-                                        <div className="font-bold text-red-600">
-                                            -{formatMoney(e.amount)}
-                                        </div>
-                                    </div>
-                                ))
-                            )}
+                <TabsContent value="overview" className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-400">
+                    <FinanceOverview />
+                </TabsContent>
+
+                <TabsContent value="fees" className="animate-in fade-in slide-in-from-bottom-2 duration-400">
+                    <StudentFeeList />
+                </TabsContent>
+
+                <TabsContent value="structures" className="animate-in fade-in slide-in-from-bottom-2 duration-400">
+                    <FeeStructureManager />
+                </TabsContent>
+
+                <TabsContent value="reports" className="animate-in fade-in slide-in-from-bottom-2 duration-400">
+                    <Card className="border-dashed border-2 border-slate-200 bg-slate-50/50 py-20 text-center">
+                        <div className="flex flex-col items-center gap-4">
+                            <div className="p-4 bg-white rounded-full shadow-sm">
+                                <TrendingUp className="h-8 w-8 text-slate-300" />
+                            </div>
+                            <div>
+                                <h3 className="text-lg font-bold text-slate-800">Financial Reporting</h3>
+                                <p className="text-sm text-slate-400 max-w-xs">Detailed audit logs and collection reports are being generated.</p>
+                            </div>
                         </div>
-                    </CardContent>
-                </Card>
-            </div>
+                    </Card>
+                </TabsContent>
+            </Tabs>
         </div>
     );
 }

@@ -81,7 +81,7 @@ class FeeStructure(models.Model):
     Defines the types of fees and their default amounts.
     """
     fee_id = models.UUIDField(primary_key=True, default=uuid_lib.uuid4, editable=False)
-    tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE, related_name='fee_structures')
+    tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE, related_name='fee_structures', db_constraint=False)
     name = models.CharField(max_length=100) # e.g., "Tuition Fee", "Exam Fee"
     amount = models.DecimalField(max_digits=10, decimal_places=2)
     # Optional link to class. If null, applies generally or manually assigned.
@@ -103,7 +103,7 @@ class StudentFee(models.Model):
     Records a specific fee assigned to a student.
     """
     student_fee_id = models.UUIDField(primary_key=True, default=uuid_lib.uuid4, editable=False)
-    tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE, related_name='student_fees')
+    tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE, related_name='student_fees', db_constraint=False)
     student = models.ForeignKey('academic.Student', on_delete=models.CASCADE, related_name='fees')
     fee_structure = models.ForeignKey(FeeStructure, on_delete=models.CASCADE, related_name='assigned_fees')
     
@@ -131,7 +131,7 @@ class Payment(models.Model):
     Records a payment transaction.
     """
     payment_id = models.UUIDField(primary_key=True, default=uuid_lib.uuid4, editable=False)
-    tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE, related_name='payments')
+    tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE, related_name='payments', db_constraint=False)
     student = models.ForeignKey('academic.Student', on_delete=models.CASCADE, related_name='payments')
     # Optional link to specific fee if paying for one item. Often payments cover multiple fees.
     # For simplicity, we can link it, or just track balance. Let's link it optionaly.
@@ -161,7 +161,7 @@ class Expense(models.Model):
     Records school operational expenses.
     """
     expense_id = models.UUIDField(primary_key=True, default=uuid_lib.uuid4, editable=False)
-    tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE, related_name='expenses')
+    tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE, related_name='expenses', db_constraint=False)
     
     title = models.CharField(max_length=200)
     amount = models.DecimalField(max_digits=10, decimal_places=2)

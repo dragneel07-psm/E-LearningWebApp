@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Bell, Globe } from 'lucide-react';
 import { User } from '@/lib/api';
+import { NotificationBell } from './notification-bell';
 
 export function TeacherHeader() {
     const user: User = {
@@ -51,10 +52,7 @@ export function TeacherHeader() {
                 <div className="h-6 w-px bg-slate-200 hidden md:block"></div>
 
                 <div className="flex items-center gap-3">
-                    <Button variant="ghost" size="icon" className="relative text-slate-500">
-                        <Bell className="h-5 w-5" />
-                        <span className="absolute top-2 right-2 h-2 w-2 bg-orange-500 rounded-full"></span>
-                    </Button>
+                    <NotificationBell />
                     <Button variant="ghost" size="sm" className="hidden md:flex gap-1 text-slate-600">
                         <Globe className="h-4 w-4" /> EN
                     </Button>

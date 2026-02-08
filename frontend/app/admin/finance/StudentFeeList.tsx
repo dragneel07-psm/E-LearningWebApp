@@ -1,0 +1,245 @@
+'use client';
+
+import { useState, useEffect } from 'react';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import {
+    Plus, Receipt, CreditCard,
+    Search, Filter, Loader2,
+    AlertCircle, CheckCircle2,
+    Clock, MoreVertical, Download,
+    Users, Calendar
+} from 'lucide-react';
+import { billingAPI, academicAPI, StudentFee, FeeStructure, AcademicClass } from '@/lib/api';
+import { toast } from 'sonner';
+import { Badge } from '@/components/ui/badge';
+import { PaymentDialog } from './PaymentDialog';
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+
+export function StudentFeeList() {
+    const [loading, setLoading] = useState(true);
+    const [fees, setFees] = useState<StudentFee[]>([]);
+    const [structures, setStructures] = useState<FeeStructure[]>([]);
+    const [classes, setClasses] = useState<AcademicClass[]>([]);
+    const [searchTerm, setSearchTerm] = useState('');
+    const [isPaymentOpen, setIsPaymentOpen] = useState(false);
+    const [selectedFee, setSelectedFee] = useState<StudentFee | null>(null);
+
+    useEffect(() => {
+        loadData();
+    }, []);
+
+    const loadData = async () => {
+        setLoading(true);
+        try {
+            const [feeData, structureData, classData] = await Promise.all([
+                billingAPI.getStudentFees(),
+                billingAPI.getFeeStructures(),
+                academicAPI.getClasses()
+            ]);
+            setFees(feeData);
+            setStructures(structureData);
+            setClasses(classData);
+        } catch (error) {
+            toast.error("Failed to load fee data");
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleRecordPayment = (fee: StudentFee) => {
+        setSelectedFee(fee);
+        setIsPaymentOpen(true);
+    };
+
+    const getStatusBadge = (status: string) => {
+        switch (status) {
+            case 'paid': return <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100 border-emerald-200"><CheckCircle2 className="h-3 w-3 mr-1" /> Paid</Badge>;
+            case 'partial': return <Badge className="bg-amber-100 text-amber-700 hover:bg-amber-100 border-amber-200"><Clock className="h-3 w-3 mr-1" /> Partial</Badge>;
+            case 'overdue': return <Badge className="bg-red-100 text-red-700 hover:bg-red-100 border-red-200"><AlertCircle className="h-3 w-3 mr-1" /> Overdue</Badge>;
+            case 'pending': return <Badge variant="outline" className="text-slate-500 border-slate-200">Pending</Badge>;
+            default: return <Badge variant="secondary">{status}</Badge>;
+        }
+    };
+
+    const filteredFees = fees.filter(f =>
+        f.student_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        f.fee_name?.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+
+    if (loading) {
+        return (
+            <div className="flex flex-col items-center justify-center p-20 space-y-4">
+                <Loader2 className="h-10 w-10 text-indigo-600 animate-spin" />
+                <p className="text-slate-500 font-medium">Loading student accounts...</p>
+            </div>
+        );
+    }
+
+    return (
+        <div className="space-y-6">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div className="flex items-center gap-3">
+                    <div className="p-2 bg-indigo-100 rounded-xl">
+                        <Receipt className="h-6 w-6 text-indigo-600" />
+                    </div>
+                    <div>
+                        <h2 className="text-2xl font-bold text-slate-900 tracking-tight">Student Fees</h2>
+                        <p className="text-slate-500 text-sm">Track payments, balances, and issue new bills</p>
+                    </div>
+                </div>
+                <div className="flex gap-2">
+                    <Button variant="outline" className="border-slate-200 hover:bg-slate-50">
+                        <Download className="h-4 w-4 mr-2" /> Export CSV
+                    </Button>
+                    <Button className="bg-indigo-600 hover:bg-indigo-700 shadow-sm">
+                        <Plus className="h-4 w-4 mr-2" /> Bulk Assign Fees
+                    </Button>
+                </div>
+            </div>
+
+            <Card className="border-slate-200 shadow-sm overflow-hidden">
+                <CardHeader className="py-4 border-b border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <div className="flex items-center gap-4">
+                        <CardTitle className="text-lg font-bold">Billing Records</CardTitle>
+                        <div className="hidden md:flex gap-1">
+                            <Badge variant="secondary" className="bg-slate-100 text-slate-600">Total: {fees.length}</Badge>
+                            <Badge variant="secondary" className="bg-red-50 text-red-600">Unpaid: {fees.filter(f => f.status !== 'paid').length}</Badge>
+                        </div>
+                    </div>
+                    <div className="flex gap-2 w-full md:w-auto">
+                        <div className="relative flex-1 md:w-64">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                            <input
+                                type="text"
+                                placeholder="Search student or fee..."
+                                className="w-full pl-9 pr-4 py-2 text-sm bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all shadow-sm"
+                                value={searchTerm}
+                                onChange={(e) => setSearchTerm(e.target.value)}
+                            />
+                        </div>
+                        <Button variant="outline" size="icon" className="shrink-0 border-slate-200">
+                            <Filter className="h-4 w-4 text-slate-500" />
+                        </Button>
+                    </div>
+                </CardHeader>
+                <CardContent className="p-0">
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-left text-sm border-separate border-spacing-0">
+                            <thead className="bg-slate-50 text-slate-500 font-bold uppercase text-[10px] tracking-wider sticky top-0 z-10">
+                                <tr>
+                                    <th className="px-6 py-4 border-b">Student</th>
+                                    <th className="px-6 py-4 border-b">Fee Item</th>
+                                    <th className="px-6 py-4 border-b">Amount Due</th>
+                                    <th className="px-6 py-4 border-b">Paid</th>
+                                    <th className="px-6 py-4 border-b">Balance</th>
+                                    <th className="px-6 py-4 border-b">Due Date</th>
+                                    <th className="px-6 py-4 border-b">Status</th>
+                                    <th className="px-6 py-4 border-b text-right">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100 bg-white">
+                                {filteredFees.map((fee) => (
+                                    <tr key={fee.student_fee_id} className="hover:bg-slate-50/50 transition-colors group">
+                                        <td className="px-6 py-4 whitespace-nowrap">
+                                            <div className="flex items-center gap-3">
+                                                <div className="h-9 w-9 rounded-full bg-indigo-50 flex items-center justify-center text-indigo-700 font-bold text-xs border border-indigo-100">
+                                                    {fee.student_name?.split(' ').map(n => n[0]).join('')}
+                                                </div>
+                                                <div>
+                                                    <p className="font-bold text-slate-900 leading-none mb-1">{fee.student_name}</p>
+                                                    <p className="text-[10px] text-slate-400 font-medium">ID: {fee.student.slice(0, 8)}</p>
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td className="px-6 py-4">
+                                            <p className="font-medium text-slate-700">{fee.fee_name}</p>
+                                        </td>
+                                        <td className="px-6 py-4 font-bold text-slate-900">
+                                            ${fee.amount_due.toLocaleString()}
+                                        </td>
+                                        <td className="px-6 py-4 font-medium text-emerald-600">
+                                            ${fee.amount_paid.toLocaleString()}
+                                        </td>
+                                        <td className="px-6 py-4">
+                                            <span className={`font-black ${fee.balance! > 0 ? 'text-red-600' : 'text-slate-400'}`}>
+                                                ${(fee.balance || 0).toLocaleString()}
+                                            </span>
+                                        </td>
+                                        <td className="px-6 py-4 whitespace-nowrap">
+                                            <div className="flex items-center gap-1.5 text-xs text-slate-500 font-medium">
+                                                <Calendar className="h-3.5 w-3.5" />
+                                                {new Date(fee.due_date).toLocaleDateString()}
+                                            </div>
+                                        </td>
+                                        <td className="px-6 py-4 whitespace-nowrap">
+                                            {getStatusBadge(fee.status)}
+                                        </td>
+                                        <td className="px-6 py-4 text-right">
+                                            <div className="flex justify-end gap-2">
+                                                {fee.status !== 'paid' && (
+                                                    <Button
+                                                        size="sm"
+                                                        className="h-8 bg-indigo-50 text-indigo-600 hover:bg-indigo-600 hover:text-white border border-indigo-100 shadow-none font-bold text-xs"
+                                                        onClick={() => handleRecordPayment(fee)}
+                                                    >
+                                                        Pay Now
+                                                    </Button>
+                                                )}
+                                                <DropdownMenu>
+                                                    <DropdownMenuTrigger asChild>
+                                                        <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400">
+                                                            <MoreVertical className="h-4 w-4" />
+                                                        </Button>
+                                                    </DropdownMenuTrigger>
+                                                    <DropdownMenuContent align="end" className="w-40">
+                                                        <DropdownMenuItem className="text-xs font-bold gap-2">
+                                                            <Download className="h-3.5 w-3.5" /> Statement
+                                                        </DropdownMenuItem>
+                                                        <DropdownMenuItem className="text-xs font-bold gap-2">
+                                                            <Filter className="h-3.5 w-3.5" /> History
+                                                        </DropdownMenuItem>
+                                                        <DropdownMenuItem className="text-xs font-bold gap-2 text-red-600">
+                                                            <AlertCircle className="h-3.5 w-3.5" /> Waive Fee
+                                                        </DropdownMenuItem>
+                                                    </DropdownMenuContent>
+                                                </DropdownMenu>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                ))}
+                                {filteredFees.length === 0 && (
+                                    <tr>
+                                        <td colSpan={8} className="px-6 py-20 text-center">
+                                            <div className="flex flex-col items-center justify-center space-y-3">
+                                                <div className="p-4 bg-slate-50 rounded-full">
+                                                    <Search className="h-8 w-8 text-slate-300" />
+                                                </div>
+                                                <div className="space-y-1">
+                                                    <p className="text-slate-900 font-bold">No results found</p>
+                                                    <p className="text-slate-500 text-sm max-w-xs mx-auto">Try adjusting your search or filters to find what you're looking for.</p>
+                                                </div>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+                </CardContent>
+            </Card>
+
+            <PaymentDialog
+                open={isPaymentOpen}
+                onOpenChange={setIsPaymentOpen}
+                fee={selectedFee}
+                onSuccess={loadData}
+            />
+        </div>
+    );
+}

@@ -41,7 +41,7 @@ export default function StudentNoticesPage() {
             <div className="space-y-6">
                 {notices.length > 0 ? (
                     notices.map((notice) => (
-                        <Card key={notice.notice_id} className={`border-none shadow-sm overflow-hidden transition-all hover:shadow-md ${notice.priority === 'high' ? 'bg-red-50/30 border-l-4 border-l-red-500' : 'bg-white border-l-4 border-l-indigo-500'}`}>
+                        <Card key={notice.id} className={`border-none shadow-sm overflow-hidden transition-all hover:shadow-md ${notice.priority === 'high' ? 'bg-red-50/30 border-l-4 border-l-red-500' : 'bg-white border-l-4 border-l-indigo-500'}`}>
                             <CardHeader className="pb-2">
                                 <div className="flex items-center justify-between mb-2">
                                     <Badge variant="outline" className="capitalize text-[10px] font-bold tracking-widest px-2 py-0 border-slate-200 text-slate-500 uppercase">

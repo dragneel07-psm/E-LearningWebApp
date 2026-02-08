@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { Switch } from '@/components/ui/switch';
 import { academicAPI, Chapter } from '@/lib/api';
 import { toast } from 'sonner';
 
@@ -21,6 +22,7 @@ export function ChapterDialog({ open, onOpenChange, chapter, subjectId, onSucces
     const [title, setTitle] = useState('');
     const [description, setDescription] = useState('');
     const [order, setOrder] = useState(0);
+    const [isPublished, setIsPublished] = useState(false);
     const [saving, setSaving] = useState(false);
 
     useEffect(() => {
@@ -28,10 +30,12 @@ export function ChapterDialog({ open, onOpenChange, chapter, subjectId, onSucces
             setTitle(chapter.title);
             setDescription(chapter.description || '');
             setOrder(chapter.order);
+            setIsPublished(chapter.is_published);
         } else {
             setTitle('');
             setDescription('');
             setOrder(0);
+            setIsPublished(false);
         }
     }, [chapter, open]);
 
@@ -47,6 +51,7 @@ export function ChapterDialog({ open, onOpenChange, chapter, subjectId, onSucces
                 title,
                 description,
                 order,
+                is_published: isPublished,
                 subject: subjectId
             };
 
@@ -92,14 +97,24 @@ export function ChapterDialog({ open, onOpenChange, chapter, subjectId, onSucces
                             onChange={(e) => setDescription(e.target.value)}
                         />
                     </div>
-                    <div className="space-y-2">
-                        <Label htmlFor="order">Display Order</Label>
-                        <Input
-                            id="order"
-                            type="number"
-                            value={order}
-                            onChange={(e) => setOrder(parseInt(e.target.value) || 0)}
-                        />
+                    <div className="flex items-center justify-between gap-4">
+                        <div className="space-y-2 flex-1">
+                            <Label htmlFor="order">Display Order</Label>
+                            <Input
+                                id="order"
+                                type="number"
+                                value={order}
+                                onChange={(e) => setOrder(parseInt(e.target.value) || 0)}
+                            />
+                        </div>
+                        <div className="space-y-2 flex items-center gap-3 pt-6">
+                            <Label htmlFor="published" className="cursor-pointer">Published</Label>
+                            <Switch
+                                id="published"
+                                checked={isPublished}
+                                onCheckedChange={setIsPublished}
+                            />
+                        </div>
                     </div>
                 </div>
                 <DialogFooter>

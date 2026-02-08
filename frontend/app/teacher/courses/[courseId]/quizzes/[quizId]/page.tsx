@@ -11,6 +11,8 @@ import { Card, CardContent } from '@/components/ui/card';
 import { toast } from 'sonner';
 import { Loader2, Save, ArrowLeft, Plus } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { arrayMove } from '@dnd-kit/sortable';
 import { QuestionList } from '@/components/quizzes/question-list';
 import { QuestionEditorModal } from '@/components/quizzes/question-editor-modal';
 
@@ -30,6 +32,9 @@ export default function QuizEditorPage() {
     const [description, setDescription] = useState('');
     const [duration, setDuration] = useState(30);
     const [passingMarks, setPassingMarks] = useState(40);
+    const [totalMarks, setTotalMarks] = useState(10);
+    const [quizType, setQuizType] = useState<'quiz' | 'exam' | 'assignment'>('quiz');
+    const [bloomsLevel, setBloomsLevel] = useState('remember');
     const [isEditorOpen, setIsEditorOpen] = useState(false);
     const [editingQuestion, setEditingQuestion] = useState<Question | undefined>(undefined);
 
@@ -41,11 +46,15 @@ export default function QuizEditorPage() {
                     academicAPI.getQuestionsByAssessment(quizId)
                 ]);
                 setQuiz(quizData);
-                setQuestions(questionsData);
+                // Sort by order field
+                setQuestions(questionsData.sort((a, b) => a.order - b.order));
                 setTitle(quizData.title);
                 setDescription(quizData.description);
                 setDuration(quizData.duration_minutes);
                 setPassingMarks(quizData.passing_marks);
+                setTotalMarks(quizData.total_marks);
+                setQuizType(quizData.type as any);
+                setBloomsLevel(quizData.blooms_level || 'remember');
             } catch (error) {
                 console.error("Failed to load quiz", error);
                 toast.error("Failed to load quiz details");
@@ -63,7 +72,10 @@ export default function QuizEditorPage() {
                 title,
                 description,
                 duration_minutes: duration,
-                passing_marks: passingMarks
+                passing_marks: passingMarks,
+                total_marks: totalMarks,
+                type: quizType,
+                blooms_level: bloomsLevel
             });
             toast.success("Quiz settings saved");
         } catch (error) {
@@ -74,11 +86,38 @@ export default function QuizEditorPage() {
         }
     };
 
+    const handleReorder = async (activeId: string, overId: string) => {
+        const oldIndex = questions.findIndex(q => q.question_id === activeId);
+        const newIndex = questions.findIndex(q => q.question_id === overId);
+
+        if (oldIndex !== -1 && newIndex !== -1) {
+            const newQuestions = arrayMove(questions, oldIndex, newIndex);
+            setQuestions(newQuestions);
+
+            try {
+                const orders = newQuestions.map((q, idx) => ({
+                    id: q.question_id,
+                    order: idx + 1
+                }));
+                await academicAPI.reorderQuestions(orders);
+                toast.success("Order updated");
+            } catch (error) {
+                console.error("Failed to reorder", error);
+                toast.error("Failed to save new order");
+                // Revert or reload
+                const questionsData = await academicAPI.getQuestionsByAssessment(quizId);
+                setQuestions(questionsData.sort((a, b) => a.order - b.order));
+            }
+        }
+    };
+
     const handleQuestionSaved = () => {
         setIsEditorOpen(false);
         setEditingQuestion(undefined);
         // Reload questions
-        academicAPI.getQuestionsByAssessment(quizId).then(setQuestions);
+        academicAPI.getQuestionsByAssessment(quizId).then(data => {
+            setQuestions(data.sort((a, b) => a.order - b.order));
+        });
     };
 
     const handleEditQuestion = (q: Question) => {
@@ -129,6 +168,7 @@ export default function QuizEditorPage() {
                         questions={questions}
                         onEdit={handleEditQuestion}
                         onDelete={handleDeleteQuestion}
+                        onReorder={handleReorder}
                     />
                 </div>
 
@@ -145,6 +185,35 @@ export default function QuizEditorPage() {
                                 <Label>Description</Label>
                                 <Textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3} />
                             </div>
+                            <div className="space-y-2">
+                                <Label>Assessment Type</Label>
+                                <Select value={quizType} onValueChange={(v: any) => setQuizType(v)}>
+                                    <SelectTrigger>
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="quiz">Quiz</SelectItem>
+                                        <SelectItem value="exam">Exam</SelectItem>
+                                        <SelectItem value="assignment">Assignment</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <div className="space-y-2">
+                                <Label>Blooms Level</Label>
+                                <Select value={bloomsLevel} onValueChange={setBloomsLevel}>
+                                    <SelectTrigger>
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="remember">Remember</SelectItem>
+                                        <SelectItem value="understand">Understand</SelectItem>
+                                        <SelectItem value="apply">Apply</SelectItem>
+                                        <SelectItem value="analyze">Analyze</SelectItem>
+                                        <SelectItem value="evaluate">Evaluate</SelectItem>
+                                        <SelectItem value="create">Create</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="space-y-2">
                                     <Label>Duration (min)</Label>
@@ -154,6 +223,24 @@ export default function QuizEditorPage() {
                                     <Label>Passing Marks</Label>
                                     <Input type="number" value={passingMarks} onChange={(e) => setPassingMarks(parseInt(e.target.value))} />
                                 </div>
+                            </div>
+                            <div className="space-y-2">
+                                <div className="flex items-center justify-between">
+                                    <Label>Total Marks</Label>
+                                    <Button
+                                        variant="link"
+                                        size="sm"
+                                        className="h-auto p-0 text-xs text-indigo-600"
+                                        onClick={() => {
+                                            const sum = questions.reduce((acc, q) => acc + (q.points || 0), 0);
+                                            setTotalMarks(sum);
+                                            toast.info(`Calculated total marks: ${sum}`);
+                                        }}
+                                    >
+                                        Auto-sum from questions
+                                    </Button>
+                                </div>
+                                <Input type="number" value={totalMarks} onChange={(e) => setTotalMarks(parseInt(e.target.value))} />
                             </div>
                         </CardContent>
                     </Card>
@@ -166,6 +253,7 @@ export default function QuizEditorPage() {
                 question={editingQuestion}
                 assessmentId={quizId}
                 onSaved={handleQuestionSaved}
+                nextOrder={questions.length + 1}
             />
         </div>
     );

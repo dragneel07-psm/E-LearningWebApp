@@ -17,9 +17,10 @@ interface QuestionEditorModalProps {
     question?: Question;
     assessmentId: string;
     onSaved: () => void;
+    nextOrder?: number;
 }
 
-export function QuestionEditorModal({ isOpen, onClose, question, assessmentId, onSaved }: QuestionEditorModalProps) {
+export function QuestionEditorModal({ isOpen, onClose, question, assessmentId, onSaved, nextOrder }: QuestionEditorModalProps) {
     const [saving, setSaving] = useState(false);
 
     // Form State
@@ -27,7 +28,8 @@ export function QuestionEditorModal({ isOpen, onClose, question, assessmentId, o
     const [type, setType] = useState<'mcq' | 'short_answer'>('mcq');
     const [points, setPoints] = useState(1);
     const [options, setOptions] = useState<string[]>(['', '', '', '']);
-    const [correctAnswer, setCorrectAnswer] = useState('');
+    const [correctOptionIndex, setCorrectOptionIndex] = useState<number | null>(null);
+    const [correctAnswer, setCorrectAnswer] = useState(''); // Used for short_answer and as final payload
 
     useEffect(() => {
         if (isOpen) {
@@ -35,14 +37,21 @@ export function QuestionEditorModal({ isOpen, onClose, question, assessmentId, o
                 setText(question.text);
                 setType(question.type as 'mcq' | 'short_answer');
                 setPoints(question.points);
-                setOptions(question.type === 'mcq' ? question.options : ['', '', '', '']);
-                setCorrectAnswer(question.correct_answer || '');
+                if (question.type === 'mcq') {
+                    setOptions(question.options);
+                    const idx = question.options.indexOf(question.correct_answer || '');
+                    setCorrectOptionIndex(idx !== -1 ? idx : null);
+                } else {
+                    setOptions(['', '', '', '']);
+                    setCorrectAnswer(question.correct_answer || '');
+                }
             } else {
                 // Reset for new
                 setText('');
                 setType('mcq');
                 setPoints(1);
                 setOptions(['', '', '', '']);
+                setCorrectOptionIndex(null);
                 setCorrectAnswer('');
             }
         }
@@ -52,14 +61,10 @@ export function QuestionEditorModal({ isOpen, onClose, question, assessmentId, o
         const newOptions = [...options];
         newOptions[index] = value;
         setOptions(newOptions);
-
-        // If correct answer matches the old value, update it too
-        // (Alternatively, store index of correct answer, but API uses string value)
-        // Ideally we track by index. But let's stick to value matching for now or update check.
     };
 
-    const handleSetCorrect = (option: string) => {
-        setCorrectAnswer(option);
+    const handleSetCorrect = (index: number) => {
+        setCorrectOptionIndex(index);
     };
 
     const handleAddOption = () => {
@@ -69,6 +74,11 @@ export function QuestionEditorModal({ isOpen, onClose, question, assessmentId, o
     const handleRemoveOption = (index: number) => {
         const newOptions = options.filter((_, i) => i !== index);
         setOptions(newOptions);
+        if (correctOptionIndex === index) {
+            setCorrectOptionIndex(null);
+        } else if (correctOptionIndex !== null && correctOptionIndex > index) {
+            setCorrectOptionIndex(correctOptionIndex - 1);
+        }
     };
 
     const handleSave = async () => {
@@ -77,21 +87,19 @@ export function QuestionEditorModal({ isOpen, onClose, question, assessmentId, o
             return;
         }
 
+        let finalCorrectAnswer = correctAnswer;
+
         if (type === 'mcq') {
             const validOptions = options.filter(o => o.trim() !== '');
             if (validOptions.length < 2) {
                 toast.error("MCQ must have at least 2 options");
                 return;
             }
-            if (!correctAnswer) {
-                toast.error("Please select a correct answer");
+            if (correctOptionIndex === null || !options[correctOptionIndex]?.trim()) {
+                toast.error("Please select a valid correct answer");
                 return;
             }
-            if (!validOptions.includes(correctAnswer)) {
-                // Should not happen if UI is consistent
-                toast.error("Correct answer must be one of the options");
-                return;
-            }
+            finalCorrectAnswer = options[correctOptionIndex];
         }
 
         try {
@@ -102,8 +110,8 @@ export function QuestionEditorModal({ isOpen, onClose, question, assessmentId, o
                 type,
                 points,
                 options: type === 'mcq' ? options.filter(o => o.trim() !== '') : [],
-                correct_answer: correctAnswer,
-                order: 0, // Backend should handle auto-order
+                correct_answer: finalCorrectAnswer,
+                order: question ? question.order : (nextOrder || 0),
             };
 
             if (question) {
@@ -173,18 +181,17 @@ export function QuestionEditorModal({ isOpen, onClose, question, assessmentId, o
                                     <Button
                                         variant="ghost"
                                         size="icon"
-                                        onClick={() => handleSetCorrect(option)}
-                                        className={option === correctAnswer && option.trim() !== '' ? 'text-emerald-600' : 'text-slate-300'}
-                                        disabled={!option.trim()}
+                                        onClick={() => handleSetCorrect(index)}
+                                        className={index === correctOptionIndex ? 'text-emerald-600' : 'text-slate-300'}
                                         title="Mark as correct"
                                     >
-                                        {option === correctAnswer && option.trim() !== '' ? <CheckCircle2 className="h-5 w-5" /> : <Circle className="h-5 w-5" />}
+                                        {index === correctOptionIndex ? <CheckCircle2 className="h-5 w-5" /> : <Circle className="h-5 w-5" />}
                                     </Button>
                                     <Input
                                         value={option}
                                         onChange={(e) => handleOptionChange(index, e.target.value)}
                                         placeholder={`Option ${index + 1}`}
-                                        className={option === correctAnswer ? 'border-emerald-500 ring-1 ring-emerald-500' : ''}
+                                        className={index === correctOptionIndex ? 'border-emerald-500 ring-1 ring-emerald-500' : ''}
                                     />
                                     <Button variant="ghost" size="icon" onClick={() => handleRemoveOption(index)} className="text-slate-400 hover:text-red-600">
                                         <Trash className="h-4 w-4" />

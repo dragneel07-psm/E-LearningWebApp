@@ -17,6 +17,11 @@ class ChapterViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         queryset = super().get_queryset()
+        
+        # Filter by published only for students
+        if getattr(self.request.user, 'role', None) == 'student':
+            queryset = queryset.filter(is_published=True)
+
         subject_id = self.request.query_params.get('subject')
         if subject_id:
             queryset = queryset.filter(subject_id=subject_id)
@@ -49,6 +54,11 @@ class LessonViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         queryset = super().get_queryset()
+
+        # Filter by published only for students
+        if getattr(self.request.user, 'role', None) == 'student':
+            queryset = queryset.filter(is_published=True, chapter__is_published=True)
+
         chapter_id = self.request.query_params.get('chapter')
         if chapter_id:
             queryset = queryset.filter(chapter_id=chapter_id)

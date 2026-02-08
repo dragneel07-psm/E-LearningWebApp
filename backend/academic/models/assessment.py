@@ -55,6 +55,7 @@ class Result(models.Model):
     # Advanced Feedback
     ai_feedback = models.TextField(blank=True, null=True, help_text="AI generated feedback on performance")
     teacher_feedback = models.TextField(blank=True, null=True)
+    graded_by = models.ForeignKey('users.UserAccount', on_delete=models.SET_NULL, null=True, blank=True, related_name='graded_results')
     
     # For descriptive answers analysis
     answers_data = models.JSONField(default=dict, blank=True) 
