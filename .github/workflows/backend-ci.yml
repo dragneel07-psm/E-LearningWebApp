@@ -189,6 +189,19 @@ jobs:
     if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
     
     steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+    
+    - name: Install dependencies
+      run: |
+        cd backend
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+    
     - name: Run Global Migrations (All Tenants)
       env:
         DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
@@ -213,6 +226,19 @@ jobs:
       url: https://api.platform.com
     
     steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+    
+    - name: Install dependencies
+      run: |
+        cd backend
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+    
     - name: Run Global Migrations (All Tenants)
       env:
         DATABASE_URL: ${{ secrets.PRODUCTION_DATABASE_URL }}
