@@ -1,149 +1,97 @@
-import requests
-import json
-from datetime import datetime, timedelta
+import os
+import django
+import sys
+from datetime import date, timedelta
 
-BASE_URL = "http://localhost:8000/api"
+# Setup Django Environment
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings.local')
+django.setup()
 
-def get_token(email, password):
-    url = f"{BASE_URL}/token/"
-    payload = {"email": email, "password": password}
-    response = requests.post(url, json=payload)
-    if response.status_code == 200:
-        return response.json()["access"]
-    else:
-        print(f"Failed to get token: {response.text}")
-        return None
+from academic.models import Student
+from library.models import Book, BookIssue
+from core.models import Tenant
+from core.middleware.tenant import _thread_locals
 
-def test_library_module():
-    # Use admin account for full access
-    token = get_token("admin@demo.com", "admin123")
-    if not token:
-        print("❌ Could not login as admin")
+def run_verification():
+    # 1. Setup Tenant Context
+    try:
+        tenant = Tenant.objects.get(subdomain='demo')
+    except Tenant.DoesNotExist:
+        print("❌ Demo tenant not found!")
         return
 
-    headers = {
-        "Authorization": f"Bearer {token}",
-        "Content-Type": "application/json",
-        "x-tenant-id": "demo"
-    }
+    # Manually set tenant context
+    _thread_locals.tenant = tenant
+    _thread_locals.db_alias = tenant.db_alias
 
-    print("\n✅ Logged in as admin\n")
+    # Dynamic Database Registration
+    from django.conf import settings
+    from django.db import connections
+    if tenant.db_alias not in settings.DATABASES:
+        new_db_config = settings.DATABASES['default'].copy()
+        new_db_config['NAME'] = settings.BASE_DIR / tenant.db_name
+        settings.DATABASES[tenant.db_alias] = new_db_config
+        connections.databases[tenant.db_alias] = new_db_config
+    
+    print(f"🌍 Using Tenant: {tenant.name} ({tenant.subdomain}) -> DB Alias: {tenant.db_alias}")
 
-    # Test 1: List Books
-    print("--- Test 1: List Books (GET /api/library/books/) ---")
-    resp = requests.get(f"{BASE_URL}/library/books/", headers=headers)
-    print(f"Status: {resp.status_code}")
-    if resp.status_code == 200:
-        books = resp.json()
-        print(f"Books in catalog: {len(books)}")
-        for book in books[:3]:
-            print(f"  - {book.get('title')} by {book.get('author')}")
-            print(f"    Available: {book.get('available_copies')}/{book.get('total_copies')}")
-    else:
-        print(f"Error: {resp.text}")
-
-    # Test 2: Add New Book
-    print("\n--- Test 2: Add New Book (POST /api/library/books/) ---")
-    new_book = {
-        "title": "Introduction to Algorithms",
-        "author": "Cormen, Leiserson, Rivest, Stein",
-        "isbn": "9780262033848",
-        "category": "technology",
-        "publisher": "MIT Press",
-        "published_year": 2009,
-        "total_copies": 3,
-        "available_copies": 3,
-        "description": "Classic algorithms textbook"
-    }
-    resp = requests.post(f"{BASE_URL}/library/books/", headers=headers, json=new_book)
-    print(f"Status: {resp.status_code}")
-    if resp.status_code == 201:
-        created_book = resp.json()
-        print(f"✅ Book created!")
-        print(f"   ID: {created_book.get('book_id')}")
-        print(f"   Title: {created_book.get('title')}")
-        book_id = created_book.get('book_id')
-    else:
-        print(f"Note: {resp.text}")
-        # Try to get existing book
-        books = requests.get(f"{BASE_URL}/library/books/", headers=headers).json()
-        if books:
-            book_id = books[0].get('book_id')
-            print(f"Using existing book: {books[0].get('title')}")
-
-    # Test 3: Get Student ID
-    print("\n--- Getting Student ID for book issue ---")
-    resp = requests.get(f"{BASE_URL}/academic/students/", headers=headers)
-    if resp.status_code == 200:
-        students = resp.json()
-        if students:
-            student_id = students[0].get('id') or students[0].get('student_id')
-            print(f"Using student: {students[0].get('first_name')} {students[0].get('last_name')}")
-        else:
-            print("No students found")
-            return
-    else:
-        print("Could not get students")
+    # 2. Get a Student
+    student = Student.objects.first()
+    if not student:
+        print("❌ No students found!")
         return
+    print(f"👨‍🎓 Testing with student: {student.user.first_name} {student.user.last_name}")
 
-    # Test 4: Issue Book
-    print("\n--- Test 4: Issue Book (POST /api/library/issues/) ---")
-    due_date = (datetime.now() + timedelta(days=14)).strftime("%Y-%m-%d")
-    issue_data = {
-        "book": book_id,
-        "student": student_id,
-        "due_date": due_date
-    }
-    resp = requests.post(f"{BASE_URL}/library/issues/", headers=headers, json=issue_data)
-    print(f"Status: {resp.status_code}")
-    if resp.status_code == 201:
-        issue = resp.json()
-        print(f"✅ Book issued!")
-        print(f"   Issue ID: {issue.get('issue_id')}")
-        print(f"   Due Date: {issue.get('due_date')}")
-        print(f"   Status: {issue.get('status')}")
-        issue_id = issue.get('issue_id')
+    # 3. Get a Book
+    book = Book.objects.first()
+    if not book:
+        print("❌ No books found! Run seed_library first.")
+        return
+    print(f"📖 Testing with book: {book.title} (Available: {book.available_copies})")
 
-        # Check book availability updated
-        print("\n--- Checking Book Availability After Issue ---")
-        resp = requests.get(f"{BASE_URL}/library/books/{book_id}/", headers=headers)
-        if resp.status_code == 200:
-            book = resp.json()
-            print(f"Available copies now: {book.get('available_copies')}/{book.get('total_copies')}")
+    # 4. Issue a Book
+    print("\n--- Testing Book Issue ---")
+    initial_copies = book.available_copies
+    
+    # Ensure no previous issues for this student/book to keep it clean
+    BookIssue.objects.filter(student=student, book=book, status='issued').delete()
+    
+    issue = BookIssue.objects.create(
+        book=book,
+        student=student,
+        due_date=date.today() + timedelta(days=14)
+    )
+    
+    # Re-fetch book to check available_copies
+    book.refresh_from_db()
+    print(f"✅ Book issued successfully. ID: {issue.issue_id}")
+    print(f"📉 Available copies updated: {initial_copies} -> {book.available_copies}")
+    
+    if book.available_copies == initial_copies - 1:
+        print("✅ Stock reduction verified.")
     else:
-        print(f"Error: {resp.text}")
+        print("❌ Stock reduction failed!")
 
-    # Test 5: List Issues
-    print("\n--- Test 5: List Book Issues (GET /api/library/issues/) ---")
-    resp = requests.get(f"{BASE_URL}/library/issues/", headers=headers)
-    print(f"Status: {resp.status_code}")
-    if resp.status_code == 200:
-        issues = resp.json()
-        print(f"Total issues: {len(issues)}")
-        for issue in issues[:3]:
-            print(f"  - Book ID: {issue.get('book')}")
-            print(f"    Status: {issue.get('status')}")
-            print(f"    Due: {issue.get('due_date')}")
-
-    # Test 6: Return Book (if issued)
-    if 'issue_id' in locals():
-        print("\n--- Test 6: Return Book (PATCH /api/library/issues/{id}/) ---")
-        return_data = {
-            "return_date": datetime.now().strftime("%Y-%m-%d"),
-            "status": "returned"
-        }
-        resp = requests.patch(f"{BASE_URL}/library/issues/{issue_id}/", headers=headers, json=return_data)
-        print(f"Status: {resp.status_code}")
-        if resp.status_code == 200:
-            print("✅ Book returned!")
-            # Note: Available copies should increment, but this requires custom logic
-        else:
-            print(f"Note: {resp.text}")
-
-    print("\n--- Test Summary ---")
-    print("✅ Library module APIs are accessible")
-    print("✅ Book catalog management working")
-    print("✅ Book issue system functional")
+    # 5. Return the Book
+    print("\n--- Testing Book Return ---")
+    issue.status = 'returned'
+    issue.return_date = date.today()
+    issue.save()
+    
+    # Manually update stock in return if model doesn't handle it in save()
+    # Let's check if models.py handles incrementing copies on return.
+    # Looking at library/models.py (lines 110-128), it ONLY decrements on creation.
+    # It does NOT seem to increment on return. Let's fix that in models.py if needed.
+    # Wait, I should verify first.
+    
+    book.refresh_from_db()
+    print(f"🔄 Book returned. Current available: {book.available_copies}")
+    
+    if book.available_copies == initial_copies:
+        print("✅ Stock increment verified.")
+    else:
+        print("❌ Stock increment failed! (Models.py may need update)")
 
 if __name__ == "__main__":
-    test_library_module()
+    run_verification()

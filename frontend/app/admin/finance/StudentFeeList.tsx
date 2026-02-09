@@ -21,12 +21,15 @@ import {
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
+import { Skeleton } from "@/components/ui/skeleton";
+
 export function StudentFeeList() {
     const [loading, setLoading] = useState(true);
     const [fees, setFees] = useState<StudentFee[]>([]);
     const [structures, setStructures] = useState<FeeStructure[]>([]);
     const [classes, setClasses] = useState<AcademicClass[]>([]);
     const [searchTerm, setSearchTerm] = useState('');
+    const [statusFilter, setStatusFilter] = useState<'all' | 'paid' | 'pending' | 'overdue'>('all');
     const [isPaymentOpen, setIsPaymentOpen] = useState(false);
     const [selectedFee, setSelectedFee] = useState<StudentFee | null>(null);
 
@@ -67,16 +70,57 @@ export function StudentFeeList() {
         }
     };
 
-    const filteredFees = fees.filter(f =>
-        f.student_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        f.fee_name?.toLowerCase().includes(searchTerm.toLowerCase())
-    );
+    const filteredFees = fees.filter(f => {
+        const matchesSearch = f.student_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            f.fee_name?.toLowerCase().includes(searchTerm.toLowerCase());
+        const matchesStatus = statusFilter === 'all' || f.status === statusFilter;
+        return matchesSearch && matchesStatus;
+    });
 
     if (loading) {
         return (
-            <div className="flex flex-col items-center justify-center p-20 space-y-4">
-                <Loader2 className="h-10 w-10 text-indigo-600 animate-spin" />
-                <p className="text-slate-500 font-medium">Loading student accounts...</p>
+            <div className="space-y-4">
+                <div className="flex justify-between items-center">
+                    <div className="flex items-center gap-3">
+                        <Skeleton className="h-10 w-10 rounded-xl" />
+                        <div className="space-y-2">
+                            <Skeleton className="h-6 w-48" />
+                            <Skeleton className="h-4 w-64" />
+                        </div>
+                    </div>
+                    <div className="flex gap-2">
+                        <Skeleton className="h-10 w-32" />
+                        <Skeleton className="h-10 w-40" />
+                    </div>
+                </div>
+                <Card className="border-slate-200 shadow-sm overflow-hidden">
+                    <CardHeader className="py-4 border-b border-slate-100">
+                        <div className="flex justify-between items-center">
+                            <Skeleton className="h-6 w-32" />
+                            <Skeleton className="h-10 w-64" />
+                        </div>
+                    </CardHeader>
+                    <CardContent className="p-0">
+                        <div className="p-6 space-y-4">
+                            {[1, 2, 3, 4, 5].map((i) => (
+                                <div key={i} className="flex items-center justify-between">
+                                    <div className="flex items-center gap-3">
+                                        <Skeleton className="h-9 w-9 rounded-full" />
+                                        <div className="space-y-1">
+                                            <Skeleton className="h-4 w-32" />
+                                            <Skeleton className="h-3 w-20" />
+                                        </div>
+                                    </div>
+                                    <Skeleton className="h-4 w-24" />
+                                    <Skeleton className="h-4 w-20" />
+                                    <Skeleton className="h-4 w-16" />
+                                    <Skeleton className="h-6 w-24 rounded-full" />
+                                    <Skeleton className="h-8 w-20" />
+                                </div>
+                            ))}
+                        </div>
+                    </CardContent>
+                </Card>
             </div>
         );
     }
@@ -104,29 +148,57 @@ export function StudentFeeList() {
             </div>
 
             <Card className="border-slate-200 shadow-sm overflow-hidden">
-                <CardHeader className="py-4 border-b border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
-                    <div className="flex items-center gap-4">
-                        <CardTitle className="text-lg font-bold">Billing Records</CardTitle>
-                        <div className="hidden md:flex gap-1">
-                            <Badge variant="secondary" className="bg-slate-100 text-slate-600">Total: {fees.length}</Badge>
-                            <Badge variant="secondary" className="bg-red-50 text-red-600">Unpaid: {fees.filter(f => f.status !== 'paid').length}</Badge>
+                <CardHeader className="py-4 border-b border-slate-100 flex flex-col gap-4">
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                        <div className="flex items-center gap-4">
+                            <CardTitle className="text-lg font-bold">Billing Records</CardTitle>
+                            <div className="hidden md:flex gap-1">
+                                <Badge variant="secondary" className="bg-slate-100 text-slate-600">Total: {filteredFees.length}</Badge>
+                                <Badge variant="secondary" className="bg-red-50 text-red-600">Unpaid: {fees.filter(f => f.status !== 'paid').length}</Badge>
+                            </div>
+                        </div>
+                        <div className="flex gap-2 w-full md:w-auto">
+                            <div className="relative flex-1 md:w-64">
+                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                                <input
+                                    type="text"
+                                    placeholder="Search student or fee..."
+                                    className="w-full pl-9 pr-4 py-2 text-sm bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all shadow-sm"
+                                    value={searchTerm}
+                                    onChange={(e) => setSearchTerm(e.target.value)}
+                                />
+                            </div>
+                            <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                    <Button variant="outline" size="icon" className="shrink-0 border-slate-200">
+                                        <Filter className={`h-4 w-4 ${statusFilter !== 'all' ? 'text-indigo-600' : 'text-slate-500'}`} />
+                                    </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                    <DropdownMenuItem onClick={() => setStatusFilter('all')} className={statusFilter === 'all' ? 'bg-slate-100 font-bold' : ''}>
+                                        All Statuses
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem onClick={() => setStatusFilter('paid')} className={statusFilter === 'paid' ? 'text-emerald-600 font-bold bg-emerald-50' : ''}>
+                                        Paid
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem onClick={() => setStatusFilter('pending')} className={statusFilter === 'pending' ? 'text-slate-600 font-bold bg-slate-50' : ''}>
+                                        Pending
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem onClick={() => setStatusFilter('overdue')} className={statusFilter === 'overdue' ? 'text-red-600 font-bold bg-red-50' : ''}>
+                                        Overdue
+                                    </DropdownMenuItem>
+                                </DropdownMenuContent>
+                            </DropdownMenu>
                         </div>
                     </div>
-                    <div className="flex gap-2 w-full md:w-auto">
-                        <div className="relative flex-1 md:w-64">
-                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                            <input
-                                type="text"
-                                placeholder="Search student or fee..."
-                                className="w-full pl-9 pr-4 py-2 text-sm bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all shadow-sm"
-                                value={searchTerm}
-                                onChange={(e) => setSearchTerm(e.target.value)}
-                            />
+                    {statusFilter !== 'all' && (
+                        <div className="flex items-center gap-2">
+                            <span className="text-xs font-bold text-slate-500 uppercase">Active Filter:</span>
+                            <Badge variant="secondary" className="capitalize flex gap-1 items-center cursor-pointer hover:bg-slate-200" onClick={() => setStatusFilter('all')}>
+                                {statusFilter} <span className="text-slate-400 ml-1">×</span>
+                            </Badge>
                         </div>
-                        <Button variant="outline" size="icon" className="shrink-0 border-slate-200">
-                            <Filter className="h-4 w-4 text-slate-500" />
-                        </Button>
-                    </div>
+                    )}
                 </CardHeader>
                 <CardContent className="p-0">
                     <div className="overflow-x-auto">

@@ -1,16 +1,59 @@
 from .models import Notification
 from django.conf import settings
+from django.core.mail import send_mail
+import logging
+
+logger = logging.getLogger(__name__)
+
+class EmailService:
+    @staticmethod
+    def send_email(recipient_email, subject, message, html_message=None):
+        """
+        Sends an email using Django's send_mail.
+        """
+        try:
+            send_mail(
+                subject,
+                message,
+                settings.DEFAULT_FROM_EMAIL,
+                [recipient_email],
+                fail_silently=False,
+                html_message=html_message
+            )
+            logger.info(f"Email sent to {recipient_email}: {subject}")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to send email to {recipient_email}: {str(e)}")
+            return False
+
+class SMSService:
+    @staticmethod
+    def send_sms(recipient_phone, message):
+        """
+        Mock SMS service. In a real app, integrate Twilio/AWS SNS here.
+        """
+        if not recipient_phone:
+            logger.warning("No phone number provided for SMS.")
+            return False
+            
+        # Mock sending
+        logger.info(f"--------------------------------------------------")
+        logger.info(f"SMS Sent to {recipient_phone}:")
+        logger.info(f"Message: {message}")
+        logger.info(f"--------------------------------------------------")
+        return True
 
 class NotificationService:
     @staticmethod
-    def create_notification(recipient, title, message, tenant=None, link=None):
+    def create_notification(recipient, title, message, tenant=None, link=None, channels=None):
         """
-        Creates a notification for a user.
-        If tenant is not provided, it tries to get it from the recipient's profile or user object.
+        Creates a notification for a user and optionally sends via other channels.
+        channels: list of 'email', 'sms', 'in_app' (default: in_app only)
         """
         if not tenant:
             tenant = getattr(recipient, 'tenant', None)
         
+        # 1. In-App Notification (Always created if not disabled explicitly, but usually yes)
         notification = Notification.objects.create(
             tenant=tenant,
             recipient=recipient,
@@ -18,10 +61,35 @@ class NotificationService:
             message=message,
             link=link
         )
+
+        channels = channels or []
+
+        # 2. Email
+        if 'email' in channels and recipient.email:
+            EmailService.send_email(recipient.email, title, message)
+
+        # 3. SMS
+        # Assuming user profile has phone number. 
+        # We need to access the profile safely.
+        if 'sms' in channels:
+            # Try to get phone from related profile if it exists
+            phone = getattr(recipient, 'phone_number', None)
+            if not phone and hasattr(recipient, 'student_profile'):
+                phone = recipient.student_profile.phone_number
+            elif not phone and hasattr(recipient, 'teacher_profile'):
+                 phone = recipient.teacher_profile.phone_number
+            elif not phone and hasattr(recipient, 'parent_profile'):
+                 phone = recipient.parent_profile.phone_number
+            
+            if phone:
+                SMSService.send_sms(phone, message)
+            else:
+                logger.warning(f"Could not send SMS to {recipient.email}: No phone number found.")
+
         return notification
 
     @staticmethod
-    def notify_role(tenant, role, title, message, link=None):
+    def notify_role(tenant, role, title, message, link=None, channels=None):
         """
         Sends a notification to all users with a specific role within a tenant.
         """
@@ -30,12 +98,12 @@ class NotificationService:
         notifications = []
         for user in users:
             notifications.append(
-                NotificationService.create_notification(user, title, message, tenant=tenant, link=link)
+                NotificationService.create_notification(user, title, message, tenant=tenant, link=link, channels=channels)
             )
         return notifications
 
     @staticmethod
-    def notify_class(tenant, academic_class, title, message, link=None):
+    def notify_class(tenant, academic_class, title, message, link=None, channels=None):
         """
         Sends a notification to all students in a specific class.
         """
@@ -43,7 +111,8 @@ class NotificationService:
         students = Student.objects.filter(academic_class=academic_class, user__tenant=tenant)
         notifications = []
         for student in students:
+            # Notify the student User
             notifications.append(
-                NotificationService.create_notification(student.user, title, message, tenant=tenant, link=link)
+                NotificationService.create_notification(student.user, title, message, tenant=tenant, link=link, channels=channels)
             )
         return notifications

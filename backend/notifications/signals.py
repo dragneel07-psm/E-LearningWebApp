@@ -23,7 +23,7 @@ def create_notice_notification(sender, instance, created, **kwargs):
         elif instance.target_audience == 'class' and instance.target_class:
             # Find all students in this class
              # Avoiding circular import by using instance relation
-            students = instance.target_class.student_set.all()
+            students = instance.target_class.students.all()
             notifications = []
             for student in students:
                 notifications.append(Notification(

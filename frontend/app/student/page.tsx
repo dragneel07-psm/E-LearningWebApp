@@ -15,6 +15,7 @@ import { academicAPI, aiAPI, helpers, Subject } from '@/lib/api';
 import { AITutorChat } from '@/components/ai-tutor-chat';
 import { GamificationWidget } from '@/components/student/GamificationWidget';
 import { SmartPathWidget } from '@/components/student/SmartPathWidget';
+import { UpcomingExamsWidget } from '@/components/student/UpcomingExamsWidget';
 import { useTranslation } from '@/lib/localization';
 
 export default function StudentDashboard() {
@@ -42,6 +43,7 @@ export default function StudentDashboard() {
     const [upcomingExamsCount, setUpcomingExamsCount] = useState(0);
     const [pendingAssignmentsCount, setPendingAssignmentsCount] = useState(0);
     const [notices, setNotices] = useState<any[]>([]);
+    const [allAssessmentsState, setAllAssessmentsState] = useState<any[]>([]);
 
     useEffect(() => {
         loadData();
@@ -60,6 +62,7 @@ export default function StudentDashboard() {
 
             // 2. Fetch Assessments for counts
             const allAssessments = await academicAPI.getAssessments();
+            setAllAssessmentsState(allAssessments);
             const now = new Date();
 
             const upcomingExams = allAssessments.filter(a =>
@@ -279,6 +282,9 @@ export default function StudentDashboard() {
                 {/* 3. Right Sidebar (1/3 width) */}
                 <div className="space-y-6">
 
+                    {/* Upcoming Exams Widget */}
+                    <UpcomingExamsWidget assessments={allAssessmentsState} />
+
                     {/* Achievement & Stats */}
                     <GamificationWidget />
 
@@ -344,17 +350,32 @@ export default function StudentDashboard() {
                         </CardHeader>
                         <CardContent className="pt-4 space-y-4">
                             {notices.length > 0 ? (
-                                notices.map((notice, idx) => (
-                                    <div key={idx} className={`p-3 rounded-lg border ${notice.priority === 'high' ? 'bg-red-50 border-red-100' : 'bg-slate-50 border-slate-100'}`}>
-                                        <h4 className={`text-sm font-semibold mb-1 ${notice.priority === 'high' ? 'text-red-900' : 'text-slate-900'}`}>
-                                            {notice.title}
-                                        </h4>
-                                        <p className="text-xs text-slate-600 mb-2 line-clamp-2">{notice.content}</p>
-                                        <span className="text-[10px] text-slate-500 font-medium whitespace-nowrap">
-                                            {new Date(notice.published_date).toLocaleDateString()}
-                                        </span>
-                                    </div>
-                                ))
+                                notices.map((notice, idx) => {
+                                    const isNew = (dateString: string) => {
+                                        const date = new Date(dateString);
+                                        const now = new Date();
+                                        const diffTime = Math.abs(now.getTime() - date.getTime());
+                                        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                                        return diffDays <= 3;
+                                    };
+
+                                    return (
+                                        <div key={idx} className={`p-3 rounded-lg border ${notice.priority === 'high' ? 'bg-red-50 border-red-100' : 'bg-slate-50 border-slate-100'}`}>
+                                            <div className="flex justify-between items-start mb-1">
+                                                <h4 className={`text-sm font-semibold ${notice.priority === 'high' ? 'text-red-900' : 'text-slate-900'}`}>
+                                                    {notice.title}
+                                                </h4>
+                                                {notice.published_date && isNew(notice.published_date) && (
+                                                    <Badge className="bg-blue-600 hover:bg-blue-600 text-[10px] h-5 py-0 px-1.5">NEW</Badge>
+                                                )}
+                                            </div>
+                                            <p className="text-xs text-slate-600 mb-2 line-clamp-2">{notice.content}</p>
+                                            <span className="text-[10px] text-slate-500 font-medium whitespace-nowrap">
+                                                {new Date(notice.published_date).toLocaleDateString()}
+                                            </span>
+                                        </div>
+                                    )
+                                })
                             ) : (
                                 <div className="text-center py-4 text-xs text-slate-400">
                                     No active notices.

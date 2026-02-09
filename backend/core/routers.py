@@ -14,6 +14,10 @@ class TenantDatabaseRouter:
         # SaaS-level billing models are shared
         if model._meta.app_label == 'billing' and model.__name__ in ['Subscription', 'SubscriptionPlan', 'Invoice']:
             return 'default'
+
+        # Force Tenant and GlobalSettings to default
+        if model._meta.app_label == 'core' and model.__name__ in ['Tenant', 'GlobalSettings']:
+            return 'default'
             
         if model._meta.app_label in settings.TENANT_APPS:
             return get_current_db_alias()
@@ -25,6 +29,10 @@ class TenantDatabaseRouter:
         """
         # SaaS-level billing models are shared
         if model._meta.app_label == 'billing' and model.__name__ in ['Subscription', 'SubscriptionPlan', 'Invoice']:
+            return 'default'
+
+        # Force Tenant and GlobalSettings to default
+        if model._meta.app_label == 'core' and model.__name__ in ['Tenant', 'GlobalSettings']:
             return 'default'
 
         if model._meta.app_label in settings.TENANT_APPS:

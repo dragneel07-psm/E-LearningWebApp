@@ -175,7 +175,7 @@ class PaymentViewSet(TenantScopedQuerysetMixin, viewsets.ModelViewSet):
         p.drawString(100, height - 180, "Student Details")
         p.setFont("Helvetica", 12)
         p.drawString(100, height - 200, f"Name: {payment.student.user.get_full_name()}")
-        p.drawString(100, height - 220, f"Student ID: {payment.student.id}")
+        p.drawString(100, height - 220, f"Student ID: {payment.student.student_id}")
         
         p.setFont("Helvetica-Bold", 14)
         p.drawString(100, height - 260, "Payment Details")

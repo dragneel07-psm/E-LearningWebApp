@@ -70,6 +70,7 @@ SHARED_APPS = [
     "billing",
     "users", # Hybrid App (Exists in both)
     "gamification",
+    "auditlog",
 ]
 
 TENANT_APPS = [
@@ -80,6 +81,8 @@ TENANT_APPS = [
     "reports",
     "notifications",
     "library",
+    "gamification",
+    "core",
 ]
 
 AUTH_USER_MODEL = 'users.UserAccount'
@@ -220,3 +223,6 @@ CACHES = {
 
 # Audit Log Configuration
 AUDITLOG_LOGENTRY_MODEL = 'auditlog.LogEntry'
+AUDITLOG_DISABLE_REMOTE_ADDR = False
+AUDITLOG_CID_GETTER = None
+AUDITLOG_CID_HEADER = None

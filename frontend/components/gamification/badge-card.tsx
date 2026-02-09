@@ -1,6 +1,6 @@
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
-import { Award, Zap, Star, Trophy, Calendar } from 'lucide-react';
+import { Award, Zap, Star, Trophy, Calendar, Footprints, Flame, GraduationCap } from 'lucide-react';
 
 export interface BadgeType {
     name: string;
@@ -18,7 +18,10 @@ const Icons: { [key: string]: any } = {
     zap: Zap,
     star: Star,
     trophy: Trophy,
-    calendar: Calendar
+    calendar: Calendar,
+    footprints: Footprints,
+    flame: Flame,
+    'graduation-cap': GraduationCap
 };
 
 export function BadgeCard({ badge }: BadgeCardProps) {

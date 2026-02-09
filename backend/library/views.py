@@ -18,8 +18,18 @@ class BookIssueViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         queryset = super().get_queryset()
+        user = self.request.user
 
-        # Auto-update overdue status
+        # 1. Role-based filtering
+        if hasattr(user, 'role') and user.role == 'student':
+            try:
+                from academic.models import Student
+                student = Student.objects.get(user=user)
+                queryset = queryset.filter(student=student)
+            except Student.DoesNotExist:
+                queryset = queryset.none()
+
+        # 2. Auto-update overdue status
         today = timezone.now().date()
         queryset.filter(
             status='issued',
@@ -29,13 +39,16 @@ class BookIssueViewSet(viewsets.ModelViewSet):
         return queryset
 
     def perform_create(self, serializer):
-        # Set due date to 14 days from now
-        due_date = timezone.now().date() + timedelta(days=14)
-        serializer.save(due_date=due_date)
+        # Set due date to 14 days from now if not provided
+        if not serializer.validated_data.get('due_date'):
+            due_date = timezone.now().date() + timedelta(days=14)
+            serializer.save(due_date=due_date)
+        else:
+            serializer.save()
 
     @action(detail=True, methods=['post'])
     def return_book(self, request, pk=None):
-        """Mark book as returned and update availability"""
+        """Mark book as returned (stock update handled by model)"""
         issue = self.get_object()
         
         # Check if already returned
@@ -46,24 +59,19 @@ class BookIssueViewSet(viewsets.ModelViewSet):
             )
         
         try:
-            with transaction.atomic():
-                # Lock the book row to prevent race conditions
-                book = Book.objects.select_for_update().get(pk=issue.book.pk)
-                
-                # Update issue
-                issue.return_date = timezone.now().date()
-                issue.status = 'returned'
-                
-                # Calculate fine if overdue
-                if issue.return_date > issue.due_date:
-                    days_overdue = (issue.return_date - issue.due_date).days
-                    issue.fine_amount = days_overdue * 0.50  # $0.50 per day
-                
-                issue.save()
-                
-                # Increment available copies
-                book.available_copies += 1
-                book.save(update_fields=['available_copies'])
+            # Updating status to 'returned' will trigger stock increment in models.py
+            issue.return_date = timezone.now().date()
+            issue.status = 'returned'
+            
+            # Calculate fine if overdue
+            if issue.return_date > issue.due_date:
+                days_overdue = (issue.return_date - issue.due_date).days
+                issue.fine_amount = days_overdue * 0.50  # $0.50 per day
+            
+            issue.save()
+            
+            serializer = self.get_serializer(issue)
+            return Response(serializer.data)
             
             serializer = self.get_serializer(issue)
             return Response(serializer.data)

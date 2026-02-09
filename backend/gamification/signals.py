@@ -3,6 +3,9 @@ from django.dispatch import receiver
 from academic.models import LessonProgress
 from .models import PointTransaction, Badge, StudentBadge
 from datetime import timedelta
+import logging
+
+logger = logging.getLogger(__name__)
 
 @receiver(post_save, sender=LessonProgress)
 def award_lesson_xp(sender, instance, created, **kwargs):
@@ -24,6 +27,7 @@ def award_lesson_xp(sender, instance, created, **kwargs):
         if not exists:
             # Award points
             points = 50 # Default
+            logger.info(f"Awarding {points} XP to {instance.student} for lesson {instance.lesson.title}")
             PointTransaction.objects.create(
                 tenant=instance.student.user.tenant, # Assuming access via user
                 student=instance.student,
@@ -33,11 +37,14 @@ def award_lesson_xp(sender, instance, created, **kwargs):
             )
             
             check_badges(instance.student)
+        else:
+            logger.info(f"XP already awarded for lesson {instance.lesson.title} to {instance.student}")
 
 def check_badges(student):
     tenant = student.user.tenant
     # Check 'lessons_completed' badge
     completed_count = LessonProgress.objects.filter(student=student, completed=True).count()
+    logger.info(f"Checking badges for {student}: Completed {completed_count} lessons")
     
     # Find badges with criteria 'lessons_completed'
     potential_badges = Badge.objects.filter(tenant=tenant, criteria_type='lessons_completed')
@@ -50,6 +57,7 @@ def check_badges(student):
                 badge=badge
             )
             if created:
+                logger.info(f"Unlocked badge: {badge.name} for {student}")
                 # Award XP for Badge
                 PointTransaction.objects.create(
                     tenant=tenant,

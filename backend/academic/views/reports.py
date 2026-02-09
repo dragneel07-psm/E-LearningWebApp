@@ -19,15 +19,30 @@ class ReportViewSet(viewsets.ViewSet):
     def student_performance_pdf(self, request, student_id=None):
         using_db = getattr(request, 'db_alias', 'default')
         student = get_object_or_404(Student.objects.using(using_db), id=student_id)
-        results = Result.objects.using(using_db).filter(student=student).select_related('assessment', 'assessment__subject')
         
-        # Calculate percentages for display
+        # Use ReportingService to get comprehensive data including AI summary
+        # Transform results for template since we are using service now
+        results_data = []
+        # We can re-fetch or use what service collected if it returns raw objects?
+        # Service returns 'mastery' but maybe not raw list. Let's re-fetch for the table to be safe and detailed.
+        results = Result.objects.using(using_db).filter(student=student).select_related('assessment', 'assessment__subject').order_by('-submitted_at')
         for r in results:
-            r.percentage = round((r.score / r.assessment.total_marks) * 100, 1)
-            
+            results_data.append({
+                'subject': r.assessment.subject.name,
+                'assessment': r.assessment.title,
+                'type': r.assessment.get_type_display(),
+                'score': r.score,
+                'total_marks': r.assessment.total_marks,
+                'percentage': round((r.score / r.assessment.total_marks) * 100, 1),
+                'submitted_at': r.submitted_at
+            })
+
         context = {
             'student': student,
-            'results': results,
+            'report': report_data,
+            'results_data': results_data, # Added this explicitly for the table loop
+            'metrics': report_data.get('metrics', {}),
+            'ai_report': report_data.get('ai_report', {}),
             'school_name': request.headers.get('x-tenant-id', 'Our School').capitalize(),
             'date': timezone.now().strftime("%B %d, %Y")
         }

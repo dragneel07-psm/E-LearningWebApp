@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Search, User } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { usersAPI, User as UserType } from '@/lib/api';
-import { NotificationBell } from '@/components/notification-bell';
+import NotificationCenter from '@/components/notifications/NotificationCenter';
 
 export default function AdminLayout({
     children,
@@ -40,7 +40,7 @@ export default function AdminLayout({
                     </div>
 
                     <div className="flex items-center gap-4">
-                        <NotificationBell />
+                        <NotificationCenter />
 
                         <div className="flex items-center gap-3 pl-4 border-l">
                             <div className="text-right hidden md:block">

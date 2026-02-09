@@ -13,6 +13,7 @@ import {
     RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar
 } from 'recharts';
 import Link from 'next/link';
+import { ResultList } from '@/components/student/ResultList';
 
 export default function AssessmentDashboard() {
     const [loading, setLoading] = useState(true);
@@ -163,32 +164,7 @@ export default function AssessmentDashboard() {
                         </CardHeader>
                         <CardContent>
                             <div className="space-y-4">
-                                {results.map((result) => (
-                                    <div key={result.result_id} className="flex items-center justify-between p-4 rounded-lg border bg-white hover:bg-slate-50 transition-colors">
-                                        <div className="flex items-start gap-4">
-                                            <div className={`h-10 w-10 rounded-full flex items-center justify-center font-bold ${result.percentage! >= 80 ? 'bg-green-100 text-green-700' :
-                                                result.percentage! >= 60 ? 'bg-blue-100 text-blue-700' :
-                                                    'bg-orange-100 text-orange-700'
-                                                }`}>
-                                                {result.percentage}%
-                                            </div>
-                                            <div>
-                                                <h4 className="font-semibold">{result.assessmentDetails?.title || 'Assessment'}</h4>
-                                                <p className="text-sm text-muted-foreground">
-                                                    {result.subjectDetails?.name} • Completed on {new Date().toLocaleDateString()}
-                                                </p>
-                                            </div>
-                                        </div>
-                                        <div className="text-right">
-                                            <div className="font-medium">{result.score}/{result.assessmentDetails?.total_marks}</div>
-                                            {result.ai_feedback && (
-                                                <Badge variant="outline" className="mt-1 gap-1 text-xs">
-                                                    <BrainCircuit className="h-3 w-3" /> AI Feedback
-                                                </Badge>
-                                            )}
-                                        </div>
-                                    </div>
-                                ))}
+                                <ResultList results={results} />
                             </div>
                         </CardContent>
                     </Card>

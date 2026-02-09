@@ -168,6 +168,7 @@ export interface Assessment {
     id: string;
     assessment_id: string;
     subject: number | string;
+    subject_name?: string;
     title: string;
     description: string;
     type: 'quiz' | 'exam' | 'assignment';
@@ -204,7 +205,7 @@ export interface GradebookData {
         type: string;
     }[];
     students: {
-        id: number;
+        id: string;
         name: string;
         email: string;
         results: Record<string, {
@@ -439,7 +440,7 @@ export interface FeeStructure {
     tenant: string;
     name: string;
     amount: number;
-    academic_class?: string | null;
+    academic_class?: number | null;
     frequency: 'monthly' | 'one_time' | 'annual' | 'term';
     created_at: string;
 }
@@ -566,7 +567,7 @@ function getAuthToken(): string | null {
 }
 
 // Generic fetch wrapper with error handling
-async function apiRequest<T>(
+export async function apiRequest<T>(
     endpoint: string,
     options: RequestInit = {}
 ): Promise<T> {
@@ -796,8 +797,23 @@ export const academicAPI = {
         const params = new URLSearchParams();
         if (startDate) params.append('start_date', startDate);
         if (endDate) params.append('end_date', endDate);
-        return `/api/academic/reports/attendance-summary/${sectionId}/?${params.toString()}`;
+        return `${API_BASE_URL}/academic/reports/attendance-summary/${sectionId}?${params.toString()}`;
     },
+
+    // Assessments
+    getAssessments: () => apiRequest<Assessment[]>('/academic/assessments/'),
+    getAssessment: (id: string) => apiRequest<Assessment>(`/academic/assessments/${id}/`),
+    createAssessment: (data: Partial<Assessment>) => apiRequest<Assessment>('/academic/assessments/', {
+        method: 'POST',
+        body: JSON.stringify(data)
+    }),
+    updateAssessment: (id: string, data: Partial<Assessment>) => apiRequest<Assessment>(`/academic/assessments/${id}/`, {
+        method: 'PATCH',
+        body: JSON.stringify(data)
+    }),
+    deleteAssessment: (id: string) => apiRequest<void>(`/academic/assessments/${id}/`, {
+        method: 'DELETE'
+    }),
     getAttendanceSummaryExcel: (sectionId: number, startDate?: string, endDate?: string) => {
         const params = new URLSearchParams();
         if (startDate) params.append('start_date', startDate);
@@ -857,7 +873,10 @@ export const academicAPI = {
     }>('/academic/stats/'),
 
     // Students
-    getStudents: () => apiRequest<Student[]>('/academic/students/'),
+    getStudents: (params?: { section_id?: string }) => {
+        const query = params?.section_id ? `?section=${params.section_id}` : '';
+        return apiRequest<Student[]>(`/academic/students/${query}`);
+    },
     getStudent: (id: string) => apiRequest<Student>(`/academic/students/${id}/`),
     getMyStudent: () => apiRequest<Student>('/academic/students/me/'),
     createStudent: (data: Partial<Student>) => apiRequest<Student>('/academic/students/', {
@@ -947,25 +966,10 @@ export const academicAPI = {
     }),
 
     // Assessments
-    getAssessments: (subjectId?: number) => {
-        const query = subjectId ? `?subject=${subjectId}` : '';
-        return apiRequest<Assessment[]>(`/academic/assessments/${query}`);
-    },
+
     getGradebook: (subjectId: number) => {
         return apiRequest<GradebookData>(`/academic/assessments/gradebook/?subject=${subjectId}`);
     },
-    getAssessment: (id: string) => apiRequest<Assessment>(`/academic/assessments/${id}/`),
-    createAssessment: (data: Partial<Assessment>) => apiRequest<Assessment>('/academic/assessments/', {
-        method: 'POST',
-        body: JSON.stringify(data)
-    }),
-    updateAssessment: (id: string, data: Partial<Assessment>) => apiRequest<Assessment>(`/academic/assessments/${id}/`, {
-        method: 'PATCH',
-        body: JSON.stringify(data)
-    }),
-    deleteAssessment: (id: string) => apiRequest<void>(`/academic/assessments/${id}/`, {
-        method: 'DELETE'
-    }),
 
 
     // Results

@@ -125,4 +125,12 @@ class BookIssue(models.Model):
                 else:
                     raise ValidationError('No copies available for this book')
             
+            # Check for return transition
+            elif self.pk:
+                old_instance = BookIssue.objects.using(using_db).get(pk=self.pk)
+                if old_instance.status != 'returned' and self.status == 'returned':
+                    book = Book.objects.using(using_db).select_for_update().get(pk=self.book.pk)
+                    book.available_copies += 1
+                    book.save(using=using_db, update_fields=['available_copies'])
+            
             super().save(*args, **kwargs)

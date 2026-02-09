@@ -13,10 +13,12 @@ class AssessmentSerializer(serializers.ModelSerializer):
     questions = QuestionSerializer(many=True, read_only=True)
     id = serializers.UUIDField(source='assessment_id', read_only=True)
     
+    subject_name = serializers.CharField(source='subject.name', read_only=True)
+    
     class Meta:
         model = Assessment
         fields = [
-            'id', 'assessment_id', 'subject', 'section', 'title', 'description', 'type', 
+            'id', 'assessment_id', 'subject', 'subject_name', 'section', 'title', 'description', 'type', 
             'total_marks', 'passing_marks', 'scheduled_at', 'due_date', 
             'duration_minutes', 'blooms_level', 'questions'
         ]
