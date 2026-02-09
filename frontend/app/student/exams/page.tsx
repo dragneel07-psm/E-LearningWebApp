@@ -1,189 +1,185 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Card } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { useRouter } from 'next/navigation';
-import { Clock, Calendar, BarChart3, Loader2 } from 'lucide-react';
-import { academicAPI, helpers, Assessment, Result, Subject } from '@/lib/api';
+import { Badge } from '@/components/ui/badge';
+import {
+    Calendar, MapPin, Ticket, Info,
+    Printer, Loader2, BookOpen, Clock
+} from 'lucide-react';
+import { academicAPI, Exam, ExamSeating } from '@/lib/api';
+import { toast } from 'sonner';
 
-type ResultWithDetails = Result & {
-    assessmentDetails?: Assessment;
-    subjectDetails?: Subject;
-    percentage?: number;
-};
-
-export default function ExamsResultsPage() {
-    const router = useRouter();
-    const [upcomingExams, setUpcomingExams] = useState<Assessment[]>([]);
-    const [pastResults, setPastResults] = useState<ResultWithDetails[]>([]); // Results with details
+export default function StudentExamsPage() {
     const [loading, setLoading] = useState(true);
+    const [exams, setExams] = useState<Exam[]>([]);
+    const [seatings, setSeatings] = useState<ExamSeating[]>([]);
 
     useEffect(() => {
         loadData();
     }, []);
 
     const loadData = async () => {
-        console.log('ExamsPage: Starting data fetch...'); // Debug log
         try {
             setLoading(true);
+            const [examsData, seatingsData] = await Promise.all([
+                academicAPI.getExams(),
+                academicAPI.getExamSeating()
+            ]);
 
-            // 1. Get student ID
-            // We fetch the list of students available to this user context
-            const students = await academicAPI.getStudents();
-            const myStudentId = students.length > 0 ? students[0].id : null;
-            console.log('ExamsPage: Found student ID:', myStudentId);
-
-            if (myStudentId) {
-                // 2. Fetch Exams (Assessments of type 'exam')
-                const allAssessments = await academicAPI.getAssessments();
-                const exams = allAssessments.filter(a => a.type === 'exam' && new Date(a.scheduled_at!) > new Date());
-                setUpcomingExams(exams);
-
-                // 3. Fetch Results
-                const results = await helpers.getStudentResultsWithDetails(myStudentId);
-                setPastResults(results as ResultWithDetails[]);
-            }
+            setExams(examsData);
+            setSeatings(seatingsData);
         } catch (error) {
-            console.error('Failed to load exams/results', error);
+            console.error("Failed to load exam data", error);
+            toast.error("Failed to load your exam schedule");
         } finally {
             setLoading(false);
         }
     };
 
-    if (loading) return <div className="flex justify-center p-12"><Loader2 className="animate-spin" /></div>;
+    const handlePrintHallTicket = (seating: ExamSeating) => {
+        window.print();
+    };
+
+    if (loading) {
+        return (
+            <div className="flex flex-col items-center justify-center p-12 text-slate-400 gap-4">
+                <Loader2 className="h-8 w-8 animate-spin text-indigo-500" />
+                <p>Loading your exam schedule...</p>
+            </div>
+        );
+    }
 
     return (
-        <div className="p-6 max-w-7xl mx-auto space-y-8">
-            <div>
-                <h1 className="text-3xl font-bold text-slate-800">Exams & Results</h1>
-                <p className="text-slate-600">Prepare for upcoming exams and review your performance history.</p>
+        <div className="space-y-8 animate-in fade-in duration-500 max-w-5xl mx-auto p-4 md:p-8">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div>
+                    <h1 className="text-3xl font-bold text-slate-900 flex items-center gap-3">
+                        <Ticket className="h-8 w-8 text-indigo-600" /> Exams & Hall Tickets
+                    </h1>
+                    <p className="text-slate-500 text-lg">View your exam schedule and seating arrangements</p>
+                </div>
+                <Button
+                    variant="outline"
+                    className="md:w-fit w-full border-slate-200"
+                    onClick={() => window.print()}
+                >
+                    <Printer className="h-4 w-4 mr-2" /> Print All Tickets
+                </Button>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                {/* Left Column: Upcoming Exams */}
-                <div className="lg:col-span-2 space-y-6">
-                    <div className="flex items-center justify-between">
-                        <h2 className="text-xl font-bold text-slate-800">Upcoming Schedule</h2>
-                        {/* <Button variant="outline" size="sm">Download Schedule</Button> */}
-                    </div>
+            {seatings.length === 0 ? (
+                <Card className="border-dashed border-2 py-12 text-center text-slate-400 bg-slate-50/50">
+                    <Info className="h-12 w-12 mx-auto mb-4 opacity-20" />
+                    <h3 className="text-lg font-medium text-slate-900">No Hall Tickets Yet</h3>
+                    <p className="max-w-xs mx-auto mt-2">
+                        Your hall tickets will appear here once they are generated by the school administration.
+                    </p>
+                </Card>
+            ) : (
+                <div className="grid gap-8">
+                    {seatings.map((seating) => {
+                        const exam = exams.find(e => e.exam_id === seating.exam);
+                        if (!exam) return null;
 
-                    {upcomingExams.length === 0 ? (
-                        <Card className="p-8 text-center text-slate-500 border-dashed">
-                            <Calendar className="h-12 w-12 mx-auto mb-3 opacity-20" />
-                            <p>No upcoming exams scheduled.</p>
-                            <p className="text-sm">Enjoy your study time!</p>
-                        </Card>
-                    ) : (
-                        <div className="grid gap-4">
-                            {upcomingExams.map((exam) => (
-                                <Card key={exam.assessment_id} className="p-5 border-l-4 border-l-indigo-600 hover:shadow-md transition-shadow">
-                                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                        return (
+                            <Card key={seating.seating_id} className="overflow-hidden border-indigo-100 shadow-sm hover:shadow-md transition-shadow">
+                                <CardHeader className="bg-indigo-600 text-white p-6">
+                                    <div className="flex justify-between items-start">
                                         <div>
-                                            <div className="flex items-center gap-2 mb-1">
-                                                <Badge className="bg-indigo-100 text-indigo-700 hover:bg-indigo-100 border-indigo-200">
-                                                    {/* Subject would be ideal here if we mapped course to subject name */}
-                                                    Exam
-                                                </Badge>
-                                                <span className="text-sm text-slate-500 font-medium">
-                                                    {new Date(exam.scheduled_at!).toLocaleDateString()}
-                                                </span>
-                                            </div>
-                                            <h3 className="text-lg font-bold text-slate-800">{exam.title}</h3>
-                                            <div className="flex items-center gap-4 mt-2 text-sm text-slate-600">
-                                                <div className="flex items-center gap-1">
-                                                    <Clock className="h-4 w-4 text-indigo-500" />
-                                                    {new Date(exam.scheduled_at!).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} ({exam.duration_minutes} mins)
+                                            <CardTitle className="text-xl md:text-2xl font-bold">
+                                                {exam.assessment_details?.title}
+                                            </CardTitle>
+                                            <CardDescription className="text-indigo-100 mt-1 flex items-center gap-2">
+                                                <BookOpen className="h-4 w-4" /> {exam.assessment_details?.subject_name}
+                                            </CardDescription>
+                                        </div>
+                                        <Badge className="bg-white text-indigo-600 hover:bg-indigo-50 border-none font-mono">
+                                            {seating.hall_ticket_number}
+                                        </Badge>
+                                    </div>
+                                </CardHeader>
+                                <CardContent className="p-0">
+                                    <div className="grid grid-cols-1 md:grid-cols-3 divide-y md:divide-y-0 md:divide-x divide-slate-100">
+                                        <div className="p-6 space-y-4">
+                                            <div className="flex items-center gap-3">
+                                                <Calendar className="h-5 w-5 text-slate-400" />
+                                                <div>
+                                                    <p className="text-xs text-slate-400 font-medium">Exam Date</p>
+                                                    <p className="font-semibold text-slate-700">
+                                                        {exam.assessment_details?.scheduled_at ?
+                                                            new Date(exam.assessment_details.scheduled_at).toLocaleDateString(undefined, {
+                                                                weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+                                                            }) : 'Not Scheduled'}
+                                                    </p>
                                                 </div>
-                                                {/* <div className="flex items-center gap-1">
-                                                    <MapPin className="h-4 w-4 text-indigo-500" />
-                                                    Room 304
-                                                </div> */}
+                                            </div>
+                                            <div className="flex items-center gap-3">
+                                                <Clock className="h-5 w-5 text-slate-400" />
+                                                <div>
+                                                    <p className="text-xs text-slate-400 font-medium">Start Time</p>
+                                                    <p className="font-semibold text-slate-700">
+                                                        {exam.assessment_details?.scheduled_at ?
+                                                            new Date(exam.assessment_details.scheduled_at).toLocaleTimeString([], {
+                                                                hour: '2-digit', minute: '2-digit'
+                                                            }) : 'TBD'}
+                                                    </p>
+                                                </div>
                                             </div>
                                         </div>
-                                        <div className="shrink-0 flex flex-col items-center gap-3">
-                                            <div className="text-center bg-slate-50 p-3 rounded-xl border border-slate-100 min-w-[100px]">
-                                                <span className="block text-xs uppercase tracking-wider text-slate-500">Marks</span>
-                                                <span className="block text-xl font-bold text-slate-800">{exam.total_marks}</span>
+
+                                        <div className="p-6 space-y-4">
+                                            <div className="flex items-center gap-3">
+                                                <MapPin className="h-5 w-5 text-slate-400" />
+                                                <div>
+                                                    <p className="text-xs text-slate-400 font-medium">Exam Center</p>
+                                                    <p className="font-semibold text-slate-700">{exam.exam_center || 'Main Building'}</p>
+                                                </div>
                                             </div>
-                                            <Button
-                                                className="w-full bg-indigo-600 hover:bg-indigo-700 font-bold rounded-xl"
-                                                onClick={() => router.push(`/student/quizzes/${exam.assessment_id}`)}
-                                            >
-                                                Start Exam
-                                            </Button>
+                                            <div className="flex items-center gap-3">
+                                                <div className="flex gap-4">
+                                                    <div>
+                                                        <p className="text-xs text-slate-400 font-medium">Room</p>
+                                                        <p className="font-semibold text-slate-700">{seating.room_number}</p>
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-xs text-slate-400 font-medium">Seat</p>
+                                                        <p className="font-semibold text-slate-700">{seating.seat_number}</p>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div className="p-6 bg-slate-50/50 flex flex-col justify-between">
+                                            <div className="space-y-2">
+                                                <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider">Candidate Details</h4>
+                                                <p className="text-sm font-bold text-slate-900">{seating.student_name}</p>
+                                                <p className="text-xs text-slate-400">ID: {seating.student_id_code}</p>
+                                            </div>
+                                            <div className="mt-4 flex gap-2">
+                                                <Button size="sm" variant="outline" className="w-full text-indigo-600 border-indigo-200" onClick={() => handlePrintHallTicket(seating)}>
+                                                    Download Ticket
+                                                </Button>
+                                            </div>
                                         </div>
                                     </div>
-                                </Card>
-                            ))}
-                        </div>
-                    )}
+
+                                    {exam.instructions && (
+                                        <div className="p-4 bg-amber-50 border-t border-amber-100 flex gap-3 items-start">
+                                            <Info className="h-4 w-4 text-amber-600 mt-0.5" />
+                                            <div>
+                                                <p className="text-xs font-bold text-amber-900 uppercase tracking-tighter">Instructions</p>
+                                                <p className="text-xs text-amber-800 leading-relaxed">{exam.instructions}</p>
+                                            </div>
+                                        </div>
+                                    )}
+                                </CardContent>
+                            </Card>
+                        );
+                    })}
                 </div>
-
-                {/* Right Column: Recent Results */}
-                <div className="space-y-6">
-                    <h2 className="text-xl font-bold text-slate-800">Recent Results</h2>
-
-                    {pastResults.length === 0 ? (
-                        <Card className="p-8 text-center text-slate-500">
-                            <BarChart3 className="h-12 w-12 mx-auto mb-3 opacity-20" />
-                            <p>No results available yet.</p>
-                        </Card>
-                    ) : (
-                        <div className="space-y-4">
-                            {pastResults.map((result) => (
-                                <Card key={result.result_id} className="p-4 relative overflow-hidden group">
-                                    <div className="flex justify-between items-start mb-2 relative z-10">
-                                        <div>
-                                            <h4 className="font-bold text-slate-800 group-hover:text-indigo-600 transition-colors">
-                                                {result.assessmentDetails?.title || 'Assessment'}
-                                            </h4>
-                                            <p className="text-xs text-slate-500">{new Date(result.submitted_at || Date.now()).toLocaleDateString()}</p>
-                                        </div>
-                                        <GradeBadge percentage={result.percentage!} />
-                                    </div>
-
-                                    <div className="relative z-10">
-                                        <div className="flex justify-between text-sm mb-1">
-                                            <span className="text-slate-600">Score</span>
-                                            <span className="font-bold text-slate-900">{result.score} <span className="text-slate-400 font-normal">/ {result.assessmentDetails?.total_marks}</span></span>
-                                        </div>
-                                        <div className="w-full bg-slate-100 rounded-full h-1.5">
-                                            <div
-                                                className={`h-1.5 rounded-full ${result.percentage! >= 60 ? 'bg-green-500' : result.percentage! >= 40 ? 'bg-orange-500' : 'bg-red-500'}`}
-                                                style={{ width: `${result.percentage}%` }}
-                                            ></div>
-                                        </div>
-                                    </div>
-
-                                    {/* Action */}
-                                    {/* <button className="mt-3 text-xs font-medium text-indigo-600 hover:text-indigo-800 flex items-center gap-1">
-                                        View Breakdown <ChevronRight className="h-3 w-3" />
-                                    </button> */}
-                                </Card>
-                            ))}
-                        </div>
-                    )}
-                </div>
-            </div>
+            )}
         </div>
-    );
-}
-
-function GradeBadge({ percentage }: { percentage: number }) {
-    let grade = 'F';
-    let color = 'bg-red-100 text-red-700';
-
-    if (percentage >= 90) { grade = 'A+'; color = 'bg-green-100 text-green-700'; }
-    else if (percentage >= 80) { grade = 'A'; color = 'bg-green-50 text-green-700'; }
-    else if (percentage >= 70) { grade = 'B'; color = 'bg-blue-100 text-blue-700'; }
-    else if (percentage >= 60) { grade = 'C'; color = 'bg-yellow-100 text-yellow-700'; }
-    else if (percentage >= 40) { grade = 'D'; color = 'bg-orange-100 text-orange-700'; }
-
-    return (
-        <span className={`text-xs font-bold px-2 py-1 rounded ${color}`}>
-            {grade}
-        </span>
     );
 }

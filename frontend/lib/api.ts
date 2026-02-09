@@ -229,6 +229,33 @@ export interface Submission {
     result?: Result;
 }
 
+export interface Exam {
+    exam_id: string;
+    assessment: string;
+    assessment_details?: Assessment;
+    hall_ticket_prefix: string;
+    exam_center?: string;
+    seating_capacity: number;
+    instructions?: string;
+    is_published: boolean;
+    results_released: boolean;
+    seating_arrangements?: ExamSeating[];
+    created_at: string;
+    updated_at: string;
+}
+
+export interface ExamSeating {
+    seating_id: string;
+    exam: string;
+    student: string;
+    student_name?: string;
+    student_id_code?: string;
+    hall_ticket_number: string;
+    room_number: string;
+    seat_number: string;
+    attendance_status: 'present' | 'absent' | 'late';
+}
+
 export interface Chapter {
     id: number;
     subject: number;
@@ -405,6 +432,44 @@ export interface GradeResult {
     score: number;
     feedback: string;
     tokens_used?: number;
+}
+
+export interface Conversation {
+    conversation_id: string;
+    type: 'direct' | 'group';
+    title?: string;
+    participants: ConversationParticipant[];
+    last_message?: Message;
+    unread_count: number;
+    created_at: string;
+    updated_at: string;
+}
+
+export interface ConversationParticipant {
+    user: string;
+    user_details: {
+        id: string;
+        email: string;
+        full_name: string;
+        role: string;
+    };
+    joined_at: string;
+    last_read_at: string;
+}
+
+export interface Message {
+    message_id: string;
+    conversation: string;
+    sender: string;
+    sender_details: {
+        id: string;
+        email: string;
+        full_name: string;
+        role: string;
+    };
+    content: string;
+    is_system_message: boolean;
+    created_at: string;
 }
 
 export interface ChatMessage {
@@ -1053,9 +1118,31 @@ export const academicAPI = {
         method: 'PATCH',
         body: JSON.stringify(data)
     }),
-    deleteNotice: (id: number) => apiRequest<void>(`/academic/notices/${id}/`, {
+    deleteNotice: (id: number, data?: Partial<Notice>) => apiRequest<void>(`/academic/notices/${id}/`, {
         method: 'DELETE'
     }),
+
+    // Exams
+    getExams: () => apiRequest<Exam[]>('/academic/exams/'),
+    getExam: (id: string) => apiRequest<Exam>(`/academic/exams/${id}/`),
+    createExam: (data: Partial<Exam>) => apiRequest<Exam>('/academic/exams/', {
+        method: 'POST',
+        body: JSON.stringify(data)
+    }),
+    updateExam: (id: string, data: Partial<Exam>) => apiRequest<Exam>(`/academic/exams/${id}/`, {
+        method: 'PATCH',
+        body: JSON.stringify(data)
+    }),
+    deleteExam: (id: string) => apiRequest<void>(`/academic/exams/${id}/`, {
+        method: 'DELETE'
+    }),
+    generateHallTickets: (id: string) => apiRequest<{ message: string }>(`/academic/exams/${id}/generate_hall_tickets/`, {
+        method: 'POST'
+    }),
+    getExamSeating: (studentId?: string) => {
+        const query = studentId ? `?student=${studentId}` : '';
+        return apiRequest<ExamSeating[]>(`/academic/exam-seating/${query}`);
+    },
 };
 
 // Billing API
@@ -1193,6 +1280,36 @@ export const notificationsAPI = {
     }),
     markAllAsRead: () => apiRequest<{ status: string }>('/notifications/notifications/mark_all_as_read/', {
         method: 'POST'
+    }),
+};
+
+// Conversations API
+export const conversationsAPI = {
+    getConversations: () => apiRequest<Conversation[]>('/conversations/conversations/'),
+    getConversation: (id: string) => apiRequest<Conversation>(`/conversations/conversations/${id}/`),
+    markAsRead: (id: string) => apiRequest<{ status: string }>(`/conversations/conversations/${id}/mark_as_read/`, {
+        method: 'POST'
+    }),
+    startDirectMessage: (userId: string) => apiRequest<Conversation>('/conversations/conversations/start_direct_message/', {
+        method: 'POST',
+        body: JSON.stringify({ user_id: userId })
+    }),
+    getMessages: (conversationId: string) => apiRequest<Message[]>(`/conversations/messages/?conversation=${conversationId}`),
+    sendMessage: (conversationId: string, content: string) => apiRequest<Message>('/conversations/messages/', {
+        method: 'POST',
+        body: JSON.stringify({ conversation: conversationId, content })
+    }),
+    createGroup: (title: string, participantIds: string[]) => apiRequest<Conversation>('/conversations/conversations/create_group/', {
+        method: 'POST',
+        body: JSON.stringify({ title, participant_ids: participantIds })
+    }),
+    addParticipants: (id: string, participantIds: string[]) => apiRequest<{ status: string }>(`/conversations/conversations/${id}/add_participants/`, {
+        method: 'POST',
+        body: JSON.stringify({ participant_ids: participantIds })
+    }),
+    removeParticipant: (id: string, userId: string) => apiRequest<{ status: string }>(`/conversations/conversations/${id}/remove_participant/`, {
+        method: 'POST',
+        body: JSON.stringify({ user_id: userId })
     }),
 };
 
@@ -1347,6 +1464,7 @@ export const api = {
             }),
     },
     notifications: notificationsAPI,
+    conversations: conversationsAPI,
     learningPaths: {
         getPaths: () => apiRequest<LearningPath[]>('/ai/learning-paths/'),
         generatePath: (data: { student_id: string; subject_id?: number; topic_focus?: string }) =>
@@ -1378,6 +1496,7 @@ export const api = {
         },
         getPendingFeesPDF: () => `${API_BASE_URL}/billing/reports/pending-fees/`,
         getPendingFeesExcel: () => `${API_BASE_URL}/billing/reports/pending-fees-excel/`,
+        getResultCardPDF: (studentId: string, resultId: string) => `${API_BASE_URL}/academic/reports/result-card/${studentId}/${resultId}/`,
     },
     settings: {
         get: () => apiRequest('/core/settings/'),

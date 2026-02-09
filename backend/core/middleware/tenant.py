@@ -14,6 +14,18 @@ def get_current_tenant():
 def get_current_db_alias():
     return getattr(_thread_locals, 'db_alias', 'default')
 
+def set_current_tenant(tenant, db_alias=None):
+    """Programmatically set the current tenant context."""
+    _thread_locals.tenant = tenant
+    _thread_locals.db_alias = db_alias or (tenant.db_alias if tenant else 'default')
+
+def clear_current_tenant():
+    """Clear the current tenant context."""
+    if hasattr(_thread_locals, 'tenant'):
+        del _thread_locals.tenant
+    if hasattr(_thread_locals, 'db_alias'):
+        del _thread_locals.db_alias
+
 class TenantMiddleware(MiddlewareMixin):
     def process_request(self, request):
         # 1. Get Host Logic (Support Header and Hostname)

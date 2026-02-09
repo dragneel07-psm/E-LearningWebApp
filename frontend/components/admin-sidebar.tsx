@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, Users, GraduationCap, School, CreditCard, BarChart3, Settings, LogOut, Bell, BookOpen, Calendar, Library, Wallet, DollarSign, ClipboardList, FileText } from 'lucide-react';
+import { LayoutDashboard, Users, GraduationCap, School, CreditCard, BarChart3, Settings, LogOut, Bell, BookOpen, Calendar, Library, Wallet, DollarSign, ClipboardList, FileText, MessageSquare } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 const navigation = [
@@ -11,6 +11,7 @@ const navigation = [
     { name: 'Classes', href: '/admin/academic/classes', icon: School },
     { name: 'Subjects', href: '/admin/academic/subjects', icon: BookOpen },
     { name: 'Assessments', href: '/admin/academic/assessments', icon: ClipboardList },
+    { name: 'Exams', href: '/admin/exams', icon: ClipboardList },
     { name: 'Students', href: '/admin/academic/students', icon: GraduationCap },
     { name: 'Teachers', href: '/admin/academic/teachers', icon: Users },
     { name: 'Library', href: '/admin/library', icon: Library },
@@ -20,6 +21,7 @@ const navigation = [
     { name: 'Financial Reports', href: '/admin/finance/reports', icon: BarChart3, indent: true },
     { name: 'Reports', href: '/admin/reports', icon: BarChart3 },
     { name: 'Communication', href: '/admin/communication', icon: Bell },
+    { name: 'Messages', href: '/admin/messages', icon: MessageSquare, indent: true },
     { name: 'Templates', href: '/admin/communication/templates', icon: FileText, indent: true },
     { name: 'Notices', href: '/admin/notices', icon: Bell, indent: true },
     { name: 'Settings', href: '/admin/settings', icon: Settings },

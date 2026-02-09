@@ -1,6 +1,7 @@
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
+from django.http import HttpResponse
 from django.utils import timezone
 from django.db.models import Count, Q
 from academic.models.student import Student
@@ -191,3 +192,117 @@ class ReportViewSet(viewsets.ViewSet):
         filename = f"attendance_summary_{section.name}.xlsx"
         
         return generate_excel_response(rows, columns, filename)
+
+    @action(detail=False, methods=['get'], url_path='result-card/(?P<student_id>[^/.]+)/(?P<result_id>[^/.]+)')
+    def result_card_pdf(self, request, student_id=None, result_id=None):
+        using_db = getattr(request, 'db_alias', 'default')
+        student = get_object_or_404(Student.objects.using(using_db).select_related('section', 'section__academic_class', 'user'), id=student_id)
+        result = get_object_or_404(
+            Result.objects.using(using_db).select_related('assessment', 'assessment__subject'), 
+            id=result_id, 
+            student=student
+        )
+        
+        context = {
+            'student': student,
+            'result': result,
+            'assessment': result.assessment,
+            'subject': result.assessment.subject,
+            'percentage': round((result.score / result.assessment.total_marks) * 100, 1),
+            'school_name': request.headers.get('x-tenant-id', 'Our School').split('.')[0].capitalize(),
+            'date': timezone.now().strftime("%B %d, %Y")
+        }
+        
+        filename = f"result_card_{student.last_name}_{result.assessment.title.replace(' ', '_')}.pdf"
+        response = generate_pdf_response('reports/result_card.html', context, filename)
+        
+        if response:
+            return response
+        return Response({"error": "Failed to generate result card"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    @action(detail=False, methods=['get'], url_path='hall-ticket/(?P<seating_id>[^/.]+)')
+    def hall_ticket_pdf(self, request, seating_id=None):
+        """Generate individual hall ticket PDF for a student"""
+        from academic.models.exam import ExamSeating
+        
+        using_db = getattr(request, 'db_alias', 'default')
+        # Avoid cross-DB joins - fetch without select_related on user
+        seating = get_object_or_404(
+            ExamSeating.objects.using(using_db),
+            seating_id=seating_id
+        )
+        
+        # Access related objects individually (they'll use the router)
+        context = {
+            'hall_ticket_number': seating.hall_ticket_number,
+            'student_name': f"{seating.student.user.first_name} {seating.student.user.last_name}",
+            'student_id': str(seating.student.student_id)[:8],
+            'class_section': f"{seating.student.section.academic_class.name} - {seating.student.section.name}",
+            'seat_number': seating.seat_number,
+            'exam_title': seating.exam.assessment.title,
+            'subject_name': seating.exam.assessment.subject.name,
+            'exam_date': seating.exam.created_at.strftime("%B %d, %Y") if seating.exam.created_at else "To Be Announced",
+            'exam_center': seating.exam.exam_center or "Main Examination Hall",
+            'room_number': seating.room_number,
+            'school_name': request.headers.get('x-tenant-id', 'Our School').split('.')[0].capitalize(),
+            'generation_date': timezone.now().strftime("%B %d, %Y at %I:%M %p")
+        }
+        
+        filename = f"hall_ticket_{seating.hall_ticket_number}.pdf"
+        response = generate_pdf_response('reports/hall_ticket.html', context, filename)
+        
+        if response:
+            return response
+        return Response({"error": "Failed to generate hall ticket"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    @action(detail=False, methods=['get'], url_path='bulk-hall-tickets/(?P<exam_id>[^/.]+)')
+    def bulk_hall_tickets_pdf(self, request, exam_id=None):
+        """Generate hall tickets for all students in an exam (ZIP file)"""
+        from academic.models.exam import Exam, ExamSeating
+        import zipfile
+        import io
+        
+        using_db = getattr(request, 'db_alias', 'default')
+        exam = get_object_or_404(Exam.objects.using(using_db), exam_id=exam_id)
+        # Avoid cross-DB joins
+        seatings = ExamSeating.objects.using(using_db).filter(exam=exam)
+        
+        if not seatings.exists():
+            return Response({"error": "No seating allocations found for this exam"}, status=status.HTTP_404_NOT_FOUND)
+        
+        # Create ZIP file in memory
+        zip_buffer = io.BytesIO()
+        with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+            for seating in seatings:
+                # Access related objects individually
+                context = {
+                    'hall_ticket_number': seating.hall_ticket_number,
+                    'student_name': f"{seating.student.user.first_name} {seating.student.user.last_name}",
+                    'student_id': str(seating.student.student_id)[:8],
+                    'class_section': f"{seating.student.section.academic_class.name} - {seating.student.section.name}",
+                    'seat_number': seating.seat_number,
+                    'exam_title': exam.assessment.title,
+                    'subject_name': exam.assessment.subject.name,
+                    'exam_date': exam.created_at.strftime("%B %d, %Y") if exam.created_at else "To Be Announced",
+                    'exam_center': exam.exam_center or "Main Examination Hall",
+                    'room_number': seating.room_number,
+                    'school_name': request.headers.get('x-tenant-id', 'Our School').split('.')[0].capitalize(),
+                    'generation_date': timezone.now().strftime("%B %d, %Y at %I:%M %p")
+                }
+                
+                # Generate PDF for this student
+                from django.template.loader import render_to_string
+                from xhtml2pdf import pisa
+                html = render_to_string('reports/hall_ticket.html', context)
+                pdf_buffer = io.BytesIO()
+                pisa.pisaDocument(io.BytesIO(html.encode("UTF-8")), pdf_buffer)
+                
+                # Add to ZIP
+                pdf_filename = f"{seating.hall_ticket_number}_{seating.student.user.last_name}.pdf"
+                zip_file.writestr(pdf_filename, pdf_buffer.getvalue())
+        
+        # Return ZIP file
+        response = HttpResponse(zip_buffer.getvalue(), content_type='application/zip')
+        response['Content-Disposition'] = f'attachment; filename="hall_tickets_{exam.assessment.title.replace(" ", "_")}.zip"'
+        return response
+

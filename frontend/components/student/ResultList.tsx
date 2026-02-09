@@ -2,8 +2,9 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { BrainCircuit, MessageSquare } from 'lucide-react';
-import { Result, Assessment, Subject } from '@/lib/api';
+import { Button } from '@/components/ui/button';
+import { BrainCircuit, MessageSquare, FileDown } from 'lucide-react';
+import { Result, Assessment, Subject, reportsAPI, helpers } from '@/lib/api';
 
 // Extended type to include details joined from other calls
 export interface ResultWithDetails extends Result {
@@ -32,8 +33,8 @@ export function ResultList({ results }: ResultListProps) {
                     <div className="flex items-start justify-between">
                         <div className="flex items-start gap-4">
                             <div className={`h-12 w-12 rounded-full flex items-center justify-center font-bold text-lg shrink-0 ${(result.percentage || 0) >= 80 ? 'bg-green-100 text-green-700' :
-                                    (result.percentage || 0) >= 60 ? 'bg-blue-100 text-blue-700' :
-                                        'bg-orange-100 text-orange-700'
+                                (result.percentage || 0) >= 60 ? 'bg-blue-100 text-blue-700' :
+                                    'bg-orange-100 text-orange-700'
                                 }`}>
                                 {result.percentage}%
                             </div>
@@ -76,6 +77,23 @@ export function ResultList({ results }: ResultListProps) {
                             )}
                         </div>
                     )}
+
+                    {/* Footer Actions */}
+                    <div className="flex justify-end gap-2 mt-2 pt-2 border-t border-slate-50">
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 gap-2 h-8 px-2"
+                            onClick={() => {
+                                const url = reportsAPI.getResultCardPDF(result.student.toString(), result.result_id || result.id);
+                                const filename = `Result_Card_${result.assessmentDetails?.title || 'Report'}.pdf`;
+                                helpers.downloadFile(url, filename);
+                            }}
+                        >
+                            <FileDown className="h-4 w-4" />
+                            Download Result Card
+                        </Button>
+                    </div>
                 </div>
             ))}
         </div>

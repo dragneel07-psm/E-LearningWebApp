@@ -24,6 +24,14 @@ jobs:
       with:
         python-version: '3.11'
         
+    - name: Cache Python dependencies
+      uses: actions/cache@v3
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('backend/requirements/*.txt', 'backend/requirements.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
+
     - name: Install dependencies
       run: |
         cd backend
@@ -74,6 +82,14 @@ jobs:
       with:
         python-version: '3.11'
         
+    - name: Cache Python dependencies
+      uses: actions/cache@v3
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('backend/requirements/*.txt', 'backend/requirements.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
+
     - name: Install dependencies
       run: |
         cd backend
@@ -173,6 +189,14 @@ jobs:
     if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
     
     steps:
+    - name: Run Global Migrations (All Tenants)
+      env:
+        DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
+        DJANGO_SETTINGS_MODULE: config.settings.staging
+      run: |
+        cd backend
+        python scripts/deploy_migrations.py
+
     - name: Deploy to DigitalOcean App Platform
       uses: digitalocean/app_action@v1
       with:
@@ -189,6 +213,14 @@ jobs:
       url: https://api.platform.com
     
     steps:
+    - name: Run Global Migrations (All Tenants)
+      env:
+        DATABASE_URL: ${{ secrets.PRODUCTION_DATABASE_URL }}
+        DJANGO_SETTINGS_MODULE: config.settings.production
+      run: |
+        cd backend
+        python scripts/deploy_migrations.py
+
     - name: Deploy to DigitalOcean App Platform
       uses: digitalocean/app_action@v1
       with:

@@ -5,7 +5,7 @@ from .views import (
     SubjectViewSet, TeacherViewSet, StudentViewSet, 
     ChapterViewSet, LessonViewSet, LessonMaterialViewSet,
     AssessmentViewSet, QuestionViewSet, SubmissionViewSet, ResultViewSet, ParentViewSet,
-    AttendanceViewSet, TimetableViewSet, NoticeViewSet, ReportViewSet
+    AttendanceViewSet, TimetableViewSet, ExamViewSet, ExamSeatingViewSet, NoticeViewSet, ReportViewSet
 )
 from .views.stats import AcademicStatsView
 
@@ -26,6 +26,8 @@ router.register(r'results', ResultViewSet)
 router.register(r'parents', ParentViewSet)
 router.register(r'attendance', AttendanceViewSet)
 router.register(r'timetable', TimetableViewSet)
+router.register(r'exams', ExamViewSet)
+router.register(r'exam-seating', ExamSeatingViewSet)
 router.register(r'notices', NoticeViewSet)
 router.register(r'reports', ReportViewSet, basename='reports')
 

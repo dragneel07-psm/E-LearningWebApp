@@ -46,7 +46,7 @@ INSTALLED_APPS = [
     "corsheaders",
     "core",
     "users",
-    "academic",
+    "academic.apps.AcademicConfig",
     "billing",
     "ai_engine",
     "reports",
@@ -54,6 +54,7 @@ INSTALLED_APPS = [
     "library",
     "gamification",
     "auditlog",
+    "conversations",
 ]
 
 # Multi-Tenancy Configuration
@@ -71,11 +72,12 @@ SHARED_APPS = [
     "users", # Hybrid App (Exists in both)
     "gamification",
     "auditlog",
+    "conversations",
 ]
 
 TENANT_APPS = [
     "users",
-    "academic",
+    "academic.apps.AcademicConfig",
     "billing",
     "ai_engine",
     "reports",

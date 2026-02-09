@@ -9,3 +9,4 @@ from .lesson import Chapter, Lesson, LessonMaterial, LessonProgress
 from .attendance import Attendance
 from .assessment import Assessment, Result
 from .timetable import Timetable
+from .exam import Exam, ExamSeating
