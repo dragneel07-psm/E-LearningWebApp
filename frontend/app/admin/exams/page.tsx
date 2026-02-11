@@ -19,7 +19,7 @@ import {
     SelectTrigger, SelectValue
 } from "@/components/ui/select";
 import { Label } from '@/components/ui/label';
-import { academicAPI, Exam, Assessment, AcademicClass } from '@/lib/api';
+import { academicAPI, reportsAPI, Exam, Assessment, AcademicClass } from '@/lib/api';
 import { toast } from 'sonner';
 
 export default function ExamManagementPage() {
@@ -32,6 +32,7 @@ export default function ExamManagementPage() {
     const [searchTerm, setSearchTerm] = useState('');
     const [showCreateDialog, setShowCreateDialog] = useState(false);
     const [submitting, setSubmitting] = useState(false);
+    const [downloadingTickets, setDownloadingTickets] = useState<string | null>(null);
 
     // Create Form State
     const [formData, setFormData] = useState({
@@ -98,12 +99,42 @@ export default function ExamManagementPage() {
 
     const handleGenerateHallTickets = async (examId: string) => {
         try {
-            toast.info("Generating hall tickets...");
+            toast.info("Allocating seats...");
             const response = await academicAPI.generateHallTickets(examId);
-            toast.success(response.message || "Hall tickets generated");
+            toast.success(response.message || "Seating allocated successfully");
             loadData();
         } catch (error: any) {
-            toast.error(error.message || "Failed to generate hall tickets");
+            toast.error(error.message || "Failed to allocate seating");
+        }
+    };
+
+    const handleDownloadBulkHallTickets = async (exam: Exam) => {
+        if (!exam.seating_arrangements || exam.seating_arrangements.length === 0) {
+            toast.error("No hall tickets generated yet. Please allocate seating first.");
+            return;
+        }
+
+        try {
+            setDownloadingTickets(exam.exam_id);
+            toast.info("Generating hall tickets ZIP...");
+
+            const url = reportsAPI.getBulkHallTicketsZIP(exam.exam_id);
+
+            // Create a temporary link and trigger download
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `hall_tickets_${exam.assessment_details?.title.replace(/\s+/g, '_')}.zip`;
+            link.target = '_blank';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+
+            toast.success(`Downloading ${exam.seating_arrangements.length} hall tickets`);
+        } catch (error: any) {
+            console.error("Failed to download hall tickets", error);
+            toast.error(error.message || "Failed to download hall tickets");
+        } finally {
+            setDownloadingTickets(null);
         }
     };
 
@@ -328,7 +359,24 @@ export default function ExamManagementPage() {
                                             className="border-indigo-200 text-indigo-600 hover:bg-indigo-50"
                                             onClick={() => handleGenerateHallTickets(exam.exam_id)}
                                         >
-                                            <Printer className="h-4 w-4 mr-2" /> Hall Tickets
+                                            <Settings2 className="h-4 w-4 mr-2" /> Allocate Seats
+                                        </Button>
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            className="border-emerald-200 text-emerald-600 hover:bg-emerald-50"
+                                            onClick={() => handleDownloadBulkHallTickets(exam)}
+                                            disabled={downloadingTickets === exam.exam_id || !exam.seating_arrangements || exam.seating_arrangements.length === 0}
+                                        >
+                                            {downloadingTickets === exam.exam_id ? (
+                                                <>
+                                                    <Loader2 className="h-4 w-4 mr-2 animate-spin" /> Downloading...
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <Printer className="h-4 w-4 mr-2" /> Download ZIP
+                                                </>
+                                            )}
                                         </Button>
                                         <Button
                                             variant="ghost"

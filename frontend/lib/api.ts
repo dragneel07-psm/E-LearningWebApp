@@ -1497,6 +1497,8 @@ export const api = {
         getPendingFeesPDF: () => `${API_BASE_URL}/billing/reports/pending-fees/`,
         getPendingFeesExcel: () => `${API_BASE_URL}/billing/reports/pending-fees-excel/`,
         getResultCardPDF: (studentId: string, resultId: string) => `${API_BASE_URL}/academic/reports/result-card/${studentId}/${resultId}/`,
+        getHallTicketPDF: (seatingId: string) => `${API_BASE_URL}/academic/reports/hall-ticket/${seatingId}/`,
+        getBulkHallTicketsZIP: (examId: string) => `${API_BASE_URL}/academic/reports/bulk-hall-tickets/${examId}/`,
     },
     settings: {
         get: () => apiRequest('/core/settings/'),

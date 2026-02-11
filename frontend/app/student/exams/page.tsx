@@ -8,13 +8,14 @@ import {
     Calendar, MapPin, Ticket, Info,
     Printer, Loader2, BookOpen, Clock
 } from 'lucide-react';
-import { academicAPI, Exam, ExamSeating } from '@/lib/api';
+import { academicAPI, reportsAPI, Exam, ExamSeating } from '@/lib/api';
 import { toast } from 'sonner';
 
 export default function StudentExamsPage() {
     const [loading, setLoading] = useState(true);
     const [exams, setExams] = useState<Exam[]>([]);
     const [seatings, setSeatings] = useState<ExamSeating[]>([]);
+    const [downloading, setDownloading] = useState<string | null>(null);
 
     useEffect(() => {
         loadData();
@@ -38,8 +39,27 @@ export default function StudentExamsPage() {
         }
     };
 
-    const handlePrintHallTicket = (seating: ExamSeating) => {
-        window.print();
+    const handleDownloadHallTicket = async (seating: ExamSeating) => {
+        try {
+            setDownloading(seating.seating_id);
+            const url = reportsAPI.getHallTicketPDF(seating.seating_id);
+
+            // Create a temporary link and trigger download
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `hall_ticket_${seating.hall_ticket_number}.pdf`;
+            link.target = '_blank';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+
+            toast.success("Hall ticket downloaded successfully!");
+        } catch (error) {
+            console.error("Failed to download hall ticket", error);
+            toast.error("Failed to download hall ticket");
+        } finally {
+            setDownloading(null);
+        }
     };
 
     if (loading) {
@@ -158,8 +178,24 @@ export default function StudentExamsPage() {
                                                 <p className="text-xs text-slate-400">ID: {seating.student_id_code}</p>
                                             </div>
                                             <div className="mt-4 flex gap-2">
-                                                <Button size="sm" variant="outline" className="w-full text-indigo-600 border-indigo-200" onClick={() => handlePrintHallTicket(seating)}>
-                                                    Download Ticket
+                                                <Button
+                                                    size="sm"
+                                                    variant="outline"
+                                                    className="w-full text-indigo-600 border-indigo-200 hover:bg-indigo-50"
+                                                    onClick={() => handleDownloadHallTicket(seating)}
+                                                    disabled={downloading === seating.seating_id}
+                                                >
+                                                    {downloading === seating.seating_id ? (
+                                                        <>
+                                                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                                            Downloading...
+                                                        </>
+                                                    ) : (
+                                                        <>
+                                                            <Printer className="h-4 w-4 mr-2" />
+                                                            Download Ticket
+                                                        </>
+                                                    )}
                                                 </Button>
                                             </div>
                                         </div>
