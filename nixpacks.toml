@@ -1,6 +1,10 @@
 [phases.setup]
 aptPkgs = ["...", "libcairo2-dev", "pkg-config"]
 
+[variables]
+C_INCLUDE_PATH = "/usr/include"
+CPLUS_INCLUDE_PATH = "/usr/include"
+
 [phases.install]
 cmds = ["python -m venv --copies /opt/venv && . /opt/venv/bin/activate && pip install setuptools && pip install -r requirements.txt"]
 
