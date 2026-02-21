@@ -139,6 +139,10 @@ DATABASES = {
 if not DATABASES["default"].get("NAME"):
     DATABASES["default"]["NAME"] = "elearning"
 
+import sys
+print(f"DATABASE_URL is: {DATABASE_URL}", file=sys.stderr)
+print(f"DATABASES config is: {DATABASES}", file=sys.stderr)
+
 
 # Password validation
 # https://docs.djangoproject.com/en/5.1/ref/settings/#auth-password-validators
