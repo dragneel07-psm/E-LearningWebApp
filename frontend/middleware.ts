@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
-import { decodeJwt } from 'jose';
+import { decodeJwt, jwtVerify } from 'jose';
 
 interface UserPayload {
     user_id: string;
@@ -17,7 +17,7 @@ const PUBLIC_PATHS = [
     '/debug-auth'
 ];
 
-export function middleware(request: NextRequest) {
+export async function middleware(request: NextRequest) {
     const { pathname, hostname } = request.nextUrl;
 
     // 1. Tenant Handling (Pass subdomain to headers)
@@ -44,7 +44,19 @@ export function middleware(request: NextRequest) {
 
     // 3. Role & Expiry Check
     try {
-        const user = decodeJwt(token) as UserPayload;
+        let user: UserPayload;
+
+        // In production, we MUST verify the JWT signature using the backend's secret key.
+        // During local dev, if no secret is provided, fallback to decoding (NOT SECURE FOR PROD).
+        const jwtSecret = process.env.JWT_SECRET;
+        if (jwtSecret) {
+            const secretKey = new TextEncoder().encode(jwtSecret);
+            const { payload } = await jwtVerify(token, secretKey);
+            user = payload as unknown as UserPayload;
+        } else {
+            user = decodeJwt(token) as UserPayload;
+        }
+
         const userRole = (user.role || 'student').toLowerCase();
 
         // Check expiration

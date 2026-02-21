@@ -152,3 +152,6 @@ websocket-client==1.4.1
 whitenoise==6.11.0
 widgetsnbextension==4.0.3
 xhtml2pdf==0.2.17
+
+django-redis==5.4.0
+

@@ -1,7 +1,6 @@
 import os
 import django
 import sys
-import uuid as uuid_lib
 
 # Add the project root to the path
 sys.path.append(os.getcwd())
@@ -9,225 +8,156 @@ sys.path.append(os.getcwd())
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
 django.setup()
 
-from django.conf import settings
-from django.db import connections, transaction
+from django_tenants.utils import schema_context, tenant_context
 from django.contrib.auth import get_user_model
 from core.models.tenant import Tenant
-from core.middleware.tenant import _thread_locals
-from django.core.management import call_command
 
 User = get_user_model()
 
-def setup_test_accounts():
-    print("🚀 Starting Test Accounts Setup...")
-
-    # 1. Ensure a Tenant exists in the DEFAULT database
-    tenant, created = Tenant.objects.get_or_create(subdomain='demo')
-    tenant.name = 'Demo School'
-    tenant.db_name = 'school_demo.sqlite3'
-    tenant.db_alias = 'demo_school'
-    tenant.domain_url = 'localhost' # Allow local testing
-    tenant.save()
-    
-    if created:
-        print(f"✅ Created Tenant record: {tenant.name}")
-    else:
-        print(f"✅ Updated existing Tenant record: {tenant.name}")
-
-    # 2. Add the tenant database to Django's connections dynamically
-    if tenant.db_alias not in settings.DATABASES:
-        new_db_config = settings.DATABASES['default'].copy()
-        new_db_config['NAME'] = settings.BASE_DIR / tenant.db_name
-        settings.DATABASES[tenant.db_alias] = new_db_config
-        connections.databases[tenant.db_alias] = new_db_config
-        print(f"✅ Registered dynamic database: {tenant.db_alias} -> {tenant.db_name}")
-
-    # 3. Run migrations on the tenant database
-    print(f"⏳ Running migrations on {tenant.db_alias}...")
-    call_command('migrate', database=tenant.db_alias, interactive=False)
-    print(f"✅ Migrations complete for {tenant.db_alias}")
-
-    # 4. Set thread context to use the tenant database
-    _thread_locals.tenant = tenant
-    _thread_locals.db_alias = tenant.db_alias
-    print(f"🔗 Set thread context to {tenant.db_alias}")
-
-    # Re-import academic models AFTER setting context if needed
-    from academic.models import Student, Teacher, AcademicClass, Section
-
-    # 5. Helper to create user
-    def create_account(username, email, password, role, first_name='', last_name='', is_superuser=False):
-        user, created = User.objects.using('default').get_or_create(
-            username=username,
-            defaults={
-                'email': email,
-                'first_name': first_name,
-                'last_name': last_name,
-                'role': role,
-                'tenant': tenant,
-                'is_staff': is_superuser,
-                'is_superuser': is_superuser
-            }
-        )
-        if not created:
-            user.email = email
-            user.first_name = first_name
-            user.last_name = last_name
-        user.set_password(password)
-        user.save(using='default')
-        
-        # Ensure it exists in tenant DB 
-        if tenant.db_alias != 'default':
-            # Check if user exists in tenant DB
-            existing_tenant_user = User.objects.using(tenant.db_alias).filter(username=username).first()
-            
-            if existing_tenant_user:
-                # If IDs mismatch, delete and recreate
-                if existing_tenant_user.user_id != user.user_id:
-                    print(f"⚠️ User ID mismatch for {username}. Recreating in tenant DB...")
-                    existing_tenant_user.delete(using=tenant.db_alias)
-                    existing_tenant_user = None
-            
-            if not existing_tenant_user:
-                user_tenant = User(
-                    user_id=user.user_id, # Force same UUID
-                    username=username,
-                    email=email,
-                    first_name=first_name,
-                    last_name=last_name,
-                    role=role,
-                    tenant=tenant,
-                    is_staff=is_superuser,
-                    is_superuser=is_superuser
-                )
-                user_tenant.set_password(password)
-                user_tenant.save(using=tenant.db_alias)
-            else:
-                # Update existing
-                existing_tenant_user.email = email
-                existing_tenant_user.first_name = first_name
-                existing_tenant_user.last_name = last_name
-                existing_tenant_user.role = role
-                existing_tenant_user.is_staff = is_superuser
-                existing_tenant_user.is_superuser = is_superuser
-                existing_tenant_user.set_password(password)
-                existing_tenant_user.save(using=tenant.db_alias)
-
-        status = "Created" if created else "Updated"
-        print(f"✅ {status} {role.capitalize()}: {username} / {password}")
-        return user
-
-    # SaaS Admin (Superuser)
-    saas_admin = create_account('saas_admin', 'saas@demo.com', 'saas123', 'saas_admin', 'SaaS', 'Admin', is_superuser=True)
-
-    # School Admin (Admin role)
-    school_admin = create_account('school_admin', 'admin@demo.com', 'admin123', 'admin', 'School', 'Administrator')
-
-    # Within the tenant database, create academic entities
-    academic_class, _ = AcademicClass.objects.using(tenant.db_alias).get_or_create(
-        name='Grade 10',
-        defaults={'order': 10}
-    )
-    section, _ = Section.objects.using(tenant.db_alias).get_or_create(
-        name='A',
-        academic_class=academic_class,
-        defaults={'capacity': 40}
-    )
-    print(f"✅ Setup Academic Class: {academic_class.name}")
-
-    # Teacher
-    teacher_user = create_account('teacher_test', 'teacher@demo.com', 'teacher123', 'teacher', 'Test', 'Teacher')
-    teacher_profile, created = Teacher.objects.using(tenant.db_alias).get_or_create(user=teacher_user)
-    if created:
-        teacher_profile.designation = 'subject_teacher'
-        teacher_profile.save(using=tenant.db_alias)
-        print(f"   - Created Teacher Profile")
-
-    # Subjects
-    from academic.models import Subject, Chapter
-    
-    physics, _ = Subject.objects.using(tenant.db_alias).get_or_create(
-        name='Physics',
-        academic_class=academic_class,
-        defaults={'credits': 4.0, 'teacher': teacher_profile}
-    )
-    if not _: # Update if exists
-        physics.teacher = teacher_profile
-        physics.save(using=tenant.db_alias)
-
-    maths, _ = Subject.objects.using(tenant.db_alias).get_or_create(
-        name='Mathematics',
-        academic_class=academic_class,
-        defaults={'credits': 5.0, 'teacher': teacher_profile}
-    )
-    if not _:
-        maths.teacher = teacher_profile
-        maths.save(using=tenant.db_alias)
-    
-    print(f"✅ Setup Subjects: Physics, Mathematics (Assigned to {teacher_user.username})")
-
-    # Chapters
-    ch1, _ = Chapter.objects.using(tenant.db_alias).get_or_create(
-        subject=physics,
-        title='Mechanics: Motion in One Dimension',
-        defaults={'order': 1}
-    )
-    ch2, _ = Chapter.objects.using(tenant.db_alias).get_or_create(
-        subject=physics,
-        title='Dynamics: Newton\'s Laws',
-        defaults={'order': 2}
-    )
-    print(f"✅ Setup Chapters for Physics")
-
-    # Associate teacher with classes (ManyToMany)
-    teacher_profile.assigned_classes.add(academic_class)
-    print(f"✅ Assigned Teacher to Class: {academic_class.name}")
-
-    # Student
-    student_user = create_account('student_test', 'student@demo.com', 'student123', 'student', 'Test', 'Student')
-    student_profile, created = Student.objects.using(tenant.db_alias).get_or_create(
-        user=student_user,
+def create_account(username, email, password, role, first_name='', last_name='', is_superuser=False, tenant=None):
+    user, created = User.objects.get_or_create(
+        username=username,
         defaults={
-            'academic_class': academic_class,
-            'section': section,
-            'learning_style': 'visual',
-            'daily_study_goal': 60,
-            'ai_explanation_level': 'normal',
-            'current_streak': 7,
-            'focus_score': 85
+            'email': email,
+            'first_name': first_name,
+            'last_name': last_name,
+            'role': role,
+            'tenant': tenant,
+            'is_staff': is_superuser,
+            'is_superuser': is_superuser
         }
     )
-    if created:
-        print(f"   - Created Student Profile (Grade 10-A)")
-    else:
-        # Update if exists
-        student_profile.academic_class = academic_class
-        student_profile.section = section
-        student_profile.save(using=tenant.db_alias)
-        print(f"   - Updated Student Profile")
+    if not created:
+        user.email = email
+        user.first_name = first_name
+        user.last_name = last_name
+        user.role = role
+        user.is_staff = is_superuser
+        user.is_superuser = is_superuser
+        
+    user.set_password(password)
+    user.save()
+    status = "Created" if created else "Updated"
+    print(f"✅ {status} {role.capitalize()}: {username} / {password}")
+    return user
 
-    # Parent
-    from academic.models import Parent
-    parent_user = create_account('parent_test', 'parent@demo.com', 'parent123', 'parent', 'Test', 'Parent')
-    parent_profile, created = Parent.objects.using(tenant.db_alias).get_or_create(
-        user=parent_user,
-        defaults={}
-    )
-    # Link parent to student
-    parent_profile.students.add(student_profile)
-    if created:
-        print(f"✅ Created Parent Profile (linked to {student_profile.user.first_name})")
-    else:
-        print(f"✅ Updated Parent Profile")
+def setup_test_accounts():
+    print("🚀 Starting Test Accounts Setup for django-tenants Architecture...")
+
+    # SaaS Admin (created in public schema)
+    with schema_context('public'):
+        print("--- Public Schema Context ---")
+        saas_admin = create_account('saas_admin', 'saas@demo.com', 'saas123', 'saas_admin', 'SaaS', 'Admin', is_superuser=True)
+
+    # 1. Fetch Demo Tenant
+    tenant = Tenant.objects.filter(schema_name='demo_school').first()
+    if not tenant:
+        print("❌ Cannot find 'demo_school' tenant. Run python setup_tenant_db.py first!")
+        return
+        
+    print(f"✅ Found Tenant record: {tenant.name} (Schema: {tenant.schema_name})")
+
+    # 2. Automatically scope all queries inside the 'with tenant_context' block to the target school's schema
+    with tenant_context(tenant):
+        print("\n--- Tenant Context Context: {tenant.name} ---")
+        from academic.models import Student, Teacher, AcademicClass, Section, Subject, Chapter, Parent
+
+        # School Admin (Admin role)
+        school_admin = create_account('school_admin', 'admin@demo.com', 'admin123', 'admin', 'School', 'Administrator', tenant=tenant)
+
+        # Academic Classes
+        academic_class, _ = AcademicClass.objects.get_or_create(
+            name='Grade 10',
+            defaults={'order': 10}
+        )
+        section, _ = Section.objects.get_or_create(
+            name='A',
+            academic_class=academic_class,
+            defaults={'capacity': 40}
+        )
+        print(f"✅ Setup Academic Class: {academic_class.name}")
+
+        # Teacher
+        teacher_user = create_account('teacher_test', 'teacher@demo.com', 'teacher123', 'teacher', 'Test', 'Teacher', tenant=tenant)
+        teacher_profile, created = Teacher.objects.get_or_create(user=teacher_user)
+        if created:
+            teacher_profile.designation = 'subject_teacher'
+            teacher_profile.save()
+            print(f"   - Created Teacher Profile")
+
+        # Subjects
+        physics, _ = Subject.objects.get_or_create(
+            name='Physics',
+            academic_class=academic_class,
+            defaults={'credits': 4.0, 'teacher': teacher_profile}
+        )
+        if not _: # Update if exists
+            physics.teacher = teacher_profile
+            physics.save()
+
+        maths, _ = Subject.objects.get_or_create(
+            name='Mathematics',
+            academic_class=academic_class,
+            defaults={'credits': 5.0, 'teacher': teacher_profile}
+        )
+        if not _:
+            maths.teacher = teacher_profile
+            maths.save()
+        
+        print(f"✅ Setup Subjects: Physics, Mathematics (Assigned to {teacher_user.username})")
+
+        # Chapters
+        ch1, _ = Chapter.objects.get_or_create(
+            subject=physics,
+            title='Mechanics: Motion in One Dimension',
+            defaults={'order': 1}
+        )
+        ch2, _ = Chapter.objects.get_or_create(
+            subject=physics,
+            title='Dynamics: Newton\'s Laws',
+            defaults={'order': 2}
+        )
+        print(f"✅ Setup Chapters for Physics")
+
+        # Associate teacher with classes (ManyToMany)
+        teacher_profile.assigned_classes.add(academic_class)
+        print(f"✅ Assigned Teacher to Class: {academic_class.name}")
+
+        # Student
+        student_user = create_account('student_test', 'student@demo.com', 'student123', 'student', 'Test', 'Student', tenant=tenant)
+        student_profile, created = Student.objects.get_or_create(
+            user=student_user,
+            defaults={
+                'academic_class': academic_class,
+                'section': section,
+                'learning_style': 'visual',
+                'daily_study_goal': 60,
+                'ai_explanation_level': 'normal',
+                'current_streak': 7,
+                'focus_score': 85
+            }
+        )
+        if created:
+            print(f"   - Created Student Profile (Grade 10-A)")
+        else:
+            student_profile.academic_class = academic_class
+            student_profile.section = section
+            student_profile.save()
+            print(f"   - Updated Student Profile")
+
+        # Parent
+        parent_user = create_account('parent_test', 'parent@demo.com', 'parent123', 'parent', 'Test', 'Parent', tenant=tenant)
+        parent_profile, created = Parent.objects.get_or_create(
+            user=parent_user,
+            defaults={}
+        )
+        parent_profile.students.add(student_profile)
+        if created:
+            print(f"✅ Created Parent Profile (linked to {student_profile.user.first_name})")
+        else:
+            print(f"✅ Updated Parent Profile")
 
     print("\n🎉 Test accounts setup complete!")
-    print("-" * 30)
-    print(f"SaaS Admin:   saas_admin / saas123")
-    print(f"School Admin: school_admin / admin123")
-    print(f"Teacher:      teacher_test / teacher123")
-    print(f"Student:      student_test / student123")
-    print(f"Parent:       parent_test / parent123")
-    print("-" * 30)
 
 if __name__ == '__main__':
     setup_test_accounts()

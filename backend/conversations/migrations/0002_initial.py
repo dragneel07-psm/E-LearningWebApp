@@ -9,18 +9,30 @@ class Migration(migrations.Migration):
     initial = True
 
     dependencies = [
-        ("ai_engine", "0001_initial"),
+        ("conversations", "0001_initial"),
         ("core", "0001_initial"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name="aiinteractionlog",
+            model_name="conversation",
             name="tenant",
             field=models.ForeignKey(
+                blank=True,
                 db_constraint=False,
+                null=True,
                 on_delete=django.db.models.deletion.CASCADE,
+                related_name="conversations",
                 to="core.tenant",
+            ),
+        ),
+        migrations.AddField(
+            model_name="conversationparticipant",
+            name="conversation",
+            field=models.ForeignKey(
+                on_delete=django.db.models.deletion.CASCADE,
+                related_name="participants",
+                to="conversations.conversation",
             ),
         ),
     ]

@@ -85,7 +85,7 @@ class FeeStructure(models.Model):
     name = models.CharField(max_length=100) # e.g., "Tuition Fee", "Exam Fee"
     amount = models.DecimalField(max_digits=10, decimal_places=2)
     # Optional link to class. If null, applies generally or manually assigned.
-    academic_class = models.ForeignKey('academic.AcademicClass', on_delete=models.SET_NULL, null=True, blank=True, related_name='fee_structures')
+    academic_class = models.ForeignKey('academic.AcademicClass', on_delete=models.SET_NULL, null=True, blank=True, related_name='fee_structures', db_constraint=False)
     frequency = models.CharField(max_length=20, choices=(
         ('monthly', 'Monthly'),
         ('one_time', 'One Time'),
@@ -104,8 +104,8 @@ class StudentFee(models.Model):
     """
     student_fee_id = models.UUIDField(primary_key=True, default=uuid_lib.uuid4, editable=False)
     tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE, related_name='student_fees', db_constraint=False)
-    student = models.ForeignKey('academic.Student', on_delete=models.CASCADE, related_name='fees')
-    fee_structure = models.ForeignKey(FeeStructure, on_delete=models.CASCADE, related_name='assigned_fees')
+    student = models.ForeignKey('academic.Student', on_delete=models.CASCADE, related_name='fees', db_constraint=False)
+    fee_structure = models.ForeignKey(FeeStructure, on_delete=models.CASCADE, related_name='assigned_fees', db_constraint=False)
     
     amount_due = models.DecimalField(max_digits=10, decimal_places=2)
     amount_paid = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
@@ -132,10 +132,10 @@ class Payment(models.Model):
     """
     payment_id = models.UUIDField(primary_key=True, default=uuid_lib.uuid4, editable=False)
     tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE, related_name='payments', db_constraint=False)
-    student = models.ForeignKey('academic.Student', on_delete=models.CASCADE, related_name='payments')
+    student = models.ForeignKey('academic.Student', on_delete=models.CASCADE, related_name='payments', db_constraint=False)
     # Optional link to specific fee if paying for one item. Often payments cover multiple fees.
     # For simplicity, we can link it, or just track balance. Let's link it optionaly.
-    student_fee = models.ForeignKey(StudentFee, on_delete=models.SET_NULL, null=True, blank=True, related_name='payments')
+    student_fee = models.ForeignKey(StudentFee, on_delete=models.SET_NULL, null=True, blank=True, related_name='payments', db_constraint=False)
     
     amount = models.DecimalField(max_digits=10, decimal_places=2)
     payment_date = models.DateTimeField(auto_now_add=True)
@@ -150,7 +150,7 @@ class Payment(models.Model):
     method = models.CharField(max_length=20, choices=METHOD_CHOICES, default='cash')
     transaction_id = models.CharField(max_length=100, blank=True, null=True)
     
-    recorded_by = models.ForeignKey('users.UserAccount', on_delete=models.SET_NULL, null=True, related_name='recorded_payments')
+    recorded_by = models.ForeignKey('users.UserAccount', on_delete=models.SET_NULL, null=True, related_name='recorded_payments', db_constraint=False)
     remarks = models.TextField(blank=True, null=True)
 
     def __str__(self):
@@ -180,7 +180,7 @@ class Expense(models.Model):
     date = models.DateField()
     description = models.TextField(blank=True, null=True)
     
-    recorded_by = models.ForeignKey('users.UserAccount', on_delete=models.SET_NULL, null=True, related_name='recorded_expenses')
+    recorded_by = models.ForeignKey('users.UserAccount', on_delete=models.SET_NULL, null=True, related_name='recorded_expenses', db_constraint=False)
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):

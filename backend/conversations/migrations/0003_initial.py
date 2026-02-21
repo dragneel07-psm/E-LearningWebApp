@@ -10,43 +10,40 @@ class Migration(migrations.Migration):
     initial = True
 
     dependencies = [
-        ("core", "0002_initial"),
-        ("notifications", "0001_initial"),
+        ("conversations", "0002_initial"),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
 
     operations = [
         migrations.AddField(
-            model_name="notification",
-            name="recipient",
+            model_name="conversationparticipant",
+            name="user",
             field=models.ForeignKey(
-                db_constraint=False,
                 on_delete=django.db.models.deletion.CASCADE,
-                related_name="notifications",
+                related_name="conversation_memberships",
                 to=settings.AUTH_USER_MODEL,
             ),
         ),
         migrations.AddField(
-            model_name="notification",
-            name="tenant",
+            model_name="message",
+            name="conversation",
             field=models.ForeignKey(
-                blank=True,
-                db_constraint=False,
-                null=True,
                 on_delete=django.db.models.deletion.CASCADE,
-                related_name="notifications",
-                to="core.tenant",
+                related_name="messages",
+                to="conversations.conversation",
             ),
         ),
         migrations.AddField(
-            model_name="notificationtemplate",
-            name="tenant",
+            model_name="message",
+            name="sender",
             field=models.ForeignKey(
-                blank=True,
-                null=True,
                 on_delete=django.db.models.deletion.CASCADE,
-                related_name="notification_templates",
-                to="core.tenant",
+                related_name="sent_messages",
+                to=settings.AUTH_USER_MODEL,
             ),
+        ),
+        migrations.AlterUniqueTogether(
+            name="conversationparticipant",
+            unique_together={("conversation", "user")},
         ),
     ]
