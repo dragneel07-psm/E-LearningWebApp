@@ -186,7 +186,7 @@ export interface Result {
     result_id: string;
     assessment: string;
     assessment_title?: string;
-    student: number;
+    student: string;
     student_name?: string;
     score: number;
     time_taken_minutes: number;
