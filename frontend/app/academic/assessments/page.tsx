@@ -1,4 +1,4 @@
-import AssessmentManager from './AssessmentManager';
+import AssessmentManager from '@/components/academic/AssessmentManager';
 
 export const metadata = {
     title: 'Assessment Manager | E-Learning Platform',
