@@ -15,20 +15,7 @@ def main():
             "available on your PYTHONPATH environment variable? Did you "
             "forget to activate a virtual environment?"
         ) from exc
-
-    try:
-        execute_from_command_line(sys.argv)
-    except Exception as e:
-        import sys
-        print(f"FATAL ERROR CAUGHT IN manage.py:", file=sys.stderr)
-        try:
-            from django.conf import settings
-            print(f"DATABASES IS: {settings.DATABASES['default']}", file=sys.stderr)
-        except Exception:
-            print("Could not dump settings", file=sys.stderr)
-        print(f"OS ENV DATABASE_URL: {os.environ.get('DATABASE_URL')}", file=sys.stderr)
-        print(f"OS ENV PGVARS: {[k for k in os.environ.keys() if 'PG' in k]}", file=sys.stderr)
-        raise e
+    execute_from_command_line(sys.argv)
 
 if __name__ == "__main__":
     main()
