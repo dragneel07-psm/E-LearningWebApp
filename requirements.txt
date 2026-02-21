@@ -1,3 +1,4 @@
+setuptools
 annotated-types==0.7.0
 anyio==3.6.2
 arabic-reshaper==3.0.0
