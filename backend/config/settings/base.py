@@ -136,7 +136,10 @@ DATABASES = {
         conn_max_age=600,
     )
 }
+
 if not DATABASES["default"].get("NAME"):
+    DATABASES["default"]["NAME"] = "elearning"
+if DATABASES["default"].get("NAME") == "":
     DATABASES["default"]["NAME"] = "elearning"
 
 import sys
