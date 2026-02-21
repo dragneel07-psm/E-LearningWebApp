@@ -59,7 +59,7 @@ export function FeeStructureDialog({ open, onOpenChange, onSave, editingStructur
                 name,
                 amount: parseFloat(amount),
                 frequency,
-                academic_class: targetClass || null,
+                academic_class: (targetClass === 'all' || !targetClass) ? null : parseInt(targetClass),
             });
         } finally {
             setIsSubmitting(false);
