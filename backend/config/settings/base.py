@@ -125,13 +125,19 @@ WSGI_APPLICATION = "config.wsgi.application"
 
 import dj_database_url
 
+DATABASE_URL = os.environ.get("DATABASE_URL")
+if not DATABASE_URL:
+    DATABASE_URL = f"postgres://{os.environ.get('DB_USER', 'postgres')}:{os.environ.get('DB_PASSWORD', '')}@{os.environ.get('DB_HOST', '127.0.0.1')}:{os.environ.get('DB_PORT', '5432')}/elearning"
+
 DATABASES = {
-    "default": dj_database_url.config(
-        default=os.environ.get("DATABASE_URL", f"postgres://{os.environ.get('DB_USER', 'postgres')}:{os.environ.get('DB_PASSWORD', '')}@{os.environ.get('DB_HOST', '127.0.0.1')}:{os.environ.get('DB_PORT', '5432')}/elearning"),
+    "default": dj_database_url.parse(
+        DATABASE_URL,
         engine='django_tenants.postgresql_backend',
         conn_max_age=600,
     )
 }
+if not DATABASES["default"].get("NAME"):
+    DATABASES["default"]["NAME"] = "elearning"
 
 
 # Password validation
