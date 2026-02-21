@@ -1,0 +1,8 @@
+[phases.setup]
+nixPkgs = ["...", "pkg-config", "cairo", "gcc"]
+
+[phases.install]
+cmds = ["python -m venv --copies /opt/venv && . /opt/venv/bin/activate && pip install setuptools && pip install -r requirements.txt"]
+
+[start]
+cmd = "cd backend && python manage.py migrate_schemas --shared && gunicorn config.wsgi --bind 0.0.0.0:$PORT"
