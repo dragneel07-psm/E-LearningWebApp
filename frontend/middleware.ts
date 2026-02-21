@@ -29,10 +29,14 @@ export async function middleware(request: NextRequest) {
     const token = request.cookies.get('access_token')?.value;
 
     // Allow access to public paths
-    if (PUBLIC_PATHS.some(path => pathname.startsWith(path))) {
-        return NextResponse.next({
-            request: { headers: requestHeaders }
-        });
+    if (pathname === '/' || PUBLIC_PATHS.some(path => pathname.startsWith(path))) {
+        // If logged in and at root, still perform the dashboard redirect logic below
+        // Otherwise continue
+        if (pathname !== '/' || !token) {
+            return NextResponse.next({
+                request: { headers: requestHeaders }
+            });
+        }
     }
 
     // Redirect to login if no token on protected routes
