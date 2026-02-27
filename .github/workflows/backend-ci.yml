@@ -258,5 +258,6 @@ jobs:
       with:
         status: ${{ job.status }}
         text: 'Backend deployed to production'
-        webhook_url: ${{ secrets.SLACK_WEBHOOK }}
+      env:
+        SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK }}
       if: always()
