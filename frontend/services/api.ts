@@ -20,10 +20,18 @@ api.interceptors.request.use((config) => {
             config.headers.Authorization = `Bearer ${token}`;
         }
 
-        // 2. Tenant Context
-        const tenant = getTenantFromSubdomain(window.location.hostname);
-        if (tenant) {
-            config.headers['x-tenant-id'] = tenant;
+        // 2. Tenant Context — skip if already explicitly set
+        if (!config.headers['x-tenant-id']) {
+            // Prefer the tenant cached at login time, fall back to subdomain detection
+            const cachedTenant = localStorage.getItem('tenant_id');
+            const subdomainTenant = getTenantFromSubdomain(window.location.hostname);
+            // Use cached if available AND not 'localhost' (which means no tenant was resolved)
+            const tenant = (cachedTenant && cachedTenant !== 'localhost')
+                ? cachedTenant
+                : (subdomainTenant !== 'localhost' ? subdomainTenant : null);
+            if (tenant) {
+                config.headers['x-tenant-id'] = tenant;
+            }
         }
     }
     return config;

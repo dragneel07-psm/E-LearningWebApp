@@ -95,7 +95,7 @@ export default function StudentDashboard() {
 
         } catch (e: any) {
             console.error(e);
-            if (e.message?.includes('404')) {
+            if (e.status === 404 || e.message?.includes('404') || e.message?.includes('No Student')) {
                 setError("Student profile not found. Are you logged in as a student?");
             } else {
                 setError("Failed to load dashboard data.");

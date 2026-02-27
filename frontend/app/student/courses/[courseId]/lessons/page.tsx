@@ -9,21 +9,30 @@ import {
     FileText, Video, Link as LinkIcon,
     ArrowLeft, CheckCircle2, Circle,
     PlayCircle, BookOpen, ChevronRight,
-    Clock
+    Clock, Download, HardDrive, Loader2
 } from 'lucide-react';
 import { academicAPI, Lesson, Subject, Chapter } from '@/lib/api';
 import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
+import {
+    isLessonDownloaded,
+    downloadLessonForOffline,
+    removeOfflineLesson,
+    useOffline
+} from '@/hooks/use-offline';
 
 export default function StudentCourseLessonsPage() {
     const params = useParams();
     const router = useRouter();
     const courseId = params.courseId as string;
+    const { isOnline } = useOffline();
 
     const [subject, setSubject] = useState<Subject | null>(null);
     const [chapters, setChapters] = useState<Chapter[]>([]);
     const [completedLessons, setCompletedLessons] = useState<Set<number>>(new Set());
     const [loading, setLoading] = useState(true);
+    const [downloadingIds, setDownloadingIds] = useState<Set<number>>(new Set());
+    const [downloadedIds, setDownloadedIds] = useState<Set<number>>(new Set());
 
     const loadData = useCallback(async () => {
         try {
@@ -37,14 +46,15 @@ export default function StudentCourseLessonsPage() {
 
             // Calculate completed lessons from the backend data
             const completed = new Set<number>();
+            const downloaded = new Set<number>();
             chaptersData.forEach(chapter => {
                 chapter.lessons?.forEach(lesson => {
-                    if (lesson.completed) {
-                        completed.add(lesson.id);
-                    }
+                    if (lesson.completed) completed.add(lesson.id);
+                    if (isLessonDownloaded(String(lesson.id))) downloaded.add(lesson.id);
                 });
             });
             setCompletedLessons(completed);
+            setDownloadedIds(downloaded);
         } catch (error) {
             console.error('Failed to load curriculum data:', error);
             toast.error('Failed to load course content');
@@ -61,6 +71,50 @@ export default function StudentCourseLessonsPage() {
     const progressPercentage = totalLessons > 0
         ? (completedLessons.size / totalLessons) * 100
         : 0;
+
+    const handleDownloadLesson = async (e: React.MouseEvent, lesson: Lesson) => {
+        e.stopPropagation();
+        if (!isOnline) {
+            toast.error('Connect to internet to download this lesson.');
+            return;
+        }
+        setDownloadingIds(prev => new Set(prev).add(lesson.id));
+        try {
+            await downloadLessonForOffline(
+                {
+                    id: String(lesson.id),
+                    title: lesson.title,
+                    subjectName: subject?.name || 'Unknown Subject',
+                    downloadedAt: new Date().toISOString(),
+                    sizeKB: lesson.duration_minutes ? lesson.duration_minutes * 50 : 200,
+                    content: lesson.content || '',
+                    videoUrl: lesson.video_url || '',
+                },
+                lesson.video_url ? [lesson.video_url] : [],
+            );
+            setDownloadedIds(prev => new Set(prev).add(lesson.id));
+            toast.success(`"${lesson.title}" saved for offline study!`);
+        } catch {
+            toast.error('Download failed. Please try again.');
+        } finally {
+            setDownloadingIds(prev => {
+                const next = new Set(prev);
+                next.delete(lesson.id);
+                return next;
+            });
+        }
+    };
+
+    const handleRemoveLesson = (e: React.MouseEvent, lesson: Lesson) => {
+        e.stopPropagation();
+        removeOfflineLesson(String(lesson.id));
+        setDownloadedIds(prev => {
+            const next = new Set(prev);
+            next.delete(lesson.id);
+            return next;
+        });
+        toast.info(`"${lesson.title}" removed from offline storage.`);
+    };
 
     if (loading) {
         return (
@@ -175,11 +229,44 @@ export default function StudentCourseLessonsPage() {
                                                             </h3>
                                                         </div>
 
-                                                        <div className="flex items-center gap-3">
+                                                        <div className="flex items-center gap-2">
                                                             {isCompleted && (
                                                                 <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100 border-none px-3 font-bold">
                                                                     COMPLETED
                                                                 </Badge>
+                                                            )}
+                                                            {/* Download for offline button */}
+                                                            {downloadedIds.has(lesson.id) ? (
+                                                                <Button
+                                                                    variant="ghost"
+                                                                    size="sm"
+                                                                    className="h-8 text-xs text-emerald-600 hover:text-red-600 hover:bg-red-50 gap-1.5 px-3"
+                                                                    onClick={(e) => handleRemoveLesson(e, lesson)}
+                                                                    title="Remove offline copy"
+                                                                >
+                                                                    <HardDrive className="h-3.5 w-3.5" />
+                                                                    <span className="hidden md:inline">Saved</span>
+                                                                </Button>
+                                                            ) : downloadingIds.has(lesson.id) ? (
+                                                                <Button
+                                                                    variant="ghost"
+                                                                    size="sm"
+                                                                    disabled
+                                                                    className="h-8 text-xs gap-1.5 px-3"
+                                                                >
+                                                                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                                                </Button>
+                                                            ) : (
+                                                                <Button
+                                                                    variant="ghost"
+                                                                    size="sm"
+                                                                    className="h-8 text-xs text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 gap-1.5 px-3"
+                                                                    onClick={(e) => handleDownloadLesson(e, lesson)}
+                                                                    title="Download for offline study"
+                                                                >
+                                                                    <Download className="h-3.5 w-3.5" />
+                                                                    <span className="hidden md:inline">Save</span>
+                                                                </Button>
                                                             )}
                                                             <Button
                                                                 variant="outline"

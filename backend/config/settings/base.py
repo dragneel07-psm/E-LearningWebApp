@@ -82,7 +82,7 @@ TENANT_DOMAIN_MODEL = "core.Domain"
 AUTH_USER_MODEL = 'users.UserAccount'
 
 MIDDLEWARE = [
-    "django_tenants.middleware.main.TenantMainMiddleware",
+    "core.middleware.TenantFromHeaderMiddleware",  # x-tenant-id header fallback
     "django.middleware.security.SecurityMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
     "corsheaders.middleware.CorsMiddleware",

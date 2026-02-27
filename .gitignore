@@ -150,3 +150,4 @@ Thumbs.db
 media/
 staticfiles/
 .pytest_cache/
+.venv*/

@@ -30,25 +30,36 @@ class GroupSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
+from rest_framework_simplejwt.tokens import RefreshToken as _RefreshToken
 
 class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        # SimpleJWT expects 'username' by default. If we want to support 'email' 
-        # as the field name from frontend, we can map it here.
-        if hasattr(self, 'initial_data') and 'email' in self.initial_data and 'username' not in self.initial_data:
-            self.initial_data['username'] = self.initial_data['email']
+    # Tell SimpleJWT to use 'email' as the login field
+    # (matches UserAccount.USERNAME_FIELD = 'email')
+    username_field = 'email'
 
     @classmethod
     def get_token(cls, user):
         token = super().get_token(user)
-
-        # Add custom claims
+        # Embed useful claims so the frontend can read role without a second API call
         token['role'] = user.role
-        token['username'] = user.username
-        # token['tenant_id'] = user.tenant.id if user.tenant else None
-
+        token['email'] = user.email
+        token['first_name'] = user.first_name
+        token['last_name'] = user.last_name
         return token
+
+    def validate(self, attrs):
+        data = super().validate(attrs)
+        # Attach the user profile to every login response
+        data['user'] = {
+            'user_id':    str(self.user.user_id),
+            'email':      self.user.email,
+            'first_name': self.user.first_name,
+            'last_name':  self.user.last_name,
+            'role':       self.user.role,
+        }
+        return data
+
+
 
 
 # User Registration Serializer
@@ -114,22 +125,35 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
         }
     
     def create(self, validated_data):
-        """Create user with hashed password"""
+        """Create user with hashed password and corresponding profile"""
         validated_data.pop('password_confirm')
         
         # Set default role if not provided
+        role = validated_data.get('role', 'student')
         if 'role' not in validated_data:
-            validated_data['role'] = 'student'
+            validated_data['role'] = role
         
-        user = UserAccount.objects.create_user(
-            email=validated_data['email'],
-            username=validated_data.get('username', validated_data['email'].split('@')[0]),
-            password=validated_data['password'],
-            first_name=validated_data.get('first_name', ''),
-            last_name=validated_data.get('last_name', ''),
-            role=validated_data.get('role', 'student'),
-        )
-        
+        from django.db import transaction
+        with transaction.atomic():
+            user = UserAccount.objects.create_user(
+                email=validated_data['email'],
+                username=validated_data.get('username', validated_data['email'].split('@')[0]),
+                password=validated_data['password'],
+                first_name=validated_data.get('first_name', ''),
+                last_name=validated_data.get('last_name', ''),
+                role=role,
+            )
+            
+            if role == 'student':
+                from academic.models import Student
+                Student.objects.create(user=user)
+            elif role == 'teacher':
+                from academic.models import Teacher
+                Teacher.objects.create(user=user)
+            elif role == 'parent':
+                from academic.models import Parent
+                Parent.objects.create(user=user)
+                
         return user
 
 # Password Reset Serializers

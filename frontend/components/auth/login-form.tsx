@@ -9,7 +9,7 @@ import { authService } from '@/services/auth';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Loader2, Lock, Mail, ArrowRight, Sparkles } from 'lucide-react';
+import { Loader2, Lock, Mail, ArrowRight, Sparkles, Building2 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { toast } from 'sonner';
 import Link from 'next/link';
@@ -17,6 +17,7 @@ import Link from 'next/link';
 const loginSchema = z.object({
     email: z.string().email("Please enter a valid email address"),
     password: z.string().min(1, "Password is required"),
+    school_code: z.string().min(1, "School code is required"),
 });
 
 type LoginFormData = z.infer<typeof loginSchema>;
@@ -40,30 +41,33 @@ export function LoginForm({ role, title, subtitle }: LoginFormProps) {
     const onSubmit = async (data: LoginFormData) => {
         setIsLoading(true);
         try {
-            await authService.login(data);
+            const result = await authService.login(data);
 
             toast.success('Welcome back! Sign in successful.');
 
             // Small delay to ensure cookies are set
             await new Promise(resolve => setTimeout(resolve, 100));
 
-            // Determine redirect path
+            // Redirect based on role returned from API (most reliable)
+            const userRole = result.user?.role || role;
             let targetPath = redirectPath;
             if (!targetPath) {
-                if (role === 'saas_admin') {
-                    targetPath = '/saas';
-                } else if (role) {
-                    targetPath = `/${role}`;
-                } else {
-                    targetPath = '/student';
+                switch (userRole) {
+                    case 'saas_admin': targetPath = '/saas'; break;
+                    case 'admin': targetPath = '/admin'; break;
+                    case 'teacher': targetPath = '/teacher'; break;
+                    case 'parent': targetPath = '/parent'; break;
+                    default: targetPath = '/student'; break;
                 }
             }
 
-            // Use window.location.href for hard navigation to ensure cookies are sent
             window.location.href = targetPath;
         } catch (err: any) {
             console.error("Login Error:", err);
-            toast.error(err.response?.data?.detail || 'Invalid email or password. Please try again.');
+            const msg = err.response?.data?.detail
+                || err.response?.data?.non_field_errors?.[0]
+                || 'Invalid credentials. Check your email, password, and school code.';
+            toast.error(msg);
             setIsLoading(false);
         }
     };
@@ -161,6 +165,26 @@ export function LoginForm({ role, title, subtitle }: LoginFormProps) {
                                     <p className="text-red-400 text-xs ml-1">{errors.password.message}</p>
                                 )}
                             </div>
+                        </div>
+                        {/* School Code */}
+                        <div className="space-y-2">
+                            <Label htmlFor="school_code" className="text-slate-300 text-xs uppercase tracking-wider font-semibold ml-1">School Code</Label>
+                            <div className="relative group">
+                                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                                    <Building2 className="h-5 w-5 text-slate-500 group-focus-within:text-white transition-colors duration-300" />
+                                </div>
+                                <Input
+                                    id="school_code"
+                                    type="text"
+                                    placeholder="demo"
+                                    autoComplete="off"
+                                    className={`pl-11 h-12 bg-white/5 border-white/10 text-white placeholder:text-slate-600 focus:bg-white/10 focus:border-white/20 focus:ring-4 focus:ring-white/5 transition-all duration-300 rounded-xl ${errors.school_code ? 'border-red-500/50 focus:border-red-500/50' : ''}`}
+                                    {...register('school_code')}
+                                />
+                            </div>
+                            {errors.school_code && (
+                                <p className="text-red-400 text-xs ml-1">{errors.school_code.message}</p>
+                            )}
                         </div>
 
                         <Button

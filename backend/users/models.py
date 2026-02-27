@@ -22,6 +22,10 @@ class UserAccount(AbstractUser):
     bio = models.TextField(blank=True, null=True)
     date_of_birth = models.DateField(blank=True, null=True)
 
+    # Two-Factor Authentication
+    is_2fa_enabled = models.BooleanField(default=False)
+    two_factor_secret = models.CharField(max_length=255, blank=True, null=True)
+
     # Use email as the login field
     email = models.EmailField(unique=True)
     USERNAME_FIELD = 'email'

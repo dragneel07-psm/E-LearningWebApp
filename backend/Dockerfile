@@ -1,39 +1,50 @@
 # Stage 1: Build dependencies
-FROM python:3.11-slim as builder
+FROM python:3.13-slim AS builder
 
 WORKDIR /app
 
-ENV PYTHONDONTWRITEBYTECODE 1
-ENV PYTHONUNBUFFERED 1
+# Build-time environment
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+ENV PIP_NO_CACHE_DIR=1
+ENV PIP_DISABLE_PIP_VERSION_CHECK=1
 
-# Install system dependencies
-RUN apt-get update && apt-get install -y \
+# Install system build dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     libpq-dev \
     libcairo2-dev \
     pkg-config \
     python3-dev \
+    libglib2.0-dev \
     && rm -rf /var/lib/apt/lists/*
+
+# Upgrade pip & build tools
+RUN pip install --upgrade pip setuptools wheel
 
 # Install python dependencies as wheels
 COPY requirements.txt .
-COPY requirements/ ./requirements/
-RUN pip install --upgrade pip
 RUN pip wheel --no-cache-dir --no-deps --wheel-dir /app/wheels -r requirements.txt
 
+# ─────────────────────────────────────────────────────────────
 # Stage 2: Run application
-FROM python:3.11-slim
+FROM python:3.13-slim
 
 WORKDIR /app
 
-# Install runtime dependencies
-RUN apt-get update && apt-get install -y \
-    libpq-dev \
+# Runtime environment
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+ENV DJANGO_SETTINGS_MODULE=config.settings.production
+
+# Install only runtime system dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libpq5 \
     libcairo2 \
-    libgirepository-1.0-1 \
+    libglib2.0-0 \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy wheels from builder and install
+# Copy pre-built wheels from builder stage and install
 COPY --from=builder /app/wheels /wheels
 COPY --from=builder /app/requirements.txt .
 RUN pip install --no-cache /wheels/*
@@ -41,18 +52,33 @@ RUN pip install --no-cache /wheels/*
 # Copy project files
 COPY . .
 
-# Create a non-root user for security
-RUN addgroup --system django && adduser --system --group django
+# Collect static files
+RUN python manage.py collectstatic --noinput || true
+
+# Create non-root user for security
+RUN addgroup --system django && adduser --system --ingroup django django
 RUN chown -R django:django /app
 
-# Use the non-root user
+# Use non-root user
 USER django
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/health/')" || exit 1
 
 # Expose port
 EXPOSE 8000
 
-# Set environment variables
-ENV DJANGO_SETTINGS_MODULE=config.settings.production
-
-# Run gunicorn
-CMD ["gunicorn", "--bind", "0.0.0.0:8000", "config.wsgi:application"]
+# Run gunicorn with optimal settings for Python 3.13
+CMD ["gunicorn", \
+    "--bind", "0.0.0.0:8000", \
+    "--workers", "4", \
+    "--worker-class", "sync", \
+    "--timeout", "120", \
+    "--keep-alive", "5", \
+    "--max-requests", "1000", \
+    "--max-requests-jitter", "100", \
+    "--log-level", "info", \
+    "--access-logfile", "-", \
+    "--error-logfile", "-", \
+    "config.wsgi:application"]

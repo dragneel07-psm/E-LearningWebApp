@@ -9,7 +9,7 @@ import {
     LayoutDashboard, BookOpen, FileText, Calendar,
     User as UserIcon, LogOut, Menu, X, MessageSquare,
     GraduationCap, Clock, FileBarChart, CreditCard,
-    BrainCircuit, Trophy, Award
+    BrainCircuit, Trophy, Award, WifiOff, Download
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -19,12 +19,16 @@ import { NotificationBell } from '@/components/notification-bell';
 import { LanguageSelector } from '@/components/LanguageSelector';
 import { GamificationProvider } from '@/components/providers/gamification-provider';
 import { HeaderStats } from '@/components/gamification/header-stats';
+import { ConnectionIndicator } from '@/components/offline-banner';
+import { useOffline } from '@/hooks/use-offline';
+import { PWAInstallPrompt } from '@/components/pwa-install-prompt';
 
 export default function StudentLayout({ children }: { children: React.ReactNode }) {
     const pathname = usePathname();
     const router = useRouter();
     const [sidebarOpen, setSidebarOpen] = useState(false);
     const [user, setUser] = useState<User | null>(null);
+    const { isOnline } = useOffline();
 
     const loadUser = useCallback(async () => {
         try {
@@ -51,9 +55,10 @@ export default function StudentLayout({ children }: { children: React.ReactNode 
         { label: 'Fees & Payments', href: '/student/fees', icon: CreditCard },
         { label: 'Timetable', href: '/student/timetable', icon: Clock },
         { label: 'Leaderboard', href: '/student/leaderboard', icon: Trophy },
-        { label: 'Notices', href: '/student/notices', icon: FileBarChart }, // Using FileBarChart as closest generic for notices/reports
+        { label: 'Notices', href: '/student/notices', icon: FileBarChart },
         { label: 'Messages', href: '/student/messages', icon: MessageSquare },
         { label: 'Profile', href: '/student/profile', icon: UserIcon },
+        { label: 'Offline Content', href: '/student/offline', icon: Download, offline: true },
     ];
 
     const handleLogout = () => {
@@ -63,6 +68,7 @@ export default function StudentLayout({ children }: { children: React.ReactNode 
 
     return (
         <GamificationProvider>
+            <PWAInstallPrompt />
             <div className="min-h-screen bg-slate-50 flex">
                 {/* Mobile Sidebar Overlay */}
                 {sidebarOpen && (
@@ -101,6 +107,7 @@ export default function StudentLayout({ children }: { children: React.ReactNode 
                         <nav className="flex-1 overflow-y-auto py-6 px-4 space-y-1">
                             {navItems.map((item) => {
                                 const isActive = pathname === item.href;
+                                const isOfflineItem = 'offline' in item && item.offline;
                                 return (
                                     <Link
                                         key={item.href}
@@ -111,11 +118,21 @@ export default function StudentLayout({ children }: { children: React.ReactNode 
                                             flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200
                                             ${isActive
                                                 ? 'bg-indigo-50 text-indigo-700 font-medium'
-                                                : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                                                : isOfflineItem && !isOnline
+                                                    ? 'text-emerald-700 bg-emerald-50 hover:bg-emerald-100'
+                                                    : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
                                             }
                                         `}>
-                                            <item.icon className={`h-5 w-5 ${isActive ? 'text-indigo-600' : 'text-slate-400'}`} />
+                                            <item.icon className={`h-5 w-5 ${isActive ? 'text-indigo-600'
+                                                : isOfflineItem && !isOnline ? 'text-emerald-600'
+                                                    : 'text-slate-400'
+                                                }`} />
                                             {item.label}
+                                            {isOfflineItem && !isOnline && (
+                                                <span className="ml-auto text-[10px] bg-emerald-600 text-white px-1.5 py-0.5 rounded-full font-bold">
+                                                    OFFLINE
+                                                </span>
+                                            )}
                                         </div>
                                     </Link>
                                 );
@@ -155,12 +172,12 @@ export default function StudentLayout({ children }: { children: React.ReactNode 
                 {/* Main Content */}
                 <div className="flex-1 flex flex-col min-w-0">
                     {/* Top Mobile Header */}
-                    <header className="lg:hidden h-16 bg-white border-b border-slate-200 flex items-center justify-between px-4">
+                    <header className="lg:hidden h-16 bg-white border-b border-slate-200 flex items-center justify-between px-4 gap-2">
                         <Button variant="ghost" size="icon" onClick={() => setSidebarOpen(true)}>
                             <Menu className="h-6 w-6 text-slate-600" />
                         </Button>
-                        <span className="font-bold text-slate-900">Student Portal</span>
-                        <div className="w-10" /> {/* Spacer for centering */}
+                        <span className="font-bold text-slate-900 flex-1 text-center">Student Portal</span>
+                        <ConnectionIndicator />
                     </header>
 
                     <main className="flex-1 p-4 lg:p-8 overflow-y-auto">
@@ -171,15 +188,30 @@ export default function StudentLayout({ children }: { children: React.ReactNode 
                                     <h1 className="text-2xl font-bold text-slate-900">
                                         Good Morning, {user?.first_name || 'Student'}! 👋
                                     </h1>
-                                    <p className="text-slate-500 mt-1">Here&apos;s what&apos;s happening in your classes today.</p>
+                                    <p className="text-slate-500 mt-1">
+                                        {isOnline
+                                            ? "Here's what's happening in your classes today."
+                                            : '📴 You\'re offline — showing downloaded content.'}
+                                    </p>
                                 </div>
-                                <div className="flex items-center gap-3">
+                                <div className="flex items-center gap-2 flex-wrap justify-end">
+                                    <ConnectionIndicator />
                                     <HeaderStats />
                                     <LanguageSelector />
                                     <NotificationBell />
-                                    <Button className="bg-indigo-600 hover:bg-indigo-700 text-white rounded-full px-6 shadow-md shadow-indigo-200">
-                                        Join Online Class
-                                    </Button>
+                                    {isOnline && (
+                                        <Button className="bg-indigo-600 hover:bg-indigo-700 text-white rounded-full px-6 shadow-md shadow-indigo-200">
+                                            Join Online Class
+                                        </Button>
+                                    )}
+                                    {!isOnline && (
+                                        <Link href="/student/offline">
+                                            <Button className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-full px-4 shadow-md">
+                                                <WifiOff className="h-4 w-4 mr-2" />
+                                                Offline Content
+                                            </Button>
+                                        </Link>
+                                    )}
                                 </div>
                             </div>
 

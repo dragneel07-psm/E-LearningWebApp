@@ -1,6 +1,7 @@
 export interface LoginCredentials {
     email: string;
     password: string;
+    school_code?: string; // maps to x-tenant-id header
 }
 
 export interface RegisterData {
@@ -36,6 +37,13 @@ export interface RegisterResponse {
 export interface LoginResponse {
     access: string;
     refresh: string;
+    user?: {
+        user_id: string;
+        email: string;
+        first_name: string;
+        last_name: string;
+        role: string;
+    };
 }
 
 export interface ChangePasswordData {
