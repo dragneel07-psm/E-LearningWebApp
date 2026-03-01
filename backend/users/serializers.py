@@ -142,7 +142,7 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
         with transaction.atomic():
             user = UserAccount.objects.create_user(
                 email=validated_data['email'],
-                username=validated_data.get('username', validated_data['email'].split('@')[0]),
+                username=validated_data.get('username', validated_data['email']),
                 password=validated_data['password'],
                 first_name=validated_data.get('first_name', ''),
                 last_name=validated_data.get('last_name', ''),
