@@ -1,6 +1,5 @@
 from django.core.management.base import BaseCommand
 from core.models.tenant import Tenant, Domain
-import os
 
 class Command(BaseCommand):
     help = 'Initializes the production public tenant and domain'
@@ -23,19 +22,22 @@ class Command(BaseCommand):
         else:
             self.stdout.write(self.style.NOTICE('ℹ️ Public tenant already exists.'))
 
-        # 2. Ensure Domain exists
-        # Use the Railway URL from logs or fallback to a default
-        prod_domain = 'e-learningwebapp-production-1112.up.railway.app'
+        # 2. Ensure Domains exist
+        # Both production and localhost for robustness
+        domains = [
+            'e-learningwebapp-production-1112.up.railway.app',
+            'localhost',
+            '127.0.0.1'
+        ]
         
-        domain, d_created = Domain.objects.get_or_create(
-            tenant=tenant,
-            domain=prod_domain,
-            defaults={'is_primary': True}
-        )
-
-        if d_created:
-            self.stdout.write(self.style.SUCCESS(f'✅ Created domain: {prod_domain}'))
-        else:
-            self.stdout.write(self.style.NOTICE(f'ℹ️ Domain {prod_domain} already exists.'))
+        for d in domains:
+            domain, d_created = Domain.objects.get_or_create(
+                domain=d,
+                defaults={'tenant': tenant, 'is_primary': (d == domains[0])}
+            )
+            if d_created:
+                self.stdout.write(self.style.SUCCESS(f'✅ Created domain: {d}'))
+            else:
+                self.stdout.write(self.style.NOTICE(f'ℹ️ Domain {d} already exists.'))
         
         self.stdout.write(self.style.SUCCESS('🚀 Production initialization complete.'))

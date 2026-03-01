@@ -48,6 +48,18 @@ class TenantFromHeaderMiddleware(TenantMainMiddleware):
 
             if tenant_id:
                 try:
+                    # Robust fallback for 'public' schema
+                    if tenant_id == 'public':
+                        from core.models.tenant import Tenant
+                        tenant = Tenant.objects.filter(schema_name='public').first()
+                        if tenant:
+                            # Set a fake domain for compatibility with parent logic
+                            tenant.domain_url = hostname
+                            request.tenant = tenant
+                            connection.set_tenant(request.tenant)
+                            self.setup_url_routing(request)
+                            return None
+                    
                     domain = domain_model.objects.select_related('tenant').filter(
                         tenant__schema_name=tenant_id
                     ).first()
