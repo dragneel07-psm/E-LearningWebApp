@@ -85,10 +85,10 @@ TENANT_DOMAIN_MODEL = "core.Domain"
 AUTH_USER_MODEL = 'users.UserAccount'
 
 MIDDLEWARE = [
-    "core.middleware.TenantFromHeaderMiddleware",  # x-tenant-id header fallback
+    "corsheaders.middleware.CorsMiddleware",  # Must be as high as possible
     "django.middleware.security.SecurityMiddleware",
+    "core.middleware.TenantFromHeaderMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
-    "corsheaders.middleware.CorsMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -204,8 +204,17 @@ CORS_ALLOWED_ORIGINS = [
 if os.environ.get("FRONTEND_URL"):
     CORS_ALLOWED_ORIGINS.append(os.environ.get("FRONTEND_URL").rstrip('/'))
 
+# Allow any Vercel preview deployment
+CORS_ALLOWED_ORIGIN_REGEXES = [
+    r"^https:\/\/.*\.vercel\.app$",
+]
+
 CORS_ALLOW_ALL_ORIGINS = os.environ.get("CORS_ALLOW_ALL_ORIGINS", "False").lower() == "true"
 CORS_ALLOW_CREDENTIALS = True
+
+CSRF_TRUSTED_ORIGINS = list(CORS_ALLOWED_ORIGINS)
+# regex based trusted origins aren't directly supported in CSRF_TRUSTED_ORIGINS list, 
+# so we add the common vercel pattern if needed, or rely on specific env var.
 
 from corsheaders.defaults import default_headers
 CORS_ALLOW_HEADERS = list(default_headers) + [
