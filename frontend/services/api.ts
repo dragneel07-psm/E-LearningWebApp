@@ -2,7 +2,10 @@ import axios from 'axios';
 import { getAccessToken } from '@/lib/auth';
 import { getTenantFromSubdomain } from '@/lib/tenant';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+const base_url = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+const API_URL = (base_url.startsWith('http://') || base_url.startsWith('https://'))
+    ? base_url
+    : `https://${base_url}`;
 
 const api = axios.create({
     baseURL: API_URL,
