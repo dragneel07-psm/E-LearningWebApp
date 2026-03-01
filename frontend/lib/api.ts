@@ -8,9 +8,20 @@ import { removeTokens } from "./auth";
 // API Base Configuration
 // API Base Configuration
 const getApiBaseUrl = () => {
-    // Always point to localhost:8000 for development to avoid networking issues with subdomains
-    // The x-tenant-id header handles the multi-tenancy context
-    return process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api';
+    let url = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api';
+
+    // Ensure protocol is present
+    if (!url.startsWith('http://') && !url.startsWith('https://')) {
+        url = `https://${url}`;
+    }
+
+    // Ensure it ends with /api (without double slashes)
+    url = url.replace(/\/$/, ''); // Remove trailing slash if any
+    if (!url.endsWith('/api')) {
+        url = `${url}/api`;
+    }
+
+    return url;
 };
 
 const API_BASE_URL = getApiBaseUrl();

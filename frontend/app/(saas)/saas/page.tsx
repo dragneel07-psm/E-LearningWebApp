@@ -62,7 +62,7 @@ export default function SaasDashboardPage() {
         }
     };
 
-    if (isLoading) {
+    if (isLoading || !data) {
         return (
             <div className="min-h-screen bg-[#0a0a0c] flex flex-col items-center justify-center space-y-4">
                 <Loader2 className="w-12 h-12 animate-spin text-indigo-500" />

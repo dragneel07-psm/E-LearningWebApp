@@ -48,7 +48,7 @@ export function RegisterForm() {
             let msg = 'Registration failed. Please try again.';
             if (err.response?.data) {
                 const d = err.response.data;
-                if (typeof d === 'object') {
+                if (typeof d === 'object' && d !== null) {
                     // Collect all values from the object
                     const allErrors = Object.values(d).flat();
                     if (allErrors.length > 0 && typeof allErrors[0] === 'string') {
