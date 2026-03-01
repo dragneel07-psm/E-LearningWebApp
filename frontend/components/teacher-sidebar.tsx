@@ -34,8 +34,29 @@ const navigation = [
     { name: 'Profile', href: '/teacher/profile', icon: User },
 ];
 
+import { useState, useEffect } from 'react';
+import { usersAPI, User as UserType } from '@/lib/api';
+
 export function TeacherSidebar() {
     const pathname = usePathname();
+    const [user, setUser] = useState<UserType | null>(null);
+
+    useEffect(() => {
+        usersAPI.getMe().then(setUser).catch(console.error);
+    }, []);
+
+    const filteredNavigation = [...navigation];
+
+    // Check for advanced reports feature
+    if (user?.tenant_features?.teacher_reports !== false) {
+        // Insert Analytics before Library
+        const libraryIndex = filteredNavigation.findIndex(n => n.name === 'Library');
+        if (libraryIndex !== -1) {
+            filteredNavigation.splice(libraryIndex, 0, { name: 'Analytics', href: '/teacher/analytics', icon: LayoutDashboard });
+        } else {
+            filteredNavigation.push({ name: 'Analytics', href: '/teacher/analytics', icon: LayoutDashboard });
+        }
+    }
 
     return (
         <div className="flex bg-white border-r border-slate-200 text-slate-600 w-64 min-h-screen flex-col shadow-sm">
@@ -49,7 +70,7 @@ export function TeacherSidebar() {
             </div>
 
             <nav className="flex-1 px-4 space-y-1">
-                {navigation.map((item) => {
+                {filteredNavigation.map((item) => {
                     const isActive = pathname === item.href || (item.href !== '/teacher' && pathname.startsWith(item.href));
                     return (
                         <Link

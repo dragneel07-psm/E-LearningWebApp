@@ -33,18 +33,15 @@ export function RegisterForm() {
     const [isLoading, setIsLoading] = useState(false);
 
     const { register, handleSubmit, formState: { errors } } = useForm<RegisterFormData>({
-        resolver: zodResolver(registerSchema),
-        defaultValues: {
-            role: 'student'
-        }
+        resolver: zodResolver(registerSchema)
     });
 
     const onSubmit = async (data: RegisterFormData) => {
         setIsLoading(true);
         try {
-            await authService.register({ ...data, role: 'student' }); // Defaulting to student for public registration
-            toast.success('Registration successful! Redirecting...');
-            router.push('/student');
+            await authService.register(data);
+            toast.success('SaaS Admin account created! Redirecting...');
+            router.push('/saas');
         } catch (err: any) {
             console.error("Register Error:", err);
             // Handle Django REST Framework error structure
@@ -85,10 +82,10 @@ export function RegisterForm() {
                             <Sparkles className="w-6 h-6 text-purple-400" />
                         </motion.div>
                         <h1 className="text-3xl font-bold tracking-tight text-white bg-clip-text text-transparent bg-gradient-to-br from-white to-white/70">
-                            Create Account
+                            SaaS Admin
                         </h1>
                         <p className="text-slate-400 text-sm tracking-wide">
-                            Join us to start your learning journey
+                            Register as a platform administrator
                         </p>
                     </div>
 

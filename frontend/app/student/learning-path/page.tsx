@@ -11,7 +11,7 @@ import {
     Lock, PlayCircle, Clock, RefreshCw, AlertCircle,
     BookOpen, Video, FileText, HelpCircle
 } from 'lucide-react';
-import { aiAPI, learningPathsAPI, academicAPI, LearningPath, LearningNode } from '@/lib/api';
+import { aiAPI, learningPathsAPI, academicAPI, usersAPI, LearningPath, LearningNode } from '@/lib/api';
 import { toast } from 'sonner';
 
 export default function LearningPathPage() {
@@ -20,6 +20,7 @@ export default function LearningPathPage() {
     const [loading, setLoading] = useState(true);
     const [generating, setGenerating] = useState(false);
     const [studentId, setStudentId] = useState('');
+    const [user, setUser] = useState<any>(null);
 
     useEffect(() => {
         loadData();
@@ -28,8 +29,12 @@ export default function LearningPathPage() {
     const loadData = async () => {
         try {
             setLoading(true);
-            const student = await academicAPI.getMyStudent();
+            const [student, currentUser] = await Promise.all([
+                academicAPI.getMyStudent(),
+                usersAPI.getMe().catch(() => null)
+            ]);
             setStudentId(student.id);
+            setUser(currentUser);
 
             const activePath = await aiAPI.getActivePath();
             setPath(activePath);
@@ -95,6 +100,18 @@ export default function LearningPathPage() {
     };
 
     if (loading) return <div className="p-8 text-center text-slate-500">Loading your learning path...</div>;
+
+    if (user?.tenant_features?.student_ai_chatbot === false) {
+        return (
+            <div className="flex flex-col items-center justify-center p-12 text-center h-[60vh]">
+                <div className="h-16 w-16 bg-slate-100 rounded-full flex items-center justify-center mb-4 mx-auto">
+                    <BrainCircuit className="h-8 w-8 text-slate-400" />
+                </div>
+                <h2 className="text-2xl font-bold text-slate-900 mb-2">AI Learning Locked</h2>
+                <p className="text-slate-500 max-w-md mx-auto">AI-powered personalized learning paths are not enabled for your school portal.</p>
+            </div>
+        );
+    }
 
     return (
         <div className="max-w-4xl mx-auto space-y-8">

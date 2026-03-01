@@ -25,6 +25,7 @@ import { saasApi, Tenant } from "@/lib/api/saas";
 import { toast } from "sonner";
 import Link from 'next/link';
 import { CreateSchoolDialog } from "@/components/saas/create-school-dialog";
+import { ManageFeaturesDialog } from "@/components/saas/manage-features-dialog";
 import { motion } from "framer-motion";
 import { Input } from "@/components/ui/input";
 
@@ -127,82 +128,12 @@ export default function SaasSchoolsPage() {
                                 </TableRow>
                             ) : (
                                 filteredSchools.map((school, index) => (
-                                    <motion.tr
-                                        key={school.tenant_id}
-                                        initial={{ opacity: 0, y: 10 }}
-                                        animate={{ opacity: 1, y: 0 }}
-                                        transition={{ delay: index * 0.05 }}
-                                        className="group border-b border-slate-100 dark:border-white/5 hover:bg-slate-50 dark:hover:bg-white/[0.02] transition-colors"
-                                    >
-                                        <TableCell className="pl-6 py-4">
-                                            <div className="flex items-center gap-4">
-                                                <div className="w-10 h-10 rounded-lg bg-indigo-600 flex items-center justify-center text-white font-bold text-lg shadow-lg shadow-indigo-500/20">
-                                                    {school.name.charAt(0)}
-                                                </div>
-                                                <div>
-                                                    <div className="font-bold text-slate-900 dark:text-white group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
-                                                        {school.name}
-                                                    </div>
-                                                    <div className="flex items-center gap-2 mt-1">
-                                                        <Globe className="w-3 h-3 text-slate-400" />
-                                                        <span className="text-xs text-slate-500 dark:text-slate-400 font-mono tracking-tight">
-                                                            {school.subdomain}.domain.com
-                                                        </span>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </TableCell>
-                                        <TableCell className="py-4">
-                                            <div className="space-y-2">
-                                                <Badge variant="outline" className="border-indigo-200 dark:border-indigo-500/30 text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-500/10">
-                                                    {school.plan_name || 'Standard Plan'}
-                                                </Badge>
-                                                <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
-                                                    <div className="w-16 h-1.5 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
-                                                        <div
-                                                            className={`h-full rounded-full ${parseInt(school.ai_usage || '0') > 90 ? 'bg-red-500' : 'bg-emerald-500'}`}
-                                                            style={{ width: school.ai_usage || '30%' }}
-                                                        ></div>
-                                                    </div>
-                                                    <span>{school.ai_usage || '30%'} AI Load</span>
-                                                </div>
-                                            </div>
-                                        </TableCell>
-                                        <TableCell className="py-4">
-                                            <div className="text-sm">
-                                                <div className="font-semibold text-slate-900 dark:text-white">{school.student_count || 0} Students</div>
-                                                <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Billing: {school.billing_cycle || 'Monthly'}</div>
-                                            </div>
-                                        </TableCell>
-                                        <TableCell className="py-4">
-                                            <div className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-100 dark:bg-emerald-500/10 text-emerald-800 dark:text-emerald-400">
-                                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 mr-2 animate-pulse"></span>
-                                                {school.subscription_status || 'Active'}
-                                            </div>
-                                        </TableCell>
-                                        <TableCell className="text-right pr-6 py-4">
-                                            <DropdownMenu>
-                                                <DropdownMenuTrigger asChild>
-                                                    <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-slate-900 dark:hover:text-white">
-                                                        <MoreHorizontal className="h-4 w-4" />
-                                                    </Button>
-                                                </DropdownMenuTrigger>
-                                                <DropdownMenuContent align="end" className="w-48">
-                                                    <DropdownMenuLabel>Manage Tenant</DropdownMenuLabel>
-                                                    <DropdownMenuItem>
-                                                        <ShieldCheck className="mr-2 h-4 w-4 text-indigo-500" /> Admin Access
-                                                    </DropdownMenuItem>
-                                                    <DropdownMenuItem>
-                                                        <ArrowUpCircle className="mr-2 h-4 w-4 text-emerald-500" /> Upgrade Plan
-                                                    </DropdownMenuItem>
-                                                    <DropdownMenuSeparator />
-                                                    <DropdownMenuItem className="text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/10">
-                                                        <AlertCircle className="mr-2 h-4 w-4" /> Suspend Account
-                                                    </DropdownMenuItem>
-                                                </DropdownMenuContent>
-                                            </DropdownMenu>
-                                        </TableCell>
-                                    </motion.tr>
+                                    <SchoolTableRow
+                                        key={school.tenant_id || index}
+                                        school={school}
+                                        index={index}
+                                        onUpdated={loadSchools}
+                                    />
                                 ))
                             )}
                         </TableBody>
@@ -210,5 +141,99 @@ export default function SaasSchoolsPage() {
                 </div>
             </Card>
         </div>
+    );
+}
+
+function SchoolTableRow({ school, index, onUpdated }: { school: TenantSummary, index: number, onUpdated: () => void }) {
+    const [isManageFeaturesOpen, setIsManageFeaturesOpen] = useState(false);
+
+    // Using Lucide react icons imported above
+    return (
+        <>
+            <motion.tr
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: index * 0.05 }}
+                className="group border-b border-slate-100 dark:border-white/5 hover:bg-slate-50 dark:hover:bg-white/[0.02] transition-colors"
+            >
+                <TableCell className="pl-6 py-4">
+                    <div className="flex items-center gap-4">
+                        <div className="w-10 h-10 rounded-lg bg-indigo-600 flex items-center justify-center text-white font-bold text-lg shadow-lg shadow-indigo-500/20">
+                            {school.name.charAt(0)}
+                        </div>
+                        <div>
+                            <div className="font-bold text-slate-900 dark:text-white group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
+                                {school.name}
+                            </div>
+                            <div className="flex items-center gap-2 mt-1">
+                                <Globe className="w-3 h-3 text-slate-400" />
+                                <span className="text-xs text-slate-500 dark:text-slate-400 font-mono tracking-tight">
+                                    {school.subdomain}.domain.com
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                </TableCell>
+                <TableCell className="py-4">
+                    <div className="space-y-2">
+                        <Badge variant="outline" className="border-indigo-200 dark:border-indigo-500/30 text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-500/10">
+                            {school.plan_name || 'Standard Plan'}
+                        </Badge>
+                        <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+                            <div className="w-16 h-1.5 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+                                <div
+                                    className={`h-full rounded-full ${parseInt(school.ai_usage || '0') > 90 ? 'bg-red-500' : 'bg-emerald-500'}`}
+                                    style={{ width: school.ai_usage || '30%' }}
+                                ></div>
+                            </div>
+                            <span>{school.ai_usage || '30%'} AI Load</span>
+                        </div>
+                    </div>
+                </TableCell>
+                <TableCell className="py-4">
+                    <div className="text-sm">
+                        <div className="font-semibold text-slate-900 dark:text-white">{school.student_count || 0} Students</div>
+                        <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Billing: {school.billing_cycle || 'Monthly'}</div>
+                    </div>
+                </TableCell>
+                <TableCell className="py-4">
+                    <div className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-100 dark:bg-emerald-500/10 text-emerald-800 dark:text-emerald-400">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 mr-2 animate-pulse"></span>
+                        {school.subscription_status || 'Active'}
+                    </div>
+                </TableCell>
+                <TableCell className="text-right pr-6 py-4">
+                    <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-slate-900 dark:hover:text-white">
+                                <MoreHorizontal className="h-4 w-4" />
+                            </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-48">
+                            <DropdownMenuLabel>Manage Tenant</DropdownMenuLabel>
+                            <DropdownMenuItem onSelect={() => setIsManageFeaturesOpen(true)}>
+                                <ShieldCheck className="mr-2 h-4 w-4 text-indigo-500" /> Manage Features
+                            </DropdownMenuItem>
+                            <DropdownMenuItem>
+                                <ArrowUpCircle className="mr-2 h-4 w-4 text-emerald-500" /> Upgrade Plan
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem className="text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/10">
+                                <AlertCircle className="mr-2 h-4 w-4" /> Suspend Account
+                            </DropdownMenuItem>
+                        </DropdownMenuContent>
+                    </DropdownMenu>
+                </TableCell>
+            </motion.tr>
+
+            {isManageFeaturesOpen && (
+                <ManageFeaturesDialog
+                    tenant={school}
+                    open={isManageFeaturesOpen}
+                    onOpenChange={setIsManageFeaturesOpen}
+                    onUpdated={onUpdated}
+                />
+            )}
+        </>
     );
 }

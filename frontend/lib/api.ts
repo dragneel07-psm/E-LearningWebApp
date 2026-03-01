@@ -17,6 +17,7 @@ const API_BASE_URL = getApiBaseUrl();
 
 // Types for API Responses
 export interface Tenant {
+    id?: number | string;
     tenant_id: string;
     name: string;
     subdomain: string;
@@ -33,6 +34,7 @@ export interface Tenant {
     current_academic_year?: string;
     established_year?: number;
     logo?: string;
+    features?: Record<string, any>;
 }
 
 export interface User {
@@ -48,6 +50,7 @@ export interface User {
     address?: string;
     bio?: string;
     date_of_birth?: string;
+    tenant_features?: Record<string, any>;
 }
 
 
@@ -651,9 +654,10 @@ export async function apiRequest<T>(
         headers['Authorization'] = `Bearer ${token}`;
     }
 
-    // Add tenant context header
-    // This should match the tenant's subdomain in the database
-    headers['x-tenant-id'] = 'demo';
+    // Add tenant context header — dynamically read from localStorage so SaaS users
+    // get 'public' and school users get their own tenant slug.
+    const storedTenantId = (typeof window !== 'undefined' ? localStorage.getItem('tenant_id') : null) || 'demo';
+    headers['x-tenant-id'] = storedTenantId;
 
     try {
         const response = await fetch(`${API_BASE_URL}${endpoint}`, {
@@ -717,7 +721,8 @@ async function apiRequestBlob(
     if (token) {
         headers['Authorization'] = `Bearer ${token}`;
     }
-    headers['x-tenant-id'] = 'demo';
+    const blobTenantId = (typeof window !== 'undefined' ? localStorage.getItem('tenant_id') : null) || 'demo';
+    headers['x-tenant-id'] = blobTenantId;
 
     const response = await fetch(`${API_BASE_URL}${endpoint}`, {
         ...options,
@@ -1389,10 +1394,11 @@ export const helpers = {
 
     downloadFile: async (url: string, filename: string) => {
         const token = getAuthToken();
+        const downloadTenantId = (typeof window !== 'undefined' ? localStorage.getItem('tenant_id') : null) || 'demo';
         const response = await fetch(url, {
             headers: {
                 'Authorization': `Bearer ${token}`,
-                'x-tenant-id': 'demo'
+                'x-tenant-id': downloadTenantId
             }
         });
         const blob = await response.blob();

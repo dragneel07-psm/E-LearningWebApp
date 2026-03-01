@@ -3,10 +3,17 @@ from rest_framework import serializers
 from .models import UserAccount
 
 class UserAccountSerializer(serializers.ModelSerializer):
+    tenant_features = serializers.SerializerMethodField()
+
     class Meta:
         model = UserAccount
-        fields = ['user_id', 'username', 'email', 'first_name', 'last_name', 'role', 'tenant']
-        read_only_fields = ['user_id', 'email', 'role', 'tenant']
+        fields = ['user_id', 'username', 'email', 'first_name', 'last_name', 'role', 'tenant', 'tenant_features']
+        read_only_fields = ['user_id', 'email', 'role', 'tenant', 'tenant_features']
+
+    def get_tenant_features(self, obj):
+        if obj.tenant:
+            return obj.tenant.features
+        return {}
 
 from django.contrib.auth.models import Group, Permission
 
@@ -56,6 +63,7 @@ class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
             'first_name': self.user.first_name,
             'last_name':  self.user.last_name,
             'role':       self.user.role,
+            'tenant_features': self.user.tenant.features if self.user.tenant else {},
         }
         return data
 
@@ -86,11 +94,10 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
     class Meta:
         model = UserAccount
         fields = ['user_id', 'email', 'username', 'password', 'password_confirm', 
-                  'first_name', 'last_name', 'role', 'tokens']
+                  'first_name', 'last_name', 'tokens']
         extra_kwargs = {
             'first_name': {'required': True},
             'last_name': {'required': True},
-            'role': {'required': False},  # Default to 'student' if not provided
             'username': {'required': False},
             'email': {'required': True},
         }
@@ -125,13 +132,11 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
         }
     
     def create(self, validated_data):
-        """Create user with hashed password and corresponding profile"""
+        """Create SaaS Admin user with hashed password"""
         validated_data.pop('password_confirm')
         
-        # Set default role if not provided
-        role = validated_data.get('role', 'student')
-        if 'role' not in validated_data:
-            validated_data['role'] = role
+        # PUBLIC REGISTRATION IS FOR SAAS ADMINS ONLY
+        role = 'saas_admin'
         
         from django.db import transaction
         with transaction.atomic():
@@ -142,19 +147,69 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
                 first_name=validated_data.get('first_name', ''),
                 last_name=validated_data.get('last_name', ''),
                 role=role,
+                tenant=None  # SaaS Admin is global
             )
-            
-            if role == 'student':
-                from academic.models import Student
-                Student.objects.create(user=user)
-            elif role == 'teacher':
-                from academic.models import Teacher
-                Teacher.objects.create(user=user)
-            elif role == 'parent':
-                from academic.models import Parent
-                Parent.objects.create(user=user)
-                
         return user
+
+class UserManagementSerializer(serializers.ModelSerializer):
+    """Serializer used by admins to create/update users with roles and profiles"""
+    
+    password = serializers.CharField(write_only=True, required=False)
+    
+    class Meta:
+        model = UserAccount
+        fields = ['user_id', 'username', 'email', 'password', 'first_name', 'last_name', 'role', 'tenant']
+
+    def create(self, validated_data):
+        password = validated_data.pop('password', None)
+        role = validated_data.get('role', 'student')
+        
+        from django.db import transaction
+        with transaction.atomic():
+            user = UserAccount(**validated_data)
+            if password:
+                user.set_password(password)
+            else:
+                user.set_unusable_password()
+            user.save()
+            
+            # Create corresponding profile if it's a tenant-scoped role
+            tenant = validated_data.get('tenant')
+            if tenant:
+                if role == 'student':
+                    from academic.models import Student
+                    Student.objects.get_or_create(user=user)
+                elif role == 'teacher':
+                    from academic.models import Teacher
+                    Teacher.objects.get_or_create(user=user)
+                elif role == 'parent':
+                    from academic.models import Parent
+                    Parent.objects.get_or_create(user=user)
+        return user
+
+    def update(self, instance, validated_data):
+        password = validated_data.pop('password', None)
+        if password:
+            instance.set_password(password)
+        
+        role_changed = 'role' in validated_data and validated_data['role'] != instance.role
+        new_role = validated_data.get('role', instance.role)
+        
+        instance = super().update(instance, validated_data)
+        
+        if role_changed and instance.tenant:
+            # Handle profile creation if role changed
+            if new_role == 'student':
+                from academic.models import Student
+                Student.objects.get_or_create(user=instance)
+            elif new_role == 'teacher':
+                from academic.models import Teacher
+                Teacher.objects.get_or_create(user=instance)
+            elif new_role == 'parent':
+                from academic.models import Parent
+                Parent.objects.get_or_create(user=instance)
+                
+        return instance
 
 # Password Reset Serializers
 from django.contrib.auth.tokens import default_token_generator

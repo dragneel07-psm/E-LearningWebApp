@@ -41,9 +41,23 @@ export const authService = {
     },
 
     async register(data: RegisterData) {
-        const response = await api.post<RegisterResponse>('/api/users/register/', data);
+        // Determine tenant: subdomain detection > 'public'
+        const tenantId = (typeof window !== 'undefined'
+            ? getTenantFromSubdomain(window.location.hostname)
+            : null) || 'public';
+
+        const response = await api.post<RegisterResponse>('/api/users/register/', data, {
+            headers: { 'x-tenant-id': tenantId },
+        });
+
         if (response.data.tokens?.access) {
             setTokens(response.data.tokens.access, response.data.tokens.refresh);
+            if (typeof window !== 'undefined') {
+                localStorage.setItem('tenant_id', tenantId);
+                if (response.data.user?.role) {
+                    localStorage.setItem('user_role', response.data.user.role);
+                }
+            }
         }
         return response.data;
     },

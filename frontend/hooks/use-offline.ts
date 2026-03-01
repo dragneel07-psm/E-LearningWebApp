@@ -28,38 +28,44 @@ function getConnectionQuality(connection: any): ConnectionQuality {
 }
 
 export function useOffline(): NetworkStatus {
-    const getConnection = () => {
-        if (typeof navigator === 'undefined') return null;
-        return (navigator as any).connection ||
-            (navigator as any).mozConnection ||
-            (navigator as any).webkitConnection || null;
-    };
-
-    const buildStatus = useCallback((): NetworkStatus => {
-        const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
-        const connection = getConnection();
-
-        if (!isOnline) {
-            return {
-                isOnline: false,
-                connectionQuality: 'offline',
-            };
-        }
-
-        const quality = getConnectionQuality(connection);
-        return {
-            isOnline: true,
-            connectionQuality: quality,
-            effectiveType: connection?.effectiveType,
-            downlink: connection?.downlink,
-            rtt: connection?.rtt,
-            saveData: connection?.saveData ?? false,
-        };
-    }, []);
-
-    const [status, setStatus] = useState<NetworkStatus>(buildStatus);
+    const [status, setStatus] = useState<NetworkStatus>({
+        isOnline: true,
+        connectionQuality: 'unknown',
+    });
 
     useEffect(() => {
+        const getConnection = () => {
+            if (typeof navigator === 'undefined') return null;
+            return (navigator as any).connection ||
+                (navigator as any).mozConnection ||
+                (navigator as any).webkitConnection || null;
+        };
+
+        const buildStatus = (): NetworkStatus => {
+            const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
+            const connection = getConnection();
+
+            if (!isOnline) {
+                return {
+                    isOnline: false,
+                    connectionQuality: 'offline',
+                };
+            }
+
+            const quality = getConnectionQuality(connection);
+            return {
+                isOnline: true,
+                connectionQuality: quality,
+                effectiveType: connection?.effectiveType,
+                downlink: connection?.downlink,
+                rtt: connection?.rtt,
+                saveData: connection?.saveData ?? false,
+            };
+        };
+
+        // Initialize status safely on client sidemount
+        setStatus(buildStatus());
+
         // Update on online/offline events
         const handleOnline = () => setStatus(buildStatus());
         const handleOffline = () => setStatus({
@@ -86,7 +92,7 @@ export function useOffline(): NetworkStatus {
             window.removeEventListener('online', handleOnline);
             window.removeEventListener('offline', handleOffline);
         };
-    }, [buildStatus]);
+    }, []);
 
     return status;
 }

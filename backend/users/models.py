@@ -8,6 +8,7 @@ class UserAccount(AbstractUser):
         ('teacher', 'Teacher'),
         ('parent', 'Parent'),
         ('admin', 'Admin'),
+        ('staff', 'Staff'),
         ('saas_admin', 'SaaS Admin'),
     )
     user_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -28,5 +29,8 @@ class UserAccount(AbstractUser):
 
     # Use email as the login field
     email = models.EmailField(unique=True)
+    first_name = models.CharField(max_length=150, db_index=True)
+    last_name = models.CharField(max_length=150, db_index=True)
+    
     USERNAME_FIELD = 'email'
     REQUIRED_FIELDS = ['username', 'first_name', 'last_name']

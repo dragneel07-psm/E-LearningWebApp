@@ -4,7 +4,7 @@ from rest_framework.response import Response
 from django.contrib.auth.models import Group, Permission
 from .models import UserAccount
 from .serializers import (
-    UserAccountSerializer, GroupSerializer, PermissionSerializer,
+    UserAccountSerializer, UserManagementSerializer, GroupSerializer, PermissionSerializer,
     PasswordResetSerializer, PasswordResetConfirmSerializer
 )
 from core.mixins import TenantScopedQuerysetMixin
@@ -19,6 +19,16 @@ from django.shortcuts import get_object_or_404
 class UserAccountViewSet(TenantScopedQuerysetMixin, viewsets.ModelViewSet):
     queryset = UserAccount.objects.all()
     serializer_class = UserAccountSerializer
+
+    def get_permissions(self):
+        if self.action in ['me', 'change_password']:
+            return [permissions.IsAuthenticated()]
+        return [IsAdminOrSaaSAdmin()]
+
+    def get_serializer_class(self):
+        if self.action in ['create', 'update', 'partial_update']:
+            return UserManagementSerializer
+        return UserAccountSerializer
     
     @action(detail=False, methods=['get', 'patch'], permission_classes=[permissions.IsAuthenticated])
     def me(self, request):
@@ -76,7 +86,7 @@ class AdminPasswordResetView(APIView):
 
     def post(self, request):
         # 1. Check if requester is Admin/Staff
-        if not (request.user.is_staff or getattr(request.user, 'role', '') == 'admin'):
+        if not (request.user.role in ['admin', 'saas_admin']):
             return Response(
                 {'error': 'You do not have permission to reset passwords.'}, 
                 status=status.HTTP_403_FORBIDDEN
@@ -92,20 +102,22 @@ class AdminPasswordResetView(APIView):
             )
 
         try:
-            print(f"DEBUG: Password reset requested for {user_id} by {request.user} (Tenant: {request.user.tenant})")
-            # 2. Get Target User (Filtered by Tenant implicitly if using correct manager/queryset, 
-            #    but effectively we check tenant match manually for safety)
             target_user = get_object_or_404(UserAccount, pk=user_id)
-            print(f"DEBUG: Found user {target_user} (Tenant: {target_user.tenant})")
             
-            # 3. Tenant Isolation Check
-            # Ensure target user belongs to the same tenant as the requester
-            if target_user.tenant != request.user.tenant:
-                print(f"DEBUG: Tenant Mismatch! {target_user.tenant} vs {request.user.tenant}")
-                return Response(
-                    {'error': 'User not found in your organization.'}, 
-                    status=status.HTTP_404_NOT_FOUND
-                )
+            # Tenant Isolation Check
+            # 1. SaaS Admin can reset anyone's password
+            # 2. Tenant Admin can only reset users in their own tenant
+            if request.user.role == 'admin':
+                if target_user.tenant != request.user.tenant:
+                    return Response(
+                        {'error': 'User not found in your organization.'}, 
+                        status=status.HTTP_404_NOT_FOUND
+                    )
+            elif request.user.role == 'saas_admin':
+                 # SaaS Admin is global
+                 pass
+            else:
+                return Response({'error': 'Unauthorized role'}, status=status.HTTP_403_FORBIDDEN)
 
             # 4. Set Password
             target_user.set_password(new_password)
@@ -129,7 +141,7 @@ def register_user(request):
     
     POST /api/auth/register/
     """
-    serializer = UserRegistrationSerializer(data=request.data)
+    serializer = UserRegistrationSerializer(data=request.data, context={'request': request})
     
     if serializer.is_valid():
         user = serializer.save()

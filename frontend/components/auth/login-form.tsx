@@ -14,13 +14,6 @@ import { motion } from 'framer-motion';
 import { toast } from 'sonner';
 import Link from 'next/link';
 
-const loginSchema = z.object({
-    email: z.string().email("Please enter a valid email address"),
-    password: z.string().min(1, "Password is required"),
-    school_code: z.string().min(1, "School code is required"),
-});
-
-type LoginFormData = z.infer<typeof loginSchema>;
 
 interface LoginFormProps {
     role?: 'admin' | 'teacher' | 'student' | 'saas_admin';
@@ -34,14 +27,23 @@ export function LoginForm({ role, title, subtitle }: LoginFormProps) {
     const redirectPath = searchParams.get('redirect');
     const [isLoading, setIsLoading] = useState(false);
 
-    const { register, handleSubmit, formState: { errors } } = useForm<LoginFormData>({
-        resolver: zodResolver(loginSchema)
+    const schema = z.object({
+        email: z.string().email("Please enter a valid email address"),
+        password: z.string().min(1, "Password is required"),
+        school_code: role === 'saas_admin' ? z.string().optional() : z.string().min(1, "School code is required"),
     });
 
-    const onSubmit = async (data: LoginFormData) => {
+    const { register, handleSubmit, formState: { errors } } = useForm<z.infer<typeof schema>>({
+        resolver: zodResolver(schema)
+    });
+
+    const onSubmit = async (data: z.infer<typeof schema>) => {
         setIsLoading(true);
         try {
-            const result = await authService.login(data);
+            if (role === 'saas_admin') {
+                data.school_code = 'public';
+            }
+            const result = await authService.login(data as any);
 
             toast.success('Welcome back! Sign in successful.');
 
@@ -166,26 +168,27 @@ export function LoginForm({ role, title, subtitle }: LoginFormProps) {
                                 )}
                             </div>
                         </div>
-                        {/* School Code */}
-                        <div className="space-y-2">
-                            <Label htmlFor="school_code" className="text-slate-300 text-xs uppercase tracking-wider font-semibold ml-1">School Code</Label>
-                            <div className="relative group">
-                                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                                    <Building2 className="h-5 w-5 text-slate-500 group-focus-within:text-white transition-colors duration-300" />
+                        {role !== 'saas_admin' && (
+                            <div className="space-y-2">
+                                <Label htmlFor="school_code" className="text-slate-300 text-xs uppercase tracking-wider font-semibold ml-1">School Code</Label>
+                                <div className="relative group">
+                                    <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                                        <Building2 className="h-5 w-5 text-slate-500 group-focus-within:text-white transition-colors duration-300" />
+                                    </div>
+                                    <Input
+                                        id="school_code"
+                                        type="text"
+                                        placeholder="demo"
+                                        autoComplete="off"
+                                        className={`pl-11 h-12 bg-white/5 border-white/10 text-white placeholder:text-slate-600 focus:bg-white/10 focus:border-white/20 focus:ring-4 focus:ring-white/5 transition-all duration-300 rounded-xl ${errors.school_code ? 'border-red-500/50 focus:border-red-500/50' : ''}`}
+                                        {...register('school_code')}
+                                    />
                                 </div>
-                                <Input
-                                    id="school_code"
-                                    type="text"
-                                    placeholder="demo"
-                                    autoComplete="off"
-                                    className={`pl-11 h-12 bg-white/5 border-white/10 text-white placeholder:text-slate-600 focus:bg-white/10 focus:border-white/20 focus:ring-4 focus:ring-white/5 transition-all duration-300 rounded-xl ${errors.school_code ? 'border-red-500/50 focus:border-red-500/50' : ''}`}
-                                    {...register('school_code')}
-                                />
+                                {errors.school_code && (
+                                    <p className="text-red-400 text-xs ml-1">{errors.school_code.message}</p>
+                                )}
                             </div>
-                            {errors.school_code && (
-                                <p className="text-red-400 text-xs ml-1">{errors.school_code.message}</p>
-                            )}
-                        </div>
+                        )}
 
                         <Button
                             className={`w-full h-12 text-white font-bold rounded-xl transition-all duration-300 shadow-lg hover:scale-[1.01] active:scale-[0.99] ${getButtonClass()}`}

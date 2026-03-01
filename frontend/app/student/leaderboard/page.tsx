@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import { academicAPI, gamificationAPI } from "@/lib/api";
+import { academicAPI, gamificationAPI, usersAPI } from "@/lib/api";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -21,14 +21,19 @@ interface LeaderboardEntry {
 export default function LeaderboardPage() {
     const [scope, setScope] = useState<"class" | "school">("class");
     const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
+    const [user, setUser] = useState<any>(null);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
         const fetchLeaderboard = async () => {
             setLoading(true);
             try {
-                const data = await gamificationAPI.getLeaderboard(scope);
+                const [data, currentUser] = await Promise.all([
+                    gamificationAPI.getLeaderboard(scope),
+                    usersAPI.getMe().catch(() => null)
+                ]);
                 setLeaderboard(data);
+                setUser(currentUser);
             } catch (error) {
                 console.error("Failed to fetch leaderboard", error);
             } finally {
@@ -53,6 +58,20 @@ export default function LeaderboardPage() {
         if (rank === 3) return "bg-amber-50/50 border-amber-100";
         return "bg-white border-slate-100 hover:bg-slate-50";
     };
+
+    if (loading) return <div className="p-12 text-center text-slate-500">Loading rankings...</div>;
+
+    if (user?.tenant_features?.student_gamification === false) {
+        return (
+            <div className="flex flex-col items-center justify-center p-12 text-center h-[60vh]">
+                <div className="h-16 w-16 bg-slate-100 rounded-full flex items-center justify-center mb-4 mx-auto">
+                    <Trophy className="h-8 w-8 text-slate-400" />
+                </div>
+                <h2 className="text-2xl font-bold text-slate-900 mb-2">Gamification Locked</h2>
+                <p className="text-slate-500 max-w-md mx-auto">Leaderboards, ranks, and points are not enabled for your school portal.</p>
+            </div>
+        );
+    }
 
     return (
         <div className="container mx-auto p-6 max-w-4xl space-y-8">

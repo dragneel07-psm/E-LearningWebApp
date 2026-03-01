@@ -26,6 +26,7 @@ export interface UserProfile {
     last_name: string;
     role: string;
     tenant?: string; // If exposed
+    tenant_features?: Record<string, any>;
 }
 
 export interface RegisterResponse {

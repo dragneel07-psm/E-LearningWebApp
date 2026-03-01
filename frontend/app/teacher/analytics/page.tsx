@@ -5,9 +5,9 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
     TrendingUp, Users, AlertTriangle,
     CheckCircle2, ChevronRight, BarChart3,
-    Calendar, BrainCircuit, Sparkles
+    Calendar, BrainCircuit, Sparkles, Lock
 } from 'lucide-react';
-import { aiAPI, academicAPI, Subject } from '@/lib/api';
+import { aiAPI, academicAPI, usersAPI, Subject } from '@/lib/api';
 import {
     BarChart, Bar, XAxis, YAxis,
     CartesianGrid, Tooltip, ResponsiveContainer,
@@ -24,14 +24,19 @@ interface AnalyticsData {
 
 export default function TeacherAnalyticsPage() {
     const [data, setData] = useState<AnalyticsData | null>(null);
+    const [user, setUser] = useState<any>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
         async function loadAnalytics() {
             try {
-                const results = await aiAPI.getTeacherAnalytics();
+                const [results, userData] = await Promise.all([
+                    aiAPI.getTeacherAnalytics(),
+                    usersAPI.getMe().catch(() => null)
+                ]);
                 setData(results);
+                setUser(userData);
             } catch (err) {
                 console.error("Failed to load analytics:", err);
                 setError("Unable to load predictive analytics.");
@@ -43,6 +48,19 @@ export default function TeacherAnalyticsPage() {
     }, []);
 
     if (loading) return <div className="p-8 text-center text-slate-500">Calculating analytics...</div>;
+
+    if (user?.tenant_features?.teacher_reports === false) {
+        return (
+            <div className="flex flex-col items-center justify-center p-12 text-center h-[60vh]">
+                <div className="h-16 w-16 bg-slate-100 rounded-full flex items-center justify-center mb-4 mt-12 mx-auto">
+                    <Lock className="h-8 w-8 text-slate-400" />
+                </div>
+                <h2 className="text-2xl font-bold text-slate-900 mb-2">Advanced Reports Locked</h2>
+                <p className="text-slate-500 max-w-md mx-auto">Your school's current plan does not include access to AI-powered predictive analytics and advanced reporting features.</p>
+            </div>
+        );
+    }
+
     if (error) return <div className="p-8 text-center text-red-500">{error}</div>;
 
     return (

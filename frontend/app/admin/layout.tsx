@@ -30,7 +30,7 @@ export default function AdminLayout({
                 {/* Top Header */}
                 <header className="sticky top-0 z-40 bg-white border-b px-6 py-3 flex items-center justify-between shadow-sm">
                     <div className="flex items-center gap-4 flex-1">
-                        <div className="relative w-full max-w-md hidden md:block">
+                        <div className="relative w-full max-w-md hidden md:block" suppressHydrationWarning>
                             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-slate-400" />
                             <Input
                                 placeholder="Search students, teachers, reports..."

@@ -9,7 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { ChevronLeft, BrainCircuit, Save } from 'lucide-react';
-import { academicAPI, Submission, Result, Assessment, Student } from '@/lib/api';
+import { academicAPI, usersAPI, Submission, Result, Assessment, Student } from '@/lib/api';
 
 export default function GradingPage() {
     const params = useParams();
@@ -21,6 +21,7 @@ export default function GradingPage() {
     const [result, setResult] = useState<Result | null>(null);
     const [assessment, setAssessment] = useState<Assessment | null>(null);
     const [student, setStudent] = useState<Student | null>(null);
+    const [user, setUser] = useState<any>(null);
     const [grade, setGrade] = useState<number>(0);
     const [feedback, setFeedback] = useState('');
     const [saving, setSaving] = useState(false);
@@ -32,13 +33,15 @@ export default function GradingPage() {
                 setSubmission(sub);
 
                 // Fetch related data
-                const [assessmentData, studentData] = await Promise.all([
+                const [assessmentData, studentData, userData] = await Promise.all([
                     academicAPI.getAssessment(sub.assessment),
-                    academicAPI.getStudent(sub.student)
+                    academicAPI.getStudent(sub.student),
+                    usersAPI.getMe().catch(() => null)
                 ]);
 
                 setAssessment(assessmentData);
                 setStudent(studentData);
+                setUser(userData);
 
                 // If already graded, load the result
                 if (sub.result) {
@@ -109,58 +112,60 @@ export default function GradingPage() {
                 {/* Right: Grading Panel */}
                 <div className="flex flex-col gap-6 h-full overflow-y-auto pr-1">
                     {/* AI Analysis Card */}
-                    <Card className="border-indigo-100 bg-indigo-50/30">
-                        <CardHeader className="pb-2">
-                            <CardTitle className="flex items-center gap-2 text-indigo-800 text-base">
-                                <BrainCircuit className="h-5 w-5" /> AI Analysis
-                            </CardTitle>
-                        </CardHeader>
-                        <CardContent className="space-y-3">
-                            {result?.answers_data ? (
-                                <>
-                                    <div className="flex justify-between items-center text-sm font-medium">
-                                        <span className="text-slate-600">Suggested Score:</span>
-                                        <span className="text-indigo-700 bg-indigo-100 px-2 py-0.5 rounded">{result?.score}/100</span>
-                                    </div>
-                                    <div className="text-sm text-slate-700 bg-white p-3 rounded border border-indigo-100 italic">
-                                        &quot;{result?.ai_feedback || "No overall AI feedback. Review individual answers for details."}&quot;
-                                    </div>
-                                    <div className="flex gap-2">
-                                        <Button size="sm" variant="outline" className="text-xs h-7 border-indigo-200 text-indigo-700 bg-white" onClick={() => {
-                                            setGrade(result?.score || 0);
-                                            setFeedback(result?.ai_feedback || '');
-                                        }}>
-                                            Apply AI Score
+                    {user?.tenant_features?.teacher_ai_grading !== false && (
+                        <Card className="border-indigo-100 bg-indigo-50/30">
+                            <CardHeader className="pb-2">
+                                <CardTitle className="flex items-center gap-2 text-indigo-800 text-base">
+                                    <BrainCircuit className="h-5 w-5" /> AI Analysis
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent className="space-y-3">
+                                {result?.answers_data ? (
+                                    <>
+                                        <div className="flex justify-between items-center text-sm font-medium">
+                                            <span className="text-slate-600">Suggested Score:</span>
+                                            <span className="text-indigo-700 bg-indigo-100 px-2 py-0.5 rounded">{result?.score}/100</span>
+                                        </div>
+                                        <div className="text-sm text-slate-700 bg-white p-3 rounded border border-indigo-100 italic">
+                                            &quot;{result?.ai_feedback || "No overall AI feedback. Review individual answers for details."}&quot;
+                                        </div>
+                                        <div className="flex gap-2">
+                                            <Button size="sm" variant="outline" className="text-xs h-7 border-indigo-200 text-indigo-700 bg-white" onClick={() => {
+                                                setGrade(result?.score || 0);
+                                                setFeedback(result?.ai_feedback || '');
+                                            }}>
+                                                Apply AI Score
+                                            </Button>
+                                        </div>
+                                    </>
+                                ) : (
+                                    <div className="text-center py-4">
+                                        <p className="text-xs text-slate-500 mb-3">AI grading has not been performed for this submission yet.</p>
+                                        <Button
+                                            size="sm"
+                                            className="bg-indigo-600 hover:bg-indigo-700 h-8 text-xs"
+                                            onClick={async () => {
+                                                setSaving(true);
+                                                try {
+                                                    const response = await academicAPI.triggerAIGrading(submissionId);
+                                                    // Reload data
+                                                    window.location.reload();
+                                                } catch (err) {
+                                                    console.error(err);
+                                                } finally {
+                                                    setSaving(false);
+                                                }
+                                            }}
+                                            disabled={saving}
+                                        >
+                                            <BrainCircuit className="h-3 w-3 mr-2" />
+                                            {saving ? 'Analyzing...' : 'Trigger AI Analysis'}
                                         </Button>
                                     </div>
-                                </>
-                            ) : (
-                                <div className="text-center py-4">
-                                    <p className="text-xs text-slate-500 mb-3">AI grading has not been performed for this submission yet.</p>
-                                    <Button
-                                        size="sm"
-                                        className="bg-indigo-600 hover:bg-indigo-700 h-8 text-xs"
-                                        onClick={async () => {
-                                            setSaving(true);
-                                            try {
-                                                const response = await academicAPI.triggerAIGrading(submissionId);
-                                                // Reload data
-                                                window.location.reload();
-                                            } catch (err) {
-                                                console.error(err);
-                                            } finally {
-                                                setSaving(false);
-                                            }
-                                        }}
-                                        disabled={saving}
-                                    >
-                                        <BrainCircuit className="h-3 w-3 mr-2" />
-                                        {saving ? 'Analyzing...' : 'Trigger AI Analysis'}
-                                    </Button>
-                                </div>
-                            )}
-                        </CardContent>
-                    </Card>
+                                )}
+                            </CardContent>
+                        </Card>
+                    )}
 
                     {/* Teacher Grading Form */}
                     <Card className="flex-1 flex flex-col">

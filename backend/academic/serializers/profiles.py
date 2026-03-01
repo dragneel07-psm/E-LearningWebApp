@@ -36,6 +36,9 @@ class TeacherSerializer(serializers.ModelSerializer):
         
         assigned_classes = validated_data.pop('assigned_classes', [])
 
+        request = self.context.get('request')
+        tenant = getattr(request, 'tenant', None) if request else None
+
         with transaction.atomic():
             user = User.objects.create_user(
                 email=email,
@@ -43,7 +46,8 @@ class TeacherSerializer(serializers.ModelSerializer):
                 password=password,
                 first_name=first_name,
                 last_name=last_name,
-                role='teacher'
+                role='teacher',
+                tenant=tenant
             )
             
             teacher = Teacher.objects.create(user=user, **validated_data)
@@ -212,6 +216,10 @@ class StudentCreateSerializer(serializers.ModelSerializer):
                 username = f"{base_username}{counter}"
                 counter += 1
             
+            # Get tenant from request context
+            request = self.context.get('request')
+            tenant = getattr(request, 'tenant', None) if request else None
+
             # Create user account
             user = User.objects.create_user(
                 username=username,
@@ -221,7 +229,8 @@ class StudentCreateSerializer(serializers.ModelSerializer):
                 last_name=last_name,
                 phone_number=phone_number,
                 date_of_birth=date_of_birth,
-                role='student'
+                role='student',
+                tenant=tenant
             )
             
             # Create student profile

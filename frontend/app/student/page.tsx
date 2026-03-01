@@ -11,7 +11,7 @@ import {
     AlertCircle, TrendingUp, ChevronRight, PlayCircle,
     Sparkles, Lightbulb, Megaphone
 } from 'lucide-react';
-import { academicAPI, aiAPI, helpers, Subject } from '@/lib/api';
+import { academicAPI, aiAPI, usersAPI, helpers, Subject } from '@/lib/api';
 import { AITutorChat } from '@/components/ai-tutor-chat';
 import { GamificationWidget } from '@/components/student/GamificationWidget';
 import { SmartPathWidget } from '@/components/student/SmartPathWidget';
@@ -27,6 +27,7 @@ export default function StudentDashboard() {
     const [courses, setCourses] = useState<Subject[]>([]);
     const [showAITutor, setShowAITutor] = useState(false);
     const [recommendations, setRecommendations] = useState<any>(null);
+    const [user, setUser] = useState<any>(null);
 
     // Mock Data based on requirements
     const attendance = 92;
@@ -53,8 +54,12 @@ export default function StudentDashboard() {
         try {
             setError(null);
             setLoading(true);
-            const student = await academicAPI.getMyStudent();
+            const [student, currentUser] = await Promise.all([
+                academicAPI.getMyStudent(),
+                usersAPI.getMe().catch(() => null)
+            ]);
             setStudentId(student.id);
+            setUser(currentUser);
 
             // 1. Fetch Subjects
             const subjects = await helpers.getStudentSubjects(student.id);
@@ -170,24 +175,26 @@ export default function StudentDashboard() {
                 </Card>
 
                 {/* AI Tutor Quick Access */}
-                <Card
-                    className="border-none shadow-sm bg-indigo-600 text-white hover:bg-indigo-700 transition-colors cursor-pointer"
-                    onClick={() => setShowAITutor(true)}
-                >
-                    <CardContent className="p-5 flex items-center justify-between h-full">
-                        <div>
-                            <p className="text-sm font-medium opacity-80 mb-1">AI Tutor</p>
-                            <h3 className="text-xl font-bold">Ask Anything</h3>
-                        </div>
-                        <div className="h-12 w-12 rounded-full bg-white/20 flex items-center justify-center backdrop-blur-sm">
-                            <BrainCircuit className="h-6 w-6 text-white" />
-                        </div>
-                    </CardContent>
-                </Card>
+                {user?.tenant_features?.student_ai_chatbot !== false && (
+                    <Card
+                        className="border-none shadow-sm bg-indigo-600 text-white hover:bg-indigo-700 transition-colors cursor-pointer"
+                        onClick={() => setShowAITutor(true)}
+                    >
+                        <CardContent className="p-5 flex items-center justify-between h-full">
+                            <div>
+                                <p className="text-sm font-medium opacity-80 mb-1">AI Tutor</p>
+                                <h3 className="text-xl font-bold">Ask Anything</h3>
+                            </div>
+                            <div className="h-12 w-12 rounded-full bg-white/20 flex items-center justify-center backdrop-blur-sm">
+                                <BrainCircuit className="h-6 w-6 text-white" />
+                            </div>
+                        </CardContent>
+                    </Card>
+                )}
             </div>
 
             {/* 1. AI Smart Path - High Visibility */}
-            {recommendations && recommendations.recommendations.length > 0 && (
+            {user?.tenant_features?.student_ai_chatbot !== false && recommendations && recommendations.recommendations.length > 0 && (
                 <SmartPathWidget recommendation={recommendations.recommendations[0]} />
             )}
 
@@ -286,10 +293,12 @@ export default function StudentDashboard() {
                     <UpcomingExamsWidget assessments={allAssessmentsState} />
 
                     {/* Achievement & Stats */}
-                    <GamificationWidget />
+                    {user?.tenant_features?.student_gamification !== false && (
+                        <GamificationWidget />
+                    )}
 
                     {/* AI Recommendations */}
-                    {recommendations && recommendations.recommendations.length > 0 && (
+                    {user?.tenant_features?.student_ai_chatbot !== false && recommendations && recommendations.recommendations.length > 0 && (
                         <Card className="border-none shadow-md overflow-hidden bg-white border-l-4 border-indigo-500">
                             <CardHeader className="pb-3 flex flex-row items-center gap-2">
                                 <Sparkles className="h-5 w-5 text-indigo-600 animate-pulse" />
@@ -320,27 +329,28 @@ export default function StudentDashboard() {
                     )}
 
                     {/* AI Tutor Call to Action */}
-                    <Card className="bg-gradient-to-br from-indigo-600 to-purple-700 text-white border-none shadow-lg overflow-hidden relative">
-                        {/* Decorative circles */}
-                        <div className="absolute top-0 right-0 -mr-8 -mt-8 h-32 w-32 rounded-full bg-white/10 blur-xl"></div>
-                        <div className="absolute bottom-0 left-0 -ml-8 -mb-8 h-24 w-24 rounded-full bg-white/10 blur-xl"></div>
-
-                        <CardContent className="p-6 relative z-10 flex flex-col items-center text-center space-y-4">
-                            <div className="h-12 w-12 rounded-full bg-white/20 flex items-center justify-center backdrop-blur-sm">
-                                <BrainCircuit className="h-6 w-6 text-white" />
-                            </div>
-                            <div>
-                                <h3 className="text-lg font-bold">Need Help Studying?</h3>
-                                <p className="text-indigo-100 text-sm mt-1 mb-4">Your AI Tutor is ready to explain complex topics instantly.</p>
-                            </div>
-                            <Button
-                                onClick={() => setShowAITutor(true)}
-                                className="w-full bg-white text-indigo-700 hover:bg-white/90 font-semibold"
-                            >
-                                <PlayCircle className="h-4 w-4 mr-2" /> Start Chat
-                            </Button>
-                        </CardContent>
-                    </Card>
+                    {user?.tenant_features?.student_ai_chatbot !== false && (
+                        <Card className="bg-gradient-to-br from-indigo-600 to-purple-700 text-white border-none shadow-lg overflow-hidden relative">
+                            {/* Decorative circles */}
+                            <div className="absolute top-0 right-0 -mr-8 -mt-8 h-32 w-32 rounded-full bg-white/10 blur-xl"></div>
+                            <div className="absolute bottom-0 left-0 -ml-8 -mb-8 h-24 w-24 rounded-full bg-white/10 blur-xl"></div>
+                            <CardContent className="p-6 relative z-10 flex flex-col items-center text-center space-y-4">
+                                <div className="h-12 w-12 rounded-full bg-white/20 flex items-center justify-center backdrop-blur-sm">
+                                    <BrainCircuit className="h-6 w-6 text-white" />
+                                </div>
+                                <div>
+                                    <h3 className="text-lg font-bold">Need Help Studying?</h3>
+                                    <p className="text-indigo-100 text-sm mt-1 mb-4">Your AI Tutor is ready to explain complex topics instantly.</p>
+                                </div>
+                                <Button
+                                    onClick={() => setShowAITutor(true)}
+                                    className="w-full bg-white text-indigo-700 hover:bg-white/90 font-semibold"
+                                >
+                                    <PlayCircle className="h-4 w-4 mr-2" /> Start Chat
+                                </Button>
+                            </CardContent>
+                        </Card>
+                    )}
 
                     {/* Notice Board */}
                     <Card className="border-none shadow-sm">
@@ -390,7 +400,9 @@ export default function StudentDashboard() {
                 </div>
             </div>
 
-            <AITutorChat open={showAITutor} onOpenChange={setShowAITutor} studentId={studentId} />
+            {user?.tenant_features?.student_ai_chatbot !== false && (
+                <AITutorChat open={showAITutor} onOpenChange={setShowAITutor} studentId={studentId} />
+            )}
         </div>
     );
 }

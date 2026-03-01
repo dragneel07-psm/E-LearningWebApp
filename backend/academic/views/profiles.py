@@ -18,6 +18,7 @@ from ..serializers import (
 )
 from core.mixins import TenantScopedQuerysetMixin
 
+from users.permissions import IsAdminOrSaaSAdmin
 User = get_user_model()
 
 
@@ -25,7 +26,11 @@ class TeacherViewSet(TenantScopedQuerysetMixin, viewsets.ModelViewSet):
     """ViewSet for managing Teachers"""
     queryset = Teacher.objects.select_related('user').prefetch_related('assigned_classes')
     serializer_class = TeacherSerializer
-    permission_classes = [IsAuthenticated]
+    
+    def get_permissions(self):
+        if self.action in ['list', 'retrieve']:
+            return [IsAuthenticated()]
+        return [IsAdminOrSaaSAdmin()]
     tenant_field = 'user__tenant'  # Teacher is related to tenant through user
 
 
@@ -41,12 +46,17 @@ class StudentViewSet(TenantScopedQuerysetMixin, viewsets.ModelViewSet):
     destroy: Delete a student
     """
     queryset = Student.objects.select_related('user', 'academic_class', 'section').all()
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAdminOrSaaSAdmin]
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = ['user__first_name', 'user__last_name', 'user__email', 'user__username']
     ordering_fields = ['user__first_name', 'user__last_name', 'academic_class__name']
     ordering = ['user__first_name']
     tenant_field = 'user__tenant'  # Student is related to tenant through user
+    
+    def get_permissions(self):
+        if self.action in ['me', 'list', 'retrieve']:
+            return [IsAuthenticated()]
+        return [IsAdminOrSaaSAdmin()]
     
     def get_serializer_class(self):
         """Return appropriate serializer based on action"""

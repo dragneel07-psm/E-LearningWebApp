@@ -17,8 +17,9 @@ import { coreAPI } from "@/lib/api";
 
 type CreateTenantPayload = Parameters<typeof coreAPI.createTenant>[0] & {
     admin_email: string;
-    admin_password: string;
-    admin_username: string;
+    password: string;
+    admin_first_name: string;
+    admin_last_name: string;
 };
 
 export function CreateSchoolDialog({ onCreated }: { onCreated: () => void }) {
@@ -28,14 +29,15 @@ export function CreateSchoolDialog({ onCreated }: { onCreated: () => void }) {
     // Form State
     const [name, setName] = useState("");
     const [subdomain, setSubdomain] = useState("");
-    const [adminUsername, setAdminUsername] = useState("admin");
+    const [adminFirstName, setAdminFirstName] = useState("");
+    const [adminLastName, setAdminLastName] = useState("");
     const [adminEmail, setAdminEmail] = useState("");
     const [adminPassword, setAdminPassword] = useState("");
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
 
-        if (!name || !subdomain || !adminEmail || !adminPassword) {
+        if (!name || !subdomain || !adminEmail || !adminPassword || !adminFirstName || !adminLastName) {
             toast.error("Please fill in all required fields.");
             return;
         }
@@ -48,8 +50,9 @@ export function CreateSchoolDialog({ onCreated }: { onCreated: () => void }) {
                 type: 'standard', // Default Plan
                 status: 'active',
                 admin_email: adminEmail,
-                admin_password: adminPassword,
-                admin_username: adminUsername
+                password: adminPassword,
+                admin_first_name: adminFirstName,
+                admin_last_name: adminLastName,
             };
             await coreAPI.createTenant(payload);
 
@@ -66,7 +69,8 @@ export function CreateSchoolDialog({ onCreated }: { onCreated: () => void }) {
             setSubdomain("");
             setAdminEmail("");
             setAdminPassword("");
-            setAdminUsername("admin");
+            setAdminFirstName("");
+            setAdminLastName("");
         } catch (error: unknown) {
             console.error(error);
             const message = error instanceof Error ? error.message : "Failed to create school.";
@@ -118,15 +122,23 @@ export function CreateSchoolDialog({ onCreated }: { onCreated: () => void }) {
                             />
                         </div>
                         <div className="grid grid-cols-4 items-center gap-4">
-                            <Label htmlFor="adminUsername" className="text-right">
-                                Admin Username
-                            </Label>
+                            <Label htmlFor="adminFirstName" className="text-right"> Admin First Name </Label>
                             <Input
-                                id="adminUsername"
-                                value={adminUsername}
-                                onChange={(e) => setAdminUsername(e.target.value)}
+                                id="adminFirstName"
+                                value={adminFirstName}
+                                onChange={(e) => setAdminFirstName(e.target.value)}
                                 className="col-span-3"
-                                placeholder="admin"
+                                placeholder="John"
+                            />
+                        </div>
+                        <div className="grid grid-cols-4 items-center gap-4">
+                            <Label htmlFor="adminLastName" className="text-right"> Admin Last Name </Label>
+                            <Input
+                                id="adminLastName"
+                                value={adminLastName}
+                                onChange={(e) => setAdminLastName(e.target.value)}
+                                className="col-span-3"
+                                placeholder="Doe"
                             />
                         </div>
                         <div className="grid grid-cols-4 items-center gap-4">

@@ -45,21 +45,36 @@ export default function StudentLayout({ children }: { children: React.ReactNode 
 
     const navItems = [
         { label: 'Dashboard', href: '/student', icon: LayoutDashboard },
-        { label: 'Learning Path', href: '/student/learning-path', icon: BrainCircuit },
+        {
+            label: 'Learning Path',
+            href: '/student/learning-path',
+            icon: BrainCircuit,
+            hidden: user?.tenant_features?.student_ai_chatbot === false
+        },
         { label: 'My Classes', href: '/student/classes', icon: BookOpen },
         { label: 'Assignments', href: '/student/assignments', icon: FileText },
         { label: 'Library', href: '/student/library', icon: BookOpen },
         { label: 'Attendance', href: '/student/attendance', icon: Calendar },
         { label: 'Assessments', href: '/student/assessments', icon: GraduationCap },
         { label: 'My Grades', href: '/student/grades', icon: Award },
-        { label: 'Fees & Payments', href: '/student/fees', icon: CreditCard },
+        {
+            label: 'Fees & Payments',
+            href: '/student/fees',
+            icon: CreditCard,
+            hidden: user?.tenant_features?.parent_fees === false
+        },
         { label: 'Timetable', href: '/student/timetable', icon: Clock },
-        { label: 'Leaderboard', href: '/student/leaderboard', icon: Trophy },
+        {
+            label: 'Leaderboard',
+            href: '/student/leaderboard',
+            icon: Trophy,
+            hidden: user?.tenant_features?.student_gamification === false
+        },
         { label: 'Notices', href: '/student/notices', icon: FileBarChart },
         { label: 'Messages', href: '/student/messages', icon: MessageSquare },
         { label: 'Profile', href: '/student/profile', icon: UserIcon },
         { label: 'Offline Content', href: '/student/offline', icon: Download, offline: true },
-    ];
+    ].filter(item => !item.hidden);
 
     const handleLogout = () => {
         removeTokens();

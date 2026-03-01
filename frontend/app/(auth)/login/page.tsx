@@ -32,7 +32,18 @@ const roles = [
         color: 'from-blue-500 to-cyan-500',
         hover: 'hover:shadow-blue-500/20 hover:border-blue-500/50',
     },
+    {
+        id: 'saas',
+        title: 'Platform System Admin',
+        description: 'Global SaaS network management',
+        icon: ShieldCheck,
+        href: '/login/saas',
+        color: 'from-violet-500 to-fuchsia-500',
+        hover: 'hover:shadow-violet-500/20 hover:border-violet-500/50',
+    },
 ];
+
+export const dynamic = 'force-dynamic';
 
 export default function LoginPortalPage() {
     return (
@@ -54,7 +65,7 @@ export default function LoginPortalPage() {
                     </p>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                     {roles.map((role, index) => (
                         <motion.div
                             key={role.id}

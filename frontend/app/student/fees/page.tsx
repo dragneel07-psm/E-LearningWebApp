@@ -11,6 +11,7 @@ import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
+import { Lock } from 'lucide-react';
 
 export default function StudentFeesPage() {
     const [fees, setFees] = useState<StudentFee[]>([]);
@@ -19,6 +20,7 @@ export default function StudentFeesPage() {
     const [isPayDialogOpen, setIsPayDialogOpen] = useState(false);
     const [selectedFee, setSelectedFee] = useState<StudentFee | null>(null);
     const [payLoading, setPayLoading] = useState(false);
+    const [user, setUser] = useState<any>(null);
 
     useEffect(() => {
         loadData();
@@ -27,7 +29,8 @@ export default function StudentFeesPage() {
     const loadData = async () => {
         try {
             setLoading(true);
-            const user = await usersAPI.getMe();
+            const currentUser = await usersAPI.getMe();
+            setUser(currentUser);
             const students = await academicAPI.getStudents();
             const currentStudent = students.find(s => s.user_id === user.user_id);
 
@@ -105,6 +108,18 @@ export default function StudentFeesPage() {
         return (
             <div className="flex justify-center items-center min-h-[400px]">
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+            </div>
+        );
+    }
+
+    if (user?.tenant_features?.parent_fees === false) {
+        return (
+            <div className="flex flex-col items-center justify-center p-12 text-center h-[60vh]">
+                <div className="h-16 w-16 bg-slate-100 rounded-full flex items-center justify-center mb-4 mx-auto">
+                    <Lock className="h-8 w-8 text-slate-400" />
+                </div>
+                <h2 className="text-2xl font-bold text-slate-900 mb-2">Finance Module Locked</h2>
+                <p className="text-slate-500 max-w-md mx-auto">Fee management and online payments are not enabled for your school portal.</p>
             </div>
         );
     }

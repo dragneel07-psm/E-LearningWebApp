@@ -22,6 +22,13 @@ class Tenant(TenantMixin, TimeStampedModel):
     current_academic_year = models.CharField(max_length=20, default='2024-2025')
     established_year = models.IntegerField(blank=True, null=True)
     logo = models.ImageField(upload_to='tenant_logos/', blank=True, null=True)
+    
+    # Feature Flags for SaaS Admin to control tenant capabilities
+    features = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="Stores active/inactive features for different roles, e.g., {'parents': {'view_attendance': True}}"
+    )
 
     # default true, schema will be automatically created and synced when it is saved
     auto_create_schema = True

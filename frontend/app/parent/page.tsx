@@ -120,13 +120,15 @@ export default function ParentDashboard() {
                                 </div>
                             </div>
 
-                            <div className="space-y-2">
-                                <div className="flex justify-between text-sm">
-                                    <span>Attendance (Last 30 Days)</span>
-                                    <span className="font-medium">{(child as any).attendance_percentage || 0}%</span>
+                            {parentData.user.tenant_features?.parent_attendance !== false && (
+                                <div className="space-y-2">
+                                    <div className="flex justify-between text-sm">
+                                        <span>Attendance (Last 30 Days)</span>
+                                        <span className="font-medium">{(child as any).attendance_percentage || 0}%</span>
+                                    </div>
+                                    <Progress value={(child as any).attendance_percentage || 0} className="h-2" />
                                 </div>
-                                <Progress value={(child as any).attendance_percentage || 0} className="h-2" />
-                            </div>
+                            )}
 
                             <div className="space-y-3 pt-4 border-t">
                                 <h4 className="text-sm font-semibold flex items-center mb-2">
