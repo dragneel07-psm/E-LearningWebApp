@@ -3,11 +3,6 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   output: 'standalone',
 
-  // Silence Turbopack workspace root warning
-  turbopack: {
-    root: __dirname,
-  },
-
   // Headers for PWA / Service Worker support
   async headers() {
     return [
