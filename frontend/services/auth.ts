@@ -41,10 +41,8 @@ export const authService = {
     },
 
     async register(data: RegisterData) {
-        // Determine tenant: subdomain detection > 'public'
-        const tenantId = (typeof window !== 'undefined'
-            ? getTenantFromSubdomain(window.location.hostname)
-            : null) || 'public';
+        // SaaS Admin registration always goes to the 'public' schema
+        const tenantId = 'public';
 
         const response = await api.post<RegisterResponse>('/api/users/register/', data, {
             headers: { 'x-tenant-id': tenantId },

@@ -43,15 +43,20 @@ export function RegisterForm() {
             toast.success('SaaS Admin account created! Redirecting...');
             router.push('/saas');
         } catch (err: any) {
-            console.error("Register Error:", err);
+            console.error("Register Error Details:", err.response?.data || err);
             // Handle Django REST Framework error structure
             let msg = 'Registration failed. Please try again.';
             if (err.response?.data) {
                 const d = err.response.data;
-                if (d.email) msg = d.email[0];
-                else if (d.password) msg = d.password[0];
-                else if (d.detail) msg = d.detail;
-                else if (typeof d === 'string') msg = d;
+                if (typeof d === 'object') {
+                    // Collect all values from the object
+                    const allErrors = Object.values(d).flat();
+                    if (allErrors.length > 0 && typeof allErrors[0] === 'string') {
+                        msg = allErrors[0];
+                    }
+                } else if (typeof d === 'string') {
+                    msg = d;
+                }
             }
             toast.error(msg);
         } finally {
