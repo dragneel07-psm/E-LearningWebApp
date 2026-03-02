@@ -11,7 +11,10 @@ class AITutorService:
         # Initialize OpenAI client
         # Note: Set OPENAI_API_KEY in environment or settings
         api_key = os.getenv('OPENAI_API_KEY', 'demo-key')
-        self.client = OpenAI(api_key=api_key) if api_key != 'demo-key' else None
+        base_url = os.getenv('OPENAI_BASE_URL')
+        self.client = (
+            OpenAI(api_key=api_key, base_url=base_url) if base_url else OpenAI(api_key=api_key)
+        ) if api_key != 'demo-key' else None
         self.model = os.getenv('OPENAI_MODEL', 'gpt-3.5-turbo')
         
     def generate_tutor_response(self, 
