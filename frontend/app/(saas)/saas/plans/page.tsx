@@ -32,6 +32,21 @@ export default function SaasPlansPage() {
     const [loading, setLoading] = useState(true);
     const [billingCycle, setBillingCycle] = useState<'monthly' | 'yearly'>('monthly');
 
+    const getCurrencyPrefix = (currency?: string) => {
+        const normalized = (currency || 'USD').toUpperCase();
+        if (normalized === 'NPR') return 'Rs. ';
+        if (normalized === 'USD') return '$';
+        return `${normalized} `;
+    };
+
+    const formatAmount = (value: number | string, currency?: string) => {
+        const numericValue = Number(value) || 0;
+        return `${getCurrencyPrefix(currency)}${numericValue.toLocaleString('en-US', {
+            minimumFractionDigits: 0,
+            maximumFractionDigits: 0,
+        })}`;
+    };
+
     const containerVariants = {
         hidden: { opacity: 0 },
         visible: {
@@ -114,7 +129,7 @@ export default function SaasPlansPage() {
                             className={`px-4 py-2 rounded-lg text-sm font-bold transition-all flex items-center gap-2 ${billingCycle === 'yearly' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'}`}
                         >
                             Yearly
-                            <span className="text-[10px] bg-emerald-100 text-emerald-600 dark:bg-emerald-500/20 dark:text-emerald-400 px-1.5 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-500/30">-20%</span>
+                            <span className="text-[10px] bg-emerald-100 text-emerald-600 dark:bg-emerald-500/20 dark:text-emerald-400 px-1.5 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-500/30">50%+ Benefit</span>
                         </button>
                     </div>
 
@@ -195,15 +210,18 @@ export default function SaasPlansPage() {
                                                 exit={{ opacity: 0, y: -10 }}
                                                 className="flex items-baseline gap-1"
                                             >
-                                                <span className="text-4xl font-black text-slate-900 dark:text-white">$</span>
                                                 <span className="text-5xl font-black text-slate-900 dark:text-white tracking-tighter">
-                                                    {billingCycle === 'monthly' ? Math.floor(plan.price_monthly) : Math.floor(plan.price_yearly)}
+                                                    {billingCycle === 'monthly'
+                                                        ? formatAmount(plan.price_monthly, plan.currency)
+                                                        : formatAmount(plan.price_yearly, plan.currency)}
                                                 </span>
                                                 <span className="text-slate-500 dark:text-slate-500 text-lg font-medium">/{billingCycle === 'monthly' ? 'mo' : 'yr'}</span>
                                             </motion.div>
                                         </AnimatePresence>
                                         <p className="text-[10px] text-indigo-500/80 dark:text-indigo-400/60 font-mono mt-2 uppercase tracking-[0.2em]">
-                                            {billingCycle === 'monthly' ? `OR $${plan.price_yearly} YEARLY` : `SAVING $${(plan.price_monthly * 12 - plan.price_yearly).toFixed(0)} PER YEAR`}
+                                            {billingCycle === 'monthly'
+                                                ? `OR ${formatAmount(plan.price_yearly, plan.currency)} YEARLY`
+                                                : `SAVING ${formatAmount((Number(plan.price_monthly) * 12) - Number(plan.price_yearly), plan.currency)} PER YEAR`}
                                         </p>
                                     </div>
                                 </CardHeader>

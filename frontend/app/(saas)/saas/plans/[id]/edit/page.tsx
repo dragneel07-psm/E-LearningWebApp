@@ -29,7 +29,7 @@ export default function EditPlanPage() {
         description: '',
         price_monthly: '',
         price_yearly: '',
-        currency: 'USD',
+        currency: 'NPR',
         student_limit: '',
         teacher_limit: '',
         ai_token_limit: '',
@@ -56,7 +56,7 @@ export default function EditPlanPage() {
                 description: plan.description || '',
                 price_monthly: plan.price_monthly.toString(),
                 price_yearly: plan.price_yearly.toString(),
-                currency: plan.currency || 'USD',
+                currency: plan.currency || 'NPR',
                 student_limit: plan.student_limit.toString(),
                 teacher_limit: plan.teacher_limit.toString(),
                 ai_token_limit: plan.ai_token_limit.toString(),
@@ -90,10 +90,26 @@ export default function EditPlanPage() {
         e.preventDefault();
         setIsSaving(true);
 
+        const monthlyPrice = parseFloat(formData.price_monthly) || 0;
+        const yearlyPrice = parseFloat(formData.price_yearly) || 0;
+        const maxYearlyForBenefit = monthlyPrice * 6; // 50% benefit over 12 monthly payments
+
+        if (monthlyPrice <= 0) {
+            toast.error("Monthly price must be greater than zero.");
+            setIsSaving(false);
+            return;
+        }
+
+        if (yearlyPrice > maxYearlyForBenefit) {
+            toast.error("Yearly price must provide at least 50% benefit over monthly billing.");
+            setIsSaving(false);
+            return;
+        }
+
         const payload = {
             ...formData,
-            price_monthly: parseFloat(formData.price_monthly) || 0,
-            price_yearly: parseFloat(formData.price_yearly) || 0,
+            price_monthly: monthlyPrice,
+            price_yearly: yearlyPrice,
             student_limit: parseInt(formData.student_limit) || 0,
             teacher_limit: parseInt(formData.teacher_limit) || 0,
             ai_token_limit: parseInt(formData.ai_token_limit) || 0,
@@ -172,11 +188,11 @@ export default function EditPlanPage() {
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                             <div className="space-y-3">
-                                <Label htmlFor="price_monthly" className="text-sm font-bold text-slate-300">Monthly Price ($)</Label>
+                                <Label htmlFor="price_monthly" className="text-sm font-bold text-slate-300">Monthly Price ({formData.currency})</Label>
                                 <Input id="price_monthly" type="number" step="0.01" required value={formData.price_monthly} onChange={handleChange} className="h-12 bg-white/5 border-white/5 rounded-xl focus:ring-indigo-500/50 text-white placeholder:text-slate-600" />
                             </div>
                             <div className="space-y-3">
-                                <Label htmlFor="price_yearly" className="text-sm font-bold text-slate-300">Yearly Price ($)</Label>
+                                <Label htmlFor="price_yearly" className="text-sm font-bold text-slate-300">Yearly Price ({formData.currency})</Label>
                                 <Input id="price_yearly" type="number" step="0.01" required value={formData.price_yearly} onChange={handleChange} className="h-12 bg-white/5 border-white/5 rounded-xl focus:ring-indigo-500/50 text-white placeholder:text-slate-600" />
                             </div>
                             <div className="space-y-3">

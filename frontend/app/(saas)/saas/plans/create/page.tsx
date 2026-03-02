@@ -25,7 +25,7 @@ export default function CreatePlanPage() {
         description: '',
         price_monthly: '',
         price_yearly: '',
-        currency: 'USD',
+        currency: 'NPR',
         student_limit: '',
         teacher_limit: '',
         ai_token_limit: '',
@@ -51,11 +51,27 @@ export default function CreatePlanPage() {
         e.preventDefault();
         setIsLoading(true);
 
+        const monthlyPrice = parseFloat(formData.price_monthly) || 0;
+        const yearlyPrice = parseFloat(formData.price_yearly) || 0;
+        const maxYearlyForBenefit = monthlyPrice * 6; // 50% benefit over 12 monthly payments
+
+        if (monthlyPrice <= 0) {
+            toast.error("Monthly price must be greater than zero.");
+            setIsLoading(false);
+            return;
+        }
+
+        if (yearlyPrice > maxYearlyForBenefit) {
+            toast.error("Yearly price must provide at least 50% benefit over monthly billing.");
+            setIsLoading(false);
+            return;
+        }
+
         // Convert types
         const payload = {
             ...formData,
-            price_monthly: parseFloat(formData.price_monthly) || 0,
-            price_yearly: parseFloat(formData.price_yearly) || 0,
+            price_monthly: monthlyPrice,
+            price_yearly: yearlyPrice,
             student_limit: parseInt(formData.student_limit) || 0,
             teacher_limit: parseInt(formData.teacher_limit) || 0,
             ai_token_limit: parseInt(formData.ai_token_limit) || 0,
@@ -125,11 +141,11 @@ export default function CreatePlanPage() {
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                             <div className="space-y-3">
-                                <Label htmlFor="price_monthly" className="text-sm font-bold text-slate-300">Monthly Price ($)</Label>
+                                <Label htmlFor="price_monthly" className="text-sm font-bold text-slate-300">Monthly Price ({formData.currency})</Label>
                                 <Input id="price_monthly" type="number" step="0.01" required value={formData.price_monthly} onChange={handleChange} placeholder="0.00" className="h-12 bg-white/5 border-white/5 rounded-xl focus:ring-indigo-500/50 text-white placeholder:text-slate-600" />
                             </div>
                             <div className="space-y-3">
-                                <Label htmlFor="price_yearly" className="text-sm font-bold text-slate-300">Yearly Price ($)</Label>
+                                <Label htmlFor="price_yearly" className="text-sm font-bold text-slate-300">Yearly Price ({formData.currency})</Label>
                                 <Input id="price_yearly" type="number" step="0.01" required value={formData.price_yearly} onChange={handleChange} placeholder="0.00" className="h-12 bg-white/5 border-white/5 rounded-xl focus:ring-indigo-500/50 text-white placeholder:text-slate-600" />
                             </div>
                             <div className="space-y-3">

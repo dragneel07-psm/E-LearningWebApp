@@ -1,7 +1,33 @@
 from rest_framework import serializers
+from decimal import Decimal
 from .models import Subscription, SubscriptionPlan, Invoice, FeeStructure, StudentFee, Payment, Expense
 
 class SubscriptionPlanSerializer(serializers.ModelSerializer):
+    def validate(self, attrs):
+        instance = getattr(self, 'instance', None)
+        monthly = attrs.get('price_monthly', getattr(instance, 'price_monthly', None))
+        yearly = attrs.get('price_yearly', getattr(instance, 'price_yearly', None))
+
+        if monthly is None or yearly is None:
+            return attrs
+
+        monthly_dec = Decimal(str(monthly))
+        yearly_dec = Decimal(str(yearly))
+        if monthly_dec <= 0:
+            raise serializers.ValidationError({'price_monthly': 'Monthly price must be greater than zero.'})
+
+        annual_monthly = monthly_dec * Decimal('12')
+        min_benefit_percent = Decimal('50')
+        min_yearly_discount = annual_monthly * (min_benefit_percent / Decimal('100'))
+        max_yearly_price = annual_monthly - min_yearly_discount
+
+        if yearly_dec > max_yearly_price:
+            raise serializers.ValidationError({
+                'price_yearly': f'Yearly price must provide at least {int(min_benefit_percent)}% benefit over monthly billing.'
+            })
+
+        return attrs
+
     class Meta:
         model = SubscriptionPlan
         fields = '__all__'
