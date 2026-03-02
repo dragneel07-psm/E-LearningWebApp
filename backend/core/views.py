@@ -15,7 +15,8 @@ from django.conf import settings
 from django.core.management import call_command
 import os
 import glob
-from datetime import datetime
+from datetime import datetime, timedelta
+from django.utils import timezone
 
 class TenantCheckView(APIView):
     permission_classes = [permissions.AllowAny]
@@ -53,6 +54,7 @@ class TenantViewSet(viewsets.ModelViewSet):
         admin_pass = serializer.validated_data.get('password')
         first = serializer.validated_data.get('admin_first_name')
         last = serializer.validated_data.get('admin_last_name')
+        selected_plan = serializer.validated_data.get('plan')
 
         # 2. Save Tenant (schema_name is mandatory for TenantMixin)
         # We use the subdomain as the schema name for consistency
@@ -76,17 +78,22 @@ class TenantViewSet(viewsets.ModelViewSet):
             # 4. Create a default Trial Subscription for the new tenant
             try:
                 from billing.models import Subscription, SubscriptionPlan
-                # Find a default plan if exists (e.g., Standard or Trial)
-                plan = SubscriptionPlan.objects.filter(name__icontains='Standard').first() or \
-                       SubscriptionPlan.objects.filter(is_active=True).first()
+                # Required by serializer, but keep a safe fallback.
+                plan = selected_plan or SubscriptionPlan.objects.filter(is_active=True).order_by('name').first()
+                if not plan:
+                    raise ValueError("No active subscription plan found.")
                 
                 Subscription.objects.create(
                     tenant=tenant,
                     plan=plan,
-                    status='active',
-                    billing_cycle='monthly'
+                    status='trial',
+                    billing_cycle='monthly',
+                    end_date=timezone.now().date() + timedelta(days=15),
+                    student_limit=plan.student_limit,
+                    storage_limit_gb=plan.storage_limit_gb,
+                    ai_token_limit=plan.ai_token_limit,
                 )
-                print(f"Trial subscription created for {tenant.name}")
+                print(f"15-day trial subscription created for {tenant.name} on plan {plan.name}")
             except Exception as sub_err:
                 print(f"Warning: Failed to create default subscription for {tenant.name}: {sub_err}")
 

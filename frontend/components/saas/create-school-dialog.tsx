@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Button } from "@/components/ui/button";
 import {
     Dialog,
@@ -11,15 +11,18 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { PlusCircle, Loader2 } from "lucide-react";
 import { toast } from "sonner";
-import { coreAPI } from "@/lib/api";
+import { coreAPI, saasApi, SubscriptionPlan } from "@/lib/api";
 
 type CreateTenantPayload = Parameters<typeof coreAPI.createTenant>[0] & {
     admin_email: string;
     password: string;
     admin_first_name: string;
     admin_last_name: string;
+    plan_id: string;
+    type: string;
 };
 
 export function CreateSchoolDialog({ onCreated }: { onCreated: () => void }) {
@@ -33,12 +36,43 @@ export function CreateSchoolDialog({ onCreated }: { onCreated: () => void }) {
     const [adminLastName, setAdminLastName] = useState("");
     const [adminEmail, setAdminEmail] = useState("");
     const [adminPassword, setAdminPassword] = useState("");
+    const [plans, setPlans] = useState<SubscriptionPlan[]>([]);
+    const [plansLoading, setPlansLoading] = useState(false);
+    const [selectedPlanId, setSelectedPlanId] = useState("");
+
+    useEffect(() => {
+        if (!open) return;
+        loadPlans();
+    }, [open]);
+
+    const loadPlans = async () => {
+        setPlansLoading(true);
+        try {
+            const data = await saasApi.getPlans();
+            const activePlans = (Array.isArray(data) ? data : []).filter((plan) => plan.is_active);
+            setPlans(activePlans);
+            if (!selectedPlanId && activePlans.length > 0) {
+                setSelectedPlanId(activePlans[0].plan_id || activePlans[0].id);
+            }
+        } catch (error) {
+            console.error(error);
+            toast.error("Failed to load subscription plans.");
+        } finally {
+            setPlansLoading(false);
+        }
+    };
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
 
-        if (!name || !subdomain || !adminEmail || !adminPassword || !adminFirstName || !adminLastName) {
+        if (!name || !subdomain || !adminEmail || !adminPassword || !adminFirstName || !adminLastName || !selectedPlanId) {
             toast.error("Please fill in all required fields.");
+            return;
+        }
+
+        const selectedPlan = plans.find((plan) => (plan.plan_id || plan.id) === selectedPlanId);
+        if (!selectedPlan) {
+            toast.error("Please select a valid subscription type.");
             return;
         }
 
@@ -47,7 +81,8 @@ export function CreateSchoolDialog({ onCreated }: { onCreated: () => void }) {
             const payload: CreateTenantPayload = {
                 name,
                 subdomain,
-                type: 'standard', // Default Plan
+                type: selectedPlan.name,
+                plan_id: selectedPlan.plan_id || selectedPlan.id,
                 status: 'active',
                 admin_email: adminEmail,
                 password: adminPassword,
@@ -69,6 +104,7 @@ export function CreateSchoolDialog({ onCreated }: { onCreated: () => void }) {
             setAdminPassword("");
             setAdminFirstName("");
             setAdminLastName("");
+            setSelectedPlanId("");
         } catch (error: unknown) {
             console.error(error);
             const message = error instanceof Error ? error.message : "Failed to create school.";
@@ -120,6 +156,28 @@ export function CreateSchoolDialog({ onCreated }: { onCreated: () => void }) {
                                 />
                                 <p className="text-[10px] text-slate-500">
                                     This will be used for logins (e.g. greenwood.domain.com)
+                                </p>
+                            </div>
+                        </div>
+                        <div className="grid grid-cols-4 items-center gap-4">
+                            <Label htmlFor="type" className="text-right">
+                                Type
+                            </Label>
+                            <div className="col-span-3 space-y-1">
+                                <Select value={selectedPlanId} onValueChange={setSelectedPlanId} disabled={plansLoading || plans.length === 0}>
+                                    <SelectTrigger id="type">
+                                        <SelectValue placeholder={plansLoading ? "Loading plans..." : "Select subscription type"} />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {plans.map((plan) => (
+                                            <SelectItem key={plan.plan_id || plan.id} value={plan.plan_id || plan.id}>
+                                                {plan.name}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                                <p className="text-[10px] text-slate-500">
+                                    School starts with a mandatory 15-day trial on the selected subscription type.
                                 </p>
                             </div>
                         </div>

@@ -4,6 +4,7 @@ from .models import Tenant, AuditLog, GlobalSettings
 import re
 from django.db import connection
 from django.db.models import Sum
+from billing.models import SubscriptionPlan
 
 class TenantSerializer(serializers.ModelSerializer):
     plan_name = serializers.SerializerMethodField()
@@ -280,12 +281,25 @@ class TenantCreateSerializer(serializers.ModelSerializer):
     admin_first_name = serializers.CharField(write_only=True)
     admin_last_name = serializers.CharField(write_only=True)
     password = serializers.CharField(write_only=True, required=False) # Optional, can auto-gen
+    plan_id = serializers.UUIDField(write_only=True, required=True)
 
     class Meta:
         model = Tenant
-        fields = ['name', 'subdomain', 'contact_email', 'address', 'admin_email', 'admin_first_name', 'admin_last_name', 'password']
+        fields = [
+            'name',
+            'subdomain',
+            'type',
+            'plan_id',
+            'contact_email',
+            'address',
+            'admin_email',
+            'admin_first_name',
+            'admin_last_name',
+            'password',
+        ]
         extra_kwargs = {
-            'contact_email': {'required': False}
+            'contact_email': {'required': False},
+            'type': {'required': True}
         }
 
     def validate_subdomain(self, value):
@@ -296,6 +310,44 @@ class TenantCreateSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("Subdomain must be lowercase alphanumeric with hyphens.")
         return value
 
+    def _derive_tenant_type(self, plan: SubscriptionPlan) -> str:
+        name = (plan.name or '').strip().lower()
+        if 'enterprise' in name:
+            return 'enterprise'
+        if 'premium' in name:
+            return 'premium'
+        if 'standard' in name or 'basic' in name or 'starter' in name:
+            return 'standard'
+
+        # Fallback by scale
+        if (plan.student_limit or 0) >= 3000:
+            return 'enterprise'
+        if (plan.student_limit or 0) >= 1000:
+            return 'premium'
+        return 'standard'
+
+    def validate(self, attrs):
+        provided_type = (attrs.get('type') or '').strip()
+        if not provided_type:
+            raise serializers.ValidationError({'type': 'Type is required.'})
+
+        plan_id = attrs.get('plan_id')
+        plan = SubscriptionPlan.objects.filter(plan_id=plan_id, is_active=True).first()
+        if not plan:
+            raise serializers.ValidationError({'plan_id': 'Selected subscription plan is invalid or inactive.'})
+
+        plan_type = self._derive_tenant_type(plan)
+        normalized_provided = provided_type.lower()
+        accepted_inputs = {plan_type, (plan.name or '').strip().lower()}
+        if normalized_provided not in accepted_inputs:
+            raise serializers.ValidationError({
+                'type': f"Type must match selected plan '{plan.name}'."
+            })
+
+        attrs['type'] = plan_type
+        attrs['plan'] = plan
+        return attrs
+
     def create(self, validated_data):
         # schema_name is derived from subdomain in the view's perform_create,
         # but the serializer still needs to pop the write-only fields.
@@ -303,6 +355,8 @@ class TenantCreateSerializer(serializers.ModelSerializer):
         validated_data.pop('admin_first_name', None)
         validated_data.pop('admin_last_name', None)
         validated_data.pop('password', None)
+        validated_data.pop('plan_id', None)
+        validated_data.pop('plan', None)
         
         # subdomain is a real field on our model now
         return Tenant.objects.create(**validated_data)
