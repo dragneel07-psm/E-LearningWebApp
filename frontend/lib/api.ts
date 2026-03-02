@@ -46,6 +46,21 @@ export interface Tenant {
     established_year?: number;
     logo?: string;
     features?: Record<string, any>;
+    // Computed SaaS metrics
+    student_count?: number;
+    teacher_count?: number;
+    total_users?: number;
+    admin_count?: number;
+    plan_name?: string;
+    billing_cycle?: string;
+    subscription_status?: string;
+    ai_usage?: string;
+    ai_tokens_used?: number;
+    ai_token_limit?: number;
+    storage_used_bytes?: number;
+    storage_used_mb?: number;
+    storage_limit_gb?: number;
+    storage_usage_percent?: number;
 }
 
 export interface User {
@@ -770,10 +785,29 @@ export const coreAPI = {
 // Users API
 export const usersAPI = {
     getAccounts: async () => {
-        const data = await apiRequest<User[] | { results?: User[] }>('/users/accounts/');
-        if (Array.isArray(data)) return data;
-        if (data && Array.isArray(data.results)) return data.results;
-        return [];
+        const firstPage = await apiRequest<User[] | { count?: number; next?: string | null; results?: User[] }>('/users/accounts/');
+        if (Array.isArray(firstPage)) return firstPage;
+        if (!firstPage || !Array.isArray(firstPage.results)) return [];
+
+        const all = [...firstPage.results];
+        const totalCount = typeof firstPage.count === 'number' ? firstPage.count : all.length;
+        let page = 2;
+        let hasMore = Boolean(firstPage.next);
+
+        while (hasMore && all.length < totalCount) {
+            const nextPage = await apiRequest<User[] | { next?: string | null; results?: User[] }>(`/users/accounts/?page=${page}`);
+            if (Array.isArray(nextPage)) {
+                all.push(...nextPage);
+                break;
+            }
+            const batch = Array.isArray(nextPage?.results) ? nextPage.results : [];
+            if (batch.length === 0) break;
+            all.push(...batch);
+            hasMore = Boolean(nextPage?.next);
+            page += 1;
+        }
+
+        return all;
     },
     getMe: () => apiRequest<User>('/users/accounts/me/'),
     getAccount: (id: string) => apiRequest<User>(`/users/accounts/${id}/`),

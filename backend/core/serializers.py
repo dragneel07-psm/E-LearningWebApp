@@ -2,6 +2,8 @@
 from rest_framework import serializers
 from .models import Tenant, AuditLog, GlobalSettings
 import re
+from django.db import connection
+from django.db.models import Sum
 
 class TenantSerializer(serializers.ModelSerializer):
     plan_name = serializers.SerializerMethodField()
@@ -9,7 +11,15 @@ class TenantSerializer(serializers.ModelSerializer):
     billing_cycle = serializers.SerializerMethodField()
     student_count = serializers.SerializerMethodField()
     teacher_count = serializers.SerializerMethodField()
+    total_users = serializers.SerializerMethodField()
+    admin_count = serializers.SerializerMethodField()
     ai_usage = serializers.SerializerMethodField()
+    ai_tokens_used = serializers.SerializerMethodField()
+    ai_token_limit = serializers.SerializerMethodField()
+    storage_used_bytes = serializers.SerializerMethodField()
+    storage_used_mb = serializers.SerializerMethodField()
+    storage_limit_gb = serializers.SerializerMethodField()
+    storage_usage_percent = serializers.SerializerMethodField()
 
     class Meta:
         model = Tenant
@@ -17,7 +27,10 @@ class TenantSerializer(serializers.ModelSerializer):
             'id', 'schema_name', 'name', 'subdomain', 'type', 'status', 
             'contact_email', 'contact_phone', 'address', 'website',
             'plan_name', 'subscription_status', 'billing_cycle',
-            'student_count', 'teacher_count', 'ai_usage', 'logo'
+            'student_count', 'teacher_count', 'total_users', 'admin_count',
+            'ai_usage', 'ai_tokens_used', 'ai_token_limit',
+            'storage_used_bytes', 'storage_used_mb', 'storage_limit_gb', 'storage_usage_percent',
+            'logo'
         ]
     
     def get_plan_name(self, obj):
@@ -45,18 +58,113 @@ class TenantSerializer(serializers.ModelSerializer):
         except:
             return "Trial"
 
+    def _get_stats(self, obj):
+        if not hasattr(self, '_stats_cache'):
+            self._stats_cache = {}
+        cache_key = str(obj.id)
+        if cache_key in self._stats_cache:
+            return self._stats_cache[cache_key]
+
+        stats = {
+            'student_count': 0,
+            'teacher_count': 0,
+            'total_users': 0,
+            'admin_count': 0,
+            'ai_tokens_used': 0,
+            'storage_used_bytes': 0,
+        }
+
+        try:
+            from django_tenants.utils import schema_context
+            with schema_context(obj.schema_name):
+                from academic.models import Student, Teacher
+                from users.models import UserAccount
+                from ai_engine.models import AIInteractionLog
+
+                stats['student_count'] = Student.objects.count()
+                stats['teacher_count'] = Teacher.objects.count()
+                stats['total_users'] = UserAccount.objects.exclude(role='saas_admin').count()
+                stats['admin_count'] = UserAccount.objects.filter(role='admin').count()
+                stats['ai_tokens_used'] = AIInteractionLog.objects.aggregate(total=Sum('total_tokens'))['total'] or 0
+        except Exception:
+            # Keep graceful fallbacks
+            pass
+
+        try:
+            # Compute real DB footprint per tenant schema (tables + indexes + TOAST)
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    SELECT COALESCE(SUM(pg_total_relation_size(c.oid)), 0)
+                    FROM pg_class c
+                    JOIN pg_namespace n ON n.oid = c.relnamespace
+                    WHERE n.nspname = %s
+                      AND c.relkind IN ('r', 'm', 'i', 't')
+                    """,
+                    [obj.schema_name]
+                )
+                row = cursor.fetchone()
+                stats['storage_used_bytes'] = int(row[0] or 0) if row else 0
+        except Exception:
+            stats['storage_used_bytes'] = 0
+
+        self._stats_cache[cache_key] = stats
+        return stats
+
+    def _get_ai_limit(self, obj):
+        try:
+            sub = getattr(obj, 'subscription', None)
+            return int(sub.ai_token_limit) if sub and sub.ai_token_limit is not None else 0
+        except Exception:
+            return 0
+
+    def _get_storage_limit_gb(self, obj):
+        try:
+            sub = getattr(obj, 'subscription', None)
+            return int(sub.storage_limit_gb) if sub and sub.storage_limit_gb is not None else 0
+        except Exception:
+            return 0
+
     def get_student_count(self, obj):
-        # This count via related set might fail if UserAccount is not on 'default' DB 
-        # but Tenant is on 'default'. 
-        # Correct way involves cross-db query or routers allowing relation. 
-        # For now, simplistic approach or specific logic needed.
-        return 0 # Placeholder to avoid router errors early on
+        return self._get_stats(obj)['student_count']
 
     def get_teacher_count(self, obj):
-        return 0
+        return self._get_stats(obj)['teacher_count']
+
+    def get_total_users(self, obj):
+        return self._get_stats(obj)['total_users']
+
+    def get_admin_count(self, obj):
+        return self._get_stats(obj)['admin_count']
     
     def get_ai_usage(self, obj):
-        return "0%"
+        used = self.get_ai_tokens_used(obj)
+        limit = self.get_ai_token_limit(obj)
+        if limit <= 0:
+            return "0%"
+        return f"{round((used / limit) * 100, 1)}%"
+
+    def get_ai_tokens_used(self, obj):
+        return self._get_stats(obj)['ai_tokens_used']
+
+    def get_ai_token_limit(self, obj):
+        return self._get_ai_limit(obj)
+
+    def get_storage_used_bytes(self, obj):
+        return self._get_stats(obj)['storage_used_bytes']
+
+    def get_storage_used_mb(self, obj):
+        return round(self.get_storage_used_bytes(obj) / (1024 * 1024), 2)
+
+    def get_storage_limit_gb(self, obj):
+        return self._get_storage_limit_gb(obj)
+
+    def get_storage_usage_percent(self, obj):
+        limit_gb = self.get_storage_limit_gb(obj)
+        if limit_gb <= 0:
+            return 0.0
+        limit_bytes = limit_gb * 1024 * 1024 * 1024
+        return round((self.get_storage_used_bytes(obj) / limit_bytes) * 100, 2)
 
 class AuditLogSerializer(serializers.ModelSerializer):
     user = serializers.StringRelatedField() # Display username

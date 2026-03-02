@@ -70,6 +70,8 @@ function formatRole(role: string): string {
         .join(' ');
 }
 
+const numberFmt = new Intl.NumberFormat('en-US');
+
 export default function SchoolDetailsPage() {
     const params = useParams();
     const router = useRouter();
@@ -284,15 +286,39 @@ export default function SchoolDetailsPage() {
         });
     }, [users, userSearch, roleFilter, statusFilter]);
 
-    const derivedStudentCount = useMemo(
-        () => users.filter(u => u.role === 'student').length || (school?.student_count ?? 0),
+    const studentCount = useMemo(
+        () => Math.max(users.filter(u => u.role === 'student').length, school?.student_count ?? 0),
         [users, school?.student_count]
     );
-    const derivedTeacherCount = useMemo(
-        () => users.filter(u => u.role === 'teacher').length || (school?.teacher_count ?? 0),
+    const teacherCount = useMemo(
+        () => Math.max(users.filter(u => u.role === 'teacher').length, school?.teacher_count ?? 0),
         [users, school?.teacher_count]
     );
-    const totalUsers = users.length || (derivedStudentCount + derivedTeacherCount);
+    const adminCount = useMemo(
+        () => Math.max(users.filter(u => u.role === 'admin').length, school?.admin_count ?? 0),
+        [users, school?.admin_count]
+    );
+    const totalUsers = useMemo(
+        () => Math.max(users.length, school?.total_users ?? 0, studentCount + teacherCount + adminCount),
+        [users.length, school?.total_users, studentCount, teacherCount, adminCount]
+    );
+
+    const aiTokensUsed = school?.ai_tokens_used ?? 0;
+    const aiTokenLimit = school?.ai_token_limit ?? 0;
+    const aiUsagePercent = useMemo(() => {
+        if (typeof school?.ai_usage === 'string' && school.ai_usage.trim().endsWith('%')) {
+            const parsed = parseFloat(school.ai_usage.replace('%', '').trim());
+            if (!Number.isNaN(parsed)) return parsed;
+        }
+        if (aiTokenLimit <= 0) return 0;
+        return (aiTokensUsed / aiTokenLimit) * 100;
+    }, [school?.ai_usage, aiTokenLimit, aiTokensUsed]);
+
+    const storageUsedMb = school?.storage_used_mb
+        ?? ((school?.storage_used_bytes ?? 0) / (1024 * 1024));
+    const storageLimitGb = school?.storage_limit_gb ?? 0;
+    const storageUsagePercent = school?.storage_usage_percent
+        ?? (storageLimitGb > 0 ? (storageUsedMb / (storageLimitGb * 1024)) * 100 : 0);
 
     if (isLoading) {
         return <div className="p-8 flex items-center justify-center h-full"><Loader2 className="w-8 h-8 animate-spin text-slate-400" /></div>;
@@ -348,8 +374,11 @@ export default function SchoolDetailsPage() {
                     <CardContent>
                         <div className="text-2xl font-bold">{totalUsers}</div>
                         <p className="text-xs text-muted-foreground">
-                            {derivedStudentCount} Students • {derivedTeacherCount} Teachers
+                            {studentCount} Students • {teacherCount} Teachers • {adminCount} Admins
                         </p>
+                        <Button variant="link" className="h-auto p-0 mt-2 text-xs" onClick={() => setActiveTab('users')}>
+                            View user details
+                        </Button>
                     </CardContent>
                 </Card>
                 <Card>
@@ -358,10 +387,16 @@ export default function SchoolDetailsPage() {
                         <CreditCard className="h-4 w-4 text-muted-foreground" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold">{school.plan_name}</div>
+                        <div className="text-2xl font-bold">{school.plan_name || 'No Plan'}</div>
                         <p className="text-xs text-muted-foreground">
-                            {school.billing_cycle} Cycle • {school.subscription_status}
+                            {(school.billing_cycle || 'monthly')} cycle • {(school.subscription_status || school.status || 'active')}
                         </p>
+                        <p className="text-xs text-muted-foreground mt-1">
+                            AI limit: {numberFmt.format(aiTokenLimit)} tokens • Storage limit: {storageLimitGb} GB
+                        </p>
+                        <Button variant="link" className="h-auto p-0 mt-2 text-xs" onClick={() => setActiveTab('billing')}>
+                            Open plan details
+                        </Button>
                     </CardContent>
                 </Card>
                 <Card>
@@ -370,10 +405,19 @@ export default function SchoolDetailsPage() {
                         <Activity className="h-4 w-4 text-muted-foreground" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold">{school.ai_usage}</div>
+                        <div className="text-2xl font-bold">{aiUsagePercent.toFixed(1)}%</div>
                         <p className="text-xs text-muted-foreground">
-                            of allocated quota
+                            {numberFmt.format(aiTokensUsed)} / {numberFmt.format(aiTokenLimit)} tokens
                         </p>
+                        <div className="mt-2 h-2 rounded bg-slate-100 overflow-hidden">
+                            <div
+                                className={`h-full ${aiUsagePercent >= 90 ? 'bg-red-500' : aiUsagePercent >= 70 ? 'bg-amber-500' : 'bg-emerald-500'}`}
+                                style={{ width: `${Math.min(aiUsagePercent, 100)}%` }}
+                            />
+                        </div>
+                        <Button variant="link" className="h-auto p-0 mt-2 text-xs" onClick={() => router.push('/saas/ai')}>
+                            Open AI analytics
+                        </Button>
                     </CardContent>
                 </Card>
                 <Card>
@@ -382,9 +426,18 @@ export default function SchoolDetailsPage() {
                         <Building className="h-4 w-4 text-muted-foreground" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold">45%</div>
+                        <div className="text-2xl font-bold">{storageUsagePercent.toFixed(2)}%</div>
                         <p className="text-xs text-muted-foreground">
-                            120GB used of 500GB
+                            {storageUsedMb.toFixed(2)} MB used of {storageLimitGb} GB
+                        </p>
+                        <div className="mt-2 h-2 rounded bg-slate-100 overflow-hidden">
+                            <div
+                                className={`h-full ${storageUsagePercent >= 90 ? 'bg-red-500' : storageUsagePercent >= 70 ? 'bg-amber-500' : 'bg-indigo-500'}`}
+                                style={{ width: `${Math.min(storageUsagePercent, 100)}%` }}
+                            />
+                        </div>
+                        <p className="text-[11px] text-slate-500 mt-2">
+                            Calculated from tenant schema size in PostgreSQL.
                         </p>
                     </CardContent>
                 </Card>
@@ -574,16 +627,22 @@ export default function SchoolDetailsPage() {
                         <CardContent className="space-y-4">
                             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                                 <div>
-                                    <span className="font-semibold block">Plan:</span> {school.plan_name}
+                                    <span className="font-semibold block">Plan:</span> {school.plan_name || 'No Plan'}
                                 </div>
                                 <div>
-                                    <span className="font-semibold block">Status:</span> {school.subscription_status}
+                                    <span className="font-semibold block">Status:</span> {school.subscription_status || school.status}
                                 </div>
                                 <div>
-                                    <span className="font-semibold block">Billing Cycle:</span> {school.billing_cycle}
+                                    <span className="font-semibold block">Billing Cycle:</span> {school.billing_cycle || 'monthly'}
                                 </div>
                                 <div>
                                     <span className="font-semibold block">Next Invoice:</span> Not available
+                                </div>
+                                <div>
+                                    <span className="font-semibold block">AI Usage:</span> {numberFmt.format(aiTokensUsed)} / {numberFmt.format(aiTokenLimit)} tokens
+                                </div>
+                                <div>
+                                    <span className="font-semibold block">Storage Usage:</span> {storageUsedMb.toFixed(2)} MB / {storageLimitGb} GB
                                 </div>
                             </div>
                             <div className="flex gap-2">
