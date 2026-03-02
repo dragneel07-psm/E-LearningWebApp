@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ArrowLeft, Building, Users, CreditCard, Activity, Loader2, RefreshCcw, Search, MoreHorizontal, Eye, Key, ShieldAlert, ShieldCheck, Save, Plus, Download, Upload } from "lucide-react";
-import { coreAPI, Invoice, saasApi, Tenant, usersAPI, User } from "@/lib/api";
+import { coreAPI, Invoice, saasApi, Tenant, User } from "@/lib/api";
 import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -156,9 +156,13 @@ export default function SchoolDetailsPage() {
     const loadUsers = useCallback(async (tenant: TenantDetails) => {
         setUsersLoading(true);
         try {
-            const allUsers = await usersAPI.getAccounts();
-            const scopedUsers = allUsers.filter(user => belongsToSchool(user.tenant, tenant));
-            setUsers(scopedUsers);
+            const tenantId = String(tenant.id ?? tenant.tenant_id ?? '');
+            if (!tenantId) {
+                setUsers([]);
+                return;
+            }
+            const tenantUsers = await saasApi.getTenantUsers(tenantId);
+            setUsers(tenantUsers);
         } catch (error) {
             console.error(error);
             toast.error("Failed to load tenant users.");
@@ -246,9 +250,11 @@ export default function SchoolDetailsPage() {
 
     const handleSaveUser = async () => {
         if (!selectedUser) return;
+        const tenantId = String(school?.id ?? school?.tenant_id ?? '');
+        if (!tenantId) return;
         setIsSavingUser(true);
         try {
-            const updated = await usersAPI.updateAccount(selectedUser.user_id, {
+            const updated = await saasApi.updateTenantUser(tenantId, selectedUser.user_id, {
                 first_name: userForm.first_name,
                 last_name: userForm.last_name,
                 email: userForm.email,
@@ -269,6 +275,8 @@ export default function SchoolDetailsPage() {
 
     const handleCreateUser = async () => {
         if (!school) return;
+        const tenantId = String(school.id ?? school.tenant_id ?? '');
+        if (!tenantId) return;
         if (!newUserForm.first_name || !newUserForm.last_name || !newUserForm.email || !newUserForm.password) {
             toast.error("First name, last name, email, and password are required.");
             return;
@@ -276,13 +284,7 @@ export default function SchoolDetailsPage() {
 
         setIsCreatingUser(true);
         try {
-            const tenantId = String(school.id ?? school.tenant_id ?? '');
-            if (!tenantId) {
-                toast.error("Unable to resolve tenant id for this school.");
-                return;
-            }
-
-            await usersAPI.createAccount({
+            await saasApi.createTenantUser(tenantId, {
                 first_name: newUserForm.first_name,
                 last_name: newUserForm.last_name,
                 email: newUserForm.email,
@@ -290,7 +292,7 @@ export default function SchoolDetailsPage() {
                 password: newUserForm.password,
                 role: newUserForm.role,
                 tenant: tenantId
-            } as Partial<User>);
+            });
 
             toast.success("User created successfully.");
             setNewUserDialogOpen(false);
@@ -305,10 +307,12 @@ export default function SchoolDetailsPage() {
     };
 
     const handleToggleUserStatus = async (user: User) => {
+        const tenantId = String(school?.id ?? school?.tenant_id ?? '');
+        if (!tenantId) return;
         setActiveUserActionId(user.user_id);
         try {
             const isCurrentlyActive = user.is_active !== false;
-            const updated = await usersAPI.updateAccount(user.user_id, { is_active: !isCurrentlyActive });
+            const updated = await saasApi.updateTenantUser(tenantId, user.user_id, { is_active: !isCurrentlyActive });
             setUsers(prev => prev.map(u => (u.user_id === user.user_id ? { ...u, ...updated, is_active: !isCurrentlyActive } : u)));
             toast.success(`User ${isCurrentlyActive ? 'suspended' : 'activated'} successfully.`);
         } catch (error) {
@@ -320,11 +324,13 @@ export default function SchoolDetailsPage() {
     };
 
     const handleResetPassword = async (user: User) => {
+        const tenantId = String(school?.id ?? school?.tenant_id ?? '');
+        if (!tenantId) return;
         const newPassword = window.prompt(`Set a new password for ${user.first_name || user.username || user.email}`);
         if (!newPassword) return;
         setActiveUserActionId(user.user_id);
         try {
-            await usersAPI.resetUserPassword(user.user_id, newPassword);
+            await saasApi.resetTenantUserPassword(tenantId, user.user_id, newPassword);
             toast.success("Password reset successfully.");
         } catch (error) {
             console.error(error);

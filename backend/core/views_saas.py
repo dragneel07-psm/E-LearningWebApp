@@ -6,6 +6,7 @@ from core.models import Tenant
 from billing.models import Invoice, Subscription
 from django.conf import settings
 from datetime import datetime, timedelta
+from django_tenants.utils import schema_context
 
 
 class IsSaaSAdmin(permissions.BasePermission):
@@ -191,5 +192,129 @@ class TenantAdminPasswordResetView(APIView):
             return Response({"message": f"Password reset successfully for admin of {tenant.name}"})
         except Tenant.DoesNotExist:
             return Response({"error": "Tenant not found"}, status=404)
+        except Exception as e:
+            return Response({"error": str(e)}, status=500)
+
+
+def _serialize_tenant_user(user):
+    return {
+        "user_id": str(user.user_id),
+        "username": user.username,
+        "email": user.email,
+        "first_name": user.first_name,
+        "last_name": user.last_name,
+        "role": user.role,
+        "tenant": str(user.tenant_id) if user.tenant_id else None,
+        "is_active": user.is_active,
+    }
+
+
+class TenantUsersView(APIView):
+    permission_classes = [IsSaaSAdmin]
+
+    def get(self, request, tenant_id):
+        try:
+            tenant = Tenant.objects.get(id=tenant_id)
+        except Tenant.DoesNotExist:
+            return Response({"error": "Tenant not found"}, status=404)
+
+        try:
+            from users.models import UserAccount
+            with schema_context(tenant.schema_name):
+                users = UserAccount.objects.all().order_by("first_name", "last_name", "email")
+                return Response([_serialize_tenant_user(u) for u in users])
+        except Exception as e:
+            return Response({"error": str(e)}, status=500)
+
+    def post(self, request, tenant_id):
+        try:
+            tenant = Tenant.objects.get(id=tenant_id)
+        except Tenant.DoesNotExist:
+            return Response({"error": "Tenant not found"}, status=404)
+
+        data = request.data or {}
+        required = ["email", "password", "first_name", "last_name"]
+        missing = [field for field in required if not data.get(field)]
+        if missing:
+            return Response({"error": f"Missing required fields: {', '.join(missing)}"}, status=400)
+
+        role = data.get("role", "student")
+        if role not in ["student", "teacher", "parent", "admin", "staff"]:
+            return Response({"error": "Invalid role"}, status=400)
+
+        username = data.get("username") or str(data.get("email")).split("@")[0]
+
+        try:
+            from users.models import UserAccount
+            with schema_context(tenant.schema_name):
+                user = UserAccount.objects.create_user(
+                    email=data["email"],
+                    username=username,
+                    password=data["password"],
+                    first_name=data["first_name"],
+                    last_name=data["last_name"],
+                    role=role,
+                    tenant=tenant,
+                    is_staff=role in ["admin", "staff"],
+                )
+                return Response(_serialize_tenant_user(user), status=201)
+        except Exception as e:
+            return Response({"error": str(e)}, status=500)
+
+
+class TenantUserDetailView(APIView):
+    permission_classes = [IsSaaSAdmin]
+
+    def patch(self, request, tenant_id, user_id):
+        try:
+            tenant = Tenant.objects.get(id=tenant_id)
+        except Tenant.DoesNotExist:
+            return Response({"error": "Tenant not found"}, status=404)
+
+        try:
+            from users.models import UserAccount
+            with schema_context(tenant.schema_name):
+                user = UserAccount.objects.get(pk=user_id)
+
+                for field in ["first_name", "last_name", "email", "username"]:
+                    if field in request.data:
+                        setattr(user, field, request.data[field])
+
+                if "role" in request.data:
+                    role = request.data["role"]
+                    if role not in ["student", "teacher", "parent", "admin", "staff", "saas_admin"]:
+                        return Response({"error": "Invalid role"}, status=400)
+                    user.role = role
+                    user.is_staff = role in ["admin", "staff", "saas_admin"]
+
+                if "is_active" in request.data:
+                    user.is_active = bool(request.data["is_active"])
+
+                user.save()
+                return Response(_serialize_tenant_user(user))
+        except Exception as e:
+            return Response({"error": str(e)}, status=500)
+
+
+class TenantUserPasswordResetView(APIView):
+    permission_classes = [IsSaaSAdmin]
+
+    def post(self, request, tenant_id, user_id):
+        new_password = request.data.get("new_password")
+        if not new_password:
+            return Response({"error": "new_password is required"}, status=400)
+
+        try:
+            tenant = Tenant.objects.get(id=tenant_id)
+        except Tenant.DoesNotExist:
+            return Response({"error": "Tenant not found"}, status=404)
+
+        try:
+            from users.models import UserAccount
+            with schema_context(tenant.schema_name):
+                user = UserAccount.objects.get(pk=user_id)
+                user.set_password(new_password)
+                user.save()
+                return Response({"message": "Password reset successfully"})
         except Exception as e:
             return Response({"error": str(e)}, status=500)

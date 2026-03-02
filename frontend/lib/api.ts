@@ -688,8 +688,11 @@ export async function apiRequest<T>(
 
     // Add tenant context header — dynamically read from localStorage so SaaS users
     // get 'public' and school users get their own tenant slug.
-    const storedTenantId = (typeof window !== 'undefined' ? localStorage.getItem('tenant_id') : null) || 'demo';
-    headers['x-tenant-id'] = storedTenantId;
+    const explicitTenantHeader = headers['x-tenant-id'] || headers['X-Tenant-Id'];
+    if (!explicitTenantHeader) {
+        const storedTenantId = (typeof window !== 'undefined' ? localStorage.getItem('tenant_id') : null) || 'demo';
+        headers['x-tenant-id'] = storedTenantId;
+    }
 
     try {
         const response = await fetch(`${API_BASE_URL}${endpoint}`, {
@@ -753,8 +756,11 @@ async function apiRequestBlob(
     if (token) {
         headers['Authorization'] = `Bearer ${token}`;
     }
-    const blobTenantId = (typeof window !== 'undefined' ? localStorage.getItem('tenant_id') : null) || 'demo';
-    headers['x-tenant-id'] = blobTenantId;
+    const explicitTenantHeader = headers['x-tenant-id'] || headers['X-Tenant-Id'];
+    if (!explicitTenantHeader) {
+        const blobTenantId = (typeof window !== 'undefined' ? localStorage.getItem('tenant_id') : null) || 'demo';
+        headers['x-tenant-id'] = blobTenantId;
+    }
 
     const response = await fetch(`${API_BASE_URL}${endpoint}`, {
         ...options,
@@ -814,8 +820,11 @@ export const coreAPI = {
 
 // Users API
 export const usersAPI = {
-    getAccounts: async () => {
-        const firstPage = await apiRequest<User[] | PaginatedResponse<User>>('/users/accounts/');
+    getAccounts: async (tenantId?: string) => {
+        const tenantHeaders = tenantId ? { 'x-tenant-id': tenantId } : undefined;
+        const firstPage = await apiRequest<User[] | PaginatedResponse<User>>('/users/accounts/', {
+            headers: tenantHeaders
+        });
         if (Array.isArray(firstPage)) return firstPage;
         if (!firstPage || !Array.isArray(firstPage.results)) return [];
 
@@ -825,7 +834,9 @@ export const usersAPI = {
         let hasMore = Boolean(firstPage.next);
 
         while (hasMore && all.length < totalCount) {
-            const nextPage = await apiRequest<User[] | PaginatedResponse<User>>(`/users/accounts/?page=${page}`);
+            const nextPage = await apiRequest<User[] | PaginatedResponse<User>>(`/users/accounts/?page=${page}`, {
+                headers: tenantHeaders
+            });
             if (Array.isArray(nextPage)) {
                 all.push(...nextPage);
                 break;
@@ -840,14 +851,18 @@ export const usersAPI = {
         return all;
     },
     getMe: () => apiRequest<User>('/users/accounts/me/'),
-    getAccount: (id: string) => apiRequest<User>(`/users/accounts/${id}/`),
-    createAccount: (data: Partial<User>) => apiRequest<User>('/users/accounts/', {
-        method: 'POST',
-        body: JSON.stringify(data)
+    getAccount: (id: string, tenantId?: string) => apiRequest<User>(`/users/accounts/${id}/`, {
+        headers: tenantId ? { 'x-tenant-id': tenantId } : undefined
     }),
-    updateAccount: (id: string, data: Partial<User>) => apiRequest<User>(`/users/accounts/${id}/`, {
+    createAccount: (data: Partial<User>, tenantId?: string) => apiRequest<User>('/users/accounts/', {
+        method: 'POST',
+        body: JSON.stringify(data),
+        headers: tenantId ? { 'x-tenant-id': tenantId } : undefined
+    }),
+    updateAccount: (id: string, data: Partial<User>, tenantId?: string) => apiRequest<User>(`/users/accounts/${id}/`, {
         method: 'PATCH',
-        body: JSON.stringify(data)
+        body: JSON.stringify(data),
+        headers: tenantId ? { 'x-tenant-id': tenantId } : undefined
     }),
     changeMyPassword: (oldPassword: string, newPassword: string) =>
         apiRequest<{ message: string }>('/users/accounts/change-password/', {
@@ -864,10 +879,11 @@ export const usersAPI = {
             method: 'POST',
             body: JSON.stringify(data)
         }),
-    resetUserPassword: (userId: string, newPassword: string) =>
+    resetUserPassword: (userId: string, newPassword: string, tenantId?: string) =>
         apiRequest<{ message: string }>('/users/admin/reset-password/', {
             method: 'POST',
-            body: JSON.stringify({ user_id: userId, new_password: newPassword })
+            body: JSON.stringify({ user_id: userId, new_password: newPassword }),
+            headers: tenantId ? { 'x-tenant-id': tenantId } : undefined
         }),
     getGroups: () => apiRequest<Group[]>('/users/groups/'),
     getGroup: (id: string | number) => apiRequest<Group>(`/users/groups/${id}/`),
@@ -1545,6 +1561,22 @@ export const saasApi = {
     getSystemStatus: () => coreAPI.getSystemStatus(),
     getKPIs: () => apiRequest<{ kpis: any, revenue_trend: any[], tenant_activity: any[] }>('/core/saas-kpi/'),
     getAIUsage: () => apiRequest<{ total_tokens: number, cost_estimate: number, usage_by_feature: any[] }>('/core/saas-ai-usage/'),
+    getTenantUsers: (tenantId: string | number) => apiRequest<User[]>(`/core/tenants/${tenantId}/users/`),
+    createTenantUser: (tenantId: string | number, data: Partial<User> & { password?: string }) =>
+        apiRequest<User>(`/core/tenants/${tenantId}/users/`, {
+            method: 'POST',
+            body: JSON.stringify(data),
+        }),
+    updateTenantUser: (tenantId: string | number, userId: string, data: Partial<User>) =>
+        apiRequest<User>(`/core/tenants/${tenantId}/users/${userId}/`, {
+            method: 'PATCH',
+            body: JSON.stringify(data),
+        }),
+    resetTenantUserPassword: (tenantId: string | number, userId: string, newPassword: string) =>
+        apiRequest<{ message: string }>(`/core/tenants/${tenantId}/users/${userId}/reset-password/`, {
+            method: 'POST',
+            body: JSON.stringify({ new_password: newPassword }),
+        }),
     resetAdminPassword: (tenantId: string | number, newPassword: string) =>
         apiRequest<{ message: string }>('/core/reset-admin-password/', {
             method: 'POST',
