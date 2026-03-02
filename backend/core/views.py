@@ -73,6 +73,23 @@ class TenantViewSet(viewsets.ModelViewSet):
             )
             print(f"Domain '{domain_url}' created for tenant.")
 
+            # 4. Create a default Trial Subscription for the new tenant
+            try:
+                from billing.models import Subscription, SubscriptionPlan
+                # Find a default plan if exists (e.g., Standard or Trial)
+                plan = SubscriptionPlan.objects.filter(name__icontains='Standard').first() or \
+                       SubscriptionPlan.objects.filter(is_active=True).first()
+                
+                Subscription.objects.create(
+                    tenant=tenant,
+                    plan=plan,
+                    status='active',
+                    billing_cycle='monthly'
+                )
+                print(f"Trial subscription created for {tenant.name}")
+            except Exception as sub_err:
+                print(f"Warning: Failed to create default subscription for {tenant.name}: {sub_err}")
+
             # 4. Create Admin User inside the new tenant schema
             if admin_email and admin_pass:
                 with schema_context(tenant.schema_name):

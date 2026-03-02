@@ -109,15 +109,19 @@ export function CreateSchoolDialog({ onCreated }: { onCreated: () => void }) {
                         </div>
                         <div className="grid grid-cols-4 items-center gap-4">
                             <Label htmlFor="subdomain" className="text-right">
-                                Subdomain
+                                School Code
                             </Label>
-                            <Input
-                                id="subdomain"
-                                value={subdomain}
-                                onChange={(e) => setSubdomain(e.target.value)}
-                                className="col-span-3"
-                                placeholder="greenwood"
-                            />
+                            <div className="col-span-3 space-y-1">
+                                <Input
+                                    id="subdomain"
+                                    value={subdomain}
+                                    onChange={(e) => setSubdomain(e.target.value)}
+                                    placeholder="e.g. greenwood"
+                                />
+                                <p className="text-[10px] text-slate-500">
+                                    This will be used for logins (e.g. greenwood.domain.com)
+                                </p>
+                            </div>
                         </div>
                         <div className="grid grid-cols-4 items-center gap-4">
                             <Label htmlFor="adminFirstName" className="text-right"> Admin First Name </Label>

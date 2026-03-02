@@ -73,7 +73,7 @@ export default function SchoolDetailsPage() {
                         </Badge>
                     </div>
                     <p className="text-slate-400 pl-6">
-                        {school.subdomain}.domain.com • ID: <span className="font-mono text-xs">{school.tenant_id}</span>
+                        {school.subdomain}.domain.com • ID: <span className="font-mono text-xs">{school.id}</span>
                     </p>
                 </div>
                 <div className="flex gap-2">

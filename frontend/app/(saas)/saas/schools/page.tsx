@@ -12,7 +12,7 @@ import {
     TableHeader,
     TableRow,
 } from "@/components/ui/table";
-import { MoreHorizontal, ArrowUpCircle, AlertCircle, Loader2, Search, Filter, ShieldCheck, Globe } from "lucide-react";
+import { MoreHorizontal, ArrowUpCircle, AlertCircle, Loader2, Search, Filter, ShieldCheck, Globe, RefreshCcw } from "lucide-react";
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -88,7 +88,13 @@ export default function SaasSchoolsPage() {
                     <h2 className="text-3xl font-bold tracking-tight text-slate-900 dark:text-white">School Management</h2>
                     <p className="text-slate-500 dark:text-slate-400 mt-1">Manage and monitor all onboarded education tenants.</p>
                 </div>
-                <CreateSchoolDialog onCreated={loadSchools} />
+                <div className="flex gap-2">
+                    <Button variant="outline" onClick={loadSchools} disabled={isLoading}>
+                        <RefreshCcw className={`mr-2 h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
+                        Refresh
+                    </Button>
+                    <CreateSchoolDialog onCreated={loadSchools} />
+                </div>
             </div>
 
             <Card className="bg-white dark:bg-[#111114] border-slate-200 dark:border-white/10 shadow-xl dark:shadow-none backdrop-blur-3xl overflow-hidden">
@@ -96,7 +102,7 @@ export default function SaasSchoolsPage() {
                     <div className="relative w-full sm:w-96">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                         <Input
-                            placeholder="Search schools, domains..."
+                            placeholder="Search by school name, domain or code..."
                             className="pl-10 bg-slate-50 dark:bg-white/5 border-slate-200 dark:border-white/10 focus:ring-indigo-500 dark:focus:ring-indigo-500/20"
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
@@ -149,7 +155,7 @@ export default function SaasSchoolsPage() {
                     </Table>
                 </div>
             </Card>
-        </div>
+        </div >
     );
 }
 
@@ -171,17 +177,18 @@ function SchoolTableRow({ school, index, onUpdated }: { school: TenantSummary, i
                         <div className="w-10 h-10 rounded-lg bg-indigo-600 flex items-center justify-center text-white font-bold text-lg shadow-lg shadow-indigo-500/20">
                             {school.name.charAt(0)}
                         </div>
-                        <div>
-                            <div className="font-bold text-slate-900 dark:text-white group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
+                        <Link href={`/saas/schools/${school.id}`} className="block">
+                            <div className="font-bold text-slate-900 dark:text-white group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors flex items-center gap-2">
                                 {school.name}
+                                <Search className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" />
                             </div>
                             <div className="flex items-center gap-2 mt-1">
                                 <Globe className="w-3 h-3 text-slate-400" />
-                                <span className="text-xs text-slate-500 dark:text-slate-400 font-mono tracking-tight">
+                                <span className="text-xs text-slate-500 dark:text-slate-400 font-mono tracking-tight hover:underline flex items-center gap-1">
                                     {school.subdomain}.domain.com
                                 </span>
                             </div>
-                        </div>
+                        </Link>
                     </div>
                 </TableCell>
                 <TableCell className="py-4">
@@ -213,35 +220,43 @@ function SchoolTableRow({ school, index, onUpdated }: { school: TenantSummary, i
                     </div>
                 </TableCell>
                 <TableCell className="text-right pr-6 py-4">
-                    <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-slate-900 dark:hover:text-white">
-                                <MoreHorizontal className="h-4 w-4" />
+                    <div className="flex items-center justify-end gap-2">
+                        <Link href={`/saas/schools/${school.id}`}>
+                            <Button variant="ghost" size="sm" className="h-8 text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 dark:hover:bg-indigo-500/10">
+                                <Search className="w-4 h-4 mr-2" />
+                                View
                             </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="w-56">
-                            <DropdownMenuLabel>Manage Tenant</DropdownMenuLabel>
-                            <Link href={`/saas/schools/${school.id}`}>
-                                <DropdownMenuItem>
-                                    <Eye className="mr-2 h-4 w-4 text-slate-500" /> View Full Information
+                        </Link>
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-slate-900 dark:hover:text-white">
+                                    <MoreHorizontal className="h-4 w-4" />
+                                </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-56">
+                                <DropdownMenuLabel>Manage Tenant</DropdownMenuLabel>
+                                <Link href={`/saas/schools/${school.id}`}>
+                                    <DropdownMenuItem>
+                                        <Eye className="mr-2 h-4 w-4 text-slate-500" /> View Full Information
+                                    </DropdownMenuItem>
+                                </Link>
+                                <DropdownMenuItem onSelect={() => setIsResetPasswordOpen(true)}>
+                                    <Key className="mr-2 h-4 w-4 text-amber-500" /> Reset Admin Password
                                 </DropdownMenuItem>
-                            </Link>
-                            <DropdownMenuItem onSelect={() => setIsResetPasswordOpen(true)}>
-                                <Key className="mr-2 h-4 w-4 text-amber-500" /> Reset Admin Password
-                            </DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem onSelect={() => setIsManageFeaturesOpen(true)}>
-                                <ShieldCheck className="mr-2 h-4 w-4 text-indigo-500" /> Manage Features
-                            </DropdownMenuItem>
-                            <DropdownMenuItem>
-                                <ArrowUpCircle className="mr-2 h-4 w-4 text-emerald-500" /> Upgrade Plan
-                            </DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem className="text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/10">
-                                <AlertCircle className="mr-2 h-4 w-4" /> Suspend Account
-                            </DropdownMenuItem>
-                        </DropdownMenuContent>
-                    </DropdownMenu>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem onSelect={() => setIsManageFeaturesOpen(true)}>
+                                    <ShieldCheck className="mr-2 h-4 w-4 text-indigo-500" /> Manage Features
+                                </DropdownMenuItem>
+                                <DropdownMenuItem>
+                                    <ArrowUpCircle className="mr-2 h-4 w-4 text-emerald-500" /> Upgrade Plan
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem className="text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/10">
+                                    <AlertCircle className="mr-2 h-4 w-4" /> Suspend Account
+                                </DropdownMenuItem>
+                            </DropdownMenuContent>
+                        </DropdownMenu>
+                    </div>
                 </TableCell>
             </motion.tr>
 
