@@ -5,6 +5,7 @@ from .base import TimeStampedModel
 
 class Tenant(TenantMixin, TimeStampedModel):
     name = models.CharField(max_length=255)
+    subdomain = models.CharField(max_length=100, unique=True, null=True, blank=True)
     
     TYPE_CHOICES = (
         ('standard', 'Standard'),

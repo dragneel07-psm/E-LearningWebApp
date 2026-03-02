@@ -79,16 +79,20 @@ class TenantCreateSerializer(serializers.ModelSerializer):
         }
 
     def validate_subdomain(self, value):
-        if Tenant.objects.filter(subdomain=value).exists():
-            raise serializers.ValidationError("Subdomain already taken.")
+        from .models import Tenant
+        if Tenant.objects.filter(schema_name=value).exists():
+            raise serializers.ValidationError("Subdomain (schema) already taken.")
         if not re.match(r'^[a-z0-9-]+$', value):
             raise serializers.ValidationError("Subdomain must be lowercase alphanumeric with hyphens.")
         return value
 
     def create(self, validated_data):
-        # Remove non-model fields before creating Tenant instance
+        # schema_name is derived from subdomain in the view's perform_create,
+        # but the serializer still needs to pop the write-only fields.
         validated_data.pop('admin_email', None)
         validated_data.pop('admin_first_name', None)
         validated_data.pop('admin_last_name', None)
         validated_data.pop('password', None)
+        
+        # subdomain is a real field on our model now
         return Tenant.objects.create(**validated_data)

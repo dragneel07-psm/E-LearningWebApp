@@ -42,44 +42,52 @@ class TenantViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         print("Creating Tenant...")
+        from django_tenants.utils import schema_context
+        from .models.tenant import Domain
         
         # 1. Prepare Data
         subdomain = serializer.validated_data.get('subdomain')
-        db_name = f"school_{subdomain}.sqlite3"
-        db_alias = get_tenant_db_alias(subdomain)
-        # TODO: Get base domain from settings
-        domain_url = f"{subdomain}.localhost"
-
-        # Capture Admin Data BEFORE save (as serializer.create pops them)
         admin_email = serializer.validated_data.get('admin_email')
         admin_pass = serializer.validated_data.get('password')
         first = serializer.validated_data.get('admin_first_name')
         last = serializer.validated_data.get('admin_last_name')
 
-        # 2. Save Tenant (defaults)
-        serializer.save(db_name=db_name, db_alias=db_alias, domain_url=domain_url)
-        tenant = serializer.instance
-        print(f"Tenant Saved: {tenant.tenant_id}")
+        # 2. Save Tenant (schema_name is mandatory for TenantMixin)
+        # We use the subdomain as the schema name for consistency
+        tenant = serializer.save(schema_name=subdomain)
+        print(f"Tenant '{tenant.name}' saved with schema '{tenant.schema_name}'")
 
-        # 3. Provision Database
         try:
-            print("Provisioning DB...")
-            provision_tenant_db(tenant)
+            # 3. Create Domain
+            # For local dev, we use .localhost. For prod, we should use the actual base domain.
+            # Domain resolution in django-tenants handles the routing.
+            base_domain = os.environ.get('BASE_DOMAIN', 'localhost')
+            domain_url = f"{subdomain}.{base_domain}"
             
-            # 4. Create Admin (using captured data)
+            Domain.objects.create(
+                domain=domain_url,
+                tenant=tenant,
+                is_primary=True
+            )
+            print(f"Domain '{domain_url}' created for tenant.")
+
+            # 4. Create Admin User inside the new tenant schema
             if admin_email and admin_pass:
-                create_tenant_admin(tenant, admin_email, admin_pass, first, last)
+                with schema_context(tenant.schema_name):
+                    create_tenant_admin(tenant, admin_email, admin_pass, first, last)
                 
-                # 5. Send Email (Mock)
-                print(f"--- WELCOME EMAIL ({admin_email}) ---\nURL: http://{domain_url}:3000\nUser: {admin_email}\nPass: {admin_pass}\n-------------------------------")
+                print(f"--- TENANT PROVISIONED: {tenant.name} ---")
+                print(f"URL: http://{domain_url}:3000")
+                print(f"Admin: {admin_email}")
+                print(f"----------------------------------------")
                 
         except Exception as e:
-            print(f"Provisioning failed: {e}")
-            # Ensure we delete the tenant if provisioning fails to avoid zombie records
+            print(f"Provisioning failed for {subdomain}: {e}")
+            # Cleanup to avoid partial tenant setup
             try:
                 tenant.delete()
             except Exception as delete_error:
-                print(f"Failed to cleanup tenant after provisioning error: {delete_error}")
+                print(f"Failed to cleanup tenant record: {delete_error}")
             raise e
 
 class AuditLogViewSet(viewsets.ReadOnlyModelViewSet):
