@@ -13,12 +13,12 @@ class TenantSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Tenant
-        fields = '__all__'
-        extra_kwargs = {
-            'db_name': {'required': False, 'allow_null': True},
-            'db_alias': {'required': False, 'allow_null': True},
-            'domain_url': {'required': False, 'allow_null': True},
-        }
+        fields = [
+            'tenant_id', 'name', 'subdomain', 'type', 'status', 
+            'contact_email', 'contact_phone', 'address', 'website',
+            'plan_name', 'subscription_status', 'billing_cycle',
+            'student_count', 'teacher_count', 'ai_usage', 'logo'
+        ]
     
     def get_plan_name(self, obj):
         try:
@@ -28,13 +28,15 @@ class TenantSerializer(serializers.ModelSerializer):
 
     def get_subscription_status(self, obj):
         try:
-            return obj.subscription.status if obj.subscription else "Inactive"
+            sub = getattr(obj, 'subscription', None)
+            return sub.status if sub else "Inactive"
         except:
             return "Inactive"
 
     def get_billing_cycle(self, obj):
         try:
-            return obj.subscription.billing_cycle if obj.subscription else "N/A"
+            sub = getattr(obj, 'subscription', None)
+            return sub.billing_cycle if sub else "N/A"
         except:
             return "N/A"
 

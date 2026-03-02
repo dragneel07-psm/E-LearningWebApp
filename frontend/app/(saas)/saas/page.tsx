@@ -42,7 +42,9 @@ export default function SaasDashboardPage() {
     const [aiUsage, setAiUsage] = useState<any>(null);
     const [isLoading, setIsLoading] = useState(true);
 
+    const [isClient, setIsClient] = useState(false);
     useEffect(() => {
+        setIsClient(true);
         loadDashboardData();
     }, []);
 
@@ -112,7 +114,7 @@ export default function SaasDashboardPage() {
                             </div>
                         </CardHeader>
                         <CardContent className="h-[320px] w-full mt-4">
-                            {Array.isArray(revenue_trend) && revenue_trend.length > 0 ? (
+                            {isClient && Array.isArray(revenue_trend) && revenue_trend.length > 0 ? (
                                 <ResponsiveContainer width="100%" height="100%">
                                     <AreaChart data={revenue_trend}>
                                         <defs>

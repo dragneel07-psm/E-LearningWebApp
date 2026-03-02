@@ -29,9 +29,11 @@ class TenantCheckView(APIView):
             })
         return Response({"exists": False}, status=status.HTTP_404_NOT_FOUND)
 
+from .views_saas import IsSaaSAdmin
+
 class TenantViewSet(viewsets.ModelViewSet):
     queryset = Tenant.objects.all()
-    # permission_classes = [permissions.IsAdminUser] # Should be SaaS Admin only
+    permission_classes = [IsSaaSAdmin]
 
     def get_serializer_class(self):
         if self.action == 'create':
