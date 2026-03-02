@@ -14,7 +14,10 @@ const PUBLIC_PATHS = [
     '/register',
     '/public',
     '/forgot-password',
-    '/debug-auth'
+    '/debug-auth',
+    '/manifest.json',
+    '/sw.js',
+    '/icons/'
 ];
 
 export async function middleware(request: NextRequest) {
@@ -118,5 +121,5 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-    matcher: ['/((?!api|_next/static|_next/image|sw.js|manifest.json|robots.txt|icons/|favicon.ico).*)'],
+    matcher: ['/((?!api|_next/static|_next/image|manifest.json|sw.js|favicon.ico|robots.txt|icons/).*)'],
 };

@@ -48,8 +48,13 @@ export default function SaasSchoolsPage() {
 
     const loadSchools = async () => {
         try {
-            const data = await saasApi.getTenants();
-            setSchools(data || []);
+            const data: any = await saasApi.getTenants();
+            // Handle paginated results { count, next, previous, results: [...] }
+            if (data && data.results && Array.isArray(data.results)) {
+                setSchools(data.results);
+            } else {
+                setSchools(Array.isArray(data) ? data : []);
+            }
         } catch (error) {
             console.error(error);
             toast.error("Failed to load schools.");
