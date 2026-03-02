@@ -52,6 +52,7 @@ export default function SaasDashboardPage() {
                 saasApi.getKPIs(),
                 saasApi.getAIUsage()
             ]);
+            console.log("Dashboard Data Loaded:", { kpiRes, aiRes });
             setData(kpiRes);
             setAiUsage(aiRes);
         } catch (error: any) {
@@ -72,7 +73,14 @@ export default function SaasDashboardPage() {
         );
     }
 
-    const { kpis, revenue_trend, tenant_activity } = data;
+    const {
+        kpis = { mrr: 0, total_schools: 0, total_students: 0 },
+        revenue_trend = [],
+        tenant_activity = [],
+        alerts = []
+    } = data || {};
+
+    const safeAlerts = Array.isArray(alerts) ? alerts : [];
 
     return (
         <div className="p-8 lg:p-10 space-y-10 min-h-full">
@@ -104,46 +112,52 @@ export default function SaasDashboardPage() {
                             </div>
                         </CardHeader>
                         <CardContent className="h-[320px] w-full mt-4">
-                            <ResponsiveContainer width="100%" height="100%">
-                                <AreaChart data={revenue_trend}>
-                                    <defs>
-                                        <linearGradient id="neonGreen" x1="0" y1="0" x2="0" y2="1">
-                                            <stop offset="5%" stopColor="#10f1b5" stopOpacity={0.2} />
-                                            <stop offset="95%" stopColor="#10f1b5" stopOpacity={0} />
-                                        </linearGradient>
-                                        <filter id="glow">
-                                            <feGaussianBlur stdDeviation="3" result="coloredBlur" />
-                                            <feMerge>
-                                                <feMergeNode in="coloredBlur" />
-                                                <feMergeNode in="SourceGraphic" />
-                                            </feMerge>
-                                        </filter>
-                                    </defs>
-                                    <CartesianGrid strokeDasharray="3 3" stroke="#333" vertical={false} opacity={0.5} />
-                                    <XAxis dataKey="month" stroke="#94a3b8" fontSize={11} tickLine={false} axisLine={false} dy={10} />
-                                    <YAxis stroke="#94a3b8" fontSize={11} tickLine={false} axisLine={false} tickFormatter={(v) => `$${v / 1000}K`} dx={-10} />
-                                    <Tooltip
-                                        contentStyle={{ backgroundColor: '#111114', border: '1px solid #333', borderRadius: '12px' }}
-                                        itemStyle={{ color: '#fff' }}
-                                    />
-                                    <Area
-                                        type="monotone"
-                                        dataKey="mrr"
-                                        stroke="#10f1b5"
-                                        strokeWidth={4}
-                                        fill="url(#neonGreen)"
-                                        filter="url(#glow)"
-                                    />
-                                    <Area
-                                        type="monotone"
-                                        dataKey="projected"
-                                        stroke="#6366f1"
-                                        strokeWidth={2}
-                                        strokeDasharray="8 8"
-                                        fill="transparent"
-                                    />
-                                </AreaChart>
-                            </ResponsiveContainer>
+                            {Array.isArray(revenue_trend) && revenue_trend.length > 0 ? (
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <AreaChart data={revenue_trend}>
+                                        <defs>
+                                            <linearGradient id="neonGreen" x1="0" y1="0" x2="0" y2="1">
+                                                <stop offset="5%" stopColor="#10f1b5" stopOpacity={0.2} />
+                                                <stop offset="95%" stopColor="#10f1b5" stopOpacity={0} />
+                                            </linearGradient>
+                                            <filter id="glow">
+                                                <feGaussianBlur stdDeviation="3" result="coloredBlur" />
+                                                <feMerge>
+                                                    <feMergeNode in="coloredBlur" />
+                                                    <feMergeNode in="SourceGraphic" />
+                                                </feMerge>
+                                            </filter>
+                                        </defs>
+                                        <CartesianGrid strokeDasharray="3 3" stroke="#333" vertical={false} opacity={0.5} />
+                                        <XAxis dataKey="month" stroke="#94a3b8" fontSize={11} tickLine={false} axisLine={false} dy={10} />
+                                        <YAxis stroke="#94a3b8" fontSize={11} tickLine={false} axisLine={false} tickFormatter={(v) => `$${v / 1000}K`} dx={-10} />
+                                        <Tooltip
+                                            contentStyle={{ backgroundColor: '#111114', border: '1px solid #333', borderRadius: '12px' }}
+                                            itemStyle={{ color: '#fff' }}
+                                        />
+                                        <Area
+                                            type="monotone"
+                                            dataKey="mrr"
+                                            stroke="#10f1b5"
+                                            strokeWidth={4}
+                                            fill="url(#neonGreen)"
+                                            filter="url(#glow)"
+                                        />
+                                        <Area
+                                            type="monotone"
+                                            dataKey="projected"
+                                            stroke="#6366f1"
+                                            strokeWidth={2}
+                                            strokeDasharray="8 8"
+                                            fill="transparent"
+                                        />
+                                    </AreaChart>
+                                </ResponsiveContainer>
+                            ) : (
+                                <div className="h-full flex items-center justify-center text-slate-500 text-xs italic">
+                                    No revenue data available yet.
+                                </div>
+                            )}
                         </CardContent>
                     </Card>
                 </motion.div>
@@ -169,7 +183,9 @@ export default function SaasDashboardPage() {
                                         <span className="text-[10px] uppercase font-bold text-slate-500 dark:text-slate-400">Node Focus</span>
                                         <Badge className="bg-red-500/10 text-red-500 border-none text-[9px] px-1.5 py-0">Critical</Badge>
                                     </div>
-                                    <p className="text-xs font-semibold text-slate-900 dark:text-white">School ID: {tenant_activity[0]?.id.slice(0, 6)}</p>
+                                    <p className="text-xs font-semibold text-slate-900 dark:text-white">
+                                        School ID: {tenant_activity[0]?.id ? tenant_activity[0].id.slice(0, 6) : 'N/A'}
+                                    </p>
                                     <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1">Low Engagement, High Churn Risk</p>
                                 </div>
 
@@ -203,10 +219,17 @@ export default function SaasDashboardPage() {
                         <div className="space-y-4">
                             <div className="space-y-1">
                                 <p className="text-xs text-slate-500 dark:text-slate-400 font-bold uppercase tracking-widest">Total Usage</p>
-                                <h4 className="text-2xl font-bold font-mono text-slate-900 dark:text-white">{(aiUsage?.total_tokens / 1000000).toFixed(1)}M Tokens</h4>
+                                <h4 className="text-2xl font-bold font-mono text-slate-900 dark:text-white">
+                                    {((aiUsage?.total_tokens || 0) / 1000000).toFixed(1)}M Tokens
+                                </h4>
                             </div>
                             <div className="h-1.5 w-full bg-slate-100 dark:bg-white/5 rounded-full overflow-hidden">
-                                <motion.div initial={{ width: 0 }} animate={{ width: '65%' }} transition={{ duration: 1.5 }} className="h-full bg-indigo-500 shadow-[0_0_15px_rgba(99,102,241,0.5)]" />
+                                <motion.div
+                                    initial={{ width: 0 }}
+                                    animate={{ width: `${Math.min(100, (aiUsage?.total_tokens || 0) / 100000)}%` }}
+                                    transition={{ duration: 1.5 }}
+                                    className="h-full bg-indigo-500 shadow-[0_0_15px_rgba(99,102,241,0.5)]"
+                                />
                             </div>
                             <div className="flex justify-between items-center text-[10px] font-bold">
                                 <span className="text-emerald-500 dark:text-emerald-400 flex items-center gap-1"><TrendingUp className="w-3 h-3" /> 20%</span>
@@ -254,10 +277,10 @@ export default function SaasDashboardPage() {
                         </div>
                         <div className="space-y-4">
                             <h4 className="text-2xl font-bold tracking-tight text-red-500">
-                                {data.alerts?.filter((a: any) => a.level === 'critical').length || 0} Critical Alerts
+                                {safeAlerts.filter((a: any) => a.level === 'critical').length} Critical Alerts
                             </h4>
                             <ul className="space-y-2">
-                                {data.alerts?.map((alert: any) => (
+                                {safeAlerts.map((alert: any) => (
                                     <li key={alert.id} className="text-[10px] text-slate-500 dark:text-slate-400 flex flex-col gap-0.5">
                                         <div className="flex items-center gap-2">
                                             <div className={`w-1.5 h-1.5 rounded-full ${alert.level === 'critical' ? 'bg-red-500' :
