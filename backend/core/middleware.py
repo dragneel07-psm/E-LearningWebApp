@@ -12,6 +12,8 @@ send 'x-tenant-id: demo' and have all requests routed to the correct schema.
 from django_tenants.middleware.main import TenantMainMiddleware
 from django_tenants.utils import get_tenant_domain_model
 from django.db import connection
+from django.db.models import Q
+from core.models.tenant import Tenant
 
 
 class TenantFromHeaderMiddleware(TenantMainMiddleware):
@@ -48,26 +50,23 @@ class TenantFromHeaderMiddleware(TenantMainMiddleware):
 
             if tenant_id:
                 try:
-                    # Robust fallback for 'public' schema
-                    if tenant_id == 'public':
-                        from core.models.tenant import Tenant
-                        tenant = Tenant.objects.filter(schema_name='public').first()
-                        if tenant:
-                            # Set a fake domain for compatibility with parent logic
-                            tenant.domain_url = hostname
-                            request.tenant = tenant
-                            connection.set_tenant(request.tenant)
-                            self.setup_url_routing(request)
-                            return None
-                    
+                    # Lookup by schema name, subdomain, or full domain
                     domain = domain_model.objects.select_related('tenant').filter(
-                        tenant__schema_name=tenant_id
+                        Q(tenant__schema_name=tenant_id) |
+                        Q(tenant__subdomain=tenant_id) |
+                        Q(domain=tenant_id)
                     ).first()
+
                     if domain:
                         tenant = domain.tenant
                     else:
-                        return self.no_tenant_found(request, hostname)
-                except Exception:
+                        # Fallback to public if the specific code wasn't found
+                        # This allows the TenantCheckView to return a nice JSON false instead of a hard 404
+                        tenant = Tenant.objects.filter(schema_name='public').first()
+                        if not tenant:
+                            return self.no_tenant_found(request, hostname)
+                except Exception as e:
+                    print(f"Tenant header resolution error: {e}")
                     return self.no_tenant_found(request, hostname)
             else:
                 return self.no_tenant_found(request, hostname)

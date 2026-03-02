@@ -21,11 +21,13 @@ class TenantCheckView(APIView):
     permission_classes = [permissions.AllowAny]
 
     def get(self, request):
-        if request.tenant:
+        # We only consider it a "School Code" match if it resolved to a non-public tenant
+        if request.tenant and request.tenant.schema_name != 'public':
             return Response({
                 "exists": True,
                 "name": request.tenant.name,
-                "tenant_id": request.tenant.tenant_id
+                "schema_name": request.tenant.schema_name,
+                "id": str(request.tenant.id)
             })
         return Response({"exists": False}, status=status.HTTP_404_NOT_FOUND)
 
