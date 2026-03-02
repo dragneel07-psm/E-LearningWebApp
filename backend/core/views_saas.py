@@ -8,8 +8,16 @@ from django.conf import settings
 from datetime import datetime, timedelta
 
 
+class IsSaaSAdmin(permissions.BasePermission):
+    """
+    Custom permission to only allow platform-level SaaS admins.
+    Does NOT require is_staff=True, only role='saas_admin'.
+    """
+    def has_permission(self, request, view):
+        return bool(request.user and request.user.is_authenticated and request.user.role == 'saas_admin')
+
 class SaasKPIView(APIView):
-    permission_classes = [permissions.IsAdminUser]
+    permission_classes = [IsSaaSAdmin]
 
     def get(self, request):
         # 1. Basic Stats
@@ -106,7 +114,7 @@ class SaasKPIView(APIView):
 
 
 class SaasAIUsageView(APIView):
-    permission_classes = [permissions.IsAdminUser]
+    permission_classes = [IsSaaSAdmin]
 
     def get(self, request):
         tenants = Tenant.objects.all()
