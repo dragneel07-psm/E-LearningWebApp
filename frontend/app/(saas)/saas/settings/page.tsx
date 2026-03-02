@@ -39,6 +39,9 @@ export default function SystemSettingsPage() {
             const data = await saasApi.getSettings();
             setSettings({
                 ...data,
+                ai_provider_name: data.ai_provider_name || 'OpenAI',
+                ai_base_url: data.ai_base_url || 'https://api.openai.com/v1',
+                ai_model: data.ai_model || 'gpt-3.5-turbo',
                 ai_api_key: ''
             });
         } catch (error) {
@@ -53,9 +56,18 @@ export default function SystemSettingsPage() {
         e.preventDefault();
         setIsSaving(true);
         try {
-            const updated = await saasApi.updateSettings(settings);
+            const payload: Partial<GlobalSettings> = {
+                ...settings,
+                ai_provider_name: (settings.ai_provider_name || '').trim() || 'OpenAI',
+                ai_base_url: (settings.ai_base_url || '').trim() || 'https://api.openai.com/v1',
+                ai_model: (settings.ai_model || '').trim() || 'gpt-3.5-turbo'
+            };
+            const updated = await saasApi.updateSettings(payload);
             setSettings({
                 ...updated,
+                ai_provider_name: updated.ai_provider_name || 'OpenAI',
+                ai_base_url: updated.ai_base_url || 'https://api.openai.com/v1',
+                ai_model: updated.ai_model || 'gpt-3.5-turbo',
                 ai_api_key: ''
             });
             toast.success("System configurations updated.");

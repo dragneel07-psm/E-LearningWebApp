@@ -174,6 +174,9 @@ class AuditLogSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 class GlobalSettingsSerializer(serializers.ModelSerializer):
+    ai_provider_name = serializers.CharField(required=False, allow_blank=True, trim_whitespace=True)
+    ai_base_url = serializers.URLField(required=False, allow_blank=True)
+    ai_model = serializers.CharField(required=False, allow_blank=True, trim_whitespace=True)
     ai_api_key = serializers.CharField(write_only=True, required=False, allow_blank=True, trim_whitespace=True)
     ai_api_key_masked = serializers.SerializerMethodField(read_only=True)
     ai_api_key_configured = serializers.SerializerMethodField(read_only=True)
@@ -210,9 +213,22 @@ class GlobalSettingsSerializer(serializers.ModelSerializer):
         return bool((obj.ai_api_key or '').strip())
 
     def validate_ai_base_url(self, value):
-        if value:
-            return value.rstrip('/')
-        return value
+        cleaned_value = (value or '').strip()
+        if not cleaned_value:
+            return 'https://api.openai.com/v1'
+        return cleaned_value.rstrip('/')
+
+    def validate(self, attrs):
+        provider_name = attrs.get('ai_provider_name')
+        model_name = attrs.get('ai_model')
+
+        if provider_name is not None and not str(provider_name).strip():
+            attrs['ai_provider_name'] = 'OpenAI'
+
+        if model_name is not None and not str(model_name).strip():
+            attrs['ai_model'] = 'gpt-3.5-turbo'
+
+        return attrs
 
     def update(self, instance, validated_data):
         incoming_key = validated_data.pop('ai_api_key', None)
