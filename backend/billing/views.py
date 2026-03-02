@@ -8,6 +8,7 @@ from .serializers import (
     SubscriptionSerializer, SubscriptionPlanSerializer, InvoiceSerializer,
     FeeStructureSerializer, StudentFeeSerializer, PaymentSerializer, ExpenseSerializer
 )
+from .plan_defaults import upsert_default_plans
 from core.mixins import TenantScopedQuerysetMixin
 from core.reports import generate_pdf_response
 from django.utils import timezone
@@ -23,6 +24,26 @@ class SubscriptionPlanViewSet(viewsets.ModelViewSet):
     queryset = SubscriptionPlan.objects.all()
     serializer_class = SubscriptionPlanSerializer
     permission_classes = [permissions.IsAuthenticated] # Adjust as needed
+
+    @action(detail=False, methods=['post'], url_path='seed-defaults')
+    def seed_defaults(self, request):
+        role = (getattr(request.user, 'role', '') or '').lower()
+        if not (request.user.is_superuser or request.user.is_staff or role == 'saas_admin'):
+            return Response(
+                {'error': 'Only SaaS administrators can seed default plans.'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        result = upsert_default_plans()
+        serializer = self.get_serializer(result['plans'], many=True)
+        return Response({
+            'message': 'Default subscription plans are ready.',
+            'created': result['created'],
+            'updated': result['updated'],
+            'rate_used': result['rate_used'],
+            'used_fallback': result['used_fallback'],
+            'plans': serializer.data,
+        }, status=status.HTTP_200_OK)
 
 class SubscriptionViewSet(viewsets.ModelViewSet):
     queryset = Subscription.objects.all()

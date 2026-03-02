@@ -427,6 +427,15 @@ export interface GlobalSettings {
     allow_registration: boolean;
 }
 
+export interface SeedDefaultPlansResponse {
+    message: string;
+    created: number;
+    updated: number;
+    rate_used: string;
+    used_fallback: boolean;
+    plans: SubscriptionPlan[];
+}
+
 export interface AuditLog {
     id: number | string;
     action: string;
@@ -1568,6 +1577,10 @@ export const saasApi = {
         apiRequest<SubscriptionPlan>('/billing/plans/', {
             method: 'POST',
             body: JSON.stringify(data),
+        }),
+    seedDefaultPlans: () =>
+        apiRequest<SeedDefaultPlansResponse>('/billing/plans/seed-defaults/', {
+            method: 'POST',
         }),
     updatePlan: (id: string, data: Partial<SubscriptionPlan>) =>
         apiRequest<SubscriptionPlan>(`/billing/plans/${id}/`, {

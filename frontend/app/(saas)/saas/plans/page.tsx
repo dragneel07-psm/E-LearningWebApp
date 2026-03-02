@@ -30,6 +30,7 @@ type Plan = SubscriptionPlan & PlanFeatureFlags;
 export default function SaasPlansPage() {
     const [plans, setPlans] = useState<Plan[]>([]);
     const [loading, setLoading] = useState(true);
+    const [seeding, setSeeding] = useState(false);
     const [billingCycle, setBillingCycle] = useState<'monthly' | 'yearly'>('monthly');
 
     const getCurrencyPrefix = (currency?: string) => {
@@ -95,6 +96,23 @@ export default function SaasPlansPage() {
         }
     };
 
+    const handleSeedDefaults = async () => {
+        try {
+            setSeeding(true);
+            const res = await saasApi.seedDefaultPlans();
+            toast.success(
+                `Default plans ready. Created: ${res.created}, Updated: ${res.updated}${res.used_fallback ? ' (fallback FX)' : ''}`
+            );
+            await loadPlans();
+        } catch (error: unknown) {
+            console.error("Failed to seed default plans", error);
+            const message = error instanceof Error ? error.message : "Failed to create default plans.";
+            toast.error(message);
+        } finally {
+            setSeeding(false);
+        }
+    };
+
     if (loading) return <div className="p-8">Loading plans...</div>;
 
     return (
@@ -147,6 +165,16 @@ export default function SaasPlansPage() {
                     <CreditCard className="w-12 h-12 mx-auto mb-4 opacity-20" />
                     <p className="text-xl font-medium">No plans found.</p>
                     <p className="text-sm">Create your first pricing tier to start onboarding schools.</p>
+                    <div className="mt-6">
+                        <Button
+                            onClick={handleSeedDefaults}
+                            disabled={seeding}
+                            className="bg-indigo-600 hover:bg-indigo-700 text-white"
+                        >
+                            <Sparkles className="mr-2 h-4 w-4" />
+                            {seeding ? 'Generating Plans...' : 'Generate Default Plans'}
+                        </Button>
+                    </div>
                 </div>
             ) : (
                 <motion.div
