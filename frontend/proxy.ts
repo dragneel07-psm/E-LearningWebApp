@@ -20,7 +20,7 @@ const PUBLIC_PATHS = [
     '/icons/'
 ];
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
     const { pathname, hostname } = request.nextUrl;
 
     // 1. Tenant Handling (Pass subdomain to headers)
@@ -45,7 +45,7 @@ export async function middleware(request: NextRequest) {
 
     // Redirect to login if no token on protected routes
     if (!token) {
-        console.log('[Middleware] No token found, redirecting to login');
+        console.log('[Proxy] No token found, redirecting to login');
         const loginUrl = new URL('/login', request.url);
         loginUrl.searchParams.set('redirect', pathname);
         return NextResponse.redirect(loginUrl);
@@ -67,11 +67,11 @@ export async function middleware(request: NextRequest) {
         }
 
         const userRole = (user.role || 'student').toLowerCase();
-        console.log(`[Middleware] Parsed User: role=${userRole}, exp=${user.exp}`);
+        console.log(`[Proxy] Parsed User: role=${userRole}, exp=${user.exp}`);
 
         // Check expiration
         if (user.exp && user.exp * 1000 < Date.now()) {
-            console.log(`[Middleware] Token expired (exp ${user.exp * 1000} < now ${Date.now()})`);
+            console.log(`[Proxy] Token expired (exp ${user.exp * 1000} < now ${Date.now()})`);
             const response = NextResponse.redirect(new URL('/login', request.url));
             response.cookies.delete('access_token');
             response.cookies.delete('refresh_token');
@@ -109,7 +109,7 @@ export async function middleware(request: NextRequest) {
         }
 
     } catch (e) {
-        console.error('[Middleware] JWT Decode/Verify error:', e);
+        console.error('[Proxy] JWT Decode/Verify error:', e);
         const response = NextResponse.redirect(new URL('/login', request.url));
         response.cookies.delete('access_token');
         return response;

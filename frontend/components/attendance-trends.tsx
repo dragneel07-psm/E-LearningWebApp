@@ -4,9 +4,9 @@ import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
     LineChart, Line, XAxis, YAxis,
-    CartesianGrid, Tooltip, ResponsiveContainer,
-    AreaChart, Area
+    CartesianGrid, Tooltip, AreaChart, Area
 } from 'recharts';
+import { SafeResponsiveContainer } from '@/components/ui/safe-responsive-container';
 import { academicAPI } from '@/lib/api';
 import { Loader2, TrendingUp, Info } from 'lucide-react';
 
@@ -65,7 +65,7 @@ export function AttendanceTrends({ sectionId }: { sectionId?: number }) {
             </CardHeader>
             <CardContent>
                 <div className="h-[250px] w-full">
-                    <ResponsiveContainer width="100%" height="100%">
+                    <SafeResponsiveContainer width="100%" height="100%">
                         <AreaChart data={data}>
                             <defs>
                                 <linearGradient id="colorRate" x1="0" y1="0" x2="0" y2="1">
@@ -106,7 +106,7 @@ export function AttendanceTrends({ sectionId }: { sectionId?: number }) {
                                 name="Attendance Rate %"
                             />
                         </AreaChart>
-                    </ResponsiveContainer>
+                    </SafeResponsiveContainer>
                 </div>
                 <div className="mt-6 p-4 bg-slate-50 rounded-2xl border border-slate-100 flex items-start gap-3">
                     <Info className="h-4 w-4 text-slate-400 mt-0.5" />

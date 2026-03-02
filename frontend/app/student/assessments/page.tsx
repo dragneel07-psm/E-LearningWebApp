@@ -9,9 +9,10 @@ import {
 } from 'lucide-react';
 import { academicAPI, helpers, Assessment, Result, Subject } from '@/lib/api';
 import {
-    ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip,
+    LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip,
     RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar
 } from 'recharts';
+import { SafeResponsiveContainer } from '@/components/ui/safe-responsive-container';
 import Link from 'next/link';
 import { ResultList } from '@/components/student/ResultList';
 
@@ -144,7 +145,7 @@ export default function AssessmentDashboard() {
                             <CardDescription>Your scores vs class average over time</CardDescription>
                         </CardHeader>
                         <CardContent className="h-[300px]">
-                            <ResponsiveContainer width="100%" height="100%">
+                            <SafeResponsiveContainer width="100%" height="100%">
                                 <LineChart data={trendData}>
                                     <CartesianGrid strokeDasharray="3 3" vertical={false} />
                                     <XAxis dataKey="name" axisLine={false} tickLine={false} />
@@ -153,7 +154,7 @@ export default function AssessmentDashboard() {
                                     <Line type="monotone" dataKey="score" stroke="#4f46e5" strokeWidth={3} activeDot={{ r: 8 }} name="Your Score" />
                                     <Line type="monotone" dataKey="avg" stroke="#94a3b8" strokeDasharray="5 5" name="Class Avg" />
                                 </LineChart>
-                            </ResponsiveContainer>
+                            </SafeResponsiveContainer>
                         </CardContent>
                     </Card>
 
@@ -179,14 +180,14 @@ export default function AssessmentDashboard() {
                             <CardDescription>Based on Bloom&apos;s Taxonomy</CardDescription>
                         </CardHeader>
                         <CardContent className="h-[300px]">
-                            <ResponsiveContainer width="100%" height="100%">
+                            <SafeResponsiveContainer width="100%" height="100%">
                                 <RadarChart cx="50%" cy="50%" outerRadius="80%" data={skillData}>
                                     <PolarGrid />
                                     <PolarAngleAxis dataKey="subject" tick={{ fontSize: 12 }} />
                                     <PolarRadiusAxis angle={30} domain={[0, 150]} tick={false} axisLine={false} />
                                     <Radar name="Student" dataKey="A" stroke="#8884d8" fill="#8884d8" fillOpacity={0.6} />
                                 </RadarChart>
-                            </ResponsiveContainer>
+                            </SafeResponsiveContainer>
                         </CardContent>
                     </Card>
 

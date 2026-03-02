@@ -10,9 +10,9 @@ import {
 import { aiAPI, academicAPI, usersAPI, Subject } from '@/lib/api';
 import {
     BarChart, Bar, XAxis, YAxis,
-    CartesianGrid, Tooltip, ResponsiveContainer,
-    LineChart, Line, AreaChart, Area
+    CartesianGrid, Tooltip, LineChart, Line, AreaChart, Area
 } from 'recharts';
+import { SafeResponsiveContainer } from '@/components/ui/safe-responsive-container';
 
 interface AnalyticsData {
     at_risk_count: number;
@@ -150,7 +150,7 @@ export default function TeacherAnalyticsPage() {
                         </CardTitle>
                     </CardHeader>
                     <CardContent className="h-[350px]">
-                        <ResponsiveContainer width="100%" height="100%">
+                        <SafeResponsiveContainer width="100%" height="100%">
                             <AreaChart data={data?.performance_trends}>
                                 <defs>
                                     <linearGradient id="colorScore" x1="0" y1="0" x2="0" y2="1">
@@ -167,7 +167,7 @@ export default function TeacherAnalyticsPage() {
                                 <Area type="monotone" dataKey="avgScore" stroke="#6366f1" strokeWidth={4} fillOpacity={1} fill="url(#colorScore)" />
                                 <Line type="monotone" dataKey="classAvg" stroke="#94a3b8" strokeDasharray="5 5" dot={false} />
                             </AreaChart>
-                        </ResponsiveContainer>
+                        </SafeResponsiveContainer>
                     </CardContent>
                 </Card>
 

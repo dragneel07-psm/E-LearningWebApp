@@ -9,12 +9,12 @@ import {
     ComposedChart,
     Line,
     LineChart,
-    ResponsiveContainer,
     Tooltip,
     XAxis,
     YAxis,
     Legend
 } from "recharts";
+import { SafeResponsiveContainer } from "@/components/ui/safe-responsive-container";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useTheme } from "next-themes";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -117,7 +117,7 @@ export function TokenUsageChart() {
                 <div className="h-[350px] w-full mt-4">
                     <Tabs defaultValue="trends" className="w-full">
                         <TabsContent value="trends" className="h-full mt-0">
-                            <ResponsiveContainer width="100%" height="100%">
+                            <SafeResponsiveContainer width="100%" height="100%">
                                 <ComposedChart data={data} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
                                     <defs>
                                         <linearGradient id="colorTokens" x1="0" y1="0" x2="0" y2="1">
@@ -173,11 +173,11 @@ export function TokenUsageChart() {
                                         activeDot={{ r: 6, strokeWidth: 0 }}
                                     />
                                 </ComposedChart>
-                            </ResponsiveContainer>
+                            </SafeResponsiveContainer>
                         </TabsContent>
 
                         <TabsContent value="breakdown" className="h-full mt-0">
-                            <ResponsiveContainer width="100%" height="100%">
+                            <SafeResponsiveContainer width="100%" height="100%">
                                 <BarChart data={schoolData} layout="vertical" margin={{ top: 10, right: 30, left: 40, bottom: 0 }}>
                                     <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} stroke={colors.grid} />
                                     <XAxis type="number" stroke={colors.text} fontSize={12} tickLine={false} axisLine={false} tickFormatter={(value) => `${(value / 1000).toFixed(0)}k`} />
@@ -187,7 +187,7 @@ export function TokenUsageChart() {
                                         {/* Optional: Add labels on bars or varied colors */}
                                     </Bar>
                                 </BarChart>
-                            </ResponsiveContainer>
+                            </SafeResponsiveContainer>
                         </TabsContent>
                     </Tabs>
                 </div>

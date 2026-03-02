@@ -7,9 +7,9 @@ import {
     BookOpen, GraduationCap, FileText, ArrowLeft, Plus, Users, School
 } from 'lucide-react';
 import {
-    BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-    RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar, Legend
+    BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar, Legend
 } from 'recharts';
+import { SafeResponsiveContainer } from '@/components/ui/safe-responsive-container';
 import Link from 'next/link';
 import { academicAPI } from '@/lib/api';
 
@@ -126,7 +126,7 @@ export default function AcademicControlDashboard() {
                         <CardDescription>Percentage of syllabus completed per subject</CardDescription>
                     </CardHeader>
                     <CardContent className="h-[300px]">
-                        <ResponsiveContainer width="100%" height="100%">
+                        <SafeResponsiveContainer width="100%" height="100%">
                             <BarChart data={curriculumData} layout="vertical" margin={{ left: 20 }}>
                                 <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} />
                                 <XAxis type="number" domain={[0, 100]} />
@@ -134,7 +134,7 @@ export default function AcademicControlDashboard() {
                                 <Tooltip />
                                 <Bar dataKey="covered" fill="#4f46e5" radius={[0, 4, 4, 0]} barSize={20} name="Completed %" />
                             </BarChart>
-                        </ResponsiveContainer>
+                        </SafeResponsiveContainer>
                     </CardContent>
                 </Card>
 
@@ -144,7 +144,7 @@ export default function AcademicControlDashboard() {
                         <CardDescription>Comparative strength across disciplines</CardDescription>
                     </CardHeader>
                     <CardContent className="h-[300px]">
-                        <ResponsiveContainer width="100%" height="100%">
+                        <SafeResponsiveContainer width="100%" height="100%">
                             <RadarChart cx="50%" cy="50%" outerRadius="80%" data={performanceData}>
                                 <PolarGrid />
                                 <PolarAngleAxis dataKey="subject" tick={{ fontSize: 11 }} />
@@ -154,7 +154,7 @@ export default function AcademicControlDashboard() {
                                 <Legend />
                                 <Tooltip />
                             </RadarChart>
-                        </ResponsiveContainer>
+                        </SafeResponsiveContainer>
                     </CardContent>
                 </Card>
             </div>

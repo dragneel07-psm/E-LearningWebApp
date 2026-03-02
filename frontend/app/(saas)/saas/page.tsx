@@ -13,9 +13,10 @@ import { toast } from "sonner";
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     LineChart, Line, XAxis, YAxis, CartesianGrid,
-    Tooltip, ResponsiveContainer, AreaChart, Area,
+    Tooltip, AreaChart, Area,
     BarChart, Bar, Cell
 } from 'recharts';
+import { SafeResponsiveContainer } from '@/components/ui/safe-responsive-container';
 import { Badge } from '@/components/ui/badge';
 
 // Stylized World Map SVG for "Tenant Health"
@@ -115,7 +116,7 @@ export default function SaasDashboardPage() {
                         </CardHeader>
                         <CardContent className="h-[320px] w-full mt-4">
                             {isClient && Array.isArray(revenue_trend) && revenue_trend.length > 0 ? (
-                                <ResponsiveContainer width="100%" height="100%">
+                                <SafeResponsiveContainer width="100%" height="100%">
                                     <AreaChart data={revenue_trend}>
                                         <defs>
                                             <linearGradient id="neonGreen" x1="0" y1="0" x2="0" y2="1">
@@ -154,7 +155,7 @@ export default function SaasDashboardPage() {
                                             fill="transparent"
                                         />
                                     </AreaChart>
-                                </ResponsiveContainer>
+                                </SafeResponsiveContainer>
                             ) : (
                                 <div className="h-full flex items-center justify-center text-slate-500 text-xs italic">
                                     No revenue data available yet.

@@ -9,7 +9,8 @@ import { Badge } from '@/components/ui/badge';
 import { ChevronLeft, Users, BookOpen, ClipboardList, BarChart2, Plus, BrainCircuit, AlertCircle, FileText, TrendingUp } from 'lucide-react';
 import Link from 'next/link';
 import { academicAPI, Subject, Student, Assessment } from '@/lib/api';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, LineChart, Line } from 'recharts';
+import { SafeResponsiveContainer } from '@/components/ui/safe-responsive-container';
 
 export default function ClassDetailPage() {
     const params = useParams();
@@ -296,7 +297,7 @@ export default function ClassDetailPage() {
                                     <CardTitle>Grade Distribution</CardTitle>
                                 </CardHeader>
                                 <CardContent className="h-[300px]">
-                                    <ResponsiveContainer width="100%" height="100%">
+                                    <SafeResponsiveContainer width="100%" height="100%">
                                         <BarChart data={metrics.distribution.length > 0 ? metrics.distribution : [{ range: 'No Data', count: 0, fill: '#eee' }]}>
                                             <CartesianGrid strokeDasharray="3 3" vertical={false} />
                                             <XAxis dataKey="range" fontSize={12} tickLine={false} axisLine={false} />
@@ -304,7 +305,7 @@ export default function ClassDetailPage() {
                                             <Tooltip cursor={{ fill: 'transparent' }} contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} />
                                             <Bar dataKey="count" radius={[4, 4, 0, 0]} />
                                         </BarChart>
-                                    </ResponsiveContainer>
+                                    </SafeResponsiveContainer>
                                 </CardContent>
                             </Card>
 
@@ -314,7 +315,7 @@ export default function ClassDetailPage() {
                                     <CardTitle>Performance Trend</CardTitle>
                                 </CardHeader>
                                 <CardContent className="h-[300px]">
-                                    <ResponsiveContainer width="100%" height="100%">
+                                    <SafeResponsiveContainer width="100%" height="100%">
                                         <LineChart data={metrics.trend.length > 0 ? metrics.trend : [{ name: 'No Data', avg: 0 }]}>
                                             <CartesianGrid strokeDasharray="3 3" vertical={false} />
                                             <XAxis dataKey="name" fontSize={12} tickLine={false} axisLine={false} />
@@ -322,7 +323,7 @@ export default function ClassDetailPage() {
                                             <Tooltip contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} />
                                             <Line type="monotone" dataKey="avg" stroke="#4f46e5" strokeWidth={3} dot={{ r: 4, fill: '#4f46e5', strokeWidth: 2, stroke: '#fff' }} activeDot={{ r: 6 }} />
                                         </LineChart>
-                                    </ResponsiveContainer>
+                                    </SafeResponsiveContainer>
                                 </CardContent>
                             </Card>
                         </div>

@@ -15,7 +15,8 @@ import { AITeachingAssistant } from '@/components/ai-teaching-assistant';
 import { MyProfileDialog } from '@/components/my-profile-dialog';
 import { AttendanceTrends } from '@/components/attendance-trends';
 import Link from 'next/link';
-import { BarChart, Bar, XAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
+import { BarChart, Bar, XAxis, CartesianGrid, Tooltip, PieChart, Pie, Cell, Legend } from 'recharts';
+import { SafeResponsiveContainer } from '@/components/ui/safe-responsive-container';
 
 export default function TeacherDashboard() {
     const [loading, setLoading] = useState(true);
@@ -212,7 +213,7 @@ export default function TeacherDashboard() {
                                 <CardTitle className="text-sm font-bold text-slate-700">Performance Trends</CardTitle>
                             </CardHeader>
                             <CardContent className="h-[200px] w-full">
-                                <ResponsiveContainer width="100%" height="100%">
+                                <SafeResponsiveContainer width="100%" height="100%">
                                     <BarChart data={[
                                         { name: 'Week 1', score: 78 },
                                         { name: 'Week 2', score: 82 },
@@ -224,7 +225,7 @@ export default function TeacherDashboard() {
                                         <Tooltip contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} />
                                         <Bar dataKey="score" fill="#6366f1" radius={[4, 4, 0, 0]} />
                                     </BarChart>
-                                </ResponsiveContainer>
+                                </SafeResponsiveContainer>
                             </CardContent>
                         </Card>
                         <AttendanceTrends />

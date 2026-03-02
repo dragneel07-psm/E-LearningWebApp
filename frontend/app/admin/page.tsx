@@ -5,7 +5,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Users, GraduationCap, School, TrendingUp, ArrowUpRight, ArrowDownRight, UserPlus, FilePlus, Calendar, MoreVertical, CreditCard, BookOpen } from 'lucide-react';
 import { academicAPI, usersAPI, billingAPI } from '@/lib/api';
-import { XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area, PieChart, Pie, Cell, Legend } from 'recharts';
+import { XAxis, YAxis, CartesianGrid, Tooltip, AreaChart, Area, PieChart, Pie, Cell, Legend } from 'recharts';
+import { SafeResponsiveContainer } from '@/components/ui/safe-responsive-container';
 
 // Dialog Imports
 import { AddStudentDialog } from '@/components/add-student-dialog';
@@ -168,7 +169,7 @@ export default function SchoolAdminDashboard() {
                         <CardTitle className="text-base font-semibold text-slate-800">Enrollment Trends (Past 6 Months)</CardTitle>
                     </CardHeader>
                     <CardContent className="h-[300px]">
-                        <ResponsiveContainer width="100%" height="100%">
+                        <SafeResponsiveContainer width="100%" height="100%">
                             <AreaChart data={enrollmentData}>
                                 <defs>
                                     <linearGradient id="colorStudents" x1="0" y1="0" x2="0" y2="1">
@@ -184,7 +185,7 @@ export default function SchoolAdminDashboard() {
                                 />
                                 <Area type="monotone" dataKey="students" stroke="#6366f1" strokeWidth={3} fillOpacity={1} fill="url(#colorStudents)" />
                             </AreaChart>
-                        </ResponsiveContainer>
+                        </SafeResponsiveContainer>
                     </CardContent>
                 </Card>
 
@@ -202,7 +203,7 @@ export default function SchoolAdminDashboard() {
                                 <span className="text-xs text-slate-500">Collected</span>
                             </div>
                         </div>
-                        <ResponsiveContainer width="100%" height="100%">
+                        <SafeResponsiveContainer width="100%" height="100%">
                             <PieChart>
                                 <Pie
                                     data={feeCollectionData}
@@ -220,7 +221,7 @@ export default function SchoolAdminDashboard() {
                                 </Pie>
                                 <Legend verticalAlign="bottom" height={36} iconType="circle" />
                             </PieChart>
-                        </ResponsiveContainer>
+                        </SafeResponsiveContainer>
                     </CardContent>
                 </Card>
             </div>
