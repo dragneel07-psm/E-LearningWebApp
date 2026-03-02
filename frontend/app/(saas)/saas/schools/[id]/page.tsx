@@ -384,24 +384,7 @@ export default function SchoolDetailsPage() {
     };
 
     const handleSaveFeatures = async () => {
-        if (!school) return;
-        setIsSavingFeatures(true);
-        try {
-            const targetId = String(school.id ?? schoolId);
-            const updated = await saasApi.updateTenant(targetId, {
-                features: {
-                    ...(school.features || {}),
-                    ...featureFlags
-                }
-            });
-            setSchool(prev => (prev ? { ...prev, ...updated, features: updated.features } : prev));
-            toast.success("Feature flags saved.");
-        } catch (error) {
-            console.error(error);
-            toast.error("Failed to save feature flags.");
-        } finally {
-            setIsSavingFeatures(false);
-        }
+        toast.info("Feature access is strictly controlled by the subscribed plan. Change plan to adjust features.");
     };
 
     const handleUploadLogo = async () => {
@@ -1038,7 +1021,7 @@ export default function SchoolDetailsPage() {
                                 <div className="space-y-2">
                                     <Label>Type</Label>
                                     <Select value={settingsForm.type} onValueChange={(value) => setSettingsForm(prev => ({ ...prev, type: value }))}>
-                                        <SelectTrigger>
+                                        <SelectTrigger disabled>
                                             <SelectValue />
                                         </SelectTrigger>
                                         <SelectContent>
@@ -1057,6 +1040,9 @@ export default function SchoolDetailsPage() {
                                     onChange={(e) => setSettingsForm(prev => ({ ...prev, address: e.target.value }))}
                                 />
                             </div>
+                            <p className="text-xs text-slate-500">
+                                Tenant type and feature access are automatically enforced from the subscribed plan.
+                            </p>
                             <div className="flex justify-end">
                                 <Button onClick={handleSaveSettings} disabled={isSavingSettings}>
                                     {isSavingSettings ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
@@ -1067,7 +1053,7 @@ export default function SchoolDetailsPage() {
                             <div className="border-t pt-6 space-y-4">
                                 <div>
                                     <h4 className="font-semibold">Feature Flags</h4>
-                                    <p className="text-sm text-slate-500">Enable or disable modules for this school.</p>
+                                    <p className="text-sm text-slate-500">Features are plan-controlled and cannot exceed plan entitlements.</p>
                                 </div>
                                 <div className="grid gap-3 md:grid-cols-2">
                                     {Object.entries(featureFlags).map(([key, value]) => (
@@ -1075,15 +1061,15 @@ export default function SchoolDetailsPage() {
                                             <div className="text-sm">{key.replace(/_/g, ' ')}</div>
                                             <Switch
                                                 checked={value}
-                                                onCheckedChange={(checked) => setFeatureFlags(prev => ({ ...prev, [key]: checked }))}
+                                                disabled
                                             />
                                         </div>
                                     ))}
                                 </div>
                                 <div className="flex justify-end">
                                     <Button variant="outline" onClick={handleSaveFeatures} disabled={isSavingFeatures}>
-                                        {isSavingFeatures ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-                                        Save Features
+                                        <Save className="mr-2 h-4 w-4" />
+                                        Plan-Controlled
                                     </Button>
                                 </div>
                             </div>

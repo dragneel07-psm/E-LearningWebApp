@@ -19,11 +19,19 @@ from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import letter
 from reportlab.lib import colors
 import io
+from core.utils.plan_enforcement import sync_subscription_limits_with_plan, sync_tenant_with_plan
 
 class SubscriptionPlanViewSet(viewsets.ModelViewSet):
     queryset = SubscriptionPlan.objects.all()
     serializer_class = SubscriptionPlanSerializer
     permission_classes = [permissions.IsAuthenticated] # Adjust as needed
+
+    def perform_update(self, serializer):
+        plan = serializer.save()
+        subscriptions = Subscription.objects.filter(plan=plan).select_related('tenant')
+        for subscription in subscriptions:
+            sync_subscription_limits_with_plan(subscription, plan=plan, save=True)
+            sync_tenant_with_plan(subscription.tenant, plan=plan, save=True)
 
     @action(detail=False, methods=['post'], url_path='seed-defaults')
     def seed_defaults(self, request):

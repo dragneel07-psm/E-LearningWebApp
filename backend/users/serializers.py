@@ -1,6 +1,7 @@
 # users/serializers.py
 from rest_framework import serializers
 from .models import UserAccount
+from core.utils.plan_enforcement import build_plan_entitled_features, get_tenant_plan
 
 class UserAccountSerializer(serializers.ModelSerializer):
     tenant_features = serializers.SerializerMethodField()
@@ -12,7 +13,7 @@ class UserAccountSerializer(serializers.ModelSerializer):
 
     def get_tenant_features(self, obj):
         if obj.tenant:
-            return obj.tenant.features
+            return build_plan_entitled_features(get_tenant_plan(obj.tenant))
         return {}
 
 from django.contrib.auth.models import Group, Permission
@@ -63,7 +64,7 @@ class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
             'first_name': self.user.first_name,
             'last_name':  self.user.last_name,
             'role':       self.user.role,
-            'tenant_features': self.user.tenant.features if self.user.tenant else {},
+            'tenant_features': build_plan_entitled_features(get_tenant_plan(self.user.tenant)) if self.user.tenant else {},
         }
         return data
 

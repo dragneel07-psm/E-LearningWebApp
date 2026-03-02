@@ -17,6 +17,7 @@ import os
 import glob
 from datetime import datetime, timedelta
 from django.utils import timezone
+from core.utils.plan_enforcement import sync_tenant_with_plan
 
 class TenantCheckView(APIView):
     permission_classes = [permissions.AllowAny]
@@ -35,7 +36,7 @@ class TenantCheckView(APIView):
 from .views_saas import IsSaaSAdmin
 
 class TenantViewSet(viewsets.ModelViewSet):
-    queryset = Tenant.objects.all()
+    queryset = Tenant.objects.select_related('subscription__plan').all()
     permission_classes = [IsSaaSAdmin]
 
     def get_serializer_class(self):
@@ -93,6 +94,7 @@ class TenantViewSet(viewsets.ModelViewSet):
                     storage_limit_gb=plan.storage_limit_gb,
                     ai_token_limit=plan.ai_token_limit,
                 )
+                sync_tenant_with_plan(tenant, plan=plan, save=True)
                 print(f"15-day trial subscription created for {tenant.name} on plan {plan.name}")
             except Exception as sub_err:
                 raise RuntimeError(f"Failed to create trial subscription for {tenant.name}: {sub_err}")

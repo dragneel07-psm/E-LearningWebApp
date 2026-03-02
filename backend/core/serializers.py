@@ -5,6 +5,11 @@ import re
 from django.db import connection
 from django.db.models import Sum
 from billing.models import SubscriptionPlan
+from core.utils.plan_enforcement import (
+    build_plan_entitled_features,
+    derive_tenant_type_from_plan,
+    get_tenant_plan,
+)
 
 class TenantSerializer(serializers.ModelSerializer):
     plan_name = serializers.SerializerMethodField()
@@ -27,12 +32,24 @@ class TenantSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'schema_name', 'name', 'subdomain', 'type', 'status', 
             'contact_email', 'contact_phone', 'address', 'website',
+            'features',
             'plan_name', 'subscription_status', 'billing_cycle',
             'student_count', 'teacher_count', 'total_users', 'admin_count',
             'ai_usage', 'ai_tokens_used', 'ai_token_limit',
             'storage_used_bytes', 'storage_used_mb', 'storage_limit_gb', 'storage_usage_percent',
             'logo'
         ]
+
+    def validate(self, attrs):
+        # Enforce strict plan entitlement on every update.
+        instance = getattr(self, 'instance', None)
+        if not instance:
+            return attrs
+
+        plan = get_tenant_plan(instance)
+        attrs['type'] = derive_tenant_type_from_plan(plan)
+        attrs['features'] = build_plan_entitled_features(plan)
+        return attrs
     
     def get_plan_name(self, obj):
         try:
@@ -168,6 +185,13 @@ class TenantSerializer(serializers.ModelSerializer):
             return 0.0
         limit_bytes = limit_gb * 1024 * 1024 * 1024
         return round((self.get_storage_used_bytes(obj) / limit_bytes) * 100, 2)
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        plan = get_tenant_plan(instance)
+        data['type'] = derive_tenant_type_from_plan(plan)
+        data['features'] = build_plan_entitled_features(plan)
+        return data
 
 class AuditLogSerializer(serializers.ModelSerializer):
     user = serializers.StringRelatedField() # Display username
@@ -312,22 +336,6 @@ class TenantCreateSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("Subdomain must be lowercase alphanumeric with hyphens.")
         return value
 
-    def _derive_tenant_type(self, plan: SubscriptionPlan) -> str:
-        name = (plan.name or '').strip().lower()
-        if 'enterprise' in name:
-            return 'enterprise'
-        if 'premium' in name:
-            return 'premium'
-        if 'standard' in name or 'basic' in name or 'starter' in name:
-            return 'standard'
-
-        # Fallback by scale
-        if (plan.student_limit or 0) >= 3000:
-            return 'enterprise'
-        if (plan.student_limit or 0) >= 1000:
-            return 'premium'
-        return 'standard'
-
     def validate(self, attrs):
         provided_type = (attrs.get('type') or '').strip()
         if not provided_type:
@@ -338,7 +346,7 @@ class TenantCreateSerializer(serializers.ModelSerializer):
         if not plan:
             raise serializers.ValidationError({'plan_id': 'Selected subscription plan is invalid or inactive.'})
 
-        plan_type = self._derive_tenant_type(plan)
+        plan_type = derive_tenant_type_from_plan(plan)
         normalized_provided = provided_type.lower()
         accepted_inputs = {plan_type, (plan.name or '').strip().lower()}
         if normalized_provided not in accepted_inputs:
@@ -347,6 +355,7 @@ class TenantCreateSerializer(serializers.ModelSerializer):
             })
 
         attrs['type'] = plan_type
+        attrs['features'] = build_plan_entitled_features(plan)
         attrs['plan'] = plan
         return attrs
 

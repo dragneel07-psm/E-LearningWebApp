@@ -1,6 +1,7 @@
 from rest_framework import serializers
 from decimal import Decimal
 from .models import Subscription, SubscriptionPlan, Invoice, FeeStructure, StudentFee, Payment, Expense
+from core.utils.plan_enforcement import sync_subscription_limits_with_plan, sync_tenant_with_plan
 
 class SubscriptionPlanSerializer(serializers.ModelSerializer):
     def validate(self, attrs):
@@ -39,6 +40,20 @@ class SubscriptionSerializer(serializers.ModelSerializer):
     class Meta:
         model = Subscription
         fields = '__all__'
+
+    def create(self, validated_data):
+        subscription = super().create(validated_data)
+        if subscription.plan:
+            sync_subscription_limits_with_plan(subscription, plan=subscription.plan, save=True)
+            sync_tenant_with_plan(subscription.tenant, plan=subscription.plan, save=True)
+        return subscription
+
+    def update(self, instance, validated_data):
+        subscription = super().update(instance, validated_data)
+        if subscription.plan:
+            sync_subscription_limits_with_plan(subscription, plan=subscription.plan, save=True)
+            sync_tenant_with_plan(subscription.tenant, plan=subscription.plan, save=True)
+        return subscription
 
 class InvoiceSerializer(serializers.ModelSerializer):
     tenant_name = serializers.CharField(source='tenant.name', read_only=True)
