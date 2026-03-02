@@ -31,13 +31,13 @@ class Command(BaseCommand):
         ]
         
         for d in domains:
-            domain, d_created = Domain.objects.get_or_create(
+            domain, d_created = Domain.objects.update_or_create(
                 domain=d,
                 defaults={'tenant': tenant, 'is_primary': (d == domains[0])}
             )
             if d_created:
                 self.stdout.write(self.style.SUCCESS(f'✅ Created domain: {d}'))
             else:
-                self.stdout.write(self.style.NOTICE(f'ℹ️ Domain {d} already exists.'))
+                self.stdout.write(self.style.SUCCESS(f'✅ Verified/Updated domain: {d}'))
         
         self.stdout.write(self.style.SUCCESS('🚀 Production initialization complete.'))

@@ -54,9 +54,10 @@ export default function SaasDashboardPage() {
             ]);
             setData(kpiRes);
             setAiUsage(aiRes);
-        } catch (error) {
-            console.error(error);
-            toast.error("Failed to load platform intelligence.");
+        } catch (error: any) {
+            console.error("Dashboard Load Error:", error);
+            const msg = error.message || "Unknown Error";
+            toast.error(`Failed to load platform intelligence: ${msg}`);
         } finally {
             setIsLoading(false);
         }
