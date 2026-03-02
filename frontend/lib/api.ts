@@ -430,6 +430,7 @@ export interface GlobalSettings {
     ai_provider_name: string;
     ai_base_url: string;
     ai_model: string;
+    auto_detect_model?: boolean;
     ai_api_key?: string;
     ai_api_key_masked?: string;
     ai_api_key_configured?: boolean;

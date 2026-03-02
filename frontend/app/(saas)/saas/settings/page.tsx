@@ -60,7 +60,8 @@ export default function SystemSettingsPage() {
                 ...settings,
                 ai_provider_name: (settings.ai_provider_name || '').trim() || 'OpenAI',
                 ai_base_url: (settings.ai_base_url || '').trim() || 'https://api.openai.com/v1',
-                ai_model: (settings.ai_model || '').trim() || 'gpt-3.5-turbo'
+                ai_model: (settings.ai_model || '').trim() || 'gpt-3.5-turbo',
+                auto_detect_model: true
             };
             const updated = await saasApi.updateSettings(payload);
             setSettings({
