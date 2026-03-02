@@ -174,9 +174,60 @@ class AuditLogSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 class GlobalSettingsSerializer(serializers.ModelSerializer):
+    ai_api_key = serializers.CharField(write_only=True, required=False, allow_blank=True, trim_whitespace=True)
+    ai_api_key_masked = serializers.SerializerMethodField(read_only=True)
+    ai_api_key_configured = serializers.SerializerMethodField(read_only=True)
+
     class Meta:
         model = GlobalSettings
-        fields = '__all__'
+        fields = [
+            'id',
+            'site_name',
+            'maintenance_mode',
+            'allow_registration',
+            'support_email',
+            'default_language',
+            'ai_enabled',
+            'ai_provider_name',
+            'ai_base_url',
+            'ai_model',
+            'ai_api_key',
+            'ai_api_key_masked',
+            'ai_api_key_configured',
+            'updated_at',
+        ]
+        read_only_fields = ['id', 'updated_at', 'ai_api_key_masked', 'ai_api_key_configured']
+
+    def get_ai_api_key_masked(self, obj):
+        key = (obj.ai_api_key or '').strip()
+        if not key:
+            return ''
+        if len(key) <= 8:
+            return '*' * len(key)
+        return f"{key[:4]}...{key[-4:]}"
+
+    def get_ai_api_key_configured(self, obj):
+        return bool((obj.ai_api_key or '').strip())
+
+    def validate_ai_base_url(self, value):
+        if value:
+            return value.rstrip('/')
+        return value
+
+    def update(self, instance, validated_data):
+        incoming_key = validated_data.pop('ai_api_key', None)
+
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+
+        # Preserve existing key when empty/blank payload is sent.
+        if incoming_key is not None:
+            cleaned_key = incoming_key.strip()
+            if cleaned_key:
+                instance.ai_api_key = cleaned_key
+
+        instance.save()
+        return instance
 
 class TenantCreateSerializer(serializers.ModelSerializer):
     admin_email = serializers.EmailField(write_only=True)

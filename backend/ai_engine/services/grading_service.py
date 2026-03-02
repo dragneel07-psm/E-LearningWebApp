@@ -1,22 +1,45 @@
 import os
 import json
 from openai import OpenAI
+from .provider_config import get_ai_provider_config
 
 class GradingService:
     def __init__(self):
-        # Initialize OpenAI client
-        api_key = os.getenv('OPENAI_API_KEY', 'demo-key')
-        base_url = os.getenv('OPENAI_BASE_URL')
-        self.client = (
-            OpenAI(api_key=api_key, base_url=base_url) if base_url else OpenAI(api_key=api_key)
-        ) if api_key != 'demo-key' else None
+        self.client = None
         self.model = os.getenv('OPENAI_MODEL', 'gpt-3.5-turbo')
+        self._client_signature = None
+        self._refresh_client(force=True)
+
+    def _refresh_client(self, force: bool = False):
+        config = get_ai_provider_config()
+        signature = (
+            config.get('api_key', ''),
+            config.get('base_url', ''),
+            config.get('model', ''),
+            bool(config.get('enabled')),
+        )
+
+        if not force and signature == self._client_signature:
+            return
+
+        self._client_signature = signature
+        self.model = config.get('model') or self.model
+
+        if config.get('configured') and config.get('enabled'):
+            self.client = OpenAI(
+                api_key=config.get('api_key'),
+                base_url=config.get('base_url'),
+            )
+        else:
+            self.client = None
 
     def grade_submission(self, question_text, student_answer, correct_answer=None, total_points=10):
         """
         Grade a student submission using AI.
         Returns dict: { 'score': float, 'feedback': str }
         """
+        self._refresh_client()
+
         if not self.client:
             return self._get_demo_grade(student_answer, total_points)
 

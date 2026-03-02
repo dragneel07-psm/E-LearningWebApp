@@ -420,11 +420,20 @@ export interface Invoice {
 }
 
 export interface GlobalSettings {
+    id?: number;
     site_name: string;
     support_email: string;
     default_language: string;
     maintenance_mode: boolean;
     allow_registration: boolean;
+    ai_enabled: boolean;
+    ai_provider_name: string;
+    ai_base_url: string;
+    ai_model: string;
+    ai_api_key?: string;
+    ai_api_key_masked?: string;
+    ai_api_key_configured?: boolean;
+    updated_at?: string;
 }
 
 export interface SeedDefaultPlansResponse {
@@ -442,6 +451,9 @@ export interface SaasAIUsageResponse {
         base_url: string;
         model: string;
         configured: boolean;
+        enabled?: boolean;
+        source?: string;
+        api_key_masked?: string;
     };
     total_tokens: number;
     total_prompt_tokens: number;

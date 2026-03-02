@@ -78,6 +78,12 @@ export default function SaasAiUsagePage() {
                                 {aiStats.provider.configured ? 'Configured' : 'Not Configured'}
                             </Badge>
                             <p className="text-xs text-slate-500 break-all">{aiStats.provider.base_url}</p>
+                            {aiStats.provider.source ? (
+                                <p className="text-xs text-slate-500">Source: {aiStats.provider.source === 'saas_settings' ? 'SaaS Settings' : 'Environment'}</p>
+                            ) : null}
+                            {aiStats.provider.api_key_masked ? (
+                                <p className="text-xs text-slate-500">Key: {aiStats.provider.api_key_masked}</p>
+                            ) : null}
                         </CardContent>
                     </Card>
                 </motion.div>

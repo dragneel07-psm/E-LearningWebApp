@@ -120,7 +120,7 @@ class GlobalSettingsViewSet(viewsets.ViewSet):
     The 'list' action (GET /api/core/settings/) returns the single instance.
     The 'create' or 'update' action (POST/PUT) updates that single instance.
     """
-    permission_classes = [permissions.IsAuthenticated] # Restrict to SaaS Admins ideally
+    permission_classes = [IsSaaSAdmin]
 
     def list(self, request):
         settings, _ = GlobalSettings.objects.get_or_create(pk=1)

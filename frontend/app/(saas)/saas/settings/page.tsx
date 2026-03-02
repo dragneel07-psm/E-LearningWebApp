@@ -5,10 +5,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
-import { Separator } from "@/components/ui/separator";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2, Save, Settings, Shield, Globe, Bell } from "lucide-react";
+import { Bot, Loader2, Save, Settings, Shield, Globe } from "lucide-react";
 import { saasApi, GlobalSettings } from '@/lib/api/saas';
 import { toast } from "sonner";
 import { motion } from "framer-motion";
@@ -21,7 +20,14 @@ export default function SystemSettingsPage() {
         support_email: '',
         default_language: 'en',
         maintenance_mode: false,
-        allow_registration: true
+        allow_registration: true,
+        ai_enabled: true,
+        ai_provider_name: 'OpenAI',
+        ai_base_url: 'https://api.openai.com/v1',
+        ai_model: 'gpt-3.5-turbo',
+        ai_api_key: '',
+        ai_api_key_masked: '',
+        ai_api_key_configured: false
     });
 
     useEffect(() => {
@@ -31,7 +37,10 @@ export default function SystemSettingsPage() {
     const loadSettings = async () => {
         try {
             const data = await saasApi.getSettings();
-            setSettings(data);
+            setSettings({
+                ...data,
+                ai_api_key: ''
+            });
         } catch (error) {
             console.error(error);
             toast.error("Failed to load settings.");
@@ -44,7 +53,11 @@ export default function SystemSettingsPage() {
         e.preventDefault();
         setIsSaving(true);
         try {
-            await saasApi.updateSettings(settings);
+            const updated = await saasApi.updateSettings(settings);
+            setSettings({
+                ...updated,
+                ai_api_key: ''
+            });
             toast.success("System configurations updated.");
         } catch (error) {
             console.error(error);
@@ -137,6 +150,91 @@ export default function SystemSettingsPage() {
                     <Card className="bg-white dark:bg-[#111114] border-slate-200 dark:border-white/10 shadow-xl dark:shadow-none overflow-hidden">
                         <CardHeader className="border-b border-slate-200 dark:border-white/5 bg-slate-50/50 dark:bg-white/[0.02]">
                             <div className="flex items-center gap-2">
+                                <Bot className="w-5 h-5 text-indigo-500 dark:text-indigo-400" />
+                                <CardTitle className="text-xl text-slate-900 dark:text-white">AI Provider Configuration</CardTitle>
+                            </div>
+                            <CardDescription className="text-slate-500 dark:text-slate-400">
+                                Configure the AI provider once from SaaS Admin and reuse it across all AI features.
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent className="space-y-6 p-6">
+                            <div className="flex items-center justify-between space-x-2 p-4 rounded-xl border border-slate-200 dark:border-white/5 hover:bg-slate-50 dark:hover:bg-white/[0.02] transition-colors">
+                                <div className="space-y-1">
+                                    <Label className="text-base font-medium text-slate-900 dark:text-white">Enable AI Features</Label>
+                                    <p className="text-sm text-slate-500 dark:text-slate-400">
+                                        Disable to force all AI features into fallback/demo mode globally.
+                                    </p>
+                                </div>
+                                <Switch
+                                    checked={settings.ai_enabled}
+                                    onCheckedChange={(c) => handleChange('ai_enabled', c)}
+                                    className="data-[state=checked]:bg-indigo-600"
+                                />
+                            </div>
+
+                            <div className="grid gap-6 md:grid-cols-2">
+                                <div className="space-y-2">
+                                    <Label htmlFor="ai_provider_name" className="text-slate-700 dark:text-slate-300">Provider Name</Label>
+                                    <Input
+                                        id="ai_provider_name"
+                                        value={settings.ai_provider_name}
+                                        onChange={(e) => handleChange('ai_provider_name', e.target.value)}
+                                        placeholder="OpenAI / OpenRouter / Custom"
+                                        className="bg-slate-50 dark:bg-white/5 border-slate-200 dark:border-white/10 text-slate-900 dark:text-white focus:ring-indigo-500"
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <Label htmlFor="ai_model" className="text-slate-700 dark:text-slate-300">Model</Label>
+                                    <Input
+                                        id="ai_model"
+                                        value={settings.ai_model}
+                                        onChange={(e) => handleChange('ai_model', e.target.value)}
+                                        placeholder="gpt-4o-mini"
+                                        className="bg-slate-50 dark:bg-white/5 border-slate-200 dark:border-white/10 text-slate-900 dark:text-white focus:ring-indigo-500"
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="space-y-2">
+                                <Label htmlFor="ai_base_url" className="text-slate-700 dark:text-slate-300">Base URL</Label>
+                                <Input
+                                    id="ai_base_url"
+                                    value={settings.ai_base_url}
+                                    onChange={(e) => handleChange('ai_base_url', e.target.value)}
+                                    placeholder="https://api.openai.com/v1"
+                                    className="bg-slate-50 dark:bg-white/5 border-slate-200 dark:border-white/10 text-slate-900 dark:text-white focus:ring-indigo-500"
+                                />
+                            </div>
+
+                            <div className="space-y-2">
+                                <Label htmlFor="ai_api_key" className="text-slate-700 dark:text-slate-300">API Key</Label>
+                                <Input
+                                    id="ai_api_key"
+                                    type="password"
+                                    value={settings.ai_api_key || ''}
+                                    onChange={(e) => handleChange('ai_api_key', e.target.value)}
+                                    placeholder="Enter new key to update. Leave blank to keep existing key."
+                                    autoComplete="new-password"
+                                    className="bg-slate-50 dark:bg-white/5 border-slate-200 dark:border-white/10 text-slate-900 dark:text-white focus:ring-indigo-500"
+                                />
+                                <p className="text-xs text-slate-500 dark:text-slate-400">
+                                    {settings.ai_api_key_configured
+                                        ? `Stored key: ${settings.ai_api_key_masked || 'Configured'}`
+                                        : 'No API key configured yet.'}
+                                </p>
+                            </div>
+                        </CardContent>
+                    </Card>
+                </motion.div>
+
+                <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.3 }}
+                >
+                    <Card className="bg-white dark:bg-[#111114] border-slate-200 dark:border-white/10 shadow-xl dark:shadow-none overflow-hidden">
+                        <CardHeader className="border-b border-slate-200 dark:border-white/5 bg-slate-50/50 dark:bg-white/[0.02]">
+                            <div className="flex items-center gap-2">
                                 <Shield className="w-5 h-5 text-emerald-500 dark:text-emerald-400" />
                                 <CardTitle className="text-xl text-slate-900 dark:text-white">Access Control & System Status</CardTitle>
                             </div>
@@ -177,7 +275,7 @@ export default function SystemSettingsPage() {
                 <motion.div
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.3 }}
+                    transition={{ delay: 0.4 }}
                     className="flex justify-end"
                 >
                     <Button

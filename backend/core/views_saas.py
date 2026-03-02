@@ -8,9 +8,9 @@ from django.conf import settings
 from datetime import datetime, timedelta
 from collections import defaultdict
 from decimal import Decimal
-import os
 from django_tenants.utils import schema_context
 from django.db.models.functions import TruncDate
+from ai_engine.services.provider_config import get_ai_provider_config
 
 
 class IsSaaSAdmin(permissions.BasePermission):
@@ -139,17 +139,7 @@ class SaasAIUsageView(APIView):
         tenant_errors = []
         daily_usage_map = defaultdict(lambda: {'tokens': 0, 'requests': 0, 'cost_estimate': Decimal('0')})
 
-        base_url = os.getenv('OPENAI_BASE_URL', 'https://api.openai.com/v1')
-        model = os.getenv('OPENAI_MODEL', 'gpt-3.5-turbo')
-        api_key = os.getenv('OPENAI_API_KEY', '')
-        configured = bool(api_key and api_key != 'demo-key')
-
-        if 'openrouter.ai' in base_url:
-            provider_name = 'OpenRouter'
-        elif 'openai.com' in base_url:
-            provider_name = 'OpenAI'
-        else:
-            provider_name = 'Custom OpenAI-Compatible'
+        provider_config = get_ai_provider_config()
 
         try:
             from django_tenants.utils import schema_context
@@ -266,10 +256,13 @@ class SaasAIUsageView(APIView):
 
         return Response({
             'provider': {
-                'name': provider_name,
-                'base_url': base_url,
-                'model': model,
-                'configured': configured,
+                'name': provider_config.get('provider_name'),
+                'base_url': provider_config.get('base_url'),
+                'model': provider_config.get('model'),
+                'configured': provider_config.get('configured'),
+                'enabled': provider_config.get('enabled'),
+                'source': provider_config.get('source'),
+                'api_key_masked': provider_config.get('api_key_masked'),
             },
             'total_tokens': total_tokens,
             'total_prompt_tokens': total_prompt_tokens,

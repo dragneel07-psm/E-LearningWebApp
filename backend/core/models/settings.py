@@ -10,6 +10,11 @@ class GlobalSettings(models.Model):
     allow_registration = models.BooleanField(default=True, help_text="Allow new tenants/schools to register.")
     support_email = models.EmailField(default="support@example.com")
     default_language = models.CharField(max_length=10, default="en", choices=[('en', 'English'), ('es', 'Spanish'), ('fr', 'French')])
+    ai_enabled = models.BooleanField(default=True, help_text="Enable or disable AI features globally.")
+    ai_provider_name = models.CharField(max_length=100, default="OpenAI", help_text="Display name of the configured AI provider.")
+    ai_base_url = models.URLField(default="https://api.openai.com/v1", help_text="Base URL for OpenAI-compatible API provider.")
+    ai_model = models.CharField(max_length=100, default="gpt-3.5-turbo", help_text="Default AI model used across services.")
+    ai_api_key = models.TextField(blank=True, default="", help_text="Secret API key for AI provider.")
     
     updated_at = models.DateTimeField(auto_now=True)
 

@@ -5,17 +5,37 @@ Handles AI-powered tutoring conversations using OpenAI
 import os
 from typing import Dict, List
 from openai import OpenAI
+from .provider_config import get_ai_provider_config
 
 class AITutorService:
     def __init__(self):
-        # Initialize OpenAI client
-        # Note: Set OPENAI_API_KEY in environment or settings
-        api_key = os.getenv('OPENAI_API_KEY', 'demo-key')
-        base_url = os.getenv('OPENAI_BASE_URL')
-        self.client = (
-            OpenAI(api_key=api_key, base_url=base_url) if base_url else OpenAI(api_key=api_key)
-        ) if api_key != 'demo-key' else None
+        self.client = None
         self.model = os.getenv('OPENAI_MODEL', 'gpt-3.5-turbo')
+        self._client_signature = None
+        self._refresh_client(force=True)
+
+    def _refresh_client(self, force: bool = False):
+        config = get_ai_provider_config()
+        signature = (
+            config.get('api_key', ''),
+            config.get('base_url', ''),
+            config.get('model', ''),
+            bool(config.get('enabled')),
+        )
+
+        if not force and signature == self._client_signature:
+            return
+
+        self._client_signature = signature
+        self.model = config.get('model') or self.model
+
+        if config.get('configured') and config.get('enabled'):
+            self.client = OpenAI(
+                api_key=config.get('api_key'),
+                base_url=config.get('base_url'),
+            )
+        else:
+            self.client = None
         
     def generate_tutor_response(self, 
                                 message: str, 
@@ -33,6 +53,8 @@ class AITutorService:
             Dict with 'response' and 'tokens_used'
         """
         
+        self._refresh_client()
+
         # Demo mode if no API key
         if not self.client:
             return {
@@ -174,6 +196,8 @@ Let's work through this together!"""
         """
         Generate pedagogical insights for a teacher based on class performance data.
         """
+        self._refresh_client()
+
         if not self.client:
             # Fallback for demo mode
             insights = []
