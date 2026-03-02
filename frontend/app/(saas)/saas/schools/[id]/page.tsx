@@ -2,12 +2,13 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
+import Image from 'next/image';
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ArrowLeft, Building, Users, CreditCard, Activity, Loader2, RefreshCcw, Search, MoreHorizontal, Eye, Key, ShieldAlert, ShieldCheck, Save } from "lucide-react";
-import { saasApi, Tenant, usersAPI, User } from "@/lib/api";
+import { ArrowLeft, Building, Users, CreditCard, Activity, Loader2, RefreshCcw, Search, MoreHorizontal, Eye, Key, ShieldAlert, ShieldCheck, Save, Plus, Download, Upload } from "lucide-react";
+import { coreAPI, Invoice, saasApi, Tenant, usersAPI, User } from "@/lib/api";
 import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -15,6 +16,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Switch } from "@/components/ui/switch";
 
 type TenantDetails = Tenant & {
     id?: string | number;
@@ -35,6 +37,15 @@ type UserFormState = {
     role: User['role'];
 };
 
+type NewUserFormState = {
+    first_name: string;
+    last_name: string;
+    email: string;
+    username: string;
+    password: string;
+    role: User['role'];
+};
+
 const EMPTY_USER_FORM: UserFormState = {
     first_name: '',
     last_name: '',
@@ -42,8 +53,25 @@ const EMPTY_USER_FORM: UserFormState = {
     role: 'student'
 };
 
-function getTenantIdentifier(user: User): string {
-    const tenantValue = user.tenant as unknown;
+const EMPTY_NEW_USER_FORM: NewUserFormState = {
+    first_name: '',
+    last_name: '',
+    email: '',
+    username: '',
+    password: '',
+    role: 'student'
+};
+
+const DEFAULT_FEATURE_FLAGS: Record<string, boolean> = {
+    student_ai_chatbot: true,
+    student_gamification: true,
+    parent_attendance: true,
+    parent_fees: true,
+    teacher_ai_grading: true,
+    teacher_reports: true,
+};
+
+function getTenantIdentifier(tenantValue: unknown): string {
     if (!tenantValue) return '';
     if (typeof tenantValue === 'string' || typeof tenantValue === 'number') {
         return String(tenantValue);
@@ -55,8 +83,8 @@ function getTenantIdentifier(user: User): string {
     return '';
 }
 
-function belongsToSchool(user: User, school: TenantDetails): boolean {
-    const tenantRef = getTenantIdentifier(user);
+function belongsToSchool(tenantValue: unknown, school: TenantDetails): boolean {
+    const tenantRef = getTenantIdentifier(tenantValue);
     if (!tenantRef) return false;
     const schoolRefs = [school.id, school.tenant_id].filter(Boolean).map(String);
     return schoolRefs.includes(tenantRef);
@@ -72,6 +100,12 @@ function formatRole(role: string): string {
 
 const numberFmt = new Intl.NumberFormat('en-US');
 
+function getApiBaseUrl(): string {
+    const raw = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api';
+    const normalized = raw.replace(/\/$/, '');
+    return normalized.endsWith('/api') ? normalized : `${normalized}/api`;
+}
+
 export default function SchoolDetailsPage() {
     const params = useParams();
     const router = useRouter();
@@ -86,6 +120,9 @@ export default function SchoolDetailsPage() {
     const [activeTab, setActiveTab] = useState('overview');
     const [isSavingSettings, setIsSavingSettings] = useState(false);
     const [isUpdatingTenantStatus, setIsUpdatingTenantStatus] = useState(false);
+    const [isSavingFeatures, setIsSavingFeatures] = useState(false);
+    const [isUploadingLogo, setIsUploadingLogo] = useState(false);
+    const [selectedLogoFile, setSelectedLogoFile] = useState<File | null>(null);
 
     const [settingsForm, setSettingsForm] = useState({
         name: '',
@@ -97,6 +134,7 @@ export default function SchoolDetailsPage() {
         type: 'standard',
         status: 'active'
     });
+    const [featureFlags, setFeatureFlags] = useState<Record<string, boolean>>(DEFAULT_FEATURE_FLAGS);
 
     const [users, setUsers] = useState<User[]>([]);
     const [usersLoading, setUsersLoading] = useState(false);
@@ -108,12 +146,18 @@ export default function SchoolDetailsPage() {
     const [userDialogOpen, setUserDialogOpen] = useState(false);
     const [isSavingUser, setIsSavingUser] = useState(false);
     const [activeUserActionId, setActiveUserActionId] = useState<string | null>(null);
+    const [newUserDialogOpen, setNewUserDialogOpen] = useState(false);
+    const [newUserForm, setNewUserForm] = useState<NewUserFormState>(EMPTY_NEW_USER_FORM);
+    const [isCreatingUser, setIsCreatingUser] = useState(false);
+
+    const [invoices, setInvoices] = useState<Invoice[]>([]);
+    const [invoicesLoading, setInvoicesLoading] = useState(false);
 
     const loadUsers = useCallback(async (tenant: TenantDetails) => {
         setUsersLoading(true);
         try {
             const allUsers = await usersAPI.getAccounts();
-            const scopedUsers = allUsers.filter(user => belongsToSchool(user, tenant));
+            const scopedUsers = allUsers.filter(user => belongsToSchool(user.tenant, tenant));
             setUsers(scopedUsers);
         } catch (error) {
             console.error(error);
@@ -121,6 +165,23 @@ export default function SchoolDetailsPage() {
             setUsers([]);
         } finally {
             setUsersLoading(false);
+        }
+    }, []);
+
+    const loadInvoices = useCallback(async (tenant: TenantDetails) => {
+        setInvoicesLoading(true);
+        try {
+            const allInvoices = await saasApi.getInvoices();
+            const scopedInvoices = allInvoices
+                .filter(inv => belongsToSchool(inv.tenant, tenant))
+                .sort((a, b) => new Date(b.issued_date).getTime() - new Date(a.issued_date).getTime());
+            setInvoices(scopedInvoices);
+        } catch (error) {
+            console.error(error);
+            toast.error("Failed to load tenant invoices.");
+            setInvoices([]);
+        } finally {
+            setInvoicesLoading(false);
         }
     }, []);
 
@@ -139,14 +200,22 @@ export default function SchoolDetailsPage() {
                 type: tenant.type || 'standard',
                 status: tenant.status || 'active'
             });
-            await loadUsers(tenant);
+            setFeatureFlags({
+                ...DEFAULT_FEATURE_FLAGS,
+                ...(tenant.features || {})
+            });
+
+            await Promise.all([
+                loadUsers(tenant),
+                loadInvoices(tenant)
+            ]);
         } catch (error) {
             console.error(error);
             toast.error("Failed to load school details.");
         } finally {
             setIsLoading(false);
         }
-    }, [loadUsers]);
+    }, [loadUsers, loadInvoices]);
 
     useEffect(() => {
         if (schoolId) {
@@ -157,6 +226,11 @@ export default function SchoolDetailsPage() {
     const handleRefreshUsers = async () => {
         if (!school) return;
         await loadUsers(school);
+    };
+
+    const handleRefreshInvoices = async () => {
+        if (!school) return;
+        await loadInvoices(school);
     };
 
     const handleOpenUserDialog = (user: User) => {
@@ -193,6 +267,43 @@ export default function SchoolDetailsPage() {
         }
     };
 
+    const handleCreateUser = async () => {
+        if (!school) return;
+        if (!newUserForm.first_name || !newUserForm.last_name || !newUserForm.email || !newUserForm.password) {
+            toast.error("First name, last name, email, and password are required.");
+            return;
+        }
+
+        setIsCreatingUser(true);
+        try {
+            const tenantId = String(school.id ?? school.tenant_id ?? '');
+            if (!tenantId) {
+                toast.error("Unable to resolve tenant id for this school.");
+                return;
+            }
+
+            await usersAPI.createAccount({
+                first_name: newUserForm.first_name,
+                last_name: newUserForm.last_name,
+                email: newUserForm.email,
+                username: newUserForm.username || newUserForm.email.split('@')[0],
+                password: newUserForm.password,
+                role: newUserForm.role,
+                tenant: tenantId
+            } as Partial<User>);
+
+            toast.success("User created successfully.");
+            setNewUserDialogOpen(false);
+            setNewUserForm(EMPTY_NEW_USER_FORM);
+            await loadUsers(school);
+        } catch (error) {
+            console.error(error);
+            toast.error("Failed to create user.");
+        } finally {
+            setIsCreatingUser(false);
+        }
+    };
+
     const handleToggleUserStatus = async (user: User) => {
         setActiveUserActionId(user.user_id);
         try {
@@ -223,6 +334,24 @@ export default function SchoolDetailsPage() {
         }
     };
 
+    const handleDownloadInvoice = async (invoice: Invoice) => {
+        try {
+            const apiBase = getApiBaseUrl();
+            const url = `${apiBase}/billing/invoices/${invoice.invoice_id}/download/`;
+            await toast.promise(
+                saasApi.helpers.downloadFile(url, `invoice_${invoice.invoice_id.slice(0, 8)}.pdf`),
+                {
+                    loading: 'Preparing invoice...',
+                    success: 'Invoice downloaded successfully.',
+                    error: 'Failed to download invoice.'
+                }
+            );
+        } catch (error) {
+            console.error(error);
+            toast.error("Failed to download invoice.");
+        }
+    };
+
     const handleSaveSettings = async () => {
         if (!school) return;
         setIsSavingSettings(true);
@@ -245,6 +374,46 @@ export default function SchoolDetailsPage() {
             toast.error("Failed to save tenant settings.");
         } finally {
             setIsSavingSettings(false);
+        }
+    };
+
+    const handleSaveFeatures = async () => {
+        if (!school) return;
+        setIsSavingFeatures(true);
+        try {
+            const targetId = String(school.id ?? schoolId);
+            const updated = await saasApi.updateTenant(targetId, {
+                features: {
+                    ...(school.features || {}),
+                    ...featureFlags
+                }
+            });
+            setSchool(prev => (prev ? { ...prev, ...updated, features: updated.features } : prev));
+            toast.success("Feature flags saved.");
+        } catch (error) {
+            console.error(error);
+            toast.error("Failed to save feature flags.");
+        } finally {
+            setIsSavingFeatures(false);
+        }
+    };
+
+    const handleUploadLogo = async () => {
+        if (!school || !selectedLogoFile) return;
+        setIsUploadingLogo(true);
+        try {
+            const formData = new FormData();
+            formData.append('logo', selectedLogoFile);
+            const targetId = String(school.id ?? schoolId);
+            const updated = await coreAPI.uploadTenantLogo(targetId, formData);
+            setSchool(prev => (prev ? { ...prev, ...updated } : prev));
+            setSelectedLogoFile(null);
+            toast.success("School logo updated.");
+        } catch (error) {
+            console.error(error);
+            toast.error("Failed to upload logo.");
+        } finally {
+            setIsUploadingLogo(false);
         }
     };
 
@@ -319,6 +488,28 @@ export default function SchoolDetailsPage() {
     const storageLimitGb = school?.storage_limit_gb ?? 0;
     const storageUsagePercent = school?.storage_usage_percent
         ?? (storageLimitGb > 0 ? (storageUsedMb / (storageLimitGb * 1024)) * 100 : 0);
+
+    const paidInvoices = invoices.filter(inv => inv.status === 'paid');
+    const pendingInvoices = invoices.filter(inv => inv.status === 'pending');
+    const failedInvoices = invoices.filter(inv => inv.status === 'failed');
+    const paidRevenue = paidInvoices.reduce((sum, inv) => sum + parseFloat(inv.amount || '0'), 0);
+    const pendingRevenue = pendingInvoices.reduce((sum, inv) => sum + parseFloat(inv.amount || '0'), 0);
+
+    const nextInvoiceDate = useMemo(() => {
+        if (invoices.length === 0) return 'Not available';
+        const latest = invoices[0];
+        if (latest.due_date) return new Date(latest.due_date).toLocaleDateString();
+
+        const source = new Date(latest.issued_date);
+        if (Number.isNaN(source.getTime())) return 'Not available';
+        const next = new Date(source);
+        if ((school?.billing_cycle || '').toLowerCase().includes('year')) {
+            next.setFullYear(next.getFullYear() + 1);
+        } else {
+            next.setMonth(next.getMonth() + 1);
+        }
+        return next.toLocaleDateString();
+    }, [invoices, school?.billing_cycle]);
 
     if (isLoading) {
         return <div className="p-8 flex items-center justify-center h-full"><Loader2 className="w-8 h-8 animate-spin text-slate-400" /></div>;
@@ -454,13 +645,13 @@ export default function SchoolDetailsPage() {
                 <TabsContent value="overview" className="space-y-4">
                     <Card>
                         <CardHeader>
-                            <CardTitle>Recent Activity</CardTitle>
+                            <CardTitle>Overview & Activity</CardTitle>
                             <CardDescription>
-                                Latest state across this tenant.
+                                Operational summary for this school tenant.
                             </CardDescription>
                         </CardHeader>
                         <CardContent className="space-y-4 text-sm">
-                            <div className="grid gap-4 md:grid-cols-2">
+                            <div className="grid gap-4 md:grid-cols-3">
                                 <div className="rounded-md border p-4">
                                     <div className="text-slate-500">Tenant Type</div>
                                     <div className="font-semibold capitalize">{school.type || 'standard'}</div>
@@ -477,11 +668,53 @@ export default function SchoolDetailsPage() {
                                     <div className="text-slate-500">Contact Phone</div>
                                     <div className="font-semibold">{school.contact_phone || 'Not configured'}</div>
                                 </div>
+                                <div className="rounded-md border p-4">
+                                    <div className="text-slate-500">Paid Revenue</div>
+                                    <div className="font-semibold">${numberFmt.format(paidRevenue)}</div>
+                                </div>
+                                <div className="rounded-md border p-4">
+                                    <div className="text-slate-500">Pending Revenue</div>
+                                    <div className="font-semibold">${numberFmt.format(pendingRevenue)}</div>
+                                </div>
                             </div>
-                            <div className="flex justify-end">
+
+                            <div className="rounded-md border">
+                                <div className="border-b px-4 py-3 font-medium">Recent Billing Activity</div>
+                                <Table>
+                                    <TableHeader>
+                                        <TableRow>
+                                            <TableHead>Invoice</TableHead>
+                                            <TableHead>Status</TableHead>
+                                            <TableHead>Amount</TableHead>
+                                            <TableHead>Date</TableHead>
+                                        </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {invoices.slice(0, 5).length === 0 ? (
+                                            <TableRow>
+                                                <TableCell colSpan={4} className="py-6 text-center text-slate-500">
+                                                    No invoice activity found.
+                                                </TableCell>
+                                            </TableRow>
+                                        ) : (
+                                            invoices.slice(0, 5).map(inv => (
+                                                <TableRow key={inv.invoice_id}>
+                                                    <TableCell className="font-mono text-xs">{inv.invoice_id.slice(0, 8)}</TableCell>
+                                                    <TableCell className="capitalize">{inv.status}</TableCell>
+                                                    <TableCell>${numberFmt.format(parseFloat(inv.amount || '0'))}</TableCell>
+                                                    <TableCell>{new Date(inv.issued_date).toLocaleDateString()}</TableCell>
+                                                </TableRow>
+                                            ))
+                                        )}
+                                    </TableBody>
+                                </Table>
+                            </div>
+
+                            <div className="flex flex-wrap justify-end gap-2">
+                                <Button variant="outline" onClick={() => setActiveTab('users')}>Manage Users</Button>
+                                <Button variant="outline" onClick={() => setActiveTab('billing')}>Open Billing</Button>
                                 <Button variant="outline" onClick={() => loadSchoolAndUsers(schoolId)} disabled={isLoading}>
-                                    <RefreshCcw className="mr-2 h-4 w-4" />
-                                    Refresh Details
+                                    <RefreshCcw className="mr-2 h-4 w-4" /> Refresh Details
                                 </Button>
                             </div>
                         </CardContent>
@@ -531,6 +764,14 @@ export default function SchoolDetailsPage() {
                                 <Button variant="outline" onClick={handleRefreshUsers} disabled={usersLoading}>
                                     {usersLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCcw className="mr-2 h-4 w-4" />}
                                     Refresh
+                                </Button>
+                                <Button
+                                    onClick={() => {
+                                        setNewUserForm(EMPTY_NEW_USER_FORM);
+                                        setNewUserDialogOpen(true);
+                                    }}
+                                >
+                                    <Plus className="mr-2 h-4 w-4" /> Add User
                                 </Button>
                             </div>
 
@@ -623,6 +864,7 @@ export default function SchoolDetailsPage() {
                     <Card>
                         <CardHeader>
                             <CardTitle>Subscription Details</CardTitle>
+                            <CardDescription>Plan usage, invoices, and payment status for this school.</CardDescription>
                         </CardHeader>
                         <CardContent className="space-y-4">
                             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -636,7 +878,7 @@ export default function SchoolDetailsPage() {
                                     <span className="font-semibold block">Billing Cycle:</span> {school.billing_cycle || 'monthly'}
                                 </div>
                                 <div>
-                                    <span className="font-semibold block">Next Invoice:</span> Not available
+                                    <span className="font-semibold block">Next Invoice:</span> {nextInvoiceDate}
                                 </div>
                                 <div>
                                     <span className="font-semibold block">AI Usage:</span> {numberFmt.format(aiTokensUsed)} / {numberFmt.format(aiTokenLimit)} tokens
@@ -644,15 +886,83 @@ export default function SchoolDetailsPage() {
                                 <div>
                                     <span className="font-semibold block">Storage Usage:</span> {storageUsedMb.toFixed(2)} MB / {storageLimitGb} GB
                                 </div>
+                                <div>
+                                    <span className="font-semibold block">Paid Revenue:</span> ${numberFmt.format(paidRevenue)}
+                                </div>
+                                <div>
+                                    <span className="font-semibold block">Pending Revenue:</span> ${numberFmt.format(pendingRevenue)}
+                                </div>
                             </div>
                             <div className="flex gap-2">
                                 <Button variant="outline" onClick={() => setActiveTab('settings')}>
                                     Edit Billing Settings
                                 </Button>
+                                <Button variant="outline" onClick={handleRefreshInvoices} disabled={invoicesLoading}>
+                                    {invoicesLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCcw className="mr-2 h-4 w-4" />}
+                                    Refresh Invoices
+                                </Button>
                                 <Button variant={school.status === 'active' ? 'destructive' : 'default'} onClick={handleToggleTenantStatus} disabled={isUpdatingTenantStatus}>
                                     {isUpdatingTenantStatus ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                                     {school.status === 'active' ? 'Suspend Subscription' : 'Reactivate Subscription'}
                                 </Button>
+                            </div>
+
+                            <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                                <div className="rounded-md border p-4">
+                                    <div className="text-slate-500 text-sm">Paid Invoices</div>
+                                    <div className="text-xl font-semibold">{paidInvoices.length}</div>
+                                </div>
+                                <div className="rounded-md border p-4">
+                                    <div className="text-slate-500 text-sm">Pending Invoices</div>
+                                    <div className="text-xl font-semibold">{pendingInvoices.length}</div>
+                                </div>
+                                <div className="rounded-md border p-4">
+                                    <div className="text-slate-500 text-sm">Failed Invoices</div>
+                                    <div className="text-xl font-semibold">{failedInvoices.length}</div>
+                                </div>
+                            </div>
+
+                            <div className="rounded-md border">
+                                <Table>
+                                    <TableHeader>
+                                        <TableRow>
+                                            <TableHead>Invoice</TableHead>
+                                            <TableHead>Status</TableHead>
+                                            <TableHead>Amount</TableHead>
+                                            <TableHead>Issued</TableHead>
+                                            <TableHead className="text-right">Action</TableHead>
+                                        </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {invoicesLoading ? (
+                                            <TableRow>
+                                                <TableCell colSpan={5} className="py-8 text-center">
+                                                    <Loader2 className="mx-auto h-5 w-5 animate-spin text-slate-400" />
+                                                </TableCell>
+                                            </TableRow>
+                                        ) : invoices.length === 0 ? (
+                                            <TableRow>
+                                                <TableCell colSpan={5} className="py-8 text-center text-slate-500">
+                                                    No invoices found for this school.
+                                                </TableCell>
+                                            </TableRow>
+                                        ) : (
+                                            invoices.map(inv => (
+                                                <TableRow key={inv.invoice_id}>
+                                                    <TableCell className="font-mono text-xs">{inv.invoice_id.slice(0, 8)}</TableCell>
+                                                    <TableCell className="capitalize">{inv.status}</TableCell>
+                                                    <TableCell>${numberFmt.format(parseFloat(inv.amount || '0'))}</TableCell>
+                                                    <TableCell>{new Date(inv.issued_date).toLocaleDateString()}</TableCell>
+                                                    <TableCell className="text-right">
+                                                        <Button variant="ghost" size="icon" onClick={() => handleDownloadInvoice(inv)}>
+                                                            <Download className="h-4 w-4" />
+                                                        </Button>
+                                                    </TableCell>
+                                                </TableRow>
+                                            ))
+                                        )}
+                                    </TableBody>
+                                </Table>
                             </div>
                         </CardContent>
                     </Card>
@@ -747,6 +1057,63 @@ export default function SchoolDetailsPage() {
                                     Save Configuration
                                 </Button>
                             </div>
+
+                            <div className="border-t pt-6 space-y-4">
+                                <div>
+                                    <h4 className="font-semibold">Feature Flags</h4>
+                                    <p className="text-sm text-slate-500">Enable or disable modules for this school.</p>
+                                </div>
+                                <div className="grid gap-3 md:grid-cols-2">
+                                    {Object.entries(featureFlags).map(([key, value]) => (
+                                        <div key={key} className="flex items-center justify-between rounded-md border p-3">
+                                            <div className="text-sm">{key.replace(/_/g, ' ')}</div>
+                                            <Switch
+                                                checked={value}
+                                                onCheckedChange={(checked) => setFeatureFlags(prev => ({ ...prev, [key]: checked }))}
+                                            />
+                                        </div>
+                                    ))}
+                                </div>
+                                <div className="flex justify-end">
+                                    <Button variant="outline" onClick={handleSaveFeatures} disabled={isSavingFeatures}>
+                                        {isSavingFeatures ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+                                        Save Features
+                                    </Button>
+                                </div>
+                            </div>
+
+                            <div className="border-t pt-6 space-y-4">
+                                <div>
+                                    <h4 className="font-semibold">Branding</h4>
+                                    <p className="text-sm text-slate-500">Upload school logo used across tenant pages.</p>
+                                </div>
+                                {school.logo ? (
+                                    <Image
+                                        src={school.logo}
+                                        alt="School logo"
+                                        width={80}
+                                        height={80}
+                                        className="h-20 w-20 rounded border object-cover"
+                                    />
+                                ) : (
+                                    <div className="text-sm text-slate-500">No logo uploaded yet.</div>
+                                )}
+                                <div className="flex flex-col gap-3 md:flex-row md:items-center">
+                                    <Input
+                                        type="file"
+                                        accept="image/*"
+                                        onChange={(e) => setSelectedLogoFile(e.target.files?.[0] || null)}
+                                    />
+                                    <Button
+                                        variant="outline"
+                                        onClick={handleUploadLogo}
+                                        disabled={!selectedLogoFile || isUploadingLogo}
+                                    >
+                                        {isUploadingLogo ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}
+                                        Upload Logo
+                                    </Button>
+                                </div>
+                            </div>
                         </CardContent>
                     </Card>
                 </TabsContent>
@@ -806,6 +1173,84 @@ export default function SchoolDetailsPage() {
                         <Button onClick={handleSaveUser} disabled={isSavingUser}>
                             {isSavingUser ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                             Save User
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            <Dialog open={newUserDialogOpen} onOpenChange={setNewUserDialogOpen}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Create User</DialogTitle>
+                        <DialogDescription>Add a new user account under this school.</DialogDescription>
+                    </DialogHeader>
+                    <div className="grid gap-4 py-2">
+                        <div className="grid grid-cols-2 gap-3">
+                            <div className="space-y-2">
+                                <Label htmlFor="newFirstName">First Name</Label>
+                                <Input
+                                    id="newFirstName"
+                                    value={newUserForm.first_name}
+                                    onChange={(e) => setNewUserForm(prev => ({ ...prev, first_name: e.target.value }))}
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="newLastName">Last Name</Label>
+                                <Input
+                                    id="newLastName"
+                                    value={newUserForm.last_name}
+                                    onChange={(e) => setNewUserForm(prev => ({ ...prev, last_name: e.target.value }))}
+                                />
+                            </div>
+                        </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="newEmail">Email</Label>
+                            <Input
+                                id="newEmail"
+                                type="email"
+                                value={newUserForm.email}
+                                onChange={(e) => setNewUserForm(prev => ({ ...prev, email: e.target.value }))}
+                            />
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                            <div className="space-y-2">
+                                <Label htmlFor="newUsername">Username (Optional)</Label>
+                                <Input
+                                    id="newUsername"
+                                    value={newUserForm.username}
+                                    onChange={(e) => setNewUserForm(prev => ({ ...prev, username: e.target.value }))}
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="newPassword">Password</Label>
+                                <Input
+                                    id="newPassword"
+                                    type="password"
+                                    value={newUserForm.password}
+                                    onChange={(e) => setNewUserForm(prev => ({ ...prev, password: e.target.value }))}
+                                />
+                            </div>
+                        </div>
+                        <div className="space-y-2">
+                            <Label>Role</Label>
+                            <Select value={newUserForm.role} onValueChange={(value) => setNewUserForm(prev => ({ ...prev, role: value as User['role'] }))}>
+                                <SelectTrigger>
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="student">Student</SelectItem>
+                                    <SelectItem value="teacher">Teacher</SelectItem>
+                                    <SelectItem value="parent">Parent</SelectItem>
+                                    <SelectItem value="admin">Admin</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setNewUserDialogOpen(false)}>Cancel</Button>
+                        <Button onClick={handleCreateUser} disabled={isCreatingUser}>
+                            {isCreatingUser ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                            Create User
                         </Button>
                     </DialogFooter>
                 </DialogContent>

@@ -463,6 +463,12 @@ export interface GradeResult {
     tokens_used?: number;
 }
 
+type PaginatedResponse<T> = {
+    count?: number;
+    next?: string | null;
+    results?: T[];
+};
+
 export interface Conversation {
     conversation_id: string;
     type: 'direct' | 'group';
@@ -778,14 +784,8 @@ export const coreAPI = {
         method: 'PATCH',
         body: formData
     }),
-    getAuditLogs: () => apiRequest<AuditLog[]>('/core/audit-logs/'),
-    getSystemStatus: () => apiRequest<SystemStatus>('/core/system-status/'),
-};
-
-// Users API
-export const usersAPI = {
-    getAccounts: async () => {
-        const firstPage = await apiRequest<User[] | { count?: number; next?: string | null; results?: User[] }>('/users/accounts/');
+    getAuditLogs: async () => {
+        const firstPage = await apiRequest<AuditLog[] | PaginatedResponse<AuditLog>>('/core/audit-logs/');
         if (Array.isArray(firstPage)) return firstPage;
         if (!firstPage || !Array.isArray(firstPage.results)) return [];
 
@@ -795,7 +795,37 @@ export const usersAPI = {
         let hasMore = Boolean(firstPage.next);
 
         while (hasMore && all.length < totalCount) {
-            const nextPage = await apiRequest<User[] | { next?: string | null; results?: User[] }>(`/users/accounts/?page=${page}`);
+            const nextPage = await apiRequest<AuditLog[] | PaginatedResponse<AuditLog>>(`/core/audit-logs/?page=${page}`);
+            if (Array.isArray(nextPage)) {
+                all.push(...nextPage);
+                break;
+            }
+            const batch = Array.isArray(nextPage?.results) ? nextPage.results : [];
+            if (batch.length === 0) break;
+            all.push(...batch);
+            hasMore = Boolean(nextPage?.next);
+            page += 1;
+        }
+
+        return all;
+    },
+    getSystemStatus: () => apiRequest<SystemStatus>('/core/system-status/'),
+};
+
+// Users API
+export const usersAPI = {
+    getAccounts: async () => {
+        const firstPage = await apiRequest<User[] | PaginatedResponse<User>>('/users/accounts/');
+        if (Array.isArray(firstPage)) return firstPage;
+        if (!firstPage || !Array.isArray(firstPage.results)) return [];
+
+        const all = [...firstPage.results];
+        const totalCount = typeof firstPage.count === 'number' ? firstPage.count : all.length;
+        let page = 2;
+        let hasMore = Boolean(firstPage.next);
+
+        while (hasMore && all.length < totalCount) {
+            const nextPage = await apiRequest<User[] | PaginatedResponse<User>>(`/users/accounts/?page=${page}`);
             if (Array.isArray(nextPage)) {
                 all.push(...nextPage);
                 break;
@@ -1467,7 +1497,31 @@ export const saasApi = {
     getTenant: (id: string) => coreAPI.getTenant(id),
     createTenant: (data: Partial<Tenant>) => coreAPI.createTenant(data),
     updateTenant: (id: string, data: Partial<Tenant>) => coreAPI.updateTenant(id, data),
-    getInvoices: () => apiRequest<Invoice[]>('/billing/invoices/'),
+    getInvoices: async () => {
+        const firstPage = await apiRequest<Invoice[] | PaginatedResponse<Invoice>>('/billing/invoices/');
+        if (Array.isArray(firstPage)) return firstPage;
+        if (!firstPage || !Array.isArray(firstPage.results)) return [];
+
+        const all = [...firstPage.results];
+        const totalCount = typeof firstPage.count === 'number' ? firstPage.count : all.length;
+        let page = 2;
+        let hasMore = Boolean(firstPage.next);
+
+        while (hasMore && all.length < totalCount) {
+            const nextPage = await apiRequest<Invoice[] | PaginatedResponse<Invoice>>(`/billing/invoices/?page=${page}`);
+            if (Array.isArray(nextPage)) {
+                all.push(...nextPage);
+                break;
+            }
+            const batch = Array.isArray(nextPage?.results) ? nextPage.results : [];
+            if (batch.length === 0) break;
+            all.push(...batch);
+            hasMore = Boolean(nextPage?.next);
+            page += 1;
+        }
+
+        return all;
+    },
     getPlans: () => apiRequest<SubscriptionPlan[]>('/billing/plans/'),
     getPlan: (id: string) => apiRequest<SubscriptionPlan>(`/billing/plans/${id}/`),
     createPlan: (data: Partial<SubscriptionPlan>) =>
