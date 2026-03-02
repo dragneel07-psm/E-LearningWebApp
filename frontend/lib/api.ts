@@ -769,7 +769,12 @@ export const coreAPI = {
 
 // Users API
 export const usersAPI = {
-    getAccounts: () => apiRequest<User[]>('/users/accounts/'),
+    getAccounts: async () => {
+        const data = await apiRequest<User[] | { results?: User[] }>('/users/accounts/');
+        if (Array.isArray(data)) return data;
+        if (data && Array.isArray(data.results)) return data.results;
+        return [];
+    },
     getMe: () => apiRequest<User>('/users/accounts/me/'),
     getAccount: (id: string) => apiRequest<User>(`/users/accounts/${id}/`),
     createAccount: (data: Partial<User>) => apiRequest<User>('/users/accounts/', {
