@@ -7,7 +7,7 @@ class UserAccountSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = UserAccount
-        fields = ['user_id', 'username', 'email', 'first_name', 'last_name', 'role', 'tenant', 'tenant_features']
+        fields = ['user_id', 'username', 'email', 'first_name', 'last_name', 'role', 'tenant', 'is_active', 'tenant_features']
         read_only_fields = ['user_id', 'email', 'role', 'tenant', 'tenant_features']
 
     def get_tenant_features(self, obj):
@@ -160,7 +160,7 @@ class UserManagementSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = UserAccount
-        fields = ['user_id', 'username', 'email', 'password', 'first_name', 'last_name', 'role', 'tenant']
+        fields = ['user_id', 'username', 'email', 'password', 'first_name', 'last_name', 'role', 'tenant', 'is_active']
 
     def create(self, validated_data):
         password = validated_data.pop('password', None)
