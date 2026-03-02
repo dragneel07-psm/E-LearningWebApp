@@ -194,7 +194,7 @@ function SchoolTableRow({ school, index, onUpdated }: { school: TenantSummary, i
                 <TableCell className="py-4">
                     <div className="space-y-2">
                         <Badge variant="outline" className="border-indigo-200 dark:border-indigo-500/30 text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-500/10">
-                            {school.plan_name || 'Standard Plan'}
+                            {school.plan_name || 'Trial (Plan Pending)'}
                         </Badge>
                         <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
                             <div className="w-16 h-1.5 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
@@ -216,7 +216,7 @@ function SchoolTableRow({ school, index, onUpdated }: { school: TenantSummary, i
                 <TableCell className="py-4">
                     <div className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-100 dark:bg-emerald-500/10 text-emerald-800 dark:text-emerald-400">
                         <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 mr-2 animate-pulse"></span>
-                        {school.subscription_status || 'Active'}
+                        {school.subscription_status || 'Trial'}
                     </div>
                 </TableCell>
                 <TableCell className="text-right pr-6 py-4">

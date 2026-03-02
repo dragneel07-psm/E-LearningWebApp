@@ -36,28 +36,30 @@ class TenantSerializer(serializers.ModelSerializer):
     
     def get_plan_name(self, obj):
         try:
-            return obj.subscription.plan.name if obj.subscription and obj.subscription.plan else "No Plan"
-        except:
-            return "No Plan"
+            sub = getattr(obj, 'subscription', None)
+            if sub and sub.plan:
+                return sub.plan.name
+            return "Trial (Plan Pending)"
+        except Exception:
+            return "Trial (Plan Pending)"
 
     def get_subscription_status(self, obj):
         try:
             sub = getattr(obj, 'subscription', None)
             if sub:
                 return sub.get_status_display() if hasattr(sub, 'get_status_display') else sub.status
-            # If no subscription record, use the Tenant's own status or default to Active
-            return obj.status.capitalize() if hasattr(obj, 'status') else "Active"
-        except:
-            return "Active"
+            return "Trial"
+        except Exception:
+            return "Trial"
 
     def get_billing_cycle(self, obj):
         try:
             sub = getattr(obj, 'subscription', None)
             if sub:
                 return sub.get_billing_cycle_display() if hasattr(sub, 'get_billing_cycle_display') else sub.billing_cycle
-            return "Trial"
-        except:
-            return "Trial"
+            return "Monthly"
+        except Exception:
+            return "Monthly"
 
     def _get_stats(self, obj):
         if not hasattr(self, '_stats_cache'):

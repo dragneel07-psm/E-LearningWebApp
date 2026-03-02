@@ -584,7 +584,7 @@ export default function SchoolDetailsPage() {
                         <CreditCard className="h-4 w-4 text-muted-foreground" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold">{school.plan_name || 'No Plan'}</div>
+                        <div className="text-2xl font-bold">{school.plan_name || 'Trial (Plan Pending)'}</div>
                         <p className="text-xs text-muted-foreground">
                             {(school.billing_cycle || 'monthly')} cycle • {(school.subscription_status || school.status || 'active')}
                         </p>
@@ -875,7 +875,7 @@ export default function SchoolDetailsPage() {
                         <CardContent className="space-y-4">
                             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                                 <div>
-                                    <span className="font-semibold block">Plan:</span> {school.plan_name || 'No Plan'}
+                                    <span className="font-semibold block">Plan:</span> {school.plan_name || 'Trial (Plan Pending)'}
                                 </div>
                                 <div>
                                     <span className="font-semibold block">Status:</span> {school.subscription_status || school.status}

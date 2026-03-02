@@ -95,7 +95,7 @@ class TenantViewSet(viewsets.ModelViewSet):
                 )
                 print(f"15-day trial subscription created for {tenant.name} on plan {plan.name}")
             except Exception as sub_err:
-                print(f"Warning: Failed to create default subscription for {tenant.name}: {sub_err}")
+                raise RuntimeError(f"Failed to create trial subscription for {tenant.name}: {sub_err}")
 
             # 4. Create Admin User inside the new tenant schema
             if admin_email and admin_pass:
