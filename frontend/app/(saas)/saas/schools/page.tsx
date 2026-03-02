@@ -30,6 +30,8 @@ import { motion } from "framer-motion";
 import { Input } from "@/components/ui/input";
 
 type TenantSummary = Tenant & {
+    id?: string | number;
+    schema_name?: string;
     plan_name?: string;
     student_count?: number;
     ai_usage?: string;
@@ -134,7 +136,7 @@ export default function SaasSchoolsPage() {
                             ) : (
                                 filteredSchools.map((school, index) => (
                                     <SchoolTableRow
-                                        key={school.tenant_id || index}
+                                        key={school.id || school.schema_name || index}
                                         school={school}
                                         index={index}
                                         onUpdated={loadSchools}

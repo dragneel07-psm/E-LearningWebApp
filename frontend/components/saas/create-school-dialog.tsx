@@ -59,10 +59,8 @@ export function CreateSchoolDialog({ onCreated }: { onCreated: () => void }) {
             toast.success("School created successfully!");
             setOpen(false);
 
-            // Wait for potential dev server reload (SQLite file creation triggers it)
-            setTimeout(() => {
-                onCreated();
-            }, 1000);
+            // Notify parent to refresh list immediately
+            onCreated();
 
             // Reset form
             setName("");

@@ -29,16 +29,21 @@ class TenantSerializer(serializers.ModelSerializer):
     def get_subscription_status(self, obj):
         try:
             sub = getattr(obj, 'subscription', None)
-            return sub.status if sub else "Inactive"
+            if sub:
+                return sub.get_status_display() if hasattr(sub, 'get_status_display') else sub.status
+            # If no subscription record, use the Tenant's own status or default to Active
+            return obj.status.capitalize() if hasattr(obj, 'status') else "Active"
         except:
-            return "Inactive"
+            return "Active"
 
     def get_billing_cycle(self, obj):
         try:
             sub = getattr(obj, 'subscription', None)
-            return sub.billing_cycle if sub else "N/A"
+            if sub:
+                return sub.get_billing_cycle_display() if hasattr(sub, 'get_billing_cycle_display') else sub.billing_cycle
+            return "Trial"
         except:
-            return "N/A"
+            return "Trial"
 
     def get_student_count(self, obj):
         # This count via related set might fail if UserAccount is not on 'default' DB 
