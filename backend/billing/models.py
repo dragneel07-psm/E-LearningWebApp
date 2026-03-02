@@ -1,6 +1,8 @@
 from django.db import models
 import uuid as uuid_lib
 from core.models.tenant import Tenant
+from django.conf import settings
+from django.utils import timezone
 
 class SubscriptionPlan(models.Model):
     plan_id = models.UUIDField(primary_key=True, default=uuid_lib.uuid4, editable=False)
@@ -57,6 +59,54 @@ class Subscription(models.Model):
 
     def __str__(self):
         return f"{self.tenant.name} - {self.plan.name if self.plan else 'No Plan'}"
+
+
+class SubscriptionPlanHistory(models.Model):
+    history_id = models.UUIDField(primary_key=True, default=uuid_lib.uuid4, editable=False)
+    tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE, related_name='subscription_plan_history')
+    subscription = models.ForeignKey(Subscription, on_delete=models.CASCADE, related_name='plan_history')
+
+    previous_plan = models.ForeignKey(
+        SubscriptionPlan,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='history_previous_plan'
+    )
+    new_plan = models.ForeignKey(
+        SubscriptionPlan,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='history_new_plan'
+    )
+
+    previous_plan_name = models.CharField(max_length=100, blank=True, default='')
+    new_plan_name = models.CharField(max_length=100, blank=True, default='')
+    previous_plan_snapshot = models.JSONField(default=dict, blank=True)
+    new_plan_snapshot = models.JSONField(default=dict, blank=True)
+
+    previous_status = models.CharField(max_length=20, blank=True, default='')
+    new_status = models.CharField(max_length=20, blank=True, default='')
+    previous_billing_cycle = models.CharField(max_length=20, blank=True, default='')
+    new_billing_cycle = models.CharField(max_length=20, blank=True, default='')
+
+    reason = models.TextField(blank=True, null=True)
+    changed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='subscription_plan_changes'
+    )
+    effective_date = models.DateField(default=timezone.now)
+    changed_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-changed_at']
+
+    def __str__(self):
+        return f"{self.tenant.name}: {self.previous_plan_name or 'None'} -> {self.new_plan_name or 'None'}"
 
 class Invoice(models.Model):
     invoice_id = models.UUIDField(primary_key=True, default=uuid_lib.uuid4, editable=False)

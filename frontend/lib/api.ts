@@ -419,6 +419,28 @@ export interface Invoice {
     due_date?: string;
 }
 
+export interface SubscriptionPlanHistory {
+    history_id: string;
+    tenant: string;
+    tenant_name?: string;
+    subscription: string;
+    previous_plan?: string | null;
+    new_plan?: string | null;
+    previous_plan_name: string;
+    new_plan_name: string;
+    previous_plan_snapshot: Record<string, any>;
+    new_plan_snapshot: Record<string, any>;
+    previous_status: string;
+    new_status: string;
+    previous_billing_cycle: string;
+    new_billing_cycle: string;
+    reason?: string;
+    changed_by?: string | null;
+    changed_by_name?: string | null;
+    effective_date: string;
+    changed_at: string;
+}
+
 export interface GlobalSettings {
     id?: number;
     site_name: string;
@@ -1322,6 +1344,7 @@ export const academicAPI = {
 export const billingAPI = {
     getSubscriptions: () => apiRequest<Subscription[]>('/billing/subscriptions/'),
     getSubscription: (id: string) => apiRequest<Subscription>(`/billing/subscriptions/${id}/`),
+    getSubscriptionHistory: (id: string) => apiRequest<SubscriptionPlanHistory[] | PaginatedResponse<SubscriptionPlanHistory>>(`/billing/subscriptions/${id}/history/`),
 
     // Finance Management
     getFeeStructures: () => apiRequest<FeeStructure[]>('/billing/fee-structures/'),
@@ -1622,6 +1645,35 @@ export const saasApi = {
 
         while (hasMore && all.length < totalCount) {
             const nextPage = await apiRequest<SubscriptionPlan[] | PaginatedResponse<SubscriptionPlan>>(`/billing/plans/?page=${page}`);
+            if (Array.isArray(nextPage)) {
+                all.push(...nextPage);
+                break;
+            }
+            const batch = Array.isArray(nextPage?.results) ? nextPage.results : [];
+            if (batch.length === 0) break;
+            all.push(...batch);
+            hasMore = Boolean(nextPage?.next);
+            page += 1;
+        }
+
+        return all;
+    },
+    getSubscriptionHistoryByTenant: async (tenantId: string | number) => {
+        const firstPage = await apiRequest<SubscriptionPlanHistory[] | PaginatedResponse<SubscriptionPlanHistory>>(
+            `/billing/subscription-history/?tenant_id=${tenantId}`
+        );
+        if (Array.isArray(firstPage)) return firstPage;
+        if (!firstPage || !Array.isArray(firstPage.results)) return [];
+
+        const all = [...firstPage.results];
+        const totalCount = typeof firstPage.count === 'number' ? firstPage.count : all.length;
+        let page = 2;
+        let hasMore = Boolean(firstPage.next);
+
+        while (hasMore && all.length < totalCount) {
+            const nextPage = await apiRequest<SubscriptionPlanHistory[] | PaginatedResponse<SubscriptionPlanHistory>>(
+                `/billing/subscription-history/?tenant_id=${tenantId}&page=${page}`
+            );
             if (Array.isArray(nextPage)) {
                 all.push(...nextPage);
                 break;

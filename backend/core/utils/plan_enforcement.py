@@ -1,4 +1,5 @@
 from typing import Any, Dict, Optional
+from django.utils import timezone
 
 
 def derive_tenant_type_from_plan(plan) -> str:
@@ -77,3 +78,61 @@ def sync_subscription_limits_with_plan(subscription, plan=None, save: bool = Tru
     if save:
         subscription.save(update_fields=["student_limit", "storage_limit_gb", "ai_token_limit"])
     return subscription
+
+
+def build_plan_snapshot(plan) -> Dict[str, Any]:
+    if not plan:
+        return {}
+
+    return {
+        "plan_id": str(getattr(plan, "plan_id", "")),
+        "name": getattr(plan, "name", ""),
+        "description": getattr(plan, "description", ""),
+        "currency": getattr(plan, "currency", ""),
+        "price_monthly": float(getattr(plan, "price_monthly", 0) or 0),
+        "price_yearly": float(getattr(plan, "price_yearly", 0) or 0),
+        "student_limit": int(getattr(plan, "student_limit", 0) or 0),
+        "teacher_limit": int(getattr(plan, "teacher_limit", 0) or 0),
+        "storage_limit_gb": int(getattr(plan, "storage_limit_gb", 0) or 0),
+        "ai_token_limit": int(getattr(plan, "ai_token_limit", 0) or 0),
+        "has_ai_tutor": bool(getattr(plan, "has_ai_tutor", False)),
+        "has_ai_eval": bool(getattr(plan, "has_ai_eval", False)),
+        "has_parent_portal": bool(getattr(plan, "has_parent_portal", False)),
+        "has_analytics": bool(getattr(plan, "has_analytics", False)),
+        "has_career_guidance": bool(getattr(plan, "has_career_guidance", False)),
+        "is_active": bool(getattr(plan, "is_active", False)),
+    }
+
+
+def record_subscription_plan_history(
+    subscription,
+    *,
+    previous_plan=None,
+    previous_status: str = "",
+    previous_billing_cycle: str = "",
+    reason: str = "",
+    changed_by=None,
+    effective_date=None,
+    previous_plan_snapshot: Optional[Dict[str, Any]] = None,
+    new_plan_snapshot: Optional[Dict[str, Any]] = None,
+):
+    from billing.models import SubscriptionPlanHistory
+
+    new_plan = getattr(subscription, "plan", None)
+    SubscriptionPlanHistory.objects.create(
+        tenant=subscription.tenant,
+        subscription=subscription,
+        previous_plan=previous_plan,
+        new_plan=new_plan,
+        previous_plan_name=(getattr(previous_plan, "name", "") or ""),
+        new_plan_name=(getattr(new_plan, "name", "") or ""),
+        previous_plan_snapshot=previous_plan_snapshot if previous_plan_snapshot is not None else build_plan_snapshot(previous_plan),
+        new_plan_snapshot=new_plan_snapshot if new_plan_snapshot is not None else build_plan_snapshot(new_plan),
+        previous_status=previous_status or "",
+        new_status=getattr(subscription, "status", "") or "",
+        previous_billing_cycle=previous_billing_cycle or "",
+        new_billing_cycle=getattr(subscription, "billing_cycle", "") or "",
+        reason=reason or "",
+        changed_by=changed_by if getattr(changed_by, "is_authenticated", False) else None,
+        effective_date=effective_date or timezone.now().date(),
+    )

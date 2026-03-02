@@ -1,7 +1,11 @@
 from rest_framework import serializers
 from decimal import Decimal
-from .models import Subscription, SubscriptionPlan, Invoice, FeeStructure, StudentFee, Payment, Expense
-from core.utils.plan_enforcement import sync_subscription_limits_with_plan, sync_tenant_with_plan
+from .models import Subscription, SubscriptionPlan, SubscriptionPlanHistory, Invoice, FeeStructure, StudentFee, Payment, Expense
+from core.utils.plan_enforcement import (
+    sync_subscription_limits_with_plan,
+    sync_tenant_with_plan,
+    record_subscription_plan_history,
+)
 
 class SubscriptionPlanSerializer(serializers.ModelSerializer):
     def validate(self, attrs):
@@ -42,18 +46,63 @@ class SubscriptionSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
     def create(self, validated_data):
+        request = self.context.get('request')
         subscription = super().create(validated_data)
         if subscription.plan:
             sync_subscription_limits_with_plan(subscription, plan=subscription.plan, save=True)
             sync_tenant_with_plan(subscription.tenant, plan=subscription.plan, save=True)
+        record_subscription_plan_history(
+            subscription,
+            previous_plan=None,
+            previous_status='',
+            previous_billing_cycle='',
+            reason='Subscription created',
+            changed_by=getattr(request, 'user', None),
+        )
         return subscription
 
     def update(self, instance, validated_data):
+        request = self.context.get('request')
+        previous_plan = instance.plan
+        previous_status = instance.status
+        previous_billing_cycle = instance.billing_cycle
+
         subscription = super().update(instance, validated_data)
         if subscription.plan:
             sync_subscription_limits_with_plan(subscription, plan=subscription.plan, save=True)
             sync_tenant_with_plan(subscription.tenant, plan=subscription.plan, save=True)
+
+        should_log = (
+            previous_plan != subscription.plan
+            or previous_status != subscription.status
+            or previous_billing_cycle != subscription.billing_cycle
+        )
+        if should_log:
+            reason = request.data.get('reason') if request is not None else None
+            record_subscription_plan_history(
+                subscription,
+                previous_plan=previous_plan,
+                previous_status=previous_status,
+                previous_billing_cycle=previous_billing_cycle,
+                reason=reason or 'Subscription updated',
+                changed_by=getattr(request, 'user', None),
+            )
         return subscription
+
+
+class SubscriptionPlanHistorySerializer(serializers.ModelSerializer):
+    tenant_name = serializers.CharField(source='tenant.name', read_only=True)
+    changed_by_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = SubscriptionPlanHistory
+        fields = '__all__'
+
+    def get_changed_by_name(self, obj):
+        if not obj.changed_by:
+            return None
+        full_name = f"{obj.changed_by.first_name} {obj.changed_by.last_name}".strip()
+        return full_name or obj.changed_by.email
 
 class InvoiceSerializer(serializers.ModelSerializer):
     tenant_name = serializers.CharField(source='tenant.name', read_only=True)

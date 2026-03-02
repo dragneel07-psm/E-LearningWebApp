@@ -17,7 +17,7 @@ import os
 import glob
 from datetime import datetime, timedelta
 from django.utils import timezone
-from core.utils.plan_enforcement import sync_tenant_with_plan
+from core.utils.plan_enforcement import sync_tenant_with_plan, record_subscription_plan_history
 
 class TenantCheckView(APIView):
     permission_classes = [permissions.AllowAny]
@@ -84,7 +84,7 @@ class TenantViewSet(viewsets.ModelViewSet):
                 if not plan:
                     raise ValueError("No active subscription plan found.")
                 
-                Subscription.objects.create(
+                subscription = Subscription.objects.create(
                     tenant=tenant,
                     plan=plan,
                     status='trial',
@@ -95,6 +95,14 @@ class TenantViewSet(viewsets.ModelViewSet):
                     ai_token_limit=plan.ai_token_limit,
                 )
                 sync_tenant_with_plan(tenant, plan=plan, save=True)
+                record_subscription_plan_history(
+                    subscription,
+                    previous_plan=None,
+                    previous_status='',
+                    previous_billing_cycle='',
+                    reason='Initial 15-day trial assignment',
+                    changed_by=getattr(self.request, 'user', None),
+                )
                 print(f"15-day trial subscription created for {tenant.name} on plan {plan.name}")
             except Exception as sub_err:
                 raise RuntimeError(f"Failed to create trial subscription for {tenant.name}: {sub_err}")

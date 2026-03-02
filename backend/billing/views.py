@@ -3,9 +3,9 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from django.db.models import Sum, Q
 from datetime import date
-from .models import Subscription, SubscriptionPlan, Invoice, FeeStructure, StudentFee, Payment, Expense
+from .models import Subscription, SubscriptionPlan, SubscriptionPlanHistory, Invoice, FeeStructure, StudentFee, Payment, Expense
 from .serializers import (
-    SubscriptionSerializer, SubscriptionPlanSerializer, InvoiceSerializer,
+    SubscriptionSerializer, SubscriptionPlanSerializer, SubscriptionPlanHistorySerializer, InvoiceSerializer,
     FeeStructureSerializer, StudentFeeSerializer, PaymentSerializer, ExpenseSerializer
 )
 from .plan_defaults import upsert_default_plans
@@ -19,7 +19,12 @@ from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import letter
 from reportlab.lib import colors
 import io
-from core.utils.plan_enforcement import sync_subscription_limits_with_plan, sync_tenant_with_plan
+from core.utils.plan_enforcement import (
+    sync_subscription_limits_with_plan,
+    sync_tenant_with_plan,
+    build_plan_snapshot,
+    record_subscription_plan_history,
+)
 
 class SubscriptionPlanViewSet(viewsets.ModelViewSet):
     queryset = SubscriptionPlan.objects.all()
@@ -27,11 +32,24 @@ class SubscriptionPlanViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated] # Adjust as needed
 
     def perform_update(self, serializer):
+        previous_plan_state = SubscriptionPlan.objects.get(pk=serializer.instance.pk)
+        previous_plan_snapshot = build_plan_snapshot(previous_plan_state)
         plan = serializer.save()
+        new_plan_snapshot = build_plan_snapshot(plan)
         subscriptions = Subscription.objects.filter(plan=plan).select_related('tenant')
         for subscription in subscriptions:
             sync_subscription_limits_with_plan(subscription, plan=plan, save=True)
             sync_tenant_with_plan(subscription.tenant, plan=plan, save=True)
+            record_subscription_plan_history(
+                subscription,
+                previous_plan=previous_plan_state,
+                previous_status=subscription.status,
+                previous_billing_cycle=subscription.billing_cycle,
+                reason='Plan definition updated',
+                changed_by=getattr(self.request, 'user', None),
+                previous_plan_snapshot=previous_plan_snapshot,
+                new_plan_snapshot=new_plan_snapshot,
+            )
 
     @action(detail=False, methods=['post'], url_path='seed-defaults')
     def seed_defaults(self, request):
@@ -54,9 +72,49 @@ class SubscriptionPlanViewSet(viewsets.ModelViewSet):
         }, status=status.HTTP_200_OK)
 
 class SubscriptionViewSet(viewsets.ModelViewSet):
-    queryset = Subscription.objects.all()
+    queryset = Subscription.objects.select_related('tenant', 'plan').all()
     serializer_class = SubscriptionSerializer
     permission_classes = [permissions.IsAuthenticated]
+
+    @action(detail=True, methods=['get'], url_path='history')
+    def history(self, request, pk=None):
+        subscription = self.get_object()
+        history = subscription.plan_history.select_related('tenant', 'subscription', 'previous_plan', 'new_plan', 'changed_by').all()
+        page = self.paginate_queryset(history)
+        if page is not None:
+            serializer = SubscriptionPlanHistorySerializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+        serializer = SubscriptionPlanHistorySerializer(history, many=True)
+        return Response(serializer.data)
+
+
+class SubscriptionPlanHistoryViewSet(viewsets.ReadOnlyModelViewSet):
+    queryset = SubscriptionPlanHistory.objects.select_related(
+        'tenant', 'subscription', 'previous_plan', 'new_plan', 'changed_by'
+    ).all()
+    serializer_class = SubscriptionPlanHistorySerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        user = self.request.user
+
+        role = (getattr(user, 'role', '') or '').lower()
+        if not (user.is_superuser or role == 'saas_admin'):
+            tenant = getattr(user, 'tenant', None)
+            if tenant:
+                queryset = queryset.filter(tenant=tenant)
+            else:
+                queryset = queryset.none()
+
+        tenant_id = self.request.query_params.get('tenant_id')
+        subscription_id = self.request.query_params.get('subscription_id')
+
+        if tenant_id:
+            queryset = queryset.filter(tenant_id=tenant_id)
+        if subscription_id:
+            queryset = queryset.filter(subscription_id=subscription_id)
+        return queryset
 
 class InvoiceViewSet(viewsets.ModelViewSet):
     queryset = Invoice.objects.all().order_by('-issued_date')

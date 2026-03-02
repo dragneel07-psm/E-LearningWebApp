@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ArrowLeft, Building, Users, CreditCard, Activity, Loader2, RefreshCcw, Search, MoreHorizontal, Eye, Key, ShieldAlert, ShieldCheck, Save, Plus, Download, Upload } from "lucide-react";
-import { coreAPI, Invoice, saasApi, Tenant, User } from "@/lib/api";
+import { coreAPI, Invoice, saasApi, SubscriptionPlanHistory, Tenant, User } from "@/lib/api";
 import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -152,6 +152,8 @@ export default function SchoolDetailsPage() {
 
     const [invoices, setInvoices] = useState<Invoice[]>([]);
     const [invoicesLoading, setInvoicesLoading] = useState(false);
+    const [planHistory, setPlanHistory] = useState<SubscriptionPlanHistory[]>([]);
+    const [planHistoryLoading, setPlanHistoryLoading] = useState(false);
 
     const loadUsers = useCallback(async (tenant: TenantDetails) => {
         setUsersLoading(true);
@@ -189,6 +191,25 @@ export default function SchoolDetailsPage() {
         }
     }, []);
 
+    const loadPlanHistory = useCallback(async (tenant: TenantDetails) => {
+        setPlanHistoryLoading(true);
+        try {
+            const tenantId = String(tenant.id ?? tenant.tenant_id ?? '');
+            if (!tenantId) {
+                setPlanHistory([]);
+                return;
+            }
+            const history = await saasApi.getSubscriptionHistoryByTenant(tenantId);
+            setPlanHistory(history);
+        } catch (error) {
+            console.error(error);
+            toast.error("Failed to load plan history.");
+            setPlanHistory([]);
+        } finally {
+            setPlanHistoryLoading(false);
+        }
+    }, []);
+
     const loadSchoolAndUsers = useCallback(async (id: string) => {
         setIsLoading(true);
         try {
@@ -211,7 +232,8 @@ export default function SchoolDetailsPage() {
 
             await Promise.all([
                 loadUsers(tenant),
-                loadInvoices(tenant)
+                loadInvoices(tenant),
+                loadPlanHistory(tenant),
             ]);
         } catch (error) {
             console.error(error);
@@ -219,7 +241,7 @@ export default function SchoolDetailsPage() {
         } finally {
             setIsLoading(false);
         }
-    }, [loadUsers, loadInvoices]);
+    }, [loadUsers, loadInvoices, loadPlanHistory]);
 
     useEffect(() => {
         if (schoolId) {
@@ -235,6 +257,11 @@ export default function SchoolDetailsPage() {
     const handleRefreshInvoices = async () => {
         if (!school) return;
         await loadInvoices(school);
+    };
+
+    const handleRefreshPlanHistory = async () => {
+        if (!school) return;
+        await loadPlanHistory(school);
     };
 
     const handleOpenUserDialog = (user: User) => {
@@ -839,6 +866,52 @@ export default function SchoolDetailsPage() {
                                                             </DropdownMenuContent>
                                                         </DropdownMenu>
                                                     </TableCell>
+                                                </TableRow>
+                                            ))
+                                        )}
+                                    </TableBody>
+                                </Table>
+                            </div>
+
+                            <div className="rounded-md border">
+                                <div className="flex items-center justify-between border-b px-4 py-3">
+                                    <div className="font-medium">Plan Change History</div>
+                                    <Button variant="outline" size="sm" onClick={handleRefreshPlanHistory} disabled={planHistoryLoading}>
+                                        {planHistoryLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCcw className="mr-2 h-4 w-4" />}
+                                        Refresh History
+                                    </Button>
+                                </div>
+                                <Table>
+                                    <TableHeader>
+                                        <TableRow>
+                                            <TableHead>Changed At</TableHead>
+                                            <TableHead>From</TableHead>
+                                            <TableHead>To</TableHead>
+                                            <TableHead>Reason</TableHead>
+                                            <TableHead>By</TableHead>
+                                        </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {planHistoryLoading ? (
+                                            <TableRow>
+                                                <TableCell colSpan={5} className="py-8 text-center">
+                                                    <Loader2 className="mx-auto h-5 w-5 animate-spin text-slate-400" />
+                                                </TableCell>
+                                            </TableRow>
+                                        ) : planHistory.length === 0 ? (
+                                            <TableRow>
+                                                <TableCell colSpan={5} className="py-8 text-center text-slate-500">
+                                                    No plan history found for this school.
+                                                </TableCell>
+                                            </TableRow>
+                                        ) : (
+                                            planHistory.map((entry) => (
+                                                <TableRow key={entry.history_id}>
+                                                    <TableCell>{new Date(entry.changed_at).toLocaleString()}</TableCell>
+                                                    <TableCell>{entry.previous_plan_name || 'N/A'}</TableCell>
+                                                    <TableCell>{entry.new_plan_name || 'N/A'}</TableCell>
+                                                    <TableCell>{entry.reason || '-'}</TableCell>
+                                                    <TableCell>{entry.changed_by_name || '-'}</TableCell>
                                                 </TableRow>
                                             ))
                                         )}

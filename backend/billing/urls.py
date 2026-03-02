@@ -1,13 +1,14 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from .views import (
-    SubscriptionViewSet, SubscriptionPlanViewSet, InvoiceViewSet,
+    SubscriptionViewSet, SubscriptionPlanViewSet, SubscriptionPlanHistoryViewSet, InvoiceViewSet,
     FeeStructureViewSet, StudentFeeViewSet, PaymentViewSet, ExpenseViewSet, FinanceDashboardViewSet
 )
 from .views_reports import BillingReportViewSet
 
 router = DefaultRouter()
 router.register(r'subscriptions', SubscriptionViewSet)
+router.register(r'subscription-history', SubscriptionPlanHistoryViewSet, basename='subscription-history')
 router.register(r'plans', SubscriptionPlanViewSet)
 router.register(r'invoices', InvoiceViewSet)
 
