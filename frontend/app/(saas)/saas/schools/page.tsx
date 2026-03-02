@@ -26,8 +26,10 @@ import { toast } from "sonner";
 import Link from 'next/link';
 import { CreateSchoolDialog } from "@/components/saas/create-school-dialog";
 import { ManageFeaturesDialog } from "@/components/saas/manage-features-dialog";
+import { ResetPasswordDialog } from "@/components/saas/reset-password-dialog";
 import { motion } from "framer-motion";
 import { Input } from "@/components/ui/input";
+import { Eye, Key } from "lucide-react";
 
 type TenantSummary = Tenant & {
     id?: string | number;
@@ -153,6 +155,7 @@ export default function SaasSchoolsPage() {
 
 function SchoolTableRow({ school, index, onUpdated }: { school: TenantSummary, index: number, onUpdated: () => void }) {
     const [isManageFeaturesOpen, setIsManageFeaturesOpen] = useState(false);
+    const [isResetPasswordOpen, setIsResetPasswordOpen] = useState(false);
 
     // Using Lucide react icons imported above
     return (
@@ -216,8 +219,17 @@ function SchoolTableRow({ school, index, onUpdated }: { school: TenantSummary, i
                                 <MoreHorizontal className="h-4 w-4" />
                             </Button>
                         </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="w-48">
+                        <DropdownMenuContent align="end" className="w-56">
                             <DropdownMenuLabel>Manage Tenant</DropdownMenuLabel>
+                            <Link href={`/saas/schools/${school.id}`}>
+                                <DropdownMenuItem>
+                                    <Eye className="mr-2 h-4 w-4 text-slate-500" /> View Full Information
+                                </DropdownMenuItem>
+                            </Link>
+                            <DropdownMenuItem onSelect={() => setIsResetPasswordOpen(true)}>
+                                <Key className="mr-2 h-4 w-4 text-amber-500" /> Reset Admin Password
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
                             <DropdownMenuItem onSelect={() => setIsManageFeaturesOpen(true)}>
                                 <ShieldCheck className="mr-2 h-4 w-4 text-indigo-500" /> Manage Features
                             </DropdownMenuItem>
@@ -233,14 +245,17 @@ function SchoolTableRow({ school, index, onUpdated }: { school: TenantSummary, i
                 </TableCell>
             </motion.tr>
 
-            {isManageFeaturesOpen && (
-                <ManageFeaturesDialog
-                    tenant={school}
-                    open={isManageFeaturesOpen}
-                    onOpenChange={setIsManageFeaturesOpen}
-                    onUpdated={onUpdated}
-                />
-            )}
+            <ManageFeaturesDialog
+                tenant={school}
+                open={isManageFeaturesOpen}
+                onOpenChange={setIsManageFeaturesOpen}
+                onUpdated={onUpdated}
+            />
+            <ResetPasswordDialog
+                tenant={school}
+                open={isResetPasswordOpen}
+                onOpenChange={setIsResetPasswordOpen}
+            />
         </>
     );
 }

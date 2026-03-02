@@ -160,3 +160,36 @@ class SaasAIUsageView(APIView):
             'cost_estimate': total_cost,
             'usage_by_feature': usage_by_feature
         })
+
+
+class TenantAdminPasswordResetView(APIView):
+    permission_classes = [IsSaaSAdmin]
+
+    def post(self, request):
+        tenant_id = request.data.get('tenant_id')
+        new_password = request.data.get('new_password')
+
+        if not tenant_id or not new_password:
+            return Response({"error": "tenant_id and new_password are required"}, status=400)
+
+        try:
+            from django_tenants.utils import schema_context
+            from users.models import UserAccount
+            
+            tenant = Tenant.objects.get(id=tenant_id)
+            
+            with schema_context(tenant.schema_name):
+                # Find the admin user for this tenant
+                # Generally, there's only one 'admin' role user created during onboarding
+                admin_user = UserAccount.objects.filter(role='admin').first()
+                if not admin_user:
+                    return Response({"error": "Admin user not found for this tenant"}, status=404)
+                
+                admin_user.set_password(new_password)
+                admin_user.save()
+                
+            return Response({"message": f"Password reset successfully for admin of {tenant.name}"})
+        except Tenant.DoesNotExist:
+            return Response({"error": "Tenant not found"}, status=404)
+        except Exception as e:
+            return Response({"error": str(e)}, status=500)

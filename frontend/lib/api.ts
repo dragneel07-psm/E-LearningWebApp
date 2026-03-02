@@ -1452,6 +1452,11 @@ export const saasApi = {
     getSystemStatus: () => coreAPI.getSystemStatus(),
     getKPIs: () => apiRequest<{ kpis: any, revenue_trend: any[], tenant_activity: any[] }>('/core/saas-kpi/'),
     getAIUsage: () => apiRequest<{ total_tokens: number, cost_estimate: number, usage_by_feature: any[] }>('/core/saas-ai-usage/'),
+    resetAdminPassword: (tenantId: string | number, newPassword: string) =>
+        apiRequest<{ message: string }>('/core/reset-admin-password/', {
+            method: 'POST',
+            body: JSON.stringify({ tenant_id: tenantId, new_password: newPassword })
+        }),
     helpers: helpers,
 };
 
