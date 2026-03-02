@@ -436,6 +436,56 @@ export interface SeedDefaultPlansResponse {
     plans: SubscriptionPlan[];
 }
 
+export interface SaasAIUsageResponse {
+    provider: {
+        name: string;
+        base_url: string;
+        model: string;
+        configured: boolean;
+    };
+    total_tokens: number;
+    total_prompt_tokens: number;
+    total_completion_tokens: number;
+    total_requests: number;
+    cost_estimate: number;
+    avg_cost_per_1k_tokens: number;
+    avg_tokens_per_request: number;
+    active_tenants: number;
+    total_tenants: number;
+    usage_by_feature: Array<{
+        feature: string;
+        tokens: number;
+        prompt_tokens: number;
+        completion_tokens: number;
+        requests: number;
+        cost_estimate: number;
+        percentage: number;
+    }>;
+    top_tenants: Array<{
+        tenant_id: string;
+        tenant_name: string;
+        tokens: number;
+        prompt_tokens: number;
+        completion_tokens: number;
+        requests: number;
+        cost_estimate: number;
+        avg_tokens_per_request: number;
+        last_activity: string | null;
+    }>;
+    daily_usage_last_7_days: Array<{
+        date: string;
+        tokens: number;
+        requests: number;
+        cost_estimate: number;
+    }>;
+    tenant_errors: Array<{
+        tenant_id?: string;
+        tenant_name?: string;
+        schema_name?: string;
+        error: string;
+    }>;
+}
+
 export interface AuditLog {
     id: number | string;
     action: string;
@@ -1597,7 +1647,7 @@ export const saasApi = {
     getAuditLogs: () => coreAPI.getAuditLogs(),
     getSystemStatus: () => coreAPI.getSystemStatus(),
     getKPIs: () => apiRequest<{ kpis: any, revenue_trend: any[], tenant_activity: any[] }>('/core/saas-kpi/'),
-    getAIUsage: () => apiRequest<{ total_tokens: number, cost_estimate: number, usage_by_feature: any[] }>('/core/saas-ai-usage/'),
+    getAIUsage: () => apiRequest<SaasAIUsageResponse>('/core/saas-ai-usage/'),
     getTenantUsers: (tenantId: string | number) => apiRequest<User[]>(`/core/tenants/${tenantId}/users/`),
     createTenantUser: (tenantId: string | number, data: Partial<User> & { password?: string }) =>
         apiRequest<User>(`/core/tenants/${tenantId}/users/`, {

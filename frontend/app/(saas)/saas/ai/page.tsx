@@ -1,18 +1,20 @@
 'use client';
 
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge";
-import { BrainCircuit, Loader2, Zap, TrendingUp, DollarSign, Activity } from "lucide-react";
-import { motion } from "framer-motion";
-import { saasApi } from '@/lib/api';
-import { useState, useEffect } from 'react';
-import { toast } from "sonner";
-import { TokenUsageChart } from "@/components/saas/token-usage-chart";
+import { useEffect, useState } from 'react';
+import { motion } from 'framer-motion';
+import { toast } from 'sonner';
+import { Badge } from '@/components/ui/badge';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { saasApi, SaasAIUsageResponse } from '@/lib/api';
+import { BrainCircuit, DollarSign, Loader2, Network, Server, Zap } from 'lucide-react';
+
+const numberFmt = new Intl.NumberFormat('en-US');
+const dateTimeFmt = new Intl.DateTimeFormat('en-US', { dateStyle: 'medium', timeStyle: 'short' });
 
 export default function SaasAiUsagePage() {
     const [isLoading, setIsLoading] = useState(true);
-    const [aiStats, setAiStats] = useState<any>(null);
+    const [aiStats, setAiStats] = useState<SaasAIUsageResponse | null>(null);
 
     useEffect(() => {
         loadAiStats();
@@ -20,24 +22,12 @@ export default function SaasAiUsagePage() {
 
     const loadAiStats = async () => {
         try {
-            // Mock data or real API if available. 
-            // Using saasApi.getAIUsage() which returns { total_tokens, cost_estimate, usage_by_feature }
             const data = await saasApi.getAIUsage();
             setAiStats(data);
-        } catch (error) {
+        } catch (error: unknown) {
             console.error(error);
-            // Fallback mock data for visualization if API fails or is empty
-            setAiStats({
-                total_tokens: 2450120,
-                cost_estimate: 49.00,
-                usage_by_feature: [],
-                top_schools: [
-                    { name: "Tech High School", tokens: 850000, limit: 1000000, cost: 17.00, status: 'warning' },
-                    { name: "Greenwood High", tokens: 45000, limit: 200000, cost: 0.90, status: 'normal' },
-                    { name: "Sunrise Academy", tokens: 48500, limit: 50000, cost: 0.97, status: 'critical' }
-                ]
-            });
-            // toast.error("Failed to load AI stats."); 
+            const message = error instanceof Error ? error.message : 'Failed to load AI usage data.';
+            toast.error(message);
         } finally {
             setIsLoading(false);
         }
@@ -47,7 +37,21 @@ export default function SaasAiUsagePage() {
         return (
             <div className="h-full flex flex-col items-center justify-center space-y-4">
                 <Loader2 className="w-12 h-12 animate-spin text-indigo-500" />
-                <p className="text-slate-500 dark:text-slate-400 font-mono text-sm animate-pulse">Analyzing Neural Usage...</p>
+                <p className="text-slate-500 dark:text-slate-400 font-mono text-sm animate-pulse">Analyzing AI usage...</p>
+            </div>
+        );
+    }
+
+    if (!aiStats) {
+        return (
+            <div className="p-8 lg:p-10 space-y-6 min-h-full">
+                <h2 className="text-3xl font-bold tracking-tight text-slate-900 dark:text-white">AI Intelligence & Cost</h2>
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Data Unavailable</CardTitle>
+                        <CardDescription>Unable to load SaaS AI analytics right now.</CardDescription>
+                    </CardHeader>
+                </Card>
             </div>
         );
     }
@@ -56,136 +60,203 @@ export default function SaasAiUsagePage() {
         <div className="p-8 lg:p-10 space-y-8 min-h-full">
             <div>
                 <h2 className="text-3xl font-bold tracking-tight text-slate-900 dark:text-white">AI Intelligence & Cost</h2>
-                <p className="text-slate-500 dark:text-slate-400 mt-1">Monitor platform-wide token consumption and LLM costs.</p>
+                <p className="text-slate-500 dark:text-slate-400 mt-1">Provider setup, token flow, and tenant-level usage analytics.</p>
             </div>
 
-            {/* OVERVIEW CARDS */}
             <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0 }}>
-                    <Card className="bg-white dark:bg-[#111114] border-slate-200 dark:border-white/10 shadow-lg dark:shadow-none backdrop-blur-3xl overflow-hidden relative group">
-                        <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
-                            <BrainCircuit className="w-16 h-16 text-indigo-500" />
-                        </div>
+                <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}>
+                    <Card>
                         <CardHeader className="pb-2">
-                            <CardTitle className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">Total Tokens</CardTitle>
+                            <CardTitle className="text-xs uppercase tracking-wider text-slate-500">Provider</CardTitle>
+                        </CardHeader>
+                        <CardContent className="space-y-2">
+                            <div className="text-lg font-semibold flex items-center gap-2">
+                                <Network className="w-4 h-4 text-indigo-500" />
+                                {aiStats.provider.name}
+                            </div>
+                            <Badge variant={aiStats.provider.configured ? 'outline' : 'destructive'}>
+                                {aiStats.provider.configured ? 'Configured' : 'Not Configured'}
+                            </Badge>
+                            <p className="text-xs text-slate-500 break-all">{aiStats.provider.base_url}</p>
+                        </CardContent>
+                    </Card>
+                </motion.div>
+
+                <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}>
+                    <Card>
+                        <CardHeader className="pb-2">
+                            <CardTitle className="text-xs uppercase tracking-wider text-slate-500">Model</CardTitle>
                         </CardHeader>
                         <CardContent>
-                            <div className="text-3xl font-bold text-slate-900 dark:text-white flex items-baseline gap-1">
-                                {(aiStats.total_tokens / 1000000).toFixed(2)}M
-                                <span className="text-sm font-normal text-slate-400">tok</span>
-                            </div>
-                            <div className="mt-2 flex items-center text-xs font-medium text-emerald-500">
-                                <TrendingUp className="w-3 h-3 mr-1" /> +12.5% from last month
+                            <div className="text-lg font-semibold flex items-center gap-2">
+                                <Server className="w-4 h-4 text-emerald-500" />
+                                <span className="break-all">{aiStats.provider.model}</span>
                             </div>
                         </CardContent>
                     </Card>
                 </motion.div>
 
-                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
-                    <Card className="bg-white dark:bg-[#111114] border-slate-200 dark:border-white/10 shadow-lg dark:shadow-none backdrop-blur-3xl overflow-hidden relative group">
-                        <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
-                            <DollarSign className="w-16 h-16 text-emerald-500" />
-                        </div>
+                <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
+                    <Card>
                         <CardHeader className="pb-2">
-                            <CardTitle className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">Est. Cost</CardTitle>
+                            <CardTitle className="text-xs uppercase tracking-wider text-slate-500">Total Tokens</CardTitle>
                         </CardHeader>
                         <CardContent>
-                            <div className="text-3xl font-bold text-slate-900 dark:text-white flex items-baseline gap-1">
-                                ${aiStats.cost_estimate.toFixed(2)}
+                            <div className="text-2xl font-bold flex items-center gap-2">
+                                <BrainCircuit className="w-5 h-5 text-indigo-500" />
+                                {numberFmt.format(aiStats.total_tokens)}
                             </div>
-                            <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">Avg $0.002 / 1k tokens</p>
+                            <p className="text-xs text-slate-500 mt-1">
+                                Prompt: {numberFmt.format(aiStats.total_prompt_tokens)} | Completion: {numberFmt.format(aiStats.total_completion_tokens)}
+                            </p>
                         </CardContent>
                     </Card>
                 </motion.div>
 
-                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
-                    <Card className="bg-white dark:bg-[#111114] border-slate-200 dark:border-white/10 shadow-lg dark:shadow-none backdrop-blur-3xl overflow-hidden relative group">
-                        <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
-                            <Activity className="w-16 h-16 text-blue-500" />
-                        </div>
+                <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}>
+                    <Card>
                         <CardHeader className="pb-2">
-                            <CardTitle className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">Avg / Student</CardTitle>
+                            <CardTitle className="text-xs uppercase tracking-wider text-slate-500">Cost & Requests</CardTitle>
                         </CardHeader>
                         <CardContent>
-                            <div className="text-3xl font-bold text-slate-900 dark:text-white">$0.005</div>
-                            <div className="mt-2 h-1.5 w-full bg-slate-100 dark:bg-white/5 rounded-full overflow-hidden">
-                                <div className="h-full bg-blue-500 w-[45%]" />
+                            <div className="text-2xl font-bold flex items-center gap-2">
+                                <DollarSign className="w-5 h-5 text-emerald-500" />
+                                ${aiStats.cost_estimate.toFixed(4)}
                             </div>
-                        </CardContent>
-                    </Card>
-                </motion.div>
-
-                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
-                    <Card className="bg-white dark:bg-[#111114] border-slate-200 dark:border-white/10 shadow-lg dark:shadow-none backdrop-blur-3xl overflow-hidden relative group">
-                        <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
-                            <Zap className="w-16 h-16 text-amber-500" />
-                        </div>
-                        <CardHeader className="pb-2">
-                            <CardTitle className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest">Top Consumer</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                            <div className="text-lg font-bold text-slate-900 dark:text-white truncate">Tech High School</div>
-                            <p className="text-xs text-amber-500 font-bold mt-1">850k tokens (Critical)</p>
+                            <p className="text-xs text-slate-500 mt-1">
+                                {numberFmt.format(aiStats.total_requests)} requests | {aiStats.avg_tokens_per_request.toFixed(2)} tok/request
+                            </p>
+                            <p className="text-xs text-slate-500 mt-1">${aiStats.avg_cost_per_1k_tokens.toFixed(6)} per 1k tokens</p>
                         </CardContent>
                     </Card>
                 </motion.div>
             </div>
 
-            {/* CHARTS */}
-            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}>
-                <TokenUsageChart />
-            </motion.div>
-
-            {/* USAGE TABLE */}
-            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 }}>
-                <Card className="bg-white dark:bg-[#111114] border-slate-200 dark:border-white/10 shadow-xl dark:shadow-none overflow-hidden">
-                    <CardHeader className="border-b border-slate-200 dark:border-white/5">
-                        <CardTitle className="text-lg font-semibold text-slate-900 dark:text-white">School Consumption Ledger</CardTitle>
-                        <CardDescription>Real-time tracking of token usage against plan limits.</CardDescription>
+            <div className="grid gap-6 lg:grid-cols-2">
+                <Card>
+                    <CardHeader>
+                        <CardTitle className="text-lg">Feature Usage Breakdown</CardTitle>
+                        <CardDescription>Token and request distribution by AI feature.</CardDescription>
                     </CardHeader>
                     <CardContent className="p-0">
                         <Table>
                             <TableHeader>
-                                <TableRow className="hover:bg-transparent border-slate-200 dark:border-white/5 bg-slate-50 dark:bg-white/[0.02]">
-                                    <TableHead className="pl-6">School Name</TableHead>
-                                    <TableHead>Plan Limit</TableHead>
-                                    <TableHead>Tokens Used</TableHead>
-                                    <TableHead>Usage Bar</TableHead>
-                                    <TableHead>Cost Est.</TableHead>
-                                    <TableHead>Status</TableHead>
+                                <TableRow>
+                                    <TableHead className="pl-6">Feature</TableHead>
+                                    <TableHead>Tokens</TableHead>
+                                    <TableHead>Requests</TableHead>
+                                    <TableHead>Cost</TableHead>
+                                    <TableHead>Share</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
-                                {aiStats.top_schools?.map((school: any) => (
-                                    <TableRow key={school.name} className="border-slate-200 dark:border-white/5 hover:bg-slate-50/50 dark:hover:bg-white/[0.02]">
-                                        <TableCell className="font-medium pl-6 text-slate-900 dark:text-white">{school.name}</TableCell>
-                                        <TableCell className="text-slate-500 dark:text-slate-400 font-mono text-xs">{(school.limit / 1000).toFixed(0)}k</TableCell>
-                                        <TableCell className="text-slate-700 dark:text-slate-300 font-mono text-xs">{(school.tokens / 1000).toFixed(1)}k</TableCell>
-                                        <TableCell className="w-[200px]">
-                                            <div className="h-2 w-full bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
-                                                <div
-                                                    className={`h-full rounded-full ${school.status === 'critical' ? 'bg-red-500' : school.status === 'warning' ? 'bg-amber-500' : 'bg-emerald-500'}`}
-                                                    style={{ width: `${(school.tokens / school.limit) * 100}%` }}
-                                                />
-                                            </div>
-                                        </TableCell>
-                                        <TableCell className="text-slate-900 dark:text-white font-mono">${school.cost.toFixed(2)}</TableCell>
-                                        <TableCell>
-                                            <Badge
-                                                variant={school.status === 'critical' ? 'destructive' : 'outline'}
-                                                className={`capitalize ${school.status === 'warning' ? 'bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-500/10 dark:text-amber-400 dark:border-amber-500/20' :
-                                                    school.status === 'normal' ? 'bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20' : ''}`}
-                                            >
-                                                {school.status}
-                                            </Badge>
-                                        </TableCell>
+                                {aiStats.usage_by_feature.length === 0 ? (
+                                    <TableRow>
+                                        <TableCell className="pl-6 text-slate-500" colSpan={5}>No AI usage recorded yet.</TableCell>
                                     </TableRow>
-                                ))}
+                                ) : (
+                                    aiStats.usage_by_feature.map((feature) => (
+                                        <TableRow key={feature.feature}>
+                                            <TableCell className="pl-6 font-medium">{feature.feature}</TableCell>
+                                            <TableCell>{numberFmt.format(feature.tokens)}</TableCell>
+                                            <TableCell>{numberFmt.format(feature.requests)}</TableCell>
+                                            <TableCell>${feature.cost_estimate.toFixed(4)}</TableCell>
+                                            <TableCell>{feature.percentage.toFixed(2)}%</TableCell>
+                                        </TableRow>
+                                    ))
+                                )}
                             </TableBody>
                         </Table>
                     </CardContent>
                 </Card>
-            </motion.div>
+
+                <Card>
+                    <CardHeader>
+                        <CardTitle className="text-lg">Top Tenant Consumers</CardTitle>
+                        <CardDescription>
+                            Active tenants: {aiStats.active_tenants}/{aiStats.total_tenants}
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent className="p-0">
+                        <Table>
+                            <TableHeader>
+                                <TableRow>
+                                    <TableHead className="pl-6">Tenant</TableHead>
+                                    <TableHead>Tokens</TableHead>
+                                    <TableHead>Requests</TableHead>
+                                    <TableHead>Cost</TableHead>
+                                    <TableHead>Last Activity</TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {aiStats.top_tenants.length === 0 ? (
+                                    <TableRow>
+                                        <TableCell className="pl-6 text-slate-500" colSpan={5}>No tenant AI usage found.</TableCell>
+                                    </TableRow>
+                                ) : (
+                                    aiStats.top_tenants.map((tenant) => (
+                                        <TableRow key={tenant.tenant_id}>
+                                            <TableCell className="pl-6 font-medium">{tenant.tenant_name}</TableCell>
+                                            <TableCell>{numberFmt.format(tenant.tokens)}</TableCell>
+                                            <TableCell>{numberFmt.format(tenant.requests)}</TableCell>
+                                            <TableCell>${tenant.cost_estimate.toFixed(4)}</TableCell>
+                                            <TableCell>{tenant.last_activity ? dateTimeFmt.format(new Date(tenant.last_activity)) : '-'}</TableCell>
+                                        </TableRow>
+                                    ))
+                                )}
+                            </TableBody>
+                        </Table>
+                    </CardContent>
+                </Card>
+            </div>
+
+            <Card>
+                <CardHeader>
+                    <CardTitle className="text-lg flex items-center gap-2">
+                        <Zap className="w-4 h-4 text-amber-500" />
+                        Last 7 Days Usage Trend
+                    </CardTitle>
+                    <CardDescription>Daily request volume, token usage, and cost summary.</CardDescription>
+                </CardHeader>
+                <CardContent className="p-0">
+                    <Table>
+                        <TableHeader>
+                            <TableRow>
+                                <TableHead className="pl-6">Date</TableHead>
+                                <TableHead>Tokens</TableHead>
+                                <TableHead>Requests</TableHead>
+                                <TableHead>Cost</TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                            {aiStats.daily_usage_last_7_days.map((row) => (
+                                <TableRow key={row.date}>
+                                    <TableCell className="pl-6 font-medium">{row.date}</TableCell>
+                                    <TableCell>{numberFmt.format(row.tokens)}</TableCell>
+                                    <TableCell>{numberFmt.format(row.requests)}</TableCell>
+                                    <TableCell>${row.cost_estimate.toFixed(4)}</TableCell>
+                                </TableRow>
+                            ))}
+                        </TableBody>
+                    </Table>
+                </CardContent>
+            </Card>
+
+            {aiStats.tenant_errors.length > 0 && (
+                <Card>
+                    <CardHeader>
+                        <CardTitle className="text-lg">Tenant Data Warnings</CardTitle>
+                        <CardDescription>Some tenant schemas could not be scanned for AI logs.</CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-2">
+                        {aiStats.tenant_errors.map((item, idx) => (
+                            <p key={`${item.tenant_id || 'unknown'}-${idx}`} className="text-sm text-amber-600 dark:text-amber-400">
+                                {(item.tenant_name || item.schema_name || 'Unknown tenant')}: {item.error}
+                            </p>
+                        ))}
+                    </CardContent>
+                </Card>
+            )}
         </div>
     );
 }

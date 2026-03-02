@@ -1,12 +1,16 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import permissions
-from django.db.models import Sum
+from django.db.models import Sum, Count, Max
 from core.models import Tenant
 from billing.models import Invoice, Subscription
 from django.conf import settings
 from datetime import datetime, timedelta
+from collections import defaultdict
+from decimal import Decimal
+import os
 from django_tenants.utils import schema_context
+from django.db.models.functions import TruncDate
 
 
 class IsSaaSAdmin(permissions.BasePermission):
@@ -120,8 +124,32 @@ class SaasAIUsageView(APIView):
     def get(self, request):
         tenants = Tenant.objects.all()
         total_tokens = 0
-        total_cost = 0.0
-        feature_counts = {}
+        total_prompt_tokens = 0
+        total_completion_tokens = 0
+        total_requests = 0
+        total_cost = Decimal('0')
+        usage_by_feature_map = defaultdict(lambda: {
+            'tokens': 0,
+            'prompt_tokens': 0,
+            'completion_tokens': 0,
+            'requests': 0,
+            'cost_estimate': Decimal('0'),
+        })
+        top_tenants = []
+        tenant_errors = []
+        daily_usage_map = defaultdict(lambda: {'tokens': 0, 'requests': 0, 'cost_estimate': Decimal('0')})
+
+        base_url = os.getenv('OPENAI_BASE_URL', 'https://api.openai.com/v1')
+        model = os.getenv('OPENAI_MODEL', 'gpt-3.5-turbo')
+        api_key = os.getenv('OPENAI_API_KEY', '')
+        configured = bool(api_key and api_key != 'demo-key')
+
+        if 'openrouter.ai' in base_url:
+            provider_name = 'OpenRouter'
+        elif 'openai.com' in base_url:
+            provider_name = 'OpenAI'
+        else:
+            provider_name = 'Custom OpenAI-Compatible'
 
         try:
             from django_tenants.utils import schema_context
@@ -131,35 +159,131 @@ class SaasAIUsageView(APIView):
                 try:
                     with schema_context(tenant.schema_name):
                         logs = AIInteractionLog.objects.all()
-                        total_tokens += logs.aggregate(total=Sum('total_tokens'))['total'] or 0
-                        total_cost += float(logs.aggregate(total=Sum('cost_estimated'))['total'] or 0)
+                        tenant_totals = logs.aggregate(
+                            total_tokens=Sum('total_tokens'),
+                            total_prompt_tokens=Sum('prompt_tokens'),
+                            total_completion_tokens=Sum('completion_tokens'),
+                            total_cost=Sum('cost_estimated'),
+                            total_requests=Count('log_id'),
+                            last_activity=Max('timestamp'),
+                        )
 
-                        for log in logs:
-                            feature = log.feature_used
-                            feature_counts[feature] = feature_counts.get(feature, 0) + log.total_tokens
+                        tenant_tokens = int(tenant_totals.get('total_tokens') or 0)
+                        tenant_prompt_tokens = int(tenant_totals.get('total_prompt_tokens') or 0)
+                        tenant_completion_tokens = int(tenant_totals.get('total_completion_tokens') or 0)
+                        tenant_cost = Decimal(str(tenant_totals.get('total_cost') or 0))
+                        tenant_requests = int(tenant_totals.get('total_requests') or 0)
+                        tenant_last_activity = tenant_totals.get('last_activity')
+
+                        total_tokens += tenant_tokens
+                        total_prompt_tokens += tenant_prompt_tokens
+                        total_completion_tokens += tenant_completion_tokens
+                        total_cost += tenant_cost
+                        total_requests += tenant_requests
+
+                        if tenant_requests > 0:
+                            top_tenants.append({
+                                'tenant_id': str(tenant.id),
+                                'tenant_name': tenant.name,
+                                'tokens': tenant_tokens,
+                                'prompt_tokens': tenant_prompt_tokens,
+                                'completion_tokens': tenant_completion_tokens,
+                                'requests': tenant_requests,
+                                'cost_estimate': float(tenant_cost),
+                                'avg_tokens_per_request': round(tenant_tokens / tenant_requests, 2),
+                                'last_activity': tenant_last_activity.isoformat() if tenant_last_activity else None,
+                            })
+
+                        feature_usage = logs.values('feature_used').annotate(
+                            tokens=Sum('total_tokens'),
+                            prompt_tokens=Sum('prompt_tokens'),
+                            completion_tokens=Sum('completion_tokens'),
+                            cost=Sum('cost_estimated'),
+                            requests=Count('log_id'),
+                        )
+                        for item in feature_usage:
+                            feature_key = item.get('feature_used') or 'unknown'
+                            usage_by_feature_map[feature_key]['tokens'] += int(item.get('tokens') or 0)
+                            usage_by_feature_map[feature_key]['prompt_tokens'] += int(item.get('prompt_tokens') or 0)
+                            usage_by_feature_map[feature_key]['completion_tokens'] += int(item.get('completion_tokens') or 0)
+                            usage_by_feature_map[feature_key]['requests'] += int(item.get('requests') or 0)
+                            usage_by_feature_map[feature_key]['cost_estimate'] += Decimal(str(item.get('cost') or 0))
+
+                        last_7_days = datetime.now().date() - timedelta(days=6)
+                        daily_usage = logs.filter(timestamp__date__gte=last_7_days).annotate(
+                            day=TruncDate('timestamp')
+                        ).values('day').annotate(
+                            tokens=Sum('total_tokens'),
+                            requests=Count('log_id'),
+                            cost=Sum('cost_estimated'),
+                        )
+                        for day_item in daily_usage:
+                            key = day_item['day'].isoformat()
+                            daily_usage_map[key]['tokens'] += int(day_item.get('tokens') or 0)
+                            daily_usage_map[key]['requests'] += int(day_item.get('requests') or 0)
+                            daily_usage_map[key]['cost_estimate'] += Decimal(str(day_item.get('cost') or 0))
                 except Exception as e:
                     print(f"Error aggregating AI logs for {tenant.schema_name}: {e}")
+                    tenant_errors.append({
+                        'tenant_id': str(tenant.id),
+                        'tenant_name': tenant.name,
+                        'schema_name': tenant.schema_name,
+                        'error': str(e),
+                    })
         except Exception as outer_err:
             print(f"SaasAIUsageView outer error: {outer_err}")
+            tenant_errors.append({'error': str(outer_err)})
 
         usage_by_feature = []
-        if total_tokens > 0:
-            for feature, tokens in feature_counts.items():
-                usage_by_feature.append({
-                    'feature': feature.replace('_', ' ').capitalize(),
-                    'percentage': round((tokens / total_tokens) * 100)
-                })
-        else:
-            usage_by_feature = [
-                {'feature': 'Tutor Chat', 'percentage': 0},
-                {'feature': 'Predictive Analytics', 'percentage': 0},
-                {'feature': 'Study Planner', 'percentage': 0},
-            ]
+        for feature_key, stats in usage_by_feature_map.items():
+            tokens = stats['tokens']
+            usage_by_feature.append({
+                'feature': feature_key.replace('_', ' ').title(),
+                'tokens': tokens,
+                'prompt_tokens': stats['prompt_tokens'],
+                'completion_tokens': stats['completion_tokens'],
+                'requests': stats['requests'],
+                'cost_estimate': float(stats['cost_estimate']),
+                'percentage': round((tokens / total_tokens) * 100, 2) if total_tokens > 0 else 0,
+            })
+
+        usage_by_feature.sort(key=lambda x: x['tokens'], reverse=True)
+        top_tenants.sort(key=lambda x: x['tokens'], reverse=True)
+
+        daily_usage_last_7_days = []
+        for i in range(6, -1, -1):
+            day = (datetime.now().date() - timedelta(days=i)).isoformat()
+            day_stats = daily_usage_map[day]
+            daily_usage_last_7_days.append({
+                'date': day,
+                'tokens': day_stats['tokens'],
+                'requests': day_stats['requests'],
+                'cost_estimate': float(day_stats['cost_estimate']),
+            })
+
+        avg_cost_per_1k_tokens = float((total_cost / total_tokens * 1000) if total_tokens > 0 else 0)
+        avg_tokens_per_request = float(total_tokens / total_requests) if total_requests > 0 else 0
 
         return Response({
+            'provider': {
+                'name': provider_name,
+                'base_url': base_url,
+                'model': model,
+                'configured': configured,
+            },
             'total_tokens': total_tokens,
-            'cost_estimate': total_cost,
-            'usage_by_feature': usage_by_feature
+            'total_prompt_tokens': total_prompt_tokens,
+            'total_completion_tokens': total_completion_tokens,
+            'total_requests': total_requests,
+            'cost_estimate': float(total_cost),
+            'avg_cost_per_1k_tokens': round(avg_cost_per_1k_tokens, 6),
+            'avg_tokens_per_request': round(avg_tokens_per_request, 2),
+            'active_tenants': len([t for t in top_tenants if t['tokens'] > 0]),
+            'total_tenants': tenants.count(),
+            'usage_by_feature': usage_by_feature,
+            'top_tenants': top_tenants[:10],
+            'daily_usage_last_7_days': daily_usage_last_7_days,
+            'tenant_errors': tenant_errors,
         })
 
 
