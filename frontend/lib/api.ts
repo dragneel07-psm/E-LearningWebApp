@@ -1538,7 +1538,31 @@ export const saasApi = {
 
         return all;
     },
-    getPlans: () => apiRequest<SubscriptionPlan[]>('/billing/plans/'),
+    getPlans: async () => {
+        const firstPage = await apiRequest<SubscriptionPlan[] | PaginatedResponse<SubscriptionPlan>>('/billing/plans/');
+        if (Array.isArray(firstPage)) return firstPage;
+        if (!firstPage || !Array.isArray(firstPage.results)) return [];
+
+        const all = [...firstPage.results];
+        const totalCount = typeof firstPage.count === 'number' ? firstPage.count : all.length;
+        let page = 2;
+        let hasMore = Boolean(firstPage.next);
+
+        while (hasMore && all.length < totalCount) {
+            const nextPage = await apiRequest<SubscriptionPlan[] | PaginatedResponse<SubscriptionPlan>>(`/billing/plans/?page=${page}`);
+            if (Array.isArray(nextPage)) {
+                all.push(...nextPage);
+                break;
+            }
+            const batch = Array.isArray(nextPage?.results) ? nextPage.results : [];
+            if (batch.length === 0) break;
+            all.push(...batch);
+            hasMore = Boolean(nextPage?.next);
+            page += 1;
+        }
+
+        return all;
+    },
     getPlan: (id: string) => apiRequest<SubscriptionPlan>(`/billing/plans/${id}/`),
     createPlan: (data: Partial<SubscriptionPlan>) =>
         apiRequest<SubscriptionPlan>('/billing/plans/', {
