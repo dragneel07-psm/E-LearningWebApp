@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
@@ -10,6 +10,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { ChevronLeft, BrainCircuit, Save } from 'lucide-react';
 import { academicAPI, usersAPI, Submission, Result, Assessment, Student } from '@/lib/api';
+import { toast } from 'sonner';
 
 export default function GradingPage() {
     const params = useParams();
@@ -25,40 +26,42 @@ export default function GradingPage() {
     const [grade, setGrade] = useState<number>(0);
     const [feedback, setFeedback] = useState('');
     const [saving, setSaving] = useState(false);
+    const [aiAnalyzing, setAiAnalyzing] = useState(false);
+
+    const loadData = useCallback(async () => {
+        try {
+            const sub = await academicAPI.getSubmission(submissionId);
+            setSubmission(sub);
+
+            const [assessmentData, studentData, userData] = await Promise.all([
+                academicAPI.getAssessment(sub.assessment),
+                academicAPI.getStudent(sub.student),
+                usersAPI.getMe().catch(() => null)
+            ]);
+
+            setAssessment(assessmentData);
+            setStudent(studentData);
+            setUser(userData);
+
+            if (sub.result) {
+                const resultData = await academicAPI.getResult(sub.result.result_id);
+                setResult(resultData);
+                setGrade(resultData.score);
+                setFeedback(resultData.teacher_feedback || resultData.ai_feedback || '');
+            } else {
+                setResult(null);
+            }
+        } catch (error) {
+            console.error('Failed to load submission:', error);
+            toast.error('Failed to load submission details');
+        } finally {
+            setLoading(false);
+        }
+    }, [submissionId]);
 
     useEffect(() => {
-        async function loadData() {
-            try {
-                const sub = await academicAPI.getSubmission(submissionId);
-                setSubmission(sub);
-
-                // Fetch related data
-                const [assessmentData, studentData, userData] = await Promise.all([
-                    academicAPI.getAssessment(sub.assessment),
-                    academicAPI.getStudent(sub.student),
-                    usersAPI.getMe().catch(() => null)
-                ]);
-
-                setAssessment(assessmentData);
-                setStudent(studentData);
-                setUser(userData);
-
-                // If already graded, load the result
-                if (sub.result) {
-                    const resultData = await academicAPI.getResult(sub.result.result_id);
-                    setResult(resultData);
-                    setGrade(resultData.score);
-                    setFeedback(resultData.teacher_feedback || resultData.ai_feedback || '');
-                }
-
-            } catch (error) {
-                console.error('Failed to load submission:', error);
-            } finally {
-                setLoading(false);
-            }
-        }
         loadData();
-    }, [submissionId]);
+    }, [loadData]);
 
     const handleSave = async () => {
         setSaving(true);
@@ -67,9 +70,11 @@ export default function GradingPage() {
                 score: grade,
                 teacher_feedback: feedback
             });
+            toast.success('Grade saved successfully');
             router.push('/teacher/grading');
         } catch (error) {
             console.error('Failed to save grade:', error);
+            toast.error('Failed to save grade');
         } finally {
             setSaving(false);
         }
@@ -145,21 +150,22 @@ export default function GradingPage() {
                                             size="sm"
                                             className="bg-indigo-600 hover:bg-indigo-700 h-8 text-xs"
                                             onClick={async () => {
-                                                setSaving(true);
+                                                setAiAnalyzing(true);
                                                 try {
-                                                    const response = await academicAPI.triggerAIGrading(submissionId);
-                                                    // Reload data
-                                                    window.location.reload();
+                                                    await academicAPI.triggerAIGrading(submissionId);
+                                                    await loadData();
+                                                    toast.success('AI analysis completed');
                                                 } catch (err) {
                                                     console.error(err);
+                                                    toast.error('Failed to run AI analysis');
                                                 } finally {
-                                                    setSaving(false);
+                                                    setAiAnalyzing(false);
                                                 }
                                             }}
-                                            disabled={saving}
+                                            disabled={aiAnalyzing}
                                         >
                                             <BrainCircuit className="h-3 w-3 mr-2" />
-                                            {saving ? 'Analyzing...' : 'Trigger AI Analysis'}
+                                            {aiAnalyzing ? 'Analyzing...' : 'Trigger AI Analysis'}
                                         </Button>
                                     </div>
                                 )}

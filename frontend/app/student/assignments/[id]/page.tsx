@@ -9,8 +9,17 @@ import { Badge } from '@/components/ui/badge';
 import {
     Clock, Save, Send, ChevronLeft, Loader2, FileText, CheckCircle, BrainCircuit
 } from 'lucide-react';
-import { academicAPI, Assessment, Submission } from '@/lib/api';
+import { academicAPI, aiAPI, Assessment, Submission } from '@/lib/api';
 import Link from 'next/link';
+import { toast } from 'sonner';
+
+function toList<T>(payload: unknown): T[] {
+    if (Array.isArray(payload)) return payload as T[];
+    if (payload && typeof payload === 'object' && Array.isArray((payload as { results?: unknown[] }).results)) {
+        return (payload as { results: T[] }).results;
+    }
+    return [];
+}
 
 export default function AssignmentSubmissionPage() {
     const params = useParams();
@@ -23,10 +32,13 @@ export default function AssignmentSubmissionPage() {
     const [submission, setSubmission] = useState<Submission | null>(null);
     const [content, setContent] = useState('');
     const [studentId, setStudentId] = useState('');
+    const [proofreading, setProofreading] = useState(false);
+    const [aiGrading, setAiGrading] = useState(false);
 
     const loadData = useCallback(async () => {
         try {
-            const students = await academicAPI.getStudents();
+            const studentsRaw = await academicAPI.getStudents();
+            const students = toList<{ id: string }>(studentsRaw);
             if (students.length === 0) return;
             const sId = students[0].id;
             setStudentId(sId);
@@ -36,7 +48,8 @@ export default function AssignmentSubmissionPage() {
             setAssignment(assess);
 
             // Check for existing submission
-            const allSubs = await academicAPI.getSubmissions();
+            const allSubsRaw = await academicAPI.getSubmissions();
+            const allSubs = toList<Submission>(allSubsRaw);
             const existing = allSubs.find(s => s.assessment === id && s.student === sId);
 
             if (existing) {
@@ -45,6 +58,7 @@ export default function AssignmentSubmissionPage() {
             }
         } catch (error) {
             console.error('Failed to load assignment:', error);
+            toast.error('Failed to load assignment details');
         } finally {
             setLoading(false);
         }
@@ -73,17 +87,76 @@ export default function AssignmentSubmissionPage() {
             }
 
             if (!asDraft) {
+                toast.success('Assignment submitted successfully');
                 router.push('/student/assignments');
             } else {
-                // Refresh to get ID if created
-                loadData();
+                toast.success('Draft saved');
+                await loadData();
             }
-        } catch (error) {
+        } catch (error: unknown) {
             console.error('Failed to submit:', error);
+            const message = error instanceof Error ? error.message : 'Failed to submit assignment';
+            toast.error(message);
         } finally {
             setSubmitting(false);
         }
     }
+
+    const handleAIProofread = async () => {
+        if (!content.trim()) {
+            toast.error('Write your response before AI proofread');
+            return;
+        }
+        setProofreading(true);
+        try {
+            const prompt = [
+                'Proofread the following student assignment response.',
+                'Keep the original meaning, improve grammar, clarity, and structure.',
+                'Return only the improved text.',
+                '',
+                content,
+            ].join('\n');
+            const response = await aiAPI.chat(prompt, '', []);
+            const improved = String(response?.response || '').trim();
+            if (!improved) {
+                toast.error('AI proofread returned an empty response');
+                return;
+            }
+            setContent(improved);
+            toast.success('AI proofread applied');
+        } catch (error: unknown) {
+            console.error('AI proofread failed:', error);
+            const message = error instanceof Error ? error.message : 'AI proofread failed';
+            toast.error(message);
+        } finally {
+            setProofreading(false);
+        }
+    };
+
+    const handleAIGrade = async () => {
+        if (!submission) return;
+        if (!confirm('Request AI grading for this assignment?')) return;
+
+        setAiGrading(true);
+        try {
+            const result = await academicAPI.triggerAIGrading(submission.submission_id);
+            const score = result && typeof result === 'object' && 'score' in (result as Record<string, unknown>)
+                ? (result as Record<string, unknown>).score
+                : undefined;
+            toast.success(
+                typeof score === 'number'
+                    ? `AI grading completed. Score: ${score}`
+                    : 'AI grading completed'
+            );
+            await loadData();
+        } catch (error: unknown) {
+            console.error('Failed to grade submission', error);
+            const message = error instanceof Error ? error.message : 'Grading failed';
+            toast.error(message);
+        } finally {
+            setAiGrading(false);
+        }
+    };
 
     if (loading) return <div className="p-8 flex justify-center"><Loader2 className="animate-spin" /></div>;
     if (!assignment) return <div className="p-8">Assignment not found</div>;
@@ -165,21 +238,16 @@ export default function AssignmentSubmissionPage() {
 
                                     {submission.status === 'submitted' ? (
                                         <Button
-                                            onClick={async () => {
-                                                if (confirm("Request AI Grading for this assignment?")) {
-                                                    try {
-                                                        const res = await academicAPI.gradeSubmission(submission.submission_id, {});
-                                                        alert(`Graded! Score: ${res.score}`);
-                                                        window.location.reload();
-                                                    } catch (error) {
-                                                        console.error('Failed to grade submission', error);
-                                                        alert("Grading failed.");
-                                                    }
-                                                }
-                                            }}
+                                            onClick={handleAIGrade}
+                                            disabled={aiGrading}
                                             className="w-full bg-indigo-100 text-indigo-700 hover:bg-indigo-200"
                                         >
-                                            <BrainCircuit className="mr-2 h-4 w-4" /> Grade with AI
+                                            {aiGrading ? (
+                                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                            ) : (
+                                                <BrainCircuit className="mr-2 h-4 w-4" />
+                                            )}
+                                            Grade with AI
                                         </Button>
                                     ) : null}
 
@@ -201,8 +269,9 @@ export default function AssignmentSubmissionPage() {
                                         <Save className="mr-2 h-4 w-4" /> Save Draft
                                     </Button>
                                     <div className="flex gap-2">
-                                        <Button variant="secondary" onClick={() => alert("AI Proofread not implemented yet")}>
-                                            ✨ AI Proofread
+                                        <Button variant="secondary" onClick={handleAIProofread} disabled={proofreading || submitting || !content.trim()}>
+                                            {proofreading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                                            AI Proofread
                                         </Button>
                                         <Button onClick={() => handleSubmit(false)} disabled={submitting || !content} className="bg-indigo-600 hover:bg-indigo-700">
                                             {submitting ? <Loader2 className="animate-spin mr-2 h-4 w-4" /> : <Send className="mr-2 h-4 w-4" />}

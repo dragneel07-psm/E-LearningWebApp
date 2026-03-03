@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { ArrowLeft, Loader2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { academicAPI, usersAPI, Subject, AcademicClass } from '@/lib/api';
+import { toast } from 'sonner';
 
 export default function CreateAssignmentPage() {
     const router = useRouter();
@@ -68,6 +69,7 @@ export default function CreateAssignmentPage() {
 
             } catch (error) {
                 console.error("Failed to load initial data", error);
+                toast.error('Failed to load classes and subjects');
             }
         };
         loadData();
@@ -80,6 +82,10 @@ export default function CreateAssignmentPage() {
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+        if (!selectedClassId || !formData.subject) {
+            toast.error('Please select both class and subject');
+            return;
+        }
         setLoading(true);
         try {
             const response = await academicAPI.createAssessment({
@@ -87,15 +93,17 @@ export default function CreateAssignmentPage() {
                 due_date: new Date(formData.due_date).toISOString(),
                 passing_marks: Math.round(formData.total_marks * 0.4) // Default 40%
             });
+            toast.success('Assignment created successfully');
 
             if (formData.type === 'quiz' || formData.type === 'exam') {
                 router.push(`/teacher/assignments/${response.assessment_id}/questions`);
             } else {
                 router.push('/teacher/assignments');
             }
-        } catch (error) {
+        } catch (error: unknown) {
             console.error('Failed to create assignment:', error);
-            alert('Failed to create assignment');
+            const message = error instanceof Error ? error.message : 'Failed to create assignment';
+            toast.error(message);
         } finally {
             setLoading(false);
         }

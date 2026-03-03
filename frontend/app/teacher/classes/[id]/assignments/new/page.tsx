@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { ChevronLeft, ChevronRight, BrainCircuit, Plus, Trash2, CheckCircle, Loader2 } from 'lucide-react';
 import Link from 'next/link';
 import { academicAPI, Subject, aiAPI } from '@/lib/api';
+import { toast } from 'sonner';
 
 export default function CreateAssignmentPage() {
     const params = useParams();
@@ -121,7 +122,7 @@ export default function CreateAssignmentPage() {
 
     const handlePublish = async () => {
         if (!selectedCourseId) {
-            alert("Please select a valid subject/course.");
+            toast.error("Please select a valid subject/course.");
             return;
         }
         setPublishing(true);
@@ -153,10 +154,13 @@ export default function CreateAssignmentPage() {
             }
 
             // Success
+            toast.success('Assignment created successfully');
             router.push(`/teacher/classes/${classId}`);
         } catch (error) {
             console.error("Failed to create assignment", error);
-            setError("Failed to create assignment. Please try again.");
+            const message = error instanceof Error ? error.message : "Failed to create assignment. Please try again.";
+            setError(message);
+            toast.error(message);
         } finally {
             setPublishing(false);
         }

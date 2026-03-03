@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Loader2, CheckCircle, XCircle, Clock, Save, ArrowLeft } from 'lucide-react';
 import { academicAPI, AcademicClass, Student, Attendance, Subject } from '@/lib/api';
 import Link from 'next/link';
+import { toast } from 'sonner';
 
 export default function AttendancePage() {
     const [loading, setLoading] = useState(true);
@@ -30,6 +31,7 @@ export default function AttendancePage() {
                 }
             } catch (error) {
                 console.error("Failed to load classes", error);
+                toast.error('Failed to load classes');
             } finally {
                 setLoading(false);
             }
@@ -67,6 +69,7 @@ export default function AttendancePage() {
                 setAttendanceData(initialData);
             } catch (error) {
                 console.error("Failed to load students", error);
+                toast.error('Failed to load students');
             } finally {
                 setLoading(false);
             }
@@ -85,7 +88,7 @@ export default function AttendancePage() {
         setSubmitting(true);
         try {
             if (!selectedSubjectId) {
-                alert('Please select a subject');
+                toast.error('Please select a subject');
                 setSubmitting(false);
                 return;
             }
@@ -102,11 +105,10 @@ export default function AttendancePage() {
             });
 
             await Promise.all(promises);
-            alert('Attendance submitted successfully!');
-            // Optional: Redirect or reset
+            toast.success('Attendance submitted successfully');
         } catch (error: unknown) {
             const message = error instanceof Error ? error.message : 'Unknown error';
-            alert(`Failed to submit attendance: ${message}`);
+            toast.error(`Failed to submit attendance: ${message}`);
         } finally {
             setSubmitting(false);
         }

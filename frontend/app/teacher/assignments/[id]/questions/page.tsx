@@ -8,6 +8,7 @@ import { ArrowLeft, Plus, Save } from 'lucide-react';
 import { academicAPI, Assessment, Question } from '@/lib/api';
 import QuestionList from '@/components/teacher/QuestionList';
 import QuestionEditor from '@/components/teacher/QuestionEditor';
+import { toast } from 'sonner';
 
 export default function AssessmentQuestionsPage() {
     const params = useParams();
@@ -32,10 +33,10 @@ export default function AssessmentQuestionsPage() {
                 academicAPI.getQuestionsByAssessment(assessmentId)
             ]);
             setAssessment(assessmentData);
-            setQuestions(questionsData);
+            setQuestions(Array.isArray(questionsData) ? questionsData : []);
         } catch (error) {
             console.error('Failed to load data:', error);
-            // alert('Failed to load assessment data');
+            toast.error('Failed to load assessment data');
         } finally {
             setLoading(false);
         }
@@ -57,7 +58,7 @@ export default function AssessmentQuestionsPage() {
             setEditingQuestion(undefined);
         } catch (error) {
             console.error('Failed to save question:', error);
-            alert('Failed to save question');
+            toast.error('Failed to save question');
         }
     };
 
@@ -66,8 +67,10 @@ export default function AssessmentQuestionsPage() {
         try {
             await academicAPI.deleteQuestion(id);
             await loadData();
+            toast.success('Question deleted');
         } catch (error) {
             console.error('Failed to delete question:', error);
+            toast.error('Failed to delete question');
         }
     };
 

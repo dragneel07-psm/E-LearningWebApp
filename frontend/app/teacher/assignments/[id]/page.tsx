@@ -16,6 +16,7 @@ import {
 } from '@/components/ui/dialog';
 import { academicAPI, Assessment, Submission, Student } from '@/lib/api';
 import QuestionManager from './QuestionManager';
+import { toast } from 'sonner';
 
 function toList<T>(payload: unknown): T[] {
     if (Array.isArray(payload)) return payload as T[];
@@ -89,9 +90,10 @@ export default function AssignmentDetailsPage() {
 
             setSelectedSubmission(null);
             await loadData();
+            toast.success('Grade saved');
         } catch (error) {
             console.error('Grading failed:', error);
-            alert('Failed to save grade.');
+            toast.error('Failed to save grade');
         } finally {
             setGradingLoading(false);
         }
