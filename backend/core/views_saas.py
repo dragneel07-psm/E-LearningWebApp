@@ -65,7 +65,16 @@ class SaasKPIView(APIView):
         paid_invoices = invoices.filter(status='paid')
         mrr = paid_invoices.aggregate(total=Sum('amount'))['total'] or 0
         pending_revenue = invoices.filter(status='pending').aggregate(total=Sum('amount'))['total'] or 0
-        overdue_invoices = invoices.filter(status='pending', due_date__lt=timezone.now().date()).count()
+        # Support historical schema variants:
+        # - If invoice due_date exists, use it.
+        # - Otherwise fallback to pending invoices older than 30 days from issued_date.
+        invoice_field_names = {field.name for field in Invoice._meta.get_fields()}
+        overdue_invoices = 0
+        if 'due_date' in invoice_field_names:
+            overdue_invoices = invoices.filter(status='pending', due_date__lt=timezone.now().date()).count()
+        elif 'issued_date' in invoice_field_names:
+            overdue_cutoff = timezone.now() - timedelta(days=30)
+            overdue_invoices = invoices.filter(status='pending', issued_date__lt=overdue_cutoff).count()
 
         # 3. Aggregated Students across all tenants using django-tenants schema_context
         total_students = 0
@@ -164,7 +173,10 @@ class SaasKPIView(APIView):
         if not alerts:
             latest_paid_invoice = paid_invoices.order_by("-issued_date").first()
             issued_at = latest_paid_invoice.issued_date if latest_paid_invoice else None
-            if issued_at and timezone.is_naive(issued_at):
+            if issued_at and not isinstance(issued_at, datetime):
+                issued_at = datetime.combine(issued_at, datetime.min.time())
+                issued_at = timezone.make_aware(issued_at, timezone.get_current_timezone())
+            if isinstance(issued_at, datetime) and timezone.is_naive(issued_at):
                 issued_at = timezone.make_aware(issued_at, timezone.get_current_timezone())
             invoice_timestamp = _format_time_ago(issued_at, now_dt) if issued_at else "just now"
             alerts = [{
