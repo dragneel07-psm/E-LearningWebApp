@@ -12,10 +12,27 @@ export const getTenantFromSubdomain = (hostname: string): string | null => {
     return parts[0]; // Default or localhost
 };
 
-// Hook or function to get tenant info (mocked for now, or fetches from API)
+type TenantInfo = {
+    id: string;
+    name: string;
+    logo: string;
+    primaryColor: string;
+};
+
+function readCachedTenantInfo() {
+    if (typeof window === 'undefined') {
+        return { name: '', logo: '', primaryColor: '' };
+    }
+    return {
+        name: localStorage.getItem('tenant_name') || '',
+        logo: localStorage.getItem('tenant_logo') || '',
+        primaryColor: localStorage.getItem('tenant_primary_color') || '',
+    };
+}
+
 export const getTenantInfo = () => {
     // Default values for SSR to avoid hydration mismatch
-    const defaultTenant = {
+    const defaultTenant: TenantInfo = {
         id: 'localhost',
         name: 'Local School',
         logo: '/logo_placeholder.png',
@@ -25,12 +42,17 @@ export const getTenantInfo = () => {
     if (typeof window === 'undefined') return defaultTenant;
 
     const hostname = window.location.hostname;
-    const tenantId = getTenantFromSubdomain(hostname);
-    // In real app, we might fetch tenant details from API based on this ID/Subdomain
+    const tenantId = getTenantFromSubdomain(hostname) || 'localhost';
+    const cached = readCachedTenantInfo();
+
+    const derivedName = tenantId === 'localhost'
+        ? 'Local School'
+        : `${tenantId.replace(/[-_]/g, ' ')} School`;
+
     return {
         id: tenantId,
-        name: tenantId === 'localhost' ? 'Local School' : `${tenantId} School`,
-        logo: '/logo_placeholder.png', // Dynamic logo
-        primaryColor: 'hsl(222.2 47.4% 11.2%)', // Example
+        name: cached.name || derivedName,
+        logo: cached.logo || '/logo_placeholder.png',
+        primaryColor: cached.primaryColor || 'hsl(222.2 47.4% 11.2%)',
     };
 };

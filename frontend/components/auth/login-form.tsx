@@ -47,9 +47,6 @@ export function LoginForm({ role, title, subtitle }: LoginFormProps) {
 
             toast.success('Welcome back! Sign in successful.');
 
-            // Small delay to ensure cookies are set
-            await new Promise(resolve => setTimeout(resolve, 100));
-
             // Redirect based on role returned from API (most reliable)
             const userRole = result.user?.role || role;
             let targetPath = redirectPath;

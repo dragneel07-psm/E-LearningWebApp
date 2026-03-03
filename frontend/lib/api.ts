@@ -7,7 +7,7 @@ import { removeTokens } from "./auth";
 
 // API Base Configuration
 // API Base Configuration
-const getApiBaseUrl = () => {
+export const getApiBaseUrl = () => {
     let url = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api';
 
     // Ensure protocol is present
@@ -525,8 +525,12 @@ export interface AuditLog {
     id: number | string;
     action: string;
     actor?: string;
-    created_at: string;
+    user?: string;
+    created_at?: string;
+    timestamp?: string;
     metadata?: Record<string, unknown>;
+    details?: Record<string, unknown>;
+    ip_address?: string | null;
 }
 
 export interface SystemStatus {
@@ -928,7 +932,31 @@ async function apiRequestBlob(
 
 // Core API
 export const coreAPI = {
-    getTenants: () => apiRequest<Tenant[]>('/core/tenants/'),
+    getTenants: async () => {
+        const firstPage = await apiRequest<Tenant[] | PaginatedResponse<Tenant>>('/core/tenants/');
+        if (Array.isArray(firstPage)) return firstPage;
+        if (!firstPage || !Array.isArray(firstPage.results)) return [];
+
+        const all = [...firstPage.results];
+        const totalCount = typeof firstPage.count === 'number' ? firstPage.count : all.length;
+        let page = 2;
+        let hasMore = Boolean(firstPage.next);
+
+        while (hasMore && all.length < totalCount) {
+            const nextPage = await apiRequest<Tenant[] | PaginatedResponse<Tenant>>(`/core/tenants/?page=${page}`);
+            if (Array.isArray(nextPage)) {
+                all.push(...nextPage);
+                break;
+            }
+            const batch = Array.isArray(nextPage?.results) ? nextPage.results : [];
+            if (batch.length === 0) break;
+            all.push(...batch);
+            hasMore = Boolean(nextPage?.next);
+            page += 1;
+        }
+
+        return all;
+    },
     getTenant: (id: string) => apiRequest<Tenant>(`/core/tenants/${id}/`),
     createTenant: (data: Partial<Tenant>) => apiRequest<Tenant>('/core/tenants/', {
         method: 'POST',
@@ -1490,7 +1518,31 @@ export const aiAPI = {
                 conversation_history: conversationHistory
             })
         }),
-    getAILogs: () => apiRequest<any[]>('/ai/logs/'),
+    getAILogs: async () => {
+        const firstPage = await apiRequest<any[] | PaginatedResponse<any>>('/ai/logs/');
+        if (Array.isArray(firstPage)) return firstPage;
+        if (!firstPage || !Array.isArray(firstPage.results)) return [];
+
+        const all = [...firstPage.results];
+        const totalCount = typeof firstPage.count === 'number' ? firstPage.count : all.length;
+        let page = 2;
+        let hasMore = Boolean(firstPage.next);
+
+        while (hasMore && all.length < totalCount) {
+            const nextPage = await apiRequest<any[] | PaginatedResponse<any>>(`/ai/logs/?page=${page}`);
+            if (Array.isArray(nextPage)) {
+                all.push(...nextPage);
+                break;
+            }
+            const batch = Array.isArray(nextPage?.results) ? nextPage.results : [];
+            if (batch.length === 0) break;
+            all.push(...batch);
+            hasMore = Boolean(nextPage?.next);
+            page += 1;
+        }
+
+        return all;
+    },
     getRecommendations: () => apiRequest<{
         recommendations: Array<{
             id: number;
@@ -1729,7 +1781,9 @@ export const saasApi = {
         }
 
         const data = await response.json();
-        return Array.isArray(data) ? data : [];
+        if (Array.isArray(data)) return data;
+        if (data && Array.isArray(data.results)) return data.results as SubscriptionPlan[];
+        return [];
     },
     getSubscriptionHistoryByTenant: async (tenantId: string | number) => {
         const firstPage = await apiRequest<SubscriptionPlanHistory[] | PaginatedResponse<SubscriptionPlanHistory>>(
@@ -1786,7 +1840,31 @@ export const saasApi = {
     getSystemStatus: () => coreAPI.getSystemStatus(),
     getKPIs: () => apiRequest<{ kpis: any, revenue_trend: any[], tenant_activity: any[] }>('/core/saas-kpi/'),
     getAIUsage: () => apiRequest<SaasAIUsageResponse>('/core/saas-ai-usage/'),
-    getTenantUsers: (tenantId: string | number) => apiRequest<User[]>(`/core/tenants/${tenantId}/users/`),
+    getTenantUsers: async (tenantId: string | number) => {
+        const firstPage = await apiRequest<User[] | PaginatedResponse<User>>(`/core/tenants/${tenantId}/users/`);
+        if (Array.isArray(firstPage)) return firstPage;
+        if (!firstPage || !Array.isArray(firstPage.results)) return [];
+
+        const all = [...firstPage.results];
+        const totalCount = typeof firstPage.count === 'number' ? firstPage.count : all.length;
+        let page = 2;
+        let hasMore = Boolean(firstPage.next);
+
+        while (hasMore && all.length < totalCount) {
+            const nextPage = await apiRequest<User[] | PaginatedResponse<User>>(`/core/tenants/${tenantId}/users/?page=${page}`);
+            if (Array.isArray(nextPage)) {
+                all.push(...nextPage);
+                break;
+            }
+            const batch = Array.isArray(nextPage?.results) ? nextPage.results : [];
+            if (batch.length === 0) break;
+            all.push(...batch);
+            hasMore = Boolean(nextPage?.next);
+            page += 1;
+        }
+
+        return all;
+    },
     createTenantUser: (tenantId: string | number, data: Partial<User> & { password?: string }) =>
         apiRequest<User>(`/core/tenants/${tenantId}/users/`, {
             method: 'POST',
@@ -1886,6 +1964,7 @@ export const api = {
             method: 'POST',
             body: JSON.stringify(data || {})
         }),
+        downloadUrl: (filename: string) => `${API_BASE_URL}/core/backups/download/${encodeURIComponent(filename)}/`,
     },
     auditLogs: {
         list: () => apiRequest('/core/audit-logs/'),

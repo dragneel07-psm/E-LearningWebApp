@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -77,9 +77,10 @@ export default function SaasPlansPage() {
     const loadPlans = async () => {
         try {
             const data = await saasApi.getPlans();
-            setPlans(data);
+            setPlans(Array.isArray(data) ? data : []);
         } catch (error) {
             console.error("Failed to load plans", error);
+            setPlans([]);
         } finally {
             setLoading(false);
         }
@@ -112,6 +113,19 @@ export default function SaasPlansPage() {
             setSeeding(false);
         }
     };
+
+    const maxStudentLimit = useMemo(
+        () => Math.max(...plans.map((plan) => Number(plan.student_limit) || 0), 1),
+        [plans]
+    );
+    const maxTeacherLimit = useMemo(
+        () => Math.max(...plans.map((plan) => Number(plan.teacher_limit) || 0), 1),
+        [plans]
+    );
+    const maxAiLimit = useMemo(
+        () => Math.max(...plans.map((plan) => Number(plan.ai_token_limit) || 0), 1),
+        [plans]
+    );
 
     if (loading) return <div className="p-8">Loading plans...</div>;
 
@@ -266,7 +280,7 @@ export default function SaasPlansPage() {
                                                 <span className="font-bold text-slate-900 dark:text-white">{plan.student_limit.toLocaleString()}</span>
                                             </div>
                                             <Progress
-                                                value={85}
+                                                value={Math.max(0, Math.min(100, (Number(plan.student_limit) / maxStudentLimit) * 100))}
                                                 className="h-1.5 bg-slate-100 dark:bg-white/5"
                                                 indicatorClassName="bg-gradient-to-r from-sky-400 to-sky-600 shadow-[0_0_10px_rgba(56,189,248,0.4)]"
                                             />
@@ -281,7 +295,7 @@ export default function SaasPlansPage() {
                                                 <span className="font-bold text-slate-900 dark:text-white">{plan.teacher_limit.toLocaleString()}</span>
                                             </div>
                                             <Progress
-                                                value={60}
+                                                value={Math.max(0, Math.min(100, (Number(plan.teacher_limit) / maxTeacherLimit) * 100))}
                                                 className="h-1.5 bg-slate-100 dark:bg-white/5"
                                                 indicatorClassName="bg-gradient-to-r from-violet-400 to-violet-600 shadow-[0_0_10px_rgba(167,139,250,0.4)]"
                                             />
@@ -296,7 +310,7 @@ export default function SaasPlansPage() {
                                                 <span className="font-bold text-slate-900 dark:text-white">{plan.ai_token_limit.toLocaleString()}</span>
                                             </div>
                                             <Progress
-                                                value={45}
+                                                value={Math.max(0, Math.min(100, (Number(plan.ai_token_limit) / maxAiLimit) * 100))}
                                                 className="h-1.5 bg-slate-100 dark:bg-white/5"
                                                 indicatorClassName="bg-gradient-to-r from-amber-400 to-amber-600 shadow-[0_0_10px_rgba(251,191,36,0.4)]"
                                             />

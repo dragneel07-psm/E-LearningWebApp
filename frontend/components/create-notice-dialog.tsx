@@ -9,6 +9,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Loader2, Send } from 'lucide-react';
 import { academicAPI } from '@/lib/api';
+import { toast } from 'sonner';
 
 interface CreateNoticeDialogProps {
     open?: boolean;
@@ -67,12 +68,12 @@ export function CreateNoticeDialog({ open, onOpenChange, trigger, onSuccess }: C
                 target_class: ''
             });
 
-            alert('Notice posted successfully!');
+            toast.success('Notice posted successfully');
             handleOpenChange(false);
             if (onSuccess) onSuccess();
         } catch (error: unknown) {
             const message = error instanceof Error ? error.message : 'Unknown error';
-            alert(`Failed to post notice: ${message}`);
+            toast.error(`Failed to post notice: ${message}`);
         } finally {
             setLoading(false);
         }
@@ -160,7 +161,7 @@ export function CreateNoticeDialog({ open, onOpenChange, trigger, onSuccess }: C
                                 required
                             />
                             <p className="text-xs text-slate-500">
-                                Tip: In a real app, this would be a dropdown of available classes.
+                                Enter the numeric class ID from your class records.
                             </p>
                         </div>
                     )}

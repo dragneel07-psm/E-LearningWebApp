@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { api } from '@/lib/api';
+import { api, getApiBaseUrl } from '@/lib/api';
 import { toast } from 'sonner';
 import { Loader2, Database, Download, Save, RefreshCw } from 'lucide-react';
 
@@ -18,6 +18,7 @@ export default function BackupsPage() {
     const [backups, setBackups] = useState<BackupFile[]>([]);
     const [loading, setLoading] = useState(true);
     const [creating, setCreating] = useState(false);
+    const [downloadingFile, setDownloadingFile] = useState<string | null>(null);
 
     useEffect(() => {
         loadBackups();
@@ -27,10 +28,11 @@ export default function BackupsPage() {
         setLoading(true);
         try {
             const data = await api.backups.list();
-            setBackups(data as any);
+            setBackups(Array.isArray(data) ? data : []);
         } catch (error) {
             console.error(error);
             toast.error('Failed to load backups');
+            setBackups([]);
         } finally {
             setLoading(false);
         }
@@ -39,14 +41,57 @@ export default function BackupsPage() {
     const handleCreateBackup = async () => {
         setCreating(true);
         try {
-            await api.backups.create({ schema: 'demo' }); // Explicitly for demo tenant for now
+            await api.backups.create();
             toast.success('Backup created successfully');
             await loadBackups();
         } catch (error) {
             console.error(error);
-            toast.error('Failed to create backup');
+            toast.error(error instanceof Error ? error.message : 'Failed to create backup');
         } finally {
             setCreating(false);
+        }
+    };
+
+    const handleDownload = async (filename: string) => {
+        const token = localStorage.getItem('access_token');
+        if (!token) {
+            toast.error('You are not logged in');
+            return;
+        }
+
+        setDownloadingFile(filename);
+        try {
+            const tenantId = localStorage.getItem('tenant_id') || 'demo';
+            const baseUrl = getApiBaseUrl();
+            const response = await fetch(
+                `${baseUrl}/core/backups/download/${encodeURIComponent(filename)}/`,
+                {
+                    method: 'GET',
+                    headers: {
+                        Authorization: `Bearer ${token}`,
+                        'x-tenant-id': tenantId,
+                    },
+                }
+            );
+            if (!response.ok) {
+                throw new Error(`Failed to download backup (${response.status})`);
+            }
+
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = filename;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            window.URL.revokeObjectURL(url);
+            toast.success('Backup download started');
+        } catch (error) {
+            console.error(error);
+            toast.error(error instanceof Error ? error.message : 'Failed to download backup');
+        } finally {
+            setDownloadingFile(null);
         }
     };
 
@@ -108,9 +153,18 @@ export default function BackupsPage() {
                                         <TableCell>{new Date(backup.created_at).toLocaleString()}</TableCell>
                                         <TableCell>{backup.size_mb} MB</TableCell>
                                         <TableCell className="text-right">
-                                            {/* Download logic would need a backend download endpoint. Skipping for now as mostly server-side mgmt */}
-                                            <Button variant="ghost" size="sm" disabled title="Download not implemented yet">
-                                                <Download className="h-4 w-4 text-slate-400" />
+                                            <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                onClick={() => handleDownload(backup.filename)}
+                                                disabled={downloadingFile === backup.filename}
+                                                title="Download backup"
+                                            >
+                                                {downloadingFile === backup.filename ? (
+                                                    <Loader2 className="h-4 w-4 animate-spin text-slate-500" />
+                                                ) : (
+                                                    <Download className="h-4 w-4 text-slate-700" />
+                                                )}
                                             </Button>
                                         </TableCell>
                                     </TableRow>

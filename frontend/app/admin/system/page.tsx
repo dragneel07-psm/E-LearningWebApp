@@ -14,7 +14,8 @@ import { SafeResponsiveContainer } from '@/components/ui/safe-responsive-contain
 import Link from 'next/link'; // Ensure Link is imported
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
-import { coreAPI, usersAPI, AuditLog } from '@/lib/api';
+import { api, coreAPI, usersAPI, AuditLog } from '@/lib/api';
+import { toast } from 'sonner';
 
 export default function SystemAdminDashboard() {
     const [features, setFeatures] = useState({
@@ -26,6 +27,8 @@ export default function SystemAdminDashboard() {
     const [latencyHistory, setLatencyHistory] = useState<Array<{ time: string; load: number }>>([]);
     const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
     const [auditLoading, setAuditLoading] = useState(true);
+    const [settingsEditable, setSettingsEditable] = useState(false);
+    const [savingMaintenance, setSavingMaintenance] = useState(false);
 
     // Real-time System Stats
     const [systemStats, setSystemStats] = useState({
@@ -75,6 +78,20 @@ export default function SystemAdminDashboard() {
             }
         }
 
+        async function loadMaintenanceState() {
+            try {
+                const settings = await api.settings.get();
+                setFeatures((prev) => ({
+                    ...prev,
+                    maintenanceMode: Boolean((settings as any)?.maintenance_mode),
+                }));
+                setSettingsEditable(true);
+            } catch (error) {
+                console.error('Failed to load maintenance setting:', error);
+                setSettingsEditable(false);
+            }
+        }
+
         async function loadAuditLogs() {
             try {
                 setAuditLoading(true);
@@ -89,8 +106,27 @@ export default function SystemAdminDashboard() {
         }
 
         loadFeatureState();
+        loadMaintenanceState();
         loadAuditLogs();
     }, []);
+
+    const handleMaintenanceToggle = async (checked: boolean) => {
+        const previous = features.maintenanceMode;
+        setFeatures((prev) => ({ ...prev, maintenanceMode: checked }));
+        if (!settingsEditable) return;
+
+        try {
+            setSavingMaintenance(true);
+            await api.settings.update({ maintenance_mode: checked });
+            toast.success(`Maintenance mode ${checked ? 'enabled' : 'disabled'}.`);
+        } catch (error) {
+            console.error('Failed to update maintenance mode:', error);
+            setFeatures((prev) => ({ ...prev, maintenanceMode: previous }));
+            toast.error('Failed to update maintenance mode.');
+        } finally {
+            setSavingMaintenance(false);
+        }
+    };
 
     return (
         <div className="p-6 space-y-8 bg-slate-50 min-h-screen dark:bg-slate-900">
@@ -197,9 +233,16 @@ export default function SystemAdminDashboard() {
                             </div>
                             <div className="flex items-center justify-between pt-2 border-t">
                                 <Label htmlFor="maint" className="text-red-600 font-medium">Maintenance Mode</Label>
-                                <Switch id="maint" checked={features.maintenanceMode} onCheckedChange={(c) => setFeatures({ ...features, maintenanceMode: c })} />
+                                <Switch
+                                    id="maint"
+                                    checked={features.maintenanceMode}
+                                    onCheckedChange={handleMaintenanceToggle}
+                                    disabled={savingMaintenance}
+                                />
                             </div>
-                            <p className="text-xs text-muted-foreground">Feature flags are controlled by your subscription plan and global settings.</p>
+                            <p className="text-xs text-muted-foreground">
+                                Feature flags are plan-controlled. Maintenance mode is synced with global settings when permitted.
+                            </p>
                         </CardContent>
                     </Card>
 

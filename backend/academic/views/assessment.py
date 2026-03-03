@@ -326,8 +326,20 @@ class ResultViewSet(viewsets.ModelViewSet):
             
             return Response({'ai_feedback': ai_response})
         except Exception as e:
-            # Fallback mock if AI fails
-            result.ai_feedback = "Good effort! Focus on reviewing the core concepts of this assessment to improve your score next time."
+            # Fallback feedback if AI provider is unavailable
+            try:
+                percent = 0
+                if result.assessment.total_marks:
+                    percent = float(result.score or 0) / float(result.assessment.total_marks) * 100
+                if percent >= 85:
+                    message = "Strong performance. Keep practicing advanced questions to maintain this level."
+                elif percent >= 60:
+                    message = "Good progress. Review missed concepts and reattempt similar questions for better retention."
+                else:
+                    message = "Keep going. Revisit foundational concepts first, then practice short, focused question sets."
+                result.ai_feedback = message
+            except Exception:
+                result.ai_feedback = "Good effort. Review core concepts and practice similar questions to improve your next attempt."
             result.save()
             return Response({'ai_feedback': result.ai_feedback, 'error': str(e)})
 

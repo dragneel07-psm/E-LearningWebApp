@@ -1,16 +1,41 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import permissions
+from django.core.cache import cache
+from django.db import IntegrityError
 from django.db.models import Sum, Count, Max
 from core.models import Tenant
 from billing.models import Invoice, Subscription
-from django.conf import settings
 from datetime import datetime, timedelta
 from collections import defaultdict
 from decimal import Decimal
 from django_tenants.utils import schema_context
 from django.db.models.functions import TruncDate
+from django.utils import timezone
 from ai_engine.services.provider_config import get_ai_provider_config
+
+KPI_CACHE_KEY = "saas:kpi:v2"
+AI_USAGE_CACHE_KEY = "saas:ai-usage:v2"
+DASHBOARD_CACHE_TTL_SECONDS = 60
+
+
+def _as_bool(value) -> bool:
+    return str(value).strip().lower() in {"1", "true", "yes", "y"}
+
+
+def _format_time_ago(reference: datetime, now: datetime) -> str:
+    delta = now - reference
+    seconds = max(int(delta.total_seconds()), 0)
+    if seconds < 60:
+        return "just now"
+    if seconds < 3600:
+        minutes = seconds // 60
+        return f"{minutes}m ago"
+    if seconds < 86400:
+        hours = seconds // 3600
+        return f"{hours}h ago"
+    days = seconds // 86400
+    return f"{days}d ago"
 
 
 class IsSaaSAdmin(permissions.BasePermission):
@@ -25,29 +50,42 @@ class SaasKPIView(APIView):
     permission_classes = [IsSaaSAdmin]
 
     def get(self, request):
+        force_refresh = _as_bool(request.query_params.get("refresh"))
+        if not force_refresh:
+            cached_payload = cache.get(KPI_CACHE_KEY)
+            if cached_payload:
+                return Response(cached_payload)
+
         # 1. Basic Stats
-        tenants = Tenant.objects.all()
-        total_schools = tenants.count()
+        tenants = list(Tenant.objects.only("id", "name", "schema_name"))
+        total_schools = len(tenants)
 
         # 2. Revenue (Aggregated from default/public schema DB)
         invoices = Invoice.objects.all()
         paid_invoices = invoices.filter(status='paid')
         mrr = paid_invoices.aggregate(total=Sum('amount'))['total'] or 0
         pending_revenue = invoices.filter(status='pending').aggregate(total=Sum('amount'))['total'] or 0
+        overdue_invoices = invoices.filter(status='pending', due_date__lt=timezone.now().date()).count()
 
         # 3. Aggregated Students across all tenants using django-tenants schema_context
         total_students = 0
+        total_ai_tokens_used = 0
         tenant_activity = []
+        tenant_errors = []
 
         try:
-            from django_tenants.utils import schema_context
             from academic.models import Student
+            from ai_engine.models import AIInteractionLog
 
             for tenant in tenants:
                 try:
                     with schema_context(tenant.schema_name):
                         students_count = Student.objects.count()
+                        ai_tokens_used = (
+                            AIInteractionLog.objects.aggregate(total=Sum("total_tokens")).get("total") or 0
+                        )
                     total_students += students_count
+                    total_ai_tokens_used += int(ai_tokens_used)
                     status = 'active' if students_count > 0 else 'idle'
                     tenant_activity.append({
                         'id': str(tenant.id),
@@ -63,13 +101,19 @@ class SaasKPIView(APIView):
                         'status': 'error',
                         'students': 0
                     })
+                    tenant_errors.append({
+                        "tenant_id": str(tenant.id),
+                        "tenant_name": tenant.name,
+                        "error": str(e),
+                    })
         except Exception as outer_err:
             print(f"SaasKPIView outer error: {outer_err}")
             tenant_activity = [{'id': str(t.id), 'name': t.name, 'status': 'unknown', 'students': 0} for t in tenants]
+            tenant_errors.append({"error": str(outer_err)})
 
         # 4. Revenue Trend (Live calculation — using issued_date which exists on Invoice)
         revenue_trend = []
-        now = datetime.now()
+        now = timezone.now()
         for i in range(5, -1, -1):
             target_date = now - timedelta(days=i * 30)
             month_label = target_date.strftime('%b')
@@ -88,41 +132,80 @@ class SaasKPIView(APIView):
 
         # 5. Dynamic Security Alerts
         alerts = []
+        now_dt = timezone.now()
         for t in tenant_activity:
             if t['status'] == 'error':
                 alerts.append({
-                    'id': str(datetime.now().timestamp()),
+                    'id': f"tenant-error-{t['id']}",
                     'level': 'critical',
                     'title': f"Connection Error: {t['name']}",
                     'description': f"Failed to connect to tenant schema {t['id']}. Investigating...",
-                    'timestamp': 'Just Now'
+                    'timestamp': 'just now'
                 })
 
-        if not alerts:
-            alerts = [
-                {'id': '1', 'level': 'info', 'title': 'System Integrity Check', 'description': 'All infrastructure nodes reporting healthy.', 'timestamp': '2h ago'},
-                {'id': '2', 'level': 'warning', 'title': 'High AI Usage', 'description': 'Demo School has exceeded 80% of token limits.', 'timestamp': '5h ago'}
-            ]
+        if overdue_invoices > 0:
+            alerts.append({
+                "id": "billing-overdue",
+                "level": "warning",
+                "title": "Overdue Invoices Detected",
+                "description": f"{overdue_invoices} invoice(s) are overdue and require follow-up.",
+                "timestamp": "just now",
+            })
 
-        return Response({
+        if pending_revenue > 0:
+            alerts.append({
+                "id": "billing-pending",
+                "level": "info",
+                "title": "Pending Revenue",
+                "description": f"${float(pending_revenue):,.2f} is currently pending collection.",
+                "timestamp": "just now",
+            })
+
+        if not alerts:
+            latest_paid_invoice = paid_invoices.order_by("-issued_date").first()
+            issued_at = latest_paid_invoice.issued_date if latest_paid_invoice else None
+            if issued_at and timezone.is_naive(issued_at):
+                issued_at = timezone.make_aware(issued_at, timezone.get_current_timezone())
+            invoice_timestamp = _format_time_ago(issued_at, now_dt) if issued_at else "just now"
+            alerts = [{
+                "id": "system-healthy",
+                "level": "info",
+                "title": "System Integrity Check",
+                "description": "All tenant schemas and billing channels are healthy.",
+                "timestamp": invoice_timestamp,
+            }]
+
+        total_ai_limit = Subscription.objects.aggregate(total=Sum("ai_token_limit")).get("total") or 0
+        ai_usage_avg = round((total_ai_tokens_used / total_ai_limit) * 100, 2) if total_ai_limit else 0.0
+
+        payload = {
             'kpis': {
                 'total_schools': total_schools,
                 'total_students': total_students,
                 'mrr': float(mrr),
                 'pending_revenue': float(pending_revenue),
-                'ai_usage_avg': 12,
+                'ai_usage_avg': ai_usage_avg,
             },
             'revenue_trend': revenue_trend,
             'tenant_activity': tenant_activity,
-            'alerts': alerts
-        })
+            'alerts': alerts,
+            'tenant_errors': tenant_errors,
+        }
+        cache.set(KPI_CACHE_KEY, payload, DASHBOARD_CACHE_TTL_SECONDS)
+        return Response(payload)
 
 
 class SaasAIUsageView(APIView):
     permission_classes = [IsSaaSAdmin]
 
     def get(self, request):
-        tenants = Tenant.objects.all()
+        force_refresh = _as_bool(request.query_params.get("refresh"))
+        if not force_refresh:
+            cached_payload = cache.get(AI_USAGE_CACHE_KEY)
+            if cached_payload:
+                return Response(cached_payload)
+
+        tenants = list(Tenant.objects.only("id", "name", "schema_name"))
         total_tokens = 0
         total_prompt_tokens = 0
         total_completion_tokens = 0
@@ -199,7 +282,7 @@ class SaasAIUsageView(APIView):
                             usage_by_feature_map[feature_key]['requests'] += int(item.get('requests') or 0)
                             usage_by_feature_map[feature_key]['cost_estimate'] += Decimal(str(item.get('cost') or 0))
 
-                        last_7_days = datetime.now().date() - timedelta(days=6)
+                        last_7_days = timezone.now().date() - timedelta(days=6)
                         daily_usage = logs.filter(timestamp__date__gte=last_7_days).annotate(
                             day=TruncDate('timestamp')
                         ).values('day').annotate(
@@ -242,7 +325,7 @@ class SaasAIUsageView(APIView):
 
         daily_usage_last_7_days = []
         for i in range(6, -1, -1):
-            day = (datetime.now().date() - timedelta(days=i)).isoformat()
+            day = (timezone.now().date() - timedelta(days=i)).isoformat()
             day_stats = daily_usage_map[day]
             daily_usage_last_7_days.append({
                 'date': day,
@@ -254,7 +337,7 @@ class SaasAIUsageView(APIView):
         avg_cost_per_1k_tokens = float((total_cost / total_tokens * 1000) if total_tokens > 0 else 0)
         avg_tokens_per_request = float(total_tokens / total_requests) if total_requests > 0 else 0
 
-        return Response({
+        payload = {
             'provider': {
                 'name': provider_config.get('provider_name'),
                 'base_url': provider_config.get('base_url'),
@@ -272,12 +355,14 @@ class SaasAIUsageView(APIView):
             'avg_cost_per_1k_tokens': round(avg_cost_per_1k_tokens, 6),
             'avg_tokens_per_request': round(avg_tokens_per_request, 2),
             'active_tenants': len([t for t in top_tenants if t['tokens'] > 0]),
-            'total_tenants': tenants.count(),
+            'total_tenants': len(tenants),
             'usage_by_feature': usage_by_feature,
             'top_tenants': top_tenants[:10],
             'daily_usage_last_7_days': daily_usage_last_7_days,
             'tenant_errors': tenant_errors,
-        })
+        }
+        cache.set(AI_USAGE_CACHE_KEY, payload, DASHBOARD_CACHE_TTL_SECONDS)
+        return Response(payload)
 
 
 class TenantAdminPasswordResetView(APIView):
@@ -326,6 +411,21 @@ def _serialize_tenant_user(user):
     }
 
 
+ROLE_CHOICES = {"student", "teacher", "parent", "admin", "staff", "saas_admin"}
+
+
+def _ensure_role_profile(role: str, user):
+    if role == "student":
+        from academic.models import Student
+        Student.objects.get_or_create(user=user)
+    elif role == "teacher":
+        from academic.models import Teacher
+        Teacher.objects.get_or_create(user=user)
+    elif role == "parent":
+        from academic.models import Parent
+        Parent.objects.get_or_create(user=user)
+
+
 class TenantUsersView(APIView):
     permission_classes = [IsSaaSAdmin]
 
@@ -356,7 +456,7 @@ class TenantUsersView(APIView):
             return Response({"error": f"Missing required fields: {', '.join(missing)}"}, status=400)
 
         role = data.get("role", "student")
-        if role not in ["student", "teacher", "parent", "admin", "staff"]:
+        if role not in ROLE_CHOICES:
             return Response({"error": "Invalid role"}, status=400)
 
         username = data.get("username") or str(data.get("email")).split("@")[0]
@@ -364,6 +464,10 @@ class TenantUsersView(APIView):
         try:
             from users.models import UserAccount
             with schema_context(tenant.schema_name):
+                if UserAccount.objects.filter(email=data["email"]).exists():
+                    return Response({"error": "A user with this email already exists."}, status=400)
+                if UserAccount.objects.filter(username=username).exists():
+                    return Response({"error": "A user with this username already exists."}, status=400)
                 user = UserAccount.objects.create_user(
                     email=data["email"],
                     username=username,
@@ -374,7 +478,10 @@ class TenantUsersView(APIView):
                     tenant=tenant,
                     is_staff=role in ["admin", "staff"],
                 )
+                _ensure_role_profile(role, user)
                 return Response(_serialize_tenant_user(user), status=201)
+        except IntegrityError as e:
+            return Response({"error": str(e)}, status=400)
         except Exception as e:
             return Response({"error": str(e)}, status=500)
 
@@ -392,6 +499,7 @@ class TenantUserDetailView(APIView):
             from users.models import UserAccount
             with schema_context(tenant.schema_name):
                 user = UserAccount.objects.get(pk=user_id)
+                previous_role = user.role
 
                 for field in ["first_name", "last_name", "email", "username"]:
                     if field in request.data:
@@ -399,7 +507,7 @@ class TenantUserDetailView(APIView):
 
                 if "role" in request.data:
                     role = request.data["role"]
-                    if role not in ["student", "teacher", "parent", "admin", "staff", "saas_admin"]:
+                    if role not in ROLE_CHOICES:
                         return Response({"error": "Invalid role"}, status=400)
                     user.role = role
                     user.is_staff = role in ["admin", "staff", "saas_admin"]
@@ -408,7 +516,11 @@ class TenantUserDetailView(APIView):
                     user.is_active = bool(request.data["is_active"])
 
                 user.save()
+                if user.role != previous_role or user.role in {"student", "teacher", "parent"}:
+                    _ensure_role_profile(user.role, user)
                 return Response(_serialize_tenant_user(user))
+        except IntegrityError as e:
+            return Response({"error": str(e)}, status=400)
         except Exception as e:
             return Response({"error": str(e)}, status=500)
 

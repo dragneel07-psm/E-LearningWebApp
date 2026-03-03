@@ -5,15 +5,22 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter }
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { ArrowLeft, Server, Save } from 'lucide-react';
+import { ArrowLeft, Server, Save, Loader2 } from 'lucide-react';
 import Link from 'next/link';
 import { coreAPI, Tenant } from '@/lib/api';
+import { toast } from 'sonner';
+
+function getTenantId(tenant: Tenant | null): string {
+    if (!tenant) return '';
+    const idLike = (tenant as any).id ?? tenant.tenant_id;
+    return idLike ? String(idLike) : '';
+}
 
 export default function TenantConfigPage() {
     const [tenants, setTenants] = useState<Tenant[]>([]);
     const [loading, setLoading] = useState(true);
     const [selectedTenant, setSelectedTenant] = useState<Tenant | null>(null);
-    const [successMsg, setSuccessMsg] = useState<string | null>(null);
+    const [saving, setSaving] = useState(false);
 
     useEffect(() => {
         loadTenants();
@@ -23,36 +30,39 @@ export default function TenantConfigPage() {
         try {
             setLoading(true);
             const data = await coreAPI.getTenants();
-            setTenants(data);
-            if (data.length > 0) {
-                setSelectedTenant(data[0]);
+            const rows = Array.isArray(data) ? data : [];
+            setTenants(rows);
+            if (rows.length > 0) {
+                setSelectedTenant(rows[0]);
             }
         } catch (error) {
             console.error('Failed to load tenants:', error);
+            toast.error('Failed to load tenant settings.');
         } finally {
             setLoading(false);
         }
     };
 
     const handleSave = async () => {
-        if (!selectedTenant) return;
+        const tenantId = getTenantId(selectedTenant);
+        if (!selectedTenant || !tenantId) return;
+        setSaving(true);
         try {
-            await coreAPI.updateTenant(selectedTenant.tenant_id, {
+            const updated = await coreAPI.updateTenant(tenantId, {
                 name: selectedTenant.name,
-                domain: selectedTenant.domain,
-                subdomain: selectedTenant.subdomain
+                website: selectedTenant.website || undefined,
+                subdomain: selectedTenant.subdomain,
             });
-            // Show success message
-            setSuccessMsg('Tenant configuration saved successfully!');
-
-            // Clear after 3 seconds
-            setTimeout(() => {
-                setSuccessMsg(null);
-            }, 3000);
-
+            setSelectedTenant((prev) => (prev ? { ...prev, ...updated } : prev));
+            setTenants((prev) =>
+                prev.map((tenant) => (getTenantId(tenant) === tenantId ? { ...tenant, ...updated } : tenant))
+            );
+            toast.success('Tenant configuration saved successfully.');
         } catch (error) {
             console.error('Failed to save tenant:', error);
-            alert('Failed to save settings.');
+            toast.error('Failed to save tenant configuration.');
+        } finally {
+            setSaving(false);
         }
     };
 
@@ -72,13 +82,6 @@ export default function TenantConfigPage() {
                 </div>
             </header>
 
-            {successMsg && (
-                <div className="bg-emerald-50 border border-emerald-200 text-emerald-700 px-4 py-3 rounded relative shadow-sm transition-all duration-300 ease-in-out">
-                    <strong className="font-bold">Success: </strong>
-                    <span className="block sm:inline">{successMsg}</span>
-                </div>
-            )}
-
             <div className="grid gap-6 md:grid-cols-4">
                 {/* Tenant List (Sidebar) */}
                 <Card className="col-span-1 border-r h-full">
@@ -86,11 +89,15 @@ export default function TenantConfigPage() {
                         <CardTitle className="text-sm">My Schools</CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-2">
-                        {tenants.map(tenant => (
+                        {tenants.map((tenant) => (
                             <div
-                                key={tenant.tenant_id}
+                                key={getTenantId(tenant)}
                                 onClick={() => setSelectedTenant(tenant)}
-                                className={`p-3 rounded-lg cursor-pointer text-sm font-medium border ${selectedTenant?.tenant_id === tenant.tenant_id ? 'bg-primary/10 border-primary text-primary' : 'hover:bg-slate-100 dark:hover:bg-slate-800'}`}
+                                className={`p-3 rounded-lg cursor-pointer text-sm font-medium border ${
+                                    getTenantId(selectedTenant) === getTenantId(tenant)
+                                        ? 'bg-primary/10 border-primary text-primary'
+                                        : 'hover:bg-slate-100 dark:hover:bg-slate-800'
+                                }`}
                             >
                                 {tenant.name}
                             </div>
@@ -106,7 +113,7 @@ export default function TenantConfigPage() {
                                 <CardTitle className="flex items-center gap-2">
                                     <Server className="h-5 w-5" /> {selectedTenant.name}
                                 </CardTitle>
-                                <CardDescription>ID: {selectedTenant.tenant_id}</CardDescription>
+                                <CardDescription>ID: {getTenantId(selectedTenant) || 'N/A'}</CardDescription>
                             </CardHeader>
                             <CardContent className="space-y-4 max-w-lg">
                                 <div className="space-y-2">
@@ -121,9 +128,9 @@ export default function TenantConfigPage() {
                                     <Label htmlFor="domain">Custom Domain</Label>
                                     <Input
                                         id="domain"
-                                        value={selectedTenant.domain || ''}
+                                        value={selectedTenant.website || ''}
                                         placeholder="e.g. school.edu.np"
-                                        onChange={(e) => setSelectedTenant({ ...selectedTenant, domain: e.target.value })}
+                                        onChange={(e) => setSelectedTenant({ ...selectedTenant, website: e.target.value })}
                                     />
                                 </div>
                                 <div className="space-y-2">
@@ -131,7 +138,7 @@ export default function TenantConfigPage() {
                                     <div className="flex items-center gap-2">
                                         <Input
                                             id="subdomain"
-                                            value={selectedTenant.subdomain}
+                                            value={selectedTenant.subdomain || ''}
                                             onChange={(e) => setSelectedTenant({ ...selectedTenant, subdomain: e.target.value })}
                                         />
                                         <span className="text-muted-foreground text-sm">.saas.edu.np</span>
@@ -139,9 +146,12 @@ export default function TenantConfigPage() {
                                 </div>
                             </CardContent>
                             <CardFooter className="justify-between border-t pt-6">
-                                <span className="text-xs text-muted-foreground">Last updated: {new Date(selectedTenant.updated_at).toLocaleDateString()}</span>
-                                <Button onClick={handleSave}>
-                                    <Save className="mr-2 h-4 w-4" /> Save Changes
+                                <span className="text-xs text-muted-foreground">
+                                    Last updated: {selectedTenant.updated_at ? new Date(selectedTenant.updated_at).toLocaleDateString() : 'N/A'}
+                                </span>
+                                <Button onClick={handleSave} disabled={saving}>
+                                    {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+                                    Save Changes
                                 </Button>
                             </CardFooter>
                         </>

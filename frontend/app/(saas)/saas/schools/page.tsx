@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -12,7 +12,7 @@ import {
     TableHeader,
     TableRow,
 } from "@/components/ui/table";
-import { MoreHorizontal, ArrowUpCircle, AlertCircle, Loader2, Search, Filter, ShieldCheck, Globe, RefreshCcw } from "lucide-react";
+import { MoreHorizontal, ArrowUpCircle, AlertCircle, Loader2, Search, ShieldCheck, Globe, RefreshCcw } from "lucide-react";
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -30,9 +30,11 @@ import { ResetPasswordDialog } from "@/components/saas/reset-password-dialog";
 import { motion } from "framer-motion";
 import { Input } from "@/components/ui/input";
 import { Eye, Key } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 type TenantSummary = Tenant & {
     id?: string | number;
+    tenant_id?: string;
     schema_name?: string;
     plan_name?: string;
     student_count?: number;
@@ -45,6 +47,7 @@ export default function SaasSchoolsPage() {
     const [schools, setSchools] = useState<TenantSummary[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState('');
+    const [statusFilter, setStatusFilter] = useState('all');
 
     useEffect(() => {
         loadSchools();
@@ -52,13 +55,8 @@ export default function SaasSchoolsPage() {
 
     const loadSchools = async () => {
         try {
-            const data: any = await saasApi.getTenants();
-            // Handle paginated results { count, next, previous, results: [...] }
-            if (data && data.results && Array.isArray(data.results)) {
-                setSchools(data.results);
-            } else {
-                setSchools(Array.isArray(data) ? data : []);
-            }
+            const data = await saasApi.getTenants();
+            setSchools(Array.isArray(data) ? data : []);
         } catch (error) {
             console.error(error);
             toast.error("Failed to load schools.");
@@ -67,10 +65,25 @@ export default function SaasSchoolsPage() {
         }
     };
 
-    const filteredSchools = schools.filter(school =>
-        school.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        school.subdomain.toLowerCase().includes(searchQuery.toLowerCase())
-    );
+    const filteredSchools = useMemo(() => {
+        const query = searchQuery.trim().toLowerCase();
+        return schools.filter((school) => {
+            const status = (school.status || school.subscription_status || '').toLowerCase();
+            if (statusFilter !== 'all' && status !== statusFilter) return false;
+            if (!query) return true;
+            const haystack = [
+                school.name,
+                school.subdomain,
+                school.schema_name,
+                school.plan_name,
+                school.website,
+            ]
+                .filter(Boolean)
+                .join(' ')
+                .toLowerCase();
+            return haystack.includes(query);
+        });
+    }, [schools, searchQuery, statusFilter]);
 
     if (isLoading) {
         return (
@@ -109,9 +122,18 @@ export default function SaasSchoolsPage() {
                         />
                     </div>
                     <div className="flex items-center gap-2">
-                        <Button variant="outline" size="sm" className="border-slate-200 dark:border-white/10 text-slate-700 dark:text-slate-300">
-                            <Filter className="w-4 h-4 mr-2" /> Filter
-                        </Button>
+                        <Select value={statusFilter} onValueChange={setStatusFilter}>
+                            <SelectTrigger className="w-[170px]">
+                                <SelectValue placeholder="Filter status" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">All Statuses</SelectItem>
+                                <SelectItem value="active">Active</SelectItem>
+                                <SelectItem value="trial">Trial</SelectItem>
+                                <SelectItem value="suspended">Suspended</SelectItem>
+                                <SelectItem value="inactive">Inactive</SelectItem>
+                            </SelectContent>
+                        </Select>
                         <Badge variant="secondary" className="h-9 px-4 bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-500/20">
                             Total: {filteredSchools.length}
                         </Badge>
@@ -159,9 +181,43 @@ export default function SaasSchoolsPage() {
     );
 }
 
-function SchoolTableRow({ school, index, onUpdated }: { school: TenantSummary, index: number, onUpdated: () => void }) {
+function SchoolTableRow({ school, index, onUpdated }: { school: TenantSummary, index: number, onUpdated: () => Promise<void> | void }) {
     const [isManageFeaturesOpen, setIsManageFeaturesOpen] = useState(false);
     const [isResetPasswordOpen, setIsResetPasswordOpen] = useState(false);
+    const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
+
+    const schoolId = String(school.id || school.tenant_id || '');
+    const normalizedStatus = (school.status || school.subscription_status || 'trial').toLowerCase();
+    const isSuspended = normalizedStatus === 'suspended' || normalizedStatus === 'inactive';
+    const usagePercent = Number.parseFloat((school.ai_usage || '0').toString().replace('%', '')) || 0;
+
+    const displayDomain = (() => {
+        if (school.website) {
+            try {
+                return new URL(school.website).host;
+            } catch {
+                return school.website.replace(/^https?:\/\//, '');
+            }
+        }
+        return school.subdomain || school.schema_name || 'unknown';
+    })();
+
+    const handleToggleStatus = async () => {
+        if (!schoolId) return;
+        setIsUpdatingStatus(true);
+        const nextStatus = isSuspended ? 'active' : 'suspended';
+        try {
+            await saasApi.updateTenant(schoolId, { status: nextStatus });
+            toast.success(`School ${nextStatus === 'active' ? 'activated' : 'suspended'} successfully.`);
+            await onUpdated();
+        } catch (error: unknown) {
+            console.error(error);
+            const message = error instanceof Error ? error.message : 'Failed to update school status.';
+            toast.error(message);
+        } finally {
+            setIsUpdatingStatus(false);
+        }
+    };
 
     // Using Lucide react icons imported above
     return (
@@ -177,7 +233,7 @@ function SchoolTableRow({ school, index, onUpdated }: { school: TenantSummary, i
                         <div className="w-10 h-10 rounded-lg bg-indigo-600 flex items-center justify-center text-white font-bold text-lg shadow-lg shadow-indigo-500/20">
                             {school.name.charAt(0)}
                         </div>
-                        <Link href={`/saas/schools/${school.id}`} className="block">
+                        <Link href={`/saas/schools/${schoolId}`} className="block">
                             <div className="font-bold text-slate-900 dark:text-white group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors flex items-center gap-2">
                                 {school.name}
                                 <Search className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" />
@@ -185,7 +241,7 @@ function SchoolTableRow({ school, index, onUpdated }: { school: TenantSummary, i
                             <div className="flex items-center gap-2 mt-1">
                                 <Globe className="w-3 h-3 text-slate-400" />
                                 <span className="text-xs text-slate-500 dark:text-slate-400 font-mono tracking-tight hover:underline flex items-center gap-1">
-                                    {school.subdomain}.domain.com
+                                    {displayDomain}
                                 </span>
                             </div>
                         </Link>
@@ -199,11 +255,11 @@ function SchoolTableRow({ school, index, onUpdated }: { school: TenantSummary, i
                         <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
                             <div className="w-16 h-1.5 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
                                 <div
-                                    className={`h-full rounded-full ${parseInt(school.ai_usage || '0') > 90 ? 'bg-red-500' : 'bg-emerald-500'}`}
-                                    style={{ width: school.ai_usage || '30%' }}
+                                    className={`h-full rounded-full ${usagePercent > 90 ? 'bg-red-500' : 'bg-emerald-500'}`}
+                                    style={{ width: `${Math.max(0, Math.min(100, usagePercent))}%` }}
                                 ></div>
                             </div>
-                            <span>{school.ai_usage || '30%'} AI Load</span>
+                            <span>{school.ai_usage || `${usagePercent.toFixed(1)}%`} AI Load</span>
                         </div>
                     </div>
                 </TableCell>
@@ -214,14 +270,20 @@ function SchoolTableRow({ school, index, onUpdated }: { school: TenantSummary, i
                     </div>
                 </TableCell>
                 <TableCell className="py-4">
-                    <div className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-100 dark:bg-emerald-500/10 text-emerald-800 dark:text-emerald-400">
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 mr-2 animate-pulse"></span>
-                        {school.subscription_status || 'Trial'}
+                    <div className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                        normalizedStatus === 'active'
+                            ? 'bg-emerald-100 dark:bg-emerald-500/10 text-emerald-800 dark:text-emerald-400'
+                            : normalizedStatus === 'trial'
+                                ? 'bg-indigo-100 dark:bg-indigo-500/10 text-indigo-800 dark:text-indigo-300'
+                                : 'bg-red-100 dark:bg-red-500/10 text-red-800 dark:text-red-400'
+                    }`}>
+                        <span className={`w-1.5 h-1.5 rounded-full mr-2 ${normalizedStatus === 'active' ? 'bg-emerald-500' : normalizedStatus === 'trial' ? 'bg-indigo-500' : 'bg-red-500'} animate-pulse`}></span>
+                        {(school.status || school.subscription_status || 'trial').toUpperCase()}
                     </div>
                 </TableCell>
                 <TableCell className="text-right pr-6 py-4">
                     <div className="flex items-center justify-end gap-2">
-                        <Link href={`/saas/schools/${school.id}`}>
+                        <Link href={`/saas/schools/${schoolId}`}>
                             <Button variant="ghost" size="sm" className="h-8 text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 dark:hover:bg-indigo-500/10">
                                 <Search className="w-4 h-4 mr-2" />
                                 View
@@ -235,7 +297,7 @@ function SchoolTableRow({ school, index, onUpdated }: { school: TenantSummary, i
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end" className="w-56">
                                 <DropdownMenuLabel>Manage Tenant</DropdownMenuLabel>
-                                <Link href={`/saas/schools/${school.id}`}>
+                                <Link href={`/saas/schools/${schoolId}`}>
                                     <DropdownMenuItem>
                                         <Eye className="mr-2 h-4 w-4 text-slate-500" /> View Full Information
                                     </DropdownMenuItem>
@@ -247,12 +309,18 @@ function SchoolTableRow({ school, index, onUpdated }: { school: TenantSummary, i
                                 <DropdownMenuItem onSelect={() => setIsManageFeaturesOpen(true)}>
                                     <ShieldCheck className="mr-2 h-4 w-4 text-indigo-500" /> Manage Features
                                 </DropdownMenuItem>
-                                <DropdownMenuItem>
-                                    <ArrowUpCircle className="mr-2 h-4 w-4 text-emerald-500" /> Upgrade Plan
+                                <Link href={`/saas/schools/${schoolId}`}>
+                                    <DropdownMenuItem>
+                                        <ArrowUpCircle className="mr-2 h-4 w-4 text-emerald-500" /> Open Billing & Plan
+                                    </DropdownMenuItem>
+                                </Link>
+                                <DropdownMenuItem disabled={isUpdatingStatus || !schoolId} onSelect={(event) => { event.preventDefault(); void handleToggleStatus(); }}>
+                                    <AlertCircle className="mr-2 h-4 w-4" />
+                                    {isSuspended ? 'Activate Account' : 'Suspend Account'}
                                 </DropdownMenuItem>
                                 <DropdownMenuSeparator />
-                                <DropdownMenuItem className="text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/10">
-                                    <AlertCircle className="mr-2 h-4 w-4" /> Suspend Account
+                                <DropdownMenuItem disabled className="text-slate-500">
+                                    <ArrowUpCircle className="mr-2 h-4 w-4 text-emerald-500" /> Upgrade Plan
                                 </DropdownMenuItem>
                             </DropdownMenuContent>
                         </DropdownMenu>

@@ -1,12 +1,13 @@
 'use client';
 
-import { aiAPI } from '@/lib/api';
+import { aiAPI, ChatMessage } from '@/lib/api';
 
 import { useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Send, Loader2, Bot, User } from 'lucide-react';
+import { toast } from 'sonner';
 
 interface Message {
     role: 'user' | 'assistant';
@@ -31,12 +32,13 @@ export function AITutorChat({ open, onOpenChange, studentId }: AITutorChatProps)
         }
 
         const userMessage: Message = { role: 'user', content: input };
-        setMessages(prev => [...prev, userMessage]);
+        const newMessages = [...messages, userMessage];
+        setMessages(newMessages);
         setInput('');
         setLoading(true);
 
         try {
-            const data = await aiAPI.chat(input, studentId, messages);
+            const data = await aiAPI.chat(input, studentId, newMessages as ChatMessage[]);
 
             const assistantMessage: Message = {
                 role: 'assistant',
@@ -45,9 +47,8 @@ export function AITutorChat({ open, onOpenChange, studentId }: AITutorChatProps)
 
             setMessages(prev => [...prev, assistantMessage]);
 
-            // Show demo mode indicator
             if (data.is_demo) {
-                console.log('Running in demo mode - OpenAI API key not configured');
+                toast.info('AI provider fallback response is active.');
             }
         } catch (error) {
             console.error('Failed to get AI response:', error);

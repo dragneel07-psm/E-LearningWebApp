@@ -25,6 +25,7 @@ import { Label } from "@/components/ui/label";
 import { ArrowLeft, Users, Plus, Shield, Trash2 } from 'lucide-react';
 import Link from 'next/link';
 import { usersAPI, Group, Permission } from '@/lib/api';
+import { toast } from 'sonner';
 
 type GroupWithPermissions = Group & { permissions?: Permission[] };
 
@@ -35,11 +36,14 @@ export default function GroupsPage() {
     const [error, setError] = useState<string | null>(null);
     const [isOpen, setIsOpen] = useState(false);
     const [newGroupName, setNewGroupName] = useState('');
+    const [creatingGroup, setCreatingGroup] = useState(false);
+    const [deletingGroupId, setDeletingGroupId] = useState<string | number | null>(null);
 
     // Permission Management State
     const [isPermDialogOpen, setIsPermDialogOpen] = useState(false);
     const [selectedGroup, setSelectedGroup] = useState<GroupWithPermissions | null>(null);
     const [selectedPermIds, setSelectedPermIds] = useState<number[]>([]);
+    const [savingPermissions, setSavingPermissions] = useState(false);
 
     useEffect(() => {
         loadData();
@@ -53,8 +57,8 @@ export default function GroupsPage() {
                 usersAPI.getGroups(),
                 usersAPI.getPermissions()
             ]);
-            setGroups(groupsData);
-            setPermissions(permsData);
+            setGroups(Array.isArray(groupsData) ? groupsData : []);
+            setPermissions(Array.isArray(permsData) ? permsData : []);
         } catch (err: unknown) {
             console.error('Failed to load data:', err);
             const status = err && typeof err === 'object' && 'status' in err ? (err as { status?: number }).status : undefined;
@@ -70,41 +74,54 @@ export default function GroupsPage() {
 
     const loadGroups = async () => {
         const data = await usersAPI.getGroups();
-        setGroups(data);
+        setGroups(Array.isArray(data) ? data : []);
     };
 
     const handleCreateGroup = async () => {
+        const groupName = newGroupName.trim();
+        if (!groupName) {
+            toast.error('Group name is required');
+            return;
+        }
         try {
+            setCreatingGroup(true);
             setError(null);
-            await usersAPI.createGroup({ name: newGroupName });
+            await usersAPI.createGroup({ name: groupName });
             setIsOpen(false);
             setNewGroupName('');
             await loadGroups();
+            toast.success('Group created successfully');
         } catch (err: unknown) {
             console.error('Failed to create group:', err);
             const status = err && typeof err === 'object' && 'status' in err ? (err as { status?: number }).status : undefined;
             if (status === 403) {
-                alert('Access Denied: You do not have permission to create groups.');
+                toast.error('Access denied: You do not have permission to create groups.');
             } else {
-                alert('Failed to create group. Please check your network and try again.');
+                toast.error('Failed to create group. Please check your network and try again.');
             }
+        } finally {
+            setCreatingGroup(false);
         }
     };
 
     const handleDeleteGroup = async (id: string | number) => {
         if (!confirm('Are you sure you want to delete this group?')) return;
         try {
+            setDeletingGroupId(id);
             setError(null);
             await usersAPI.deleteGroup(id);
-            loadGroups();
+            await loadGroups();
+            toast.success('Group deleted successfully');
         } catch (err: unknown) {
             console.error('Failed to delete group:', err);
             const status = err && typeof err === 'object' && 'status' in err ? (err as { status?: number }).status : undefined;
             if (status === 403) {
-                alert('Access Denied: You do not have permission to delete groups.');
+                toast.error('Access denied: You do not have permission to delete groups.');
             } else {
-                alert('Failed to delete group. Please try again later.');
+                toast.error('Failed to delete group. Please try again later.');
             }
+        } finally {
+            setDeletingGroupId(null);
         }
     };
 
@@ -123,27 +140,25 @@ export default function GroupsPage() {
     };
 
     const handleSavePermissions = async () => {
-        console.log('Saving permissions...', { selectedGroup, selectedPermIds });
         if (!selectedGroup) {
-            console.error('No group selected!');
+            toast.error('No group selected');
             return;
         }
 
         try {
+            setSavingPermissions(true);
             const payload = { permission_ids: selectedPermIds };
-            console.log('Sending payload:', payload);
-
-            const response = await usersAPI.updateGroup(selectedGroup.id, payload);
-            console.log('Update success:', response);
+            await usersAPI.updateGroup(selectedGroup.id, payload);
 
             setIsPermDialogOpen(false);
-            loadGroups();
-            alert('Permissions updated successfully!');
+            await loadGroups();
+            toast.success('Permissions updated successfully');
         } catch (err: unknown) {
             console.error('Detailed Error in handleSavePermissions:', err);
             const message = err instanceof Error ? err.message : 'Unknown error';
-            console.error('Error Message:', message);
-            alert(`Failed to update permissions: ${message}`);
+            toast.error(`Failed to update permissions: ${message}`);
+        } finally {
+            setSavingPermissions(false);
         }
     };
 
@@ -201,7 +216,9 @@ export default function GroupsPage() {
                                     </div>
                                 </div>
                                 <DialogFooter>
-                                    <Button onClick={handleCreateGroup}>Create Group</Button>
+                                    <Button onClick={handleCreateGroup} disabled={creatingGroup}>
+                                        {creatingGroup ? 'Creating...' : 'Create Group'}
+                                    </Button>
                                 </DialogFooter>
                             </DialogContent>
                         </Dialog>
@@ -234,7 +251,12 @@ export default function GroupsPage() {
                                             <Button variant="outline" size="sm" onClick={() => openPermissionDialog(group)}>
                                                 <Shield className="h-4 w-4 mr-1" /> Permissions
                                             </Button>
-                                            <Button variant="destructive" size="sm" onClick={() => handleDeleteGroup(group.id)}>
+                                            <Button
+                                                variant="destructive"
+                                                size="sm"
+                                                onClick={() => handleDeleteGroup(group.id)}
+                                                disabled={deletingGroupId === group.id}
+                                            >
                                                 <Trash2 className="h-4 w-4" />
                                             </Button>
                                         </TableCell>
@@ -282,7 +304,9 @@ export default function GroupsPage() {
 
                     <DialogFooter>
                         <Button variant="outline" onClick={() => setIsPermDialogOpen(false)}>Cancel</Button>
-                        <Button onClick={handleSavePermissions}>Save Changes</Button>
+                        <Button onClick={handleSavePermissions} disabled={savingPermissions}>
+                            {savingPermissions ? 'Saving...' : 'Save Changes'}
+                        </Button>
                     </DialogFooter>
                 </DialogContent>
             </Dialog>

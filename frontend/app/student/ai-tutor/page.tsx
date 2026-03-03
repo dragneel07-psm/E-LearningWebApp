@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Send, Sparkles, Trash2, Loader2 } from 'lucide-react';
-import { aiAPI, usersAPI } from '@/lib/api';
+import { aiAPI, ChatMessage, usersAPI } from '@/lib/api';
 import { toast } from 'sonner';
 import ReactMarkdown from 'react-markdown';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
@@ -45,7 +45,12 @@ export default function AITutorPage() {
     const loadConversation = () => {
         const saved = localStorage.getItem('ai-tutor-conversation');
         if (saved) {
-            setMessages(JSON.parse(saved));
+            try {
+                const parsed = JSON.parse(saved);
+                setMessages(Array.isArray(parsed) ? parsed : []);
+            } catch {
+                setMessages([]);
+            }
         }
     };
 
@@ -69,8 +74,7 @@ export default function AITutorPage() {
         setLoading(true);
 
         try {
-            // Updated to pass 3 arguments as expected by aiAPI.chat
-            const response = await aiAPI.chat(input, studentId, messages as any);
+            const response = await aiAPI.chat(input, studentId, newMessages as ChatMessage[]);
 
             const assistantMessage: Message = {
                 role: 'assistant',
@@ -82,12 +86,18 @@ export default function AITutorPage() {
             saveConversation(updatedMessages);
 
             if (response.is_demo) {
-                toast.info('Demo mode - Using simulated AI responses');
+                toast.info('Fallback AI response mode is active. Configure provider key/model for full quality.');
             }
         } catch (error) {
             console.error('AI chat error:', error);
             toast.error('Failed to get AI response');
-            setMessages(newMessages.slice(0, -1)); // Remove user message on error
+            const failureReply: Message = {
+                role: 'assistant',
+                content: 'I could not process that right now. Please try again in a moment.',
+            };
+            const updatedMessages = [...newMessages, failureReply];
+            setMessages(updatedMessages);
+            saveConversation(updatedMessages);
         } finally {
             setLoading(false);
         }

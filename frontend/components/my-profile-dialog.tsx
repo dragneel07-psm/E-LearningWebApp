@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { User, usersAPI } from '@/lib/api';
 import { Loader2, Save, Phone, MapPin, Calendar, FileText } from 'lucide-react';
+import { toast } from 'sonner';
 
 interface MyProfileDialogProps {
     user: User | null;
@@ -65,13 +66,12 @@ export function MyProfileDialog({ user, open, onOpenChange, onSuccess }: MyProfi
                 await usersAPI.changeMyPassword(formData.old_password, formData.new_password);
             }
 
-            alert('Profile updated successfully!');
+            toast.success('Profile updated successfully');
             onOpenChange(false);
             if (onSuccess) onSuccess();
-            window.location.reload();
         } catch (error: unknown) {
             const message = error instanceof Error ? error.message : 'Unknown error';
-            alert(`Failed to update profile: ${message}`);
+            toast.error(`Failed to update profile: ${message}`);
         } finally {
             setLoading(false);
         }

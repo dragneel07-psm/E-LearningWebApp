@@ -175,7 +175,7 @@ export default function SystemSettingsPage() {
                                 <div className="space-y-1">
                                     <Label className="text-base font-medium text-slate-900 dark:text-white">Enable AI Features</Label>
                                     <p className="text-sm text-slate-500 dark:text-slate-400">
-                                        Disable to force all AI features into fallback/demo mode globally.
+                                        Disable to force all AI features into fallback response mode globally.
                                     </p>
                                 </div>
                                 <Switch

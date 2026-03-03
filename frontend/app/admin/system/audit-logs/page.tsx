@@ -16,6 +16,22 @@ import { ArrowLeft, Search, Terminal } from 'lucide-react';
 import Link from 'next/link';
 import { coreAPI, AuditLog } from '@/lib/api';
 
+function getLogTimestamp(log: AuditLog): string {
+    return log.timestamp || log.created_at || '';
+}
+
+function getLogActor(log: AuditLog): string {
+    return log.user || log.actor || 'System';
+}
+
+function getLogDetails(log: AuditLog): string {
+    const payload = log.details || log.metadata || {};
+    if (!payload || typeof payload !== 'object') return '-';
+    const entries = Object.entries(payload).slice(0, 3);
+    if (entries.length === 0) return '-';
+    return entries.map(([k, v]) => `${k}: ${String(v)}`).join(' | ');
+}
+
 export default function AuditLogsPage() {
     const [logs, setLogs] = useState<AuditLog[]>([]);
     const [loading, setLoading] = useState(true);
@@ -39,8 +55,8 @@ export default function AuditLogsPage() {
 
     const filteredLogs = logs.filter(log =>
         log.action.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (log.actor || 'System').toLowerCase().includes(searchTerm.toLowerCase()) ||
-        JSON.stringify(log.metadata || {}).toLowerCase().includes(searchTerm.toLowerCase())
+        getLogActor(log).toLowerCase().includes(searchTerm.toLowerCase()) ||
+        JSON.stringify(log.details || log.metadata || {}).toLowerCase().includes(searchTerm.toLowerCase())
     );
 
     return (
@@ -98,13 +114,13 @@ export default function AuditLogsPage() {
                                 filteredLogs.map((log) => (
                                     <TableRow key={log.id}>
                                         <TableCell className="font-mono text-xs">
-                                            {new Date(log.created_at).toLocaleString()}
+                                            {getLogTimestamp(log) ? new Date(getLogTimestamp(log)).toLocaleString() : '-'}
                                         </TableCell>
                                         <TableCell className="font-medium">{log.action}</TableCell>
-                                        <TableCell>{log.actor || 'System'}</TableCell>
+                                        <TableCell>{getLogActor(log)}</TableCell>
                                         <TableCell className="font-mono text-xs text-muted-foreground">{(log as any).ip_address || (log.metadata as any)?.ip_address || 'N/A'}</TableCell>
                                         <TableCell className="text-xs text-muted-foreground max-w-md truncate">
-                                            {JSON.stringify(log.metadata)}
+                                            {getLogDetails(log)}
                                         </TableCell>
                                     </TableRow>
                                 ))

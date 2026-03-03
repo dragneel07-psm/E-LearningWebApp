@@ -23,18 +23,17 @@ export function ManageFeaturesDialog({ tenant, open, onOpenChange, onUpdated }: 
     // Initialize feature toggles safely
     const initialFeatures = tenant.features || {};
     const features: Record<string, boolean> = {
-        student_ai_chatbot: initialFeatures.student_ai_chatbot ?? true,
-        student_gamification: initialFeatures.student_gamification ?? true,
-        parent_attendance: initialFeatures.parent_attendance ?? true,
-        parent_fees: initialFeatures.parent_fees ?? true,
-        teacher_ai_grading: initialFeatures.teacher_ai_grading ?? true,
-        teacher_reports: initialFeatures.teacher_reports ?? true,
+        student_ai_chatbot: initialFeatures.student_ai_chatbot ?? false,
+        student_gamification: initialFeatures.student_gamification ?? false,
+        parent_attendance: initialFeatures.parent_attendance ?? false,
+        parent_fees: initialFeatures.parent_fees ?? false,
+        teacher_ai_grading: initialFeatures.teacher_ai_grading ?? false,
+        teacher_reports: initialFeatures.teacher_reports ?? false,
     };
 
-    const handleSave = () => {
-        toast.info("Features are controlled by the tenant subscription plan. Change plan to modify feature access.");
+    const handleClose = () => {
+        toast.info("These capabilities are plan-entitled and read-only from this screen.");
         onOpenChange(false);
-        onUpdated();
     };
 
     return (
@@ -108,7 +107,7 @@ export function ManageFeaturesDialog({ tenant, open, onOpenChange, onUpdated }: 
 
                 <DialogFooter>
                     <Button variant="outline" onClick={() => onOpenChange(false)}>Close</Button>
-                    <Button onClick={handleSave}>
+                    <Button onClick={handleClose}>
                         Plan-Controlled
                     </Button>
                 </DialogFooter>

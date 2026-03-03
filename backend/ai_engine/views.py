@@ -275,7 +275,12 @@ def ai_tutor_chat(request):
     Handle AI tutor chat messages with context awareness.
     """
     message = request.data.get('message')
-    history = request.data.get('history', [])
+    # Frontend sends `conversation_history`; keep `history` as backward-compatible fallback.
+    history = request.data.get('conversation_history')
+    if history is None:
+        history = request.data.get('history', [])
+    if not isinstance(history, list):
+        history = []
     
     if not message:
         return Response({'error': 'Message is required'}, status=status.HTTP_400_BAD_REQUEST)
@@ -330,7 +335,9 @@ def ai_tutor_chat(request):
             student_context=context, 
             conversation_history=history
         )
-        response_text = response_data['response']
+        response_text = response_data.get('response', '')
+        tokens_used = int(response_data.get('tokens_used') or 0)
+        is_demo = bool(response_data.get('is_demo', False))
         
         # Log interaction (simplified)
         if tenant:
@@ -339,12 +346,16 @@ def ai_tutor_chat(request):
                     tenant=tenant,
                     user=request.user,
                     feature_used='tutor',
-                    total_tokens=response_data.get('tokens_used', 0)
+                    total_tokens=tokens_used
                 )
             except Exception as log_err:
                 print(f"⚠️ Interaction logging failed: {log_err}")
         
-        return Response({'response': response_text})
+        return Response({
+            'response': response_text,
+            'tokens_used': tokens_used,
+            'is_demo': is_demo,
+        })
         
     except Exception as e:
         import traceback

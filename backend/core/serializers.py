@@ -112,19 +112,22 @@ class TenantSerializer(serializers.ModelSerializer):
 
         try:
             # Compute real DB footprint per tenant schema (tables + indexes + TOAST)
-            with connection.cursor() as cursor:
-                cursor.execute(
-                    """
-                    SELECT COALESCE(SUM(pg_total_relation_size(c.oid)), 0)
-                    FROM pg_class c
-                    JOIN pg_namespace n ON n.oid = c.relnamespace
-                    WHERE n.nspname = %s
-                      AND c.relkind IN ('r', 'm', 'i', 't')
-                    """,
-                    [obj.schema_name]
-                )
-                row = cursor.fetchone()
-                stats['storage_used_bytes'] = int(row[0] or 0) if row else 0
+            if connection.vendor == 'postgresql':
+                with connection.cursor() as cursor:
+                    cursor.execute(
+                        """
+                        SELECT COALESCE(SUM(pg_total_relation_size(c.oid)), 0)
+                        FROM pg_class c
+                        JOIN pg_namespace n ON n.oid = c.relnamespace
+                        WHERE n.nspname = %s
+                          AND c.relkind IN ('r', 'm', 'i', 't')
+                        """,
+                        [obj.schema_name]
+                    )
+                    row = cursor.fetchone()
+                    stats['storage_used_bytes'] = int(row[0] or 0) if row else 0
+            else:
+                stats['storage_used_bytes'] = 0
         except Exception:
             stats['storage_used_bytes'] = 0
 

@@ -83,10 +83,10 @@ class GradingService:
             return self._get_demo_grade(student_answer, total_points, error=str(e))
 
     def _get_demo_grade(self, answer, total_points, error=None):
-        """Fallback mock grading"""
+        """Fallback heuristic grading when AI provider is unavailable."""
         words = len(answer.split())
         
-        # Simple heuristic for demo
+        # Heuristic scoring fallback
         if words < 5:
             score = total_points * 0.2
             feedback = "The answer is too short. Please elaborate more."
@@ -98,7 +98,7 @@ class GradingService:
             feedback = "Excellent answer! Detailed and well-explained."
 
         if error:
-            feedback += f" (Note: AI Service unavailable, using demo grading. Error: {error})"
+            feedback += f" (AI provider temporarily unavailable; fallback rubric used. Error: {error})"
             
         return {
             "score": round(score, 1),

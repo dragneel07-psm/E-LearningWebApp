@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { usersAPI, academicAPI, AcademicClass, User } from '@/lib/api';
 import { useEffect } from 'react';
+import { toast } from 'sonner';
 
 interface AddStudentDialogProps {
     open: boolean;
@@ -65,7 +66,7 @@ export function AddStudentDialog({ open, onOpenChange, onSuccess }: AddStudentDi
                 academic_class: parseInt(formData.academic_class)
             } as any); // Cast as any because createStudent expects full Student but we pass partial from models slice
 
-            alert('Student created successfully!');
+            toast.success('Student created successfully');
             onOpenChange(false);
             if (onSuccess) onSuccess();
 
@@ -80,7 +81,7 @@ export function AddStudentDialog({ open, onOpenChange, onSuccess }: AddStudentDi
             });
         } catch (error: unknown) {
             const message = error instanceof Error ? error.message : 'Unknown error';
-            alert(`Failed to create student: ${message}`);
+            toast.error(`Failed to create student: ${message}`);
         } finally {
             setLoading(false);
         }

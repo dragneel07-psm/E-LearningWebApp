@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Loader2, Plus, Trash2 } from 'lucide-react';
 import { academicAPI, Timetable, AcademicClass } from '@/lib/api';
+import { toast } from 'sonner';
 
 interface ManageScheduleDialogProps {
     open?: boolean;
@@ -36,10 +37,12 @@ export function ManageScheduleDialog({ open, onOpenChange, trigger }: ManageSche
         const fetchClasses = async () => {
             try {
                 const data = await academicAPI.getClasses();
-                setClasses(data);
-                if (data.length > 0) setSelectedClass(data[0].id.toString());
+                const safeClasses = Array.isArray(data) ? data : [];
+                setClasses(safeClasses);
+                if (safeClasses.length > 0) setSelectedClass(safeClasses[0].id.toString());
             } catch (error) {
                 console.error("Failed to load classes", error);
+                toast.error('Failed to load classes');
             }
         };
         if (open || isOpen) fetchClasses();
@@ -49,11 +52,12 @@ export function ManageScheduleDialog({ open, onOpenChange, trigger }: ManageSche
         if (!selectedClass) return;
         const fetchTimetable = async () => {
             try {
-                // In a real app, we might filter by class on backend
                 const allTimetable = await academicAPI.getTimetable();
-                setTimetable(allTimetable.filter(t => t.academic_class.toString() === selectedClass));
+                const safeTimetable = Array.isArray(allTimetable) ? allTimetable : [];
+                setTimetable(safeTimetable.filter(t => t.academic_class.toString() === selectedClass));
             } catch (error) {
                 console.error("Failed to load timetable", error);
+                toast.error('Failed to load timetable');
             }
         };
         fetchTimetable();
@@ -80,13 +84,15 @@ export function ManageScheduleDialog({ open, onOpenChange, trigger }: ManageSche
 
             // Refresh
             const allTimetable = await academicAPI.getTimetable();
-            setTimetable(allTimetable.filter(t => t.academic_class.toString() === selectedClass));
+            const safeTimetable = Array.isArray(allTimetable) ? allTimetable : [];
+            setTimetable(safeTimetable.filter(t => t.academic_class.toString() === selectedClass));
 
             // Reset partial form
             setFormData(prev => ({ ...prev, subject_name: '', room_number: '' }));
+            toast.success('Schedule slot added');
         } catch (error: unknown) {
             const message = error instanceof Error ? error.message : 'Unknown error';
-            alert(`Failed to add slot: ${message}`);
+            toast.error(`Failed to add slot: ${message}`);
         } finally {
             setLoading(false);
         }
@@ -98,10 +104,12 @@ export function ManageScheduleDialog({ open, onOpenChange, trigger }: ManageSche
             await academicAPI.deleteTimetable(id);
             // Refresh
             const allTimetable = await academicAPI.getTimetable();
-            setTimetable(allTimetable.filter(t => t.academic_class.toString() === selectedClass));
+            const safeTimetable = Array.isArray(allTimetable) ? allTimetable : [];
+            setTimetable(safeTimetable.filter(t => t.academic_class.toString() === selectedClass));
+            toast.success('Schedule slot deleted');
         } catch (error) {
             console.error('Failed to delete slot', error);
-            alert("Failed to delete slot");
+            toast.error("Failed to delete slot");
         }
     };
 

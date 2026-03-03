@@ -55,7 +55,7 @@ class AITutorService:
         
         self._refresh_client()
 
-        # Demo mode if no API key
+        # Fallback mode if provider is not configured
         if not self.client:
             return {
                 'response': self._get_demo_response(message),
@@ -92,9 +92,9 @@ class AITutorService:
             }
             
         except Exception as e:
-            # Fallback to demo response on error
+            # Fallback response on provider errors
             return {
-                'response': f"I'm having trouble connecting right now. Demo response: {self._get_demo_response(message)}",
+                'response': f"I'm having trouble connecting right now. Here is a fallback explanation: {self._get_demo_response(message)}",
                 'tokens_used': 0,
                 'is_demo': True,
                 'error': str(e)
@@ -142,9 +142,9 @@ class AITutorService:
         return base_prompt
     
     def _get_demo_response(self, message: str) -> str:
-        """Generate demo response when API key not available"""
+        """Generate fallback response when provider is unavailable."""
         
-        # Simple keyword-based demo responses
+        # Simple keyword-based fallback responses
         message_lower = message.lower()
         
         if 'math' in message_lower or 'equation' in message_lower:
@@ -199,7 +199,7 @@ Let's work through this together!"""
         self._refresh_client()
 
         if not self.client:
-            # Fallback for demo mode
+            # Fallback for provider-unavailable mode
             insights = []
             if data.get('at_risk_students'):
                 insights.append(f"Action required: Several students are showing signs of academic risk. Focus on personalized support.")

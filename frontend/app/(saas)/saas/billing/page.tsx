@@ -13,7 +13,7 @@ import {
     TableRow,
 } from "@/components/ui/table";
 import { DollarSign, Download, CheckCircle, Clock, AlertTriangle, Loader2, TrendingUp, History, Sparkles } from "lucide-react";
-import { saasApi, Invoice } from "@/lib/api";
+import { getApiBaseUrl, saasApi, Invoice } from "@/lib/api";
 import { toast } from "sonner";
 import { motion } from "framer-motion";
 
@@ -28,10 +28,11 @@ export default function SaasBillingPage() {
     const loadInvoices = async () => {
         try {
             const data = await saasApi.getInvoices();
-            setInvoices(data || []);
+            setInvoices(Array.isArray(data) ? data : []);
         } catch (error) {
             console.error(error);
             toast.error("Failed to load invoices.");
+            setInvoices([]);
         } finally {
             setIsLoading(false);
         }
@@ -60,6 +61,7 @@ export default function SaasBillingPage() {
     };
 
     // Calculate Stats
+    const now = Date.now();
     const totalRevenue = invoices
         .filter(inv => inv.status === 'paid')
         .reduce((acc, curr) => acc + parseFloat(curr.amount), 0);
@@ -68,8 +70,36 @@ export default function SaasBillingPage() {
         .filter(inv => inv.status === 'pending')
         .reduce((acc, curr) => acc + parseFloat(curr.amount), 0);
 
+    const failedAmount = invoices
+        .filter(inv => inv.status === 'failed')
+        .reduce((acc, curr) => acc + parseFloat(curr.amount), 0);
+    const overdueAmount = invoices
+        .filter((inv) => inv.status === 'pending' && inv.due_date && new Date(inv.due_date).getTime() < now)
+        .reduce((acc, curr) => acc + parseFloat(curr.amount), 0);
+
     const paidCount = invoices.filter(inv => inv.status === 'paid').length;
     const pendingCount = invoices.filter(inv => inv.status === 'pending').length;
+    const failedCount = invoices.filter(inv => inv.status === 'failed').length;
+    const overdueCount = invoices.filter((inv) => inv.status === 'pending' && inv.due_date && new Date(inv.due_date).getTime() < now).length;
+
+    const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
+    const currentPeriodRevenue = invoices
+        .filter((inv) => inv.status === 'paid')
+        .filter((inv) => {
+            const issuedAt = new Date(inv.issued_date).getTime();
+            return issuedAt >= (now - THIRTY_DAYS_MS);
+        })
+        .reduce((acc, curr) => acc + parseFloat(curr.amount), 0);
+    const previousPeriodRevenue = invoices
+        .filter((inv) => inv.status === 'paid')
+        .filter((inv) => {
+            const issuedAt = new Date(inv.issued_date).getTime();
+            return issuedAt < (now - THIRTY_DAYS_MS) && issuedAt >= (now - (2 * THIRTY_DAYS_MS));
+        })
+        .reduce((acc, curr) => acc + parseFloat(curr.amount), 0);
+    const revenueGrowthPct = previousPeriodRevenue > 0
+        ? ((currentPeriodRevenue - previousPeriodRevenue) / previousPeriodRevenue) * 100
+        : 0;
 
     if (isLoading) {
         return <div className="p-8 flex items-center justify-center h-full"><Loader2 className="w-8 h-8 animate-spin text-slate-400" /></div>;
@@ -113,9 +143,10 @@ export default function SaasBillingPage() {
                         </CardHeader>
                         <CardContent className="p-6 pt-0">
                             <div className="text-3xl font-black text-slate-900 dark:text-white">$ {totalRevenue.toLocaleString()}</div>
-                            <p className="text-xs text-emerald-500 dark:text-emerald-400 mt-2 flex items-center gap-1 font-bold">
+                            <p className={`text-xs mt-2 flex items-center gap-1 font-bold ${revenueGrowthPct >= 0 ? 'text-emerald-500 dark:text-emerald-400' : 'text-red-500 dark:text-red-400'}`}>
                                 <TrendingUp className="w-3 h-3" />
-                                +20.1% <span className="text-slate-500 font-medium tracking-normal ml-1">vs last month</span>
+                                {revenueGrowthPct >= 0 ? '+' : ''}{revenueGrowthPct.toFixed(1)}%
+                                <span className="text-slate-500 font-medium tracking-normal ml-1">vs previous 30 days</span>
                             </p>
                             <div className="absolute bottom-0 left-0 w-full h-1 bg-gradient-to-r from-emerald-600/0 via-emerald-600/50 to-emerald-600/0 opacity-0 group-hover:opacity-100 transition-all duration-500" />
                         </CardContent>
@@ -167,9 +198,9 @@ export default function SaasBillingPage() {
                             </div>
                         </CardHeader>
                         <CardContent className="p-6 pt-0">
-                            <div className="text-3xl font-black text-slate-900 dark:text-white">0</div>
+                            <div className="text-3xl font-black text-slate-900 dark:text-white">{failedCount + overdueCount}</div>
                             <p className="text-xs text-slate-500 dark:text-slate-400 mt-2 flex items-center gap-1 font-medium">
-                                No urgent attention required
+                                ${(failedAmount + overdueAmount).toLocaleString()} at risk amount
                             </p>
                             <div className="absolute bottom-0 left-0 w-full h-1 bg-gradient-to-r from-red-600/0 via-red-600/50 to-red-600/0 opacity-0 group-hover:opacity-100 transition-all duration-500" />
                         </CardContent>
@@ -243,7 +274,7 @@ export default function SaasBillingPage() {
                                                     ) : (
                                                         <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-red-100 dark:bg-red-500/10 border border-red-200 dark:border-red-500/30 text-red-700 dark:text-red-400 text-xs font-bold w-fit">
                                                             <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-[0_0_8px_#ef4444]" />
-                                                            VOIDED
+                                                            FAILED
                                                         </div>
                                                     )}
                                                 </TableCell>
@@ -254,7 +285,7 @@ export default function SaasBillingPage() {
                                                         size="icon"
                                                         className="h-10 w-10 rounded-full bg-slate-100 dark:bg-white/5 text-slate-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-white/10 transition-all"
                                                         onClick={() => {
-                                                            const url = `http://localhost:8000/api/billing/invoices/${inv.invoice_id}/download/`;
+                                                            const url = `${getApiBaseUrl()}/billing/invoices/${inv.invoice_id}/download/`;
                                                             toast.promise(
                                                                 saasApi.helpers.downloadFile(url, `invoice_${inv.invoice_id.slice(0, 8)}.pdf`),
                                                                 {

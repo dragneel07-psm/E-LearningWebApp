@@ -23,7 +23,13 @@ export default function SaasAiUsagePage() {
     const loadAiStats = async () => {
         try {
             const data = await saasApi.getAIUsage();
-            setAiStats(data);
+            setAiStats({
+                ...data,
+                usage_by_feature: Array.isArray(data?.usage_by_feature) ? data.usage_by_feature : [],
+                top_tenants: Array.isArray(data?.top_tenants) ? data.top_tenants : [],
+                daily_usage_last_7_days: Array.isArray(data?.daily_usage_last_7_days) ? data.daily_usage_last_7_days : [],
+                tenant_errors: Array.isArray(data?.tenant_errors) ? data.tenant_errors : [],
+            });
         } catch (error: unknown) {
             console.error(error);
             const message = error instanceof Error ? error.message : 'Failed to load AI usage data.';
@@ -55,6 +61,11 @@ export default function SaasAiUsagePage() {
             </div>
         );
     }
+
+    const usageByFeature = Array.isArray(aiStats.usage_by_feature) ? aiStats.usage_by_feature : [];
+    const topTenants = Array.isArray(aiStats.top_tenants) ? aiStats.top_tenants : [];
+    const dailyUsageRows = Array.isArray(aiStats.daily_usage_last_7_days) ? aiStats.daily_usage_last_7_days : [];
+    const tenantErrors = Array.isArray(aiStats.tenant_errors) ? aiStats.tenant_errors : [];
 
     return (
         <div className="p-8 lg:p-10 space-y-8 min-h-full">
@@ -156,12 +167,12 @@ export default function SaasAiUsagePage() {
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
-                                {aiStats.usage_by_feature.length === 0 ? (
+                                {usageByFeature.length === 0 ? (
                                     <TableRow>
                                         <TableCell className="pl-6 text-slate-500" colSpan={5}>No AI usage recorded yet.</TableCell>
                                     </TableRow>
                                 ) : (
-                                    aiStats.usage_by_feature.map((feature) => (
+                                    usageByFeature.map((feature) => (
                                         <TableRow key={feature.feature}>
                                             <TableCell className="pl-6 font-medium">{feature.feature}</TableCell>
                                             <TableCell>{numberFmt.format(feature.tokens)}</TableCell>
@@ -195,12 +206,12 @@ export default function SaasAiUsagePage() {
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
-                                {aiStats.top_tenants.length === 0 ? (
+                                {topTenants.length === 0 ? (
                                     <TableRow>
                                         <TableCell className="pl-6 text-slate-500" colSpan={5}>No tenant AI usage found.</TableCell>
                                     </TableRow>
                                 ) : (
-                                    aiStats.top_tenants.map((tenant) => (
+                                    topTenants.map((tenant) => (
                                         <TableRow key={tenant.tenant_id}>
                                             <TableCell className="pl-6 font-medium">{tenant.tenant_name}</TableCell>
                                             <TableCell>{numberFmt.format(tenant.tokens)}</TableCell>
@@ -235,7 +246,7 @@ export default function SaasAiUsagePage() {
                             </TableRow>
                         </TableHeader>
                         <TableBody>
-                            {aiStats.daily_usage_last_7_days.map((row) => (
+                            {dailyUsageRows.map((row) => (
                                 <TableRow key={row.date}>
                                     <TableCell className="pl-6 font-medium">{row.date}</TableCell>
                                     <TableCell>{numberFmt.format(row.tokens)}</TableCell>
@@ -248,14 +259,14 @@ export default function SaasAiUsagePage() {
                 </CardContent>
             </Card>
 
-            {aiStats.tenant_errors.length > 0 && (
+            {tenantErrors.length > 0 && (
                 <Card>
                     <CardHeader>
                         <CardTitle className="text-lg">Tenant Data Warnings</CardTitle>
                         <CardDescription>Some tenant schemas could not be scanned for AI logs.</CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-2">
-                        {aiStats.tenant_errors.map((item, idx) => (
+                        {tenantErrors.map((item, idx) => (
                             <p key={`${item.tenant_id || 'unknown'}-${idx}`} className="text-sm text-amber-600 dark:text-amber-400">
                                 {(item.tenant_name || item.schema_name || 'Unknown tenant')}: {item.error}
                             </p>

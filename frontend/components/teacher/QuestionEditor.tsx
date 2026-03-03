@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Plus, Trash2, X, CheckCircle2 } from 'lucide-react';
 import { Question } from '@/lib/api';
+import { toast } from 'sonner';
 
 interface QuestionEditorProps {
     initialData?: Partial<Question>;
@@ -57,7 +58,7 @@ export default function QuestionEditor({ initialData, onSave, onCancel }: Questi
         e.preventDefault();
 
         if (type === 'mcq' && !correctAnswer) {
-            alert('Please select a correct answer for MCQ.');
+            toast.error('Please select a correct answer for MCQ.');
             return;
         }
 
@@ -70,8 +71,10 @@ export default function QuestionEditor({ initialData, onSave, onCancel }: Questi
                 options: type === 'mcq' ? options : [],
                 correct_answer: type === 'mcq' ? correctAnswer : undefined
             });
+            toast.success(initialData ? 'Question updated' : 'Question added');
         } catch (error) {
             console.error(error);
+            toast.error('Failed to save question');
         } finally {
             setLoading(false);
         }

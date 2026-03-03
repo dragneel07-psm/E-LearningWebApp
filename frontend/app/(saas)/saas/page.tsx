@@ -55,7 +55,6 @@ export default function SaasDashboardPage() {
                 saasApi.getKPIs(),
                 saasApi.getAIUsage()
             ]);
-            console.log("Dashboard Data Loaded:", { kpiRes, aiRes });
             setData(kpiRes);
             setAiUsage(aiRes);
         } catch (error: any) {
@@ -84,6 +83,25 @@ export default function SaasDashboardPage() {
     } = data || {};
 
     const safeAlerts = Array.isArray(alerts) ? alerts : [];
+    const trendRows = Array.isArray(revenue_trend) ? revenue_trend : [];
+    const tenantRows = Array.isArray(tenant_activity) ? tenant_activity : [];
+    const latestMrr = Number(trendRows[trendRows.length - 1]?.mrr || kpis.mrr || 0);
+    const previousMrr = Number(trendRows[trendRows.length - 2]?.mrr || 0);
+    const mrrGrowthPct = previousMrr > 0 ? ((latestMrr - previousMrr) / previousMrr) * 100 : 0;
+    const healthyTenants = tenantRows.filter((tenant: any) => tenant.status === 'active').length;
+    const healthPercent = tenantRows.length > 0 ? Math.round((healthyTenants / tenantRows.length) * 100) : 0;
+    const focusTenant = [...tenantRows].sort((a: any, b: any) => Number(a.students || 0) - Number(b.students || 0))[0];
+    const activeStudentsBarsRaw = [...tenantRows]
+        .sort((a: any, b: any) => Number(b.students || 0) - Number(a.students || 0))
+        .slice(0, 11)
+        .map((tenant: any) => Number(tenant.students || 0));
+    const maxStudentsPerTenant = Math.max(...activeStudentsBarsRaw, 1);
+    const activeStudentsBars = activeStudentsBarsRaw.length > 0
+        ? activeStudentsBarsRaw.map((count) => Math.max(8, Math.round((count / maxStudentsPerTenant) * 100)))
+        : [0];
+    const aiAdoptionPercent = aiUsage?.total_tenants
+        ? Math.round(((aiUsage?.active_tenants || 0) / aiUsage.total_tenants) * 100)
+        : 0;
 
     return (
         <div className="p-8 lg:p-10 space-y-10 min-h-full">
@@ -106,7 +124,9 @@ export default function SaasDashboardPage() {
                                 </div>
                                 <div className="mt-2 flex items-baseline gap-2">
                                     <h2 className="text-3xl font-bold text-slate-900 dark:text-white">${kpis.mrr.toLocaleString()}</h2>
-                                    <span className="text-emerald-500 dark:text-emerald-400 text-xs font-bold">+16.4%</span>
+                                    <span className={`text-xs font-bold ${mrrGrowthPct >= 0 ? 'text-emerald-500 dark:text-emerald-400' : 'text-red-500 dark:text-red-400'}`}>
+                                        {mrrGrowthPct >= 0 ? '+' : ''}{mrrGrowthPct.toFixed(1)}%
+                                    </span>
                                 </div>
                             </div>
                             <div className="flex items-center gap-4 text-xs text-slate-500 dark:text-slate-300">
@@ -184,12 +204,18 @@ export default function SaasDashboardPage() {
                                 <div className="bg-slate-50 dark:bg-[#1a1a1f] border border-slate-200 dark:border-white/5 p-4 rounded-xl shadow-2xl relative">
                                     <div className="flex justify-between items-start mb-1">
                                         <span className="text-[10px] uppercase font-bold text-slate-500 dark:text-slate-400">Node Focus</span>
-                                        <Badge className="bg-red-500/10 text-red-500 border-none text-[9px] px-1.5 py-0">Critical</Badge>
+                                        <Badge className={`${focusTenant?.status === 'error' ? 'bg-red-500/10 text-red-500' : 'bg-amber-500/10 text-amber-500'} border-none text-[9px] px-1.5 py-0`}>
+                                            {focusTenant?.status === 'error' ? 'Critical' : 'Watch'}
+                                        </Badge>
                                     </div>
                                     <p className="text-xs font-semibold text-slate-900 dark:text-white">
-                                        School ID: {tenant_activity[0]?.id ? tenant_activity[0].id.slice(0, 6) : 'N/A'}
+                                        School ID: {focusTenant?.id ? String(focusTenant.id).slice(0, 6) : 'N/A'}
                                     </p>
-                                    <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1">Low Engagement, High Churn Risk</p>
+                                    <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-1">
+                                        {focusTenant?.status === 'error'
+                                            ? 'Schema connection issue detected.'
+                                            : `${Number(focusTenant?.students || 0)} students enrolled.`}
+                                    </p>
                                 </div>
 
                                 <div className="grid grid-cols-2 gap-3">
@@ -199,7 +225,7 @@ export default function SaasDashboardPage() {
                                     </div>
                                     <div className="bg-slate-50 dark:bg-[#1a1a1f] p-3 rounded-lg border border-slate-200 dark:border-white/5 text-center">
                                         <p className="text-[9px] uppercase font-bold text-slate-500 dark:text-slate-400">Healthy</p>
-                                        <p className="text-lg font-bold text-emerald-500 dark:text-emerald-400">92%</p>
+                                        <p className="text-lg font-bold text-emerald-500 dark:text-emerald-400">{healthPercent}%</p>
                                     </div>
                                 </div>
                             </div>
@@ -229,14 +255,14 @@ export default function SaasDashboardPage() {
                             <div className="h-1.5 w-full bg-slate-100 dark:bg-white/5 rounded-full overflow-hidden">
                                 <motion.div
                                     initial={{ width: 0 }}
-                                    animate={{ width: `${Math.min(100, (aiUsage?.total_tokens || 0) / 100000)}%` }}
+                                    animate={{ width: `${Math.max(0, Math.min(100, aiAdoptionPercent))}%` }}
                                     transition={{ duration: 1.5 }}
                                     className="h-full bg-indigo-500 shadow-[0_0_15px_rgba(99,102,241,0.5)]"
                                 />
                             </div>
                             <div className="flex justify-between items-center text-[10px] font-bold">
-                                <span className="text-emerald-500 dark:text-emerald-400 flex items-center gap-1"><TrendingUp className="w-3 h-3" /> 20%</span>
-                                <span className="text-slate-500 dark:text-slate-400 uppercase">Cost: $4,500</span>
+                                <span className="text-emerald-500 dark:text-emerald-400 flex items-center gap-1"><TrendingUp className="w-3 h-3" /> {aiAdoptionPercent}% AI-active tenants</span>
+                                <span className="text-slate-500 dark:text-slate-400 uppercase">Cost: ${Number(aiUsage?.cost_estimate || 0).toFixed(2)}</span>
                             </div>
                         </div>
                     </Card>
@@ -257,13 +283,13 @@ export default function SaasDashboardPage() {
                                 <h4 className="text-2xl font-bold font-mono text-slate-900 dark:text-white">{kpis.total_students.toLocaleString()}</h4>
                             </div>
                             <div className="h-[40px] w-full flex items-end gap-1">
-                                {[30, 50, 40, 60, 45, 70, 55, 80, 75, 90, 85].map((h, i) => (
+                                {activeStudentsBars.map((h, i) => (
                                     <motion.div key={i} initial={{ height: 0 }} animate={{ height: `${h}%` }} transition={{ delay: 0.5 + (i * 0.05) }} className="flex-1 bg-emerald-500/20 rounded-t-sm" />
                                 ))}
                             </div>
                             <div className="flex justify-between items-center text-[10px] font-bold">
-                                <span className="text-emerald-500 dark:text-emerald-400 flex items-center gap-1"><TrendingUp className="w-3 h-3" /> 5.2%</span>
-                                <span className="text-slate-500 dark:text-slate-400 uppercase">Avg for last 7d</span>
+                                <span className="text-emerald-500 dark:text-emerald-400 flex items-center gap-1"><TrendingUp className="w-3 h-3" /> {tenantRows.length} tenants tracked</span>
+                                <span className="text-slate-500 dark:text-slate-400 uppercase">Top tenant activity</span>
                             </div>
                         </div>
                     </Card>

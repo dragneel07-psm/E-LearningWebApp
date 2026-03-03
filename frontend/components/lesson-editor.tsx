@@ -10,6 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { FileText, Video, Link as LinkIcon, FileUp, Eye } from 'lucide-react';
 import dynamic from 'next/dynamic';
 import 'react-quill/dist/quill.snow.css';
+import { toast } from 'sonner';
 
 // Dynamic import to avoid SSR issues with react-quill
 const ReactQuill = dynamic(() => import('react-quill'), { ssr: false });
@@ -51,12 +52,12 @@ export function LessonEditor({ open, onOpenChange, lesson, courseId, onSave }: L
 
     const handleSave = async () => {
         if (!title.trim()) {
-            alert('Please enter a lesson title');
+            toast.error('Please enter a lesson title');
             return;
         }
 
         if (!content.trim() && contentType !== 'pdf') {
-            alert('Please add content to the lesson');
+            toast.error('Please add content to the lesson');
             return;
         }
 
@@ -69,10 +70,11 @@ export function LessonEditor({ open, onOpenChange, lesson, courseId, onSave }: L
                 content_type: contentType,
                 content
             });
+            toast.success(lesson ? 'Lesson updated' : 'Lesson created');
             onOpenChange(false);
         } catch (error) {
             console.error('Failed to save lesson:', error);
-            alert('Failed to save lesson. Please try again.');
+            toast.error('Failed to save lesson. Please try again.');
         } finally {
             setSaving(false);
         }

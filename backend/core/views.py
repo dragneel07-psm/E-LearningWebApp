@@ -1,15 +1,16 @@
 # core/views.py
 from rest_framework import viewsets, permissions, status
 from rest_framework.response import Response
+from rest_framework.decorators import action
 from .models import Tenant, AuditLog, GlobalSettings
 from .serializers import TenantSerializer, AuditLogSerializer, GlobalSettingsSerializer, TenantCreateSerializer
 from rest_framework.views import APIView
 from django.db import connection
 import shutil
-import random
+import time
+from django.http import FileResponse, Http404
 
 from .utils.tenant_db import provision_tenant_db, get_tenant_db_alias
-from .utils.tenant_users import create_tenant_admin
 from .utils.tenant_users import create_tenant_admin
 from django.conf import settings
 from django.core.management import call_command
@@ -171,11 +172,14 @@ class SystemStatusView(APIView):
     def get(self, request):
         # 1. Check Database Status
         try:
+            start = time.perf_counter()
             with connection.cursor() as cursor:
                 cursor.execute("SELECT 1")
+            latency_ms = int((time.perf_counter() - start) * 1000)
             db_status = "Operational"
         except Exception:
             db_status = "Degraded"
+            latency_ms = -1
 
         # 2. Disk Usage
         total, used, free = shutil.disk_usage("/")
@@ -183,12 +187,9 @@ class SystemStatusView(APIView):
         used_gb = used // (2**30)
         free_gb = free // (2**30)
 
-        # 3. Simulated API Latency
-        latency = random.randint(20, 150) # ms
-
         return Response({
             "status": db_status,
-            "latency": f"{latency}ms",
+            "latency": f"{latency_ms}ms" if latency_ms >= 0 else "N/A",
             "storage": {
                 "total": f"{total_gb} GB",
                 "used": f"{used_gb} GB",
@@ -232,15 +233,27 @@ class BackupViewSet(viewsets.ViewSet):
             elif request.tenant.schema_name != 'public':
                 call_command('backup_tenant', schema=request.tenant.schema_name)
             else:
-                # If on public/admin, maybe backup all? Or require schema.
-                # Let's default to backing up 'demo' if nothing specified for ease of use in dev
-                # Or better: verify 'all' param
                 if request.data.get('all'):
                     call_command('backup_tenant', all=True)
                 else:
-                    # Default behavior for admin panel: Backup demo tenant if no schema
-                    call_command('backup_tenant', schema='demo') 
+                    return Response(
+                        {"error": "Provide 'schema' for a tenant backup or set 'all': true for all tenants."},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
                     
             return Response({"status": "Backup created successfully"})
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    @action(detail=False, methods=['get'], url_path=r'download/(?P<filename>[^/]+)')
+    def download(self, request, filename=None):
+        backup_dir = os.path.join(settings.BASE_DIR, 'backups')
+        safe_filename = os.path.basename(filename or '')
+        if not safe_filename or safe_filename != filename or not safe_filename.endswith('.sqlite3'):
+            raise Http404("Backup file not found")
+
+        file_path = os.path.join(backup_dir, safe_filename)
+        if not os.path.isfile(file_path):
+            raise Http404("Backup file not found")
+
+        return FileResponse(open(file_path, 'rb'), as_attachment=True, filename=safe_filename)

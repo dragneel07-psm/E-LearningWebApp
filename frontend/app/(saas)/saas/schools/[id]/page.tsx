@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ArrowLeft, Building, Users, CreditCard, Activity, Loader2, RefreshCcw, Search, MoreHorizontal, Eye, Key, ShieldAlert, ShieldCheck, Save, Plus, Download, Upload } from "lucide-react";
-import { coreAPI, Invoice, saasApi, SubscriptionPlanHistory, Tenant, User } from "@/lib/api";
+import { coreAPI, getApiBaseUrl, Invoice, saasApi, SubscriptionPlanHistory, Tenant, User } from "@/lib/api";
 import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -63,12 +63,12 @@ const EMPTY_NEW_USER_FORM: NewUserFormState = {
 };
 
 const DEFAULT_FEATURE_FLAGS: Record<string, boolean> = {
-    student_ai_chatbot: true,
-    student_gamification: true,
-    parent_attendance: true,
-    parent_fees: true,
-    teacher_ai_grading: true,
-    teacher_reports: true,
+    student_ai_chatbot: false,
+    student_gamification: false,
+    parent_attendance: false,
+    parent_fees: false,
+    teacher_ai_grading: false,
+    teacher_reports: false,
 };
 
 function getTenantIdentifier(tenantValue: unknown): string {
@@ -99,12 +99,6 @@ function formatRole(role: string): string {
 }
 
 const numberFmt = new Intl.NumberFormat('en-US');
-
-function getApiBaseUrl(): string {
-    const raw = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api';
-    const normalized = raw.replace(/\/$/, '');
-    return normalized.endsWith('/api') ? normalized : `${normalized}/api`;
-}
 
 export default function SchoolDetailsPage() {
     const params = useParams();
@@ -149,6 +143,10 @@ export default function SchoolDetailsPage() {
     const [newUserDialogOpen, setNewUserDialogOpen] = useState(false);
     const [newUserForm, setNewUserForm] = useState<NewUserFormState>(EMPTY_NEW_USER_FORM);
     const [isCreatingUser, setIsCreatingUser] = useState(false);
+    const [passwordResetUser, setPasswordResetUser] = useState<User | null>(null);
+    const [passwordResetValue, setPasswordResetValue] = useState('');
+    const [passwordResetDialogOpen, setPasswordResetDialogOpen] = useState(false);
+    const [isResettingUserPassword, setIsResettingUserPassword] = useState(false);
 
     const [invoices, setInvoices] = useState<Invoice[]>([]);
     const [invoicesLoading, setInvoicesLoading] = useState(false);
@@ -164,7 +162,7 @@ export default function SchoolDetailsPage() {
                 return;
             }
             const tenantUsers = await saasApi.getTenantUsers(tenantId);
-            setUsers(tenantUsers);
+            setUsers(Array.isArray(tenantUsers) ? tenantUsers : []);
         } catch (error) {
             console.error(error);
             toast.error("Failed to load tenant users.");
@@ -178,7 +176,8 @@ export default function SchoolDetailsPage() {
         setInvoicesLoading(true);
         try {
             const allInvoices = await saasApi.getInvoices();
-            const scopedInvoices = allInvoices
+            const invoiceRows = Array.isArray(allInvoices) ? allInvoices : [];
+            const scopedInvoices = invoiceRows
                 .filter(inv => belongsToSchool(inv.tenant, tenant))
                 .sort((a, b) => new Date(b.issued_date).getTime() - new Date(a.issued_date).getTime());
             setInvoices(scopedInvoices);
@@ -200,7 +199,7 @@ export default function SchoolDetailsPage() {
                 return;
             }
             const history = await saasApi.getSubscriptionHistoryByTenant(tenantId);
-            setPlanHistory(history);
+            setPlanHistory(Array.isArray(history) ? history : []);
         } catch (error) {
             console.error(error);
             toast.error("Failed to load plan history.");
@@ -350,20 +349,38 @@ export default function SchoolDetailsPage() {
         }
     };
 
-    const handleResetPassword = async (user: User) => {
+    const handleResetPasswordDialogChange = (open: boolean) => {
+        setPasswordResetDialogOpen(open);
+        if (!open) {
+            setPasswordResetUser(null);
+            setPasswordResetValue('');
+        }
+    };
+
+    const openResetPasswordDialog = (user: User) => {
+        setPasswordResetUser(user);
+        setPasswordResetValue('');
+        setPasswordResetDialogOpen(true);
+    };
+
+    const handleResetPassword = async () => {
+        if (!passwordResetUser) return;
         const tenantId = String(school?.id ?? school?.tenant_id ?? '');
         if (!tenantId) return;
-        const newPassword = window.prompt(`Set a new password for ${user.first_name || user.username || user.email}`);
-        if (!newPassword) return;
-        setActiveUserActionId(user.user_id);
+        if (passwordResetValue.trim().length < 6) {
+            toast.error("Password must be at least 6 characters.");
+            return;
+        }
+        setIsResettingUserPassword(true);
         try {
-            await saasApi.resetTenantUserPassword(tenantId, user.user_id, newPassword);
+            await saasApi.resetTenantUserPassword(tenantId, passwordResetUser.user_id, passwordResetValue.trim());
             toast.success("Password reset successfully.");
+            handleResetPasswordDialogChange(false);
         } catch (error) {
             console.error(error);
             toast.error("Failed to reset password.");
         } finally {
-            setActiveUserActionId(null);
+            setIsResettingUserPassword(false);
         }
     };
 
@@ -504,6 +521,10 @@ export default function SchoolDetailsPage() {
     const storageLimitGb = school?.storage_limit_gb ?? 0;
     const storageUsagePercent = school?.storage_usage_percent
         ?? (storageLimitGb > 0 ? (storageUsedMb / (storageLimitGb * 1024)) * 100 : 0);
+    const tenantIdentifier = String(school?.id ?? school?.tenant_id ?? schoolId);
+    const schoolDomain = school?.domain
+        || school?.website
+        || (school?.subdomain ? `${school.subdomain}` : 'Not configured');
 
     const paidInvoices = invoices.filter(inv => inv.status === 'paid');
     const pendingInvoices = invoices.filter(inv => inv.status === 'pending');
@@ -557,7 +578,7 @@ export default function SchoolDetailsPage() {
                         </Badge>
                     </div>
                     <p className="text-slate-400 pl-6">
-                        {(school.domain || `${school.subdomain}.localhost`)} • ID: <span className="font-mono text-xs">{school.id}</span>
+                        {schoolDomain} • ID: <span className="font-mono text-xs">{tenantIdentifier}</span>
                     </p>
                 </div>
                 <div className="flex gap-2">
@@ -849,7 +870,7 @@ export default function SchoolDetailsPage() {
                                                                 <DropdownMenuItem onSelect={() => handleOpenUserDialog(user)}>
                                                                     <Eye className="mr-2 h-4 w-4" /> View / Edit Details
                                                                 </DropdownMenuItem>
-                                                                <DropdownMenuItem onSelect={() => handleResetPassword(user)}>
+                                                                <DropdownMenuItem onSelect={() => openResetPasswordDialog(user)}>
                                                                     <Key className="mr-2 h-4 w-4" /> Reset Password
                                                                 </DropdownMenuItem>
                                                                 <DropdownMenuItem onSelect={() => handleToggleUserStatus(user)}>
@@ -1316,6 +1337,35 @@ export default function SchoolDetailsPage() {
                         <Button onClick={handleCreateUser} disabled={isCreatingUser}>
                             {isCreatingUser ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                             Create User
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            <Dialog open={passwordResetDialogOpen} onOpenChange={handleResetPasswordDialogChange}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Reset User Password</DialogTitle>
+                        <DialogDescription>
+                            Set a new password for {passwordResetUser?.first_name || passwordResetUser?.username || passwordResetUser?.email || 'this user'}.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-2 py-2">
+                        <Label htmlFor="resetUserPassword">New Password</Label>
+                        <Input
+                            id="resetUserPassword"
+                            type="password"
+                            value={passwordResetValue}
+                            onChange={(e) => setPasswordResetValue(e.target.value)}
+                            placeholder="Enter at least 6 characters"
+                            autoComplete="new-password"
+                        />
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => handleResetPasswordDialogChange(false)}>Cancel</Button>
+                        <Button onClick={handleResetPassword} disabled={isResettingUserPassword}>
+                            {isResettingUserPassword ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                            Reset Password
                         </Button>
                     </DialogFooter>
                 </DialogContent>

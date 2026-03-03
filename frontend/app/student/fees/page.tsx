@@ -29,27 +29,28 @@ export default function StudentFeesPage() {
     const loadData = async () => {
         try {
             setLoading(true);
-            const currentUser = await usersAPI.getMe();
+            const [currentUser, currentStudent] = await Promise.all([
+                usersAPI.getMe(),
+                academicAPI.getMyStudent(),
+            ]);
             setUser(currentUser);
-            const students = await academicAPI.getStudents();
-            const currentStudent = students.find(s => s.user_id === user.user_id);
 
-            if (currentStudent) {
-                const [feesData, paymentsData] = await Promise.all([
-                    billingAPI.getStudentFees(),
-                    billingAPI.getPayments()
-                ]);
+            const [feesData, paymentsData] = await Promise.all([
+                billingAPI.getStudentFees(),
+                billingAPI.getPayments()
+            ]);
 
-                // Filter for current student
-                const myFees = feesData.filter(f => f.student === currentStudent.id);
-                const myPayments = paymentsData.filter(p => p.student === currentStudent.id);
+            const studentId = currentStudent.id;
+            const myFees = (Array.isArray(feesData) ? feesData : []).filter((f) => f.student === studentId);
+            const myPayments = (Array.isArray(paymentsData) ? paymentsData : []).filter((p) => p.student === studentId);
 
-                setFees(myFees);
-                setPayments(myPayments);
-            }
+            setFees(myFees);
+            setPayments(myPayments);
         } catch (error) {
             console.error('Failed to load fee data:', error);
             toast.error('Failed to load fee data');
+            setFees([]);
+            setPayments([]);
         } finally {
             setLoading(false);
         }
@@ -62,15 +63,17 @@ export default function StudentFeesPage() {
 
     const confirmPayment = async () => {
         if (!selectedFee) return;
+        const payableAmount = Number(selectedFee.amount_due) - Number(selectedFee.amount_paid);
+        if (payableAmount <= 0) {
+            toast.info('This invoice is already settled.');
+            return;
+        }
         setPayLoading(true);
         try {
-            // Simulation of payment gateway redirect and success
-            await new Promise(resolve => setTimeout(resolve, 2000));
-
             await billingAPI.recordPayment({
                 student: selectedFee.student,
                 student_fee: selectedFee.student_fee_id,
-                amount: selectedFee.amount_due - selectedFee.amount_paid,
+                amount: payableAmount,
                 method: 'online',
                 remarks: 'Self-paid via Student Portal'
             });
@@ -307,7 +310,7 @@ export default function StudentFeesPage() {
                 </TabsContent>
             </Tabs>
 
-            {/* Pay Now Simulation Dialog */}
+            {/* Pay Dialog */}
             <Dialog open={isPayDialogOpen} onOpenChange={setIsPayDialogOpen}>
                 <DialogContent className="sm:max-w-[425px] border-0 shadow-2xl">
                     <DialogHeader>
@@ -338,7 +341,7 @@ export default function StudentFeesPage() {
                         </div>
 
                         <div className="space-y-4">
-                            <Label className="font-bold text-slate-700">Payment Method (Simulation)</Label>
+                            <Label className="font-bold text-slate-700">Payment Method</Label>
                             <div className="grid grid-cols-2 gap-3">
                                 <Button variant="outline" className="h-16 border-2 border-indigo-100 flex flex-col gap-1 active:border-indigo-600">
                                     <CreditCard className="h-5 w-5 text-indigo-600" />
@@ -354,7 +357,7 @@ export default function StudentFeesPage() {
                         <div className="flex items-center gap-3 p-3 bg-amber-50 rounded-lg border border-amber-100">
                             <AlertCircle className="h-5 w-5 text-amber-600 shrink-0" />
                             <p className="text-[10px] text-amber-700 leading-tight">
-                                This is a test environment. Clicking &apos;Confirm&apos; will simulate a successful transaction and update your records.
+                                Your payment request will be recorded immediately and reflected in your fee ledger.
                             </p>
                         </div>
                     </div>

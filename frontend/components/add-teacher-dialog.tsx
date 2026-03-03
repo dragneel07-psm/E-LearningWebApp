@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { usersAPI, academicAPI, User } from '@/lib/api';
+import { toast } from 'sonner';
 
 interface AddTeacherDialogProps {
     open: boolean;
@@ -45,7 +46,7 @@ export function AddTeacherDialog({ open, onOpenChange, onSuccess }: AddTeacherDi
                 user_id: user.user_id
             } as any);
 
-            alert('Teacher created successfully!');
+            toast.success('Teacher created successfully');
             onOpenChange(false);
             if (onSuccess) onSuccess();
 
@@ -59,7 +60,7 @@ export function AddTeacherDialog({ open, onOpenChange, onSuccess }: AddTeacherDi
             });
         } catch (error: unknown) {
             const message = error instanceof Error ? error.message : 'Unknown error';
-            alert(`Failed to create teacher: ${message}`);
+            toast.error(`Failed to create teacher: ${message}`);
         } finally {
             setLoading(false);
         }

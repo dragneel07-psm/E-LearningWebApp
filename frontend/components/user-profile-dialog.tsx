@@ -8,14 +8,16 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { User, usersAPI, academicAPI, AcademicClass } from '@/lib/api';
 import { Card, CardContent } from '@/components/ui/card';
 import { Mail, User as UserIcon, Briefcase, Edit2, Save, X, Loader2 } from 'lucide-react';
+import { toast } from 'sonner';
 
 interface UserProfileDialogProps {
     user: User | null;
     open: boolean;
     onOpenChange: (open: boolean) => void;
+    onSuccess?: () => void;
 }
 
-export function UserProfileDialog({ user, open, onOpenChange }: UserProfileDialogProps) {
+export function UserProfileDialog({ user, open, onOpenChange, onSuccess }: UserProfileDialogProps) {
     const [isEditing, setIsEditing] = useState(false);
     const [loading, setLoading] = useState(false);
     const [classes, setClasses] = useState<AcademicClass[]>([]);
@@ -61,7 +63,7 @@ export function UserProfileDialog({ user, open, onOpenChange }: UserProfileDialo
     const loadClasses = async () => {
         try {
             const data = await academicAPI.getClasses();
-            setClasses(data);
+            setClasses(Array.isArray(data) ? data : []);
         } catch (e) {
             console.error("Failed to load classes", e);
         }
@@ -70,7 +72,7 @@ export function UserProfileDialog({ user, open, onOpenChange }: UserProfileDialo
     const loadStudentDetails = async (userId: string) => {
         try {
             const students = await academicAPI.getStudents();
-            const profile = students.find(s => s.user_id === userId);
+            const profile = (Array.isArray(students) ? students : []).find(s => s.user_id === userId);
             if (profile) {
                 setStudentProfileId(profile.id);
                 setCurrentClass(profile.academic_class?.toString() || '');
@@ -102,13 +104,13 @@ export function UserProfileDialog({ user, open, onOpenChange }: UserProfileDialo
             // If role changed from non-student to student, we might need to create a profile
             // This is complex, for now we assume simple updates.
 
-            alert('User profile updated successfully');
+            toast.success('User profile updated successfully');
             setIsEditing(false);
             onOpenChange(false);
-            window.location.reload(); // Refresh to show changes
+            onSuccess?.();
         } catch (error: unknown) {
             const message = error instanceof Error ? error.message : 'Unknown error';
-            alert(`Failed to update: ${message}`);
+            toast.error(`Failed to update: ${message}`);
         } finally {
             setLoading(false);
         }
