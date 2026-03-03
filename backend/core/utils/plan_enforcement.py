@@ -23,7 +23,15 @@ def derive_tenant_type_from_plan(plan) -> str:
 
 
 def get_tenant_plan(tenant) -> Optional[Any]:
-    sub = getattr(tenant, "subscription", None)
+    if not tenant:
+        return None
+
+    try:
+        sub = getattr(tenant, "subscription", None)
+    except Exception:
+        # Missing reverse O2O (no subscription yet) or inconsistent tenant relation.
+        return None
+
     if sub and getattr(sub, "plan", None):
         return sub.plan
     return None

@@ -3,6 +3,20 @@ from rest_framework import serializers
 from .models import UserAccount
 from core.utils.plan_enforcement import build_plan_entitled_features, get_tenant_plan
 
+def _safe_tenant_features(user) -> dict:
+    try:
+        tenant = getattr(user, "tenant", None)
+    except Exception:
+        tenant = None
+
+    if not tenant:
+        return {}
+
+    try:
+        return build_plan_entitled_features(get_tenant_plan(tenant))
+    except Exception:
+        return build_plan_entitled_features(None)
+
 class UserAccountSerializer(serializers.ModelSerializer):
     tenant_features = serializers.SerializerMethodField()
 
@@ -12,9 +26,7 @@ class UserAccountSerializer(serializers.ModelSerializer):
         read_only_fields = ['user_id', 'email', 'role', 'tenant', 'tenant_features']
 
     def get_tenant_features(self, obj):
-        if obj.tenant:
-            return build_plan_entitled_features(get_tenant_plan(obj.tenant))
-        return {}
+        return _safe_tenant_features(obj)
 
 from django.contrib.auth.models import Group, Permission
 
@@ -64,7 +76,7 @@ class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
             'first_name': self.user.first_name,
             'last_name':  self.user.last_name,
             'role':       self.user.role,
-            'tenant_features': build_plan_entitled_features(get_tenant_plan(self.user.tenant)) if self.user.tenant else {},
+            'tenant_features': _safe_tenant_features(self.user),
         }
         return data
 
