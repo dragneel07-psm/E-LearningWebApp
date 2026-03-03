@@ -15,6 +15,11 @@ export const authService = {
     async login(credentials: LoginCredentials) {
         // Pull school_code out — it's a header, not a POST body field
         const { school_code, ...body } = credentials;
+        const normalizedBody = {
+            ...body,
+            email: body.email?.trim().toLowerCase(),
+            password: body.password,
+        };
 
         // Determine tenant: explicit school_code > subdomain detection > 'public'
         const tenantId = school_code?.trim() ||
@@ -23,7 +28,12 @@ export const authService = {
                 : null) ||
             'public';
 
-        const response = await api.post<LoginResponse>('/api/users/login/', body, {
+        // Keep tenant cache in sync before login so request-level fallbacks can't use stale tenant.
+        if (typeof window !== 'undefined') {
+            localStorage.setItem('tenant_id', tenantId);
+        }
+
+        const response = await api.post<LoginResponse>('/api/users/login/', normalizedBody, {
             headers: { 'x-tenant-id': tenantId },
         });
 

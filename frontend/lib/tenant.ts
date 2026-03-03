@@ -1,15 +1,37 @@
 // lib/tenant.ts
 
 export const getTenantFromSubdomain = (hostname: string): string | null => {
-    const parts = hostname.split('.');
-    // Handle demo.localhost or school.com
+    const normalizedHost = (hostname || '').trim().toLowerCase();
+    const parts = normalizedHost.split('.').filter(Boolean);
+
+    if (!normalizedHost) return null;
+
+    if (normalizedHost === 'localhost' || normalizedHost === '127.0.0.1') {
+        return 'localhost';
+    }
+
+    // Handle demo.localhost
     if (parts.length > 1 && parts[parts.length - 1] === 'localhost') {
         return parts[0] === 'localhost' ? 'localhost' : parts[0];
     }
+
+    // Ignore platform-managed hosts where first label is app name, not tenant.
+    const managedHostSuffixes = [
+        '.vercel.app',
+        '.railway.app',
+        '.up.railway.app',
+    ];
+    if (managedHostSuffixes.some((suffix) => normalizedHost.endsWith(suffix))) {
+        return null;
+    }
+
+    // tenant.example.com -> tenant
     if (parts.length > 2) {
         return parts[0];
     }
-    return parts[0]; // Default or localhost
+
+    // Root domains like example.com do not imply a tenant.
+    return null;
 };
 
 type TenantInfo = {
