@@ -573,6 +573,12 @@ type PaginatedResponse<T> = {
     results?: T[];
 };
 
+function normalizeArrayPayload<T>(payload: T[] | PaginatedResponse<T> | null | undefined): T[] {
+    if (Array.isArray(payload)) return payload;
+    if (payload && Array.isArray(payload.results)) return payload.results;
+    return [];
+}
+
 export interface Conversation {
     conversation_id: string;
     type: 'direct' | 'group';
@@ -1585,7 +1591,10 @@ export const aiAPI = {
 
 // Notifications API
 export const notificationsAPI = {
-    getNotifications: () => apiRequest<Notification[]>('/notifications/notifications/'),
+    getNotifications: async () => {
+        const payload = await apiRequest<Notification[] | PaginatedResponse<Notification>>('/notifications/notifications/');
+        return normalizeArrayPayload(payload);
+    },
     getUnreadCount: () => apiRequest<{ count: number }>('/notifications/notifications/unread_count/'),
     markAsRead: (id: number) => apiRequest<{ status: string }>(`/notifications/notifications/${id}/mark_as_read/`, {
         method: 'POST'
@@ -1597,7 +1606,10 @@ export const notificationsAPI = {
 
 // Conversations API
 export const conversationsAPI = {
-    getConversations: () => apiRequest<Conversation[]>('/conversations/conversations/'),
+    getConversations: async () => {
+        const payload = await apiRequest<Conversation[] | PaginatedResponse<Conversation>>('/conversations/conversations/');
+        return normalizeArrayPayload(payload);
+    },
     getConversation: (id: string) => apiRequest<Conversation>(`/conversations/conversations/${id}/`),
     markAsRead: (id: string) => apiRequest<{ status: string }>(`/conversations/conversations/${id}/mark_as_read/`, {
         method: 'POST'
@@ -1606,7 +1618,10 @@ export const conversationsAPI = {
         method: 'POST',
         body: JSON.stringify({ user_id: userId })
     }),
-    getMessages: (conversationId: string) => apiRequest<Message[]>(`/conversations/messages/?conversation=${conversationId}`),
+    getMessages: async (conversationId: string) => {
+        const payload = await apiRequest<Message[] | PaginatedResponse<Message>>(`/conversations/messages/?conversation=${conversationId}`);
+        return normalizeArrayPayload(payload);
+    },
     sendMessage: (conversationId: string, content: string) => apiRequest<Message>('/conversations/messages/', {
         method: 'POST',
         body: JSON.stringify({ conversation: conversationId, content })

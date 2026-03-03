@@ -24,5 +24,13 @@ export function SafeResponsiveContainer({
         return <div className={fallbackClassName} style={{ height: fallbackHeight }} aria-hidden="true" />;
     }
 
-    return <ResponsiveContainer {...props}>{children}</ResponsiveContainer>;
+    return (
+        <ResponsiveContainer
+            minWidth={props.minWidth ?? 0}
+            minHeight={props.minHeight ?? 1}
+            {...props}
+        >
+            {children}
+        </ResponsiveContainer>
+    );
 }

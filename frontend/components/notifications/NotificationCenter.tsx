@@ -1,11 +1,11 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Bell, Check, X } from 'lucide-react';
+import { Bell } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { apiRequest, Notification } from '@/lib/api';
+import { apiRequest, notificationsAPI, Notification } from '@/lib/api';
 import { toast } from 'sonner';
 import { formatDistanceToNow } from 'date-fns';
 
@@ -25,11 +25,13 @@ export default function NotificationCenter() {
 
     const fetchNotifications = async () => {
         try {
-            const data = await apiRequest<Notification[]>('/notifications/notifications/');
+            const data = await notificationsAPI.getNotifications();
             setNotifications(data);
             setUnreadCount(data.filter(n => !n.is_read).length);
         } catch (error) {
             console.error('Failed to fetch notifications');
+            setNotifications([]);
+            setUnreadCount(0);
         }
     };
 
