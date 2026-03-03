@@ -12,6 +12,7 @@ send 'x-tenant-id: demo' and have all requests routed to the correct schema.
 from django_tenants.middleware.main import TenantMainMiddleware
 from django_tenants.utils import get_tenant_domain_model
 from django.db import connection
+from django.db import DatabaseError
 from django.db.models import Q
 from core.models.tenant import Tenant
 
@@ -50,10 +51,9 @@ class TenantFromHeaderMiddleware(TenantMainMiddleware):
 
             if tenant_id:
                 try:
-                    # Lookup by schema name, subdomain, or full domain
+                    # Migration-safe lookup (avoid hard dependency on optional columns).
                     domain = domain_model.objects.select_related('tenant').filter(
                         Q(tenant__schema_name=tenant_id) |
-                        Q(tenant__subdomain=tenant_id) |
                         Q(domain=tenant_id)
                     ).first()
 
@@ -65,6 +65,10 @@ class TenantFromHeaderMiddleware(TenantMainMiddleware):
                         tenant = Tenant.objects.filter(schema_name='public').first()
                         if not tenant:
                             return self.no_tenant_found(request, hostname)
+                except DatabaseError:
+                    tenant = Tenant.objects.filter(schema_name=tenant_id).first()
+                    if not tenant:
+                        return self.no_tenant_found(request, hostname)
                 except Exception as e:
                     print(f"Tenant header resolution error: {e}")
                     return self.no_tenant_found(request, hostname)

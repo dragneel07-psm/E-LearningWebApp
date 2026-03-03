@@ -12,6 +12,7 @@ Priority order:
 from django_tenants.middleware.main import TenantMainMiddleware
 from django_tenants.utils import get_tenant_domain_model, get_tenant_model
 from django.db import connection
+from django.db import DatabaseError
 from django.db.models import Q
 
 
@@ -39,25 +40,29 @@ class TenantFromHeaderMiddleware(TenantMainMiddleware):
 
         if tenant_id:
             # Accept school code as schema_name OR subdomain OR domain.
-            tenant = (
-                domain_model.objects.select_related("tenant")
-                .filter(
-                    Q(tenant__schema_name__iexact=tenant_id)
-                    | Q(tenant__subdomain__iexact=tenant_id)
-                    | Q(domain__iexact=tenant_id)
-                    | Q(domain__istartswith=f"{tenant_id}.")
+            try:
+                # Keep this migration-safe: resolve by schema/domain first.
+                # (subdomain can be absent in stale DB schema and cause 500)
+                tenant_pk = (
+                    domain_model.objects.select_related("tenant")
+                    .filter(
+                        Q(tenant__schema_name__iexact=tenant_id)
+                        | Q(domain__iexact=tenant_id)
+                        | Q(domain__istartswith=f"{tenant_id}.")
+                    )
+                    .values_list("tenant", flat=True)
+                    .first()
                 )
-                .values_list("tenant", flat=True)
-                .first()
-            )
-            if tenant:
-                tenant = tenant_model.objects.filter(pk=tenant).first()
-            else:
-                tenant = (
-                    tenant_model.objects.filter(
-                        Q(schema_name__iexact=tenant_id) | Q(subdomain__iexact=tenant_id)
+                if tenant_pk:
+                    tenant = tenant_model.objects.filter(pk=tenant_pk).first()
+                else:
+                    tenant = tenant_model.objects.filter(
+                        schema_name__iexact=tenant_id
                     ).first()
-                )
+            except DatabaseError:
+                tenant = tenant_model.objects.filter(
+                    schema_name__iexact=tenant_id
+                ).first()
 
         # 2. Fall back to standard domain-based resolution
         if tenant is None:
