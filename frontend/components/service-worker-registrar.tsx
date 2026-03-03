@@ -1,11 +1,11 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import { toast } from 'sonner';
 
 export function ServiceWorkerRegistrar() {
-    const [updateAvailable, setUpdateAvailable] = useState(false);
-    const [registration, setRegistration] = useState<ServiceWorkerRegistration | null>(null);
+    const refreshRequestedRef = useRef(false);
+    const controllerChangedRef = useRef(false);
 
     useEffect(() => {
         if (typeof window === 'undefined') return;
@@ -15,6 +15,7 @@ export function ServiceWorkerRegistrar() {
         }
 
         let mounted = true;
+        let updateInterval: ReturnType<typeof setInterval> | null = null;
 
         const registerSW = async () => {
             try {
@@ -24,7 +25,6 @@ export function ServiceWorkerRegistrar() {
                 });
 
                 if (!mounted) return;
-                setRegistration(reg);
                 console.log('[PWA] Service Worker registered:', reg.scope);
 
                 // Check for updates
@@ -35,14 +35,13 @@ export function ServiceWorkerRegistrar() {
                     newWorker.addEventListener('statechange', () => {
                         if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
                             if (mounted) {
-                                setUpdateAvailable(true);
                                 toast.info('A new version is available! Refresh to update.', {
                                     duration: 10000,
                                     action: {
                                         label: 'Refresh',
                                         onClick: () => {
+                                            refreshRequestedRef.current = true;
                                             newWorker.postMessage({ type: 'SKIP_WAITING' });
-                                            window.location.reload();
                                         }
                                     }
                                 });
@@ -52,11 +51,9 @@ export function ServiceWorkerRegistrar() {
                 });
 
                 // Periodic update check every 30 minutes
-                const updateInterval = setInterval(() => {
+                updateInterval = setInterval(() => {
                     reg.update().catch(console.warn);
                 }, 30 * 60 * 1000);
-
-                return () => clearInterval(updateInterval);
             } catch (error) {
                 console.warn('[PWA] Service Worker registration failed:', error);
             }
@@ -65,11 +62,25 @@ export function ServiceWorkerRegistrar() {
         registerSW();
 
         // Listen for service worker controller changes (after skipWaiting)
-        navigator.serviceWorker.addEventListener('controllerchange', () => {
-            if (mounted) window.location.reload();
-        });
+        const handleControllerChange = () => {
+            if (!mounted || controllerChangedRef.current) return;
+            controllerChangedRef.current = true;
 
-        return () => { mounted = false; };
+            if (refreshRequestedRef.current) {
+                window.location.reload();
+            } else {
+                toast.success('App updated in background. Refresh when convenient.');
+            }
+        };
+        navigator.serviceWorker.addEventListener('controllerchange', handleControllerChange);
+
+        return () => {
+            mounted = false;
+            navigator.serviceWorker.removeEventListener('controllerchange', handleControllerChange);
+            if (updateInterval) {
+                clearInterval(updateInterval);
+            }
+        };
     }, []);
 
     return null; // Invisible component

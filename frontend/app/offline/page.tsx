@@ -72,7 +72,7 @@ export default function OfflineFallbackPage() {
                     <a className="btn" href="/student/offline">
                         Open Downloaded Content
                     </a>
-                    <a className="btn btn-outline" href="javascript:location.reload()">
+                    <a className="btn btn-outline" href="/">
                         Try Again
                     </a>
                 </div>

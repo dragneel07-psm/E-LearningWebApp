@@ -1,10 +1,12 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { getAccessToken, getUser, isAuthenticated } from '@/lib/auth';
 
 export default function DebugAuthPage() {
     const [debugInfo, setDebugInfo] = useState<any>({});
+    const router = useRouter();
 
     useEffect(() => {
         // Get all cookies
@@ -54,7 +56,7 @@ export default function DebugAuthPage() {
                     Go to Login
                 </button>
                 <button
-                    onClick={() => window.location.reload()}
+                    onClick={() => router.refresh()}
                     className="px-4 py-2 bg-green-600 rounded hover:bg-green-700"
                 >
                     Refresh
@@ -65,7 +67,7 @@ export default function DebugAuthPage() {
                         document.cookie.split(";").forEach((c) => {
                             document.cookie = c.replace(/^ +/, "").replace(/=.*/, "=;expires=" + new Date().toUTCString() + ";path=/");
                         });
-                        window.location.reload();
+                        router.push('/login/student');
                     }}
                     className="px-4 py-2 bg-red-600 rounded hover:bg-red-700"
                 >

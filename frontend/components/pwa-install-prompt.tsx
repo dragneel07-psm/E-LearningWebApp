@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Download, Smartphone, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { toast } from 'sonner';
 
 interface BeforeInstallPromptEvent extends Event {
     prompt(): Promise<void>;
@@ -52,13 +53,9 @@ export function PWAInstallPrompt() {
 
     const handleInstall = async () => {
         if (!deferredPrompt) {
-            // Fallback: show manual instructions
-            alert(
-                'To install:\n' +
-                '• Android/Chrome: Menu → "Add to Home Screen"\n' +
-                '• iPhone/Safari: Share button → "Add to Home Screen"\n' +
-                '• Desktop Chrome: Address bar → Install icon'
-            );
+            toast.info('Install manually from browser menu (Add to Home Screen / Install App).', {
+                duration: 7000,
+            });
             return;
         }
 
