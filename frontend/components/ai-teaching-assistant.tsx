@@ -2,8 +2,9 @@
 
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { BrainCircuit, Sparkles, MessageSquare, ListChecks, FileText, X, Send, Search } from 'lucide-react';
+import { BrainCircuit, Sparkles, MessageSquare, ListChecks, FileText, X, Send, Search, AlertCircle } from 'lucide-react';
 import { Input } from '@/components/ui/input';
+import { aiAPI, ChatMessage } from '@/lib/api';
 
 interface AIAction {
     label: string;
@@ -11,45 +12,65 @@ interface AIAction {
     prompt: string;
 }
 
+type AssistantMessage = { role: 'user' | 'ai'; content: string };
+
+function toApiHistory(messages: AssistantMessage[]): ChatMessage[] {
+    return messages.map((msg) => ({
+        role: msg.role === 'ai' ? 'assistant' : 'user',
+        content: msg.content,
+    }));
+}
+
 export function AITeachingAssistant() {
     const [isOpen, setIsOpen] = useState(false);
-    const [messages, setMessages] = useState<{ role: 'user' | 'ai', content: string }[]>([
+    const [messages, setMessages] = useState<AssistantMessage[]>([
         { role: 'ai', content: "Hello! I'm your AI Teaching Assistant. I can help you create quizzes, plan lessons, or analyze student performance. How can I assist you today?" }
     ]);
     const [input, setInput] = useState('');
     const [loading, setLoading] = useState(false);
+    const [error, setError] = useState<string | null>(null);
 
     const quickActions: AIAction[] = [
-        { label: 'Generate Quiz', icon: ListChecks, prompt: 'Generate a 5-question multiple choice quiz on [Topic]' },
-        { label: 'Create Homework', icon: FileText, prompt: 'Create a homework assignment for Class 10 Physics on Newton\'s Laws' },
-        { label: 'Summarize Class', icon: MessageSquare, prompt: 'Summarize the key points from the last lesson on Algebra' },
-        { label: 'Identify Weak Students', icon: Search, prompt: 'Analyze recent assessment results and identify students who need extra help' },
+        { label: 'Generate Quiz', icon: ListChecks, prompt: 'Generate a 5-question multiple choice quiz on Algebra for Grade 10 with answers.' },
+        { label: 'Create Homework', icon: FileText, prompt: 'Create a homework assignment for Class 10 Physics on Newton\'s Laws with 5 questions.' },
+        { label: 'Summarize Class', icon: MessageSquare, prompt: 'Summarize key points from the last lesson on Algebra in bullet points.' },
+        { label: 'Identify Weak Students', icon: Search, prompt: 'Based on recent results, suggest how to support weak students in the next class.' },
     ];
 
     const handleSubmit = async (prompt: string) => {
-        if (!prompt.trim()) return;
+        if (!prompt.trim() || loading) return;
 
-        const userMsg = prompt;
-        setMessages(prev => [...prev, { role: 'user', content: userMsg }]);
+        const userMsg = prompt.trim();
+        const currentMessages = [...messages, { role: 'user' as const, content: userMsg }];
+
+        setMessages(currentMessages);
         setInput('');
         setLoading(true);
+        setError(null);
 
-        // Mock AI response
-        setTimeout(() => {
-            let response = "I'm processing your request...";
-            if (userMsg.includes('Quiz')) response = "Here is a draft quiz for your topic:\n1. Question 1...\n2. Question 2...\nWould you like me to save this to your Assessments?";
-            else if (userMsg.includes('Homework')) response = "I've drafted a homework assignment. It covers the core concepts. You can review it in the Assignments tab.";
-            else if (userMsg.includes('Weak')) response = "Based on the last quiz, 3 students scored below 60%: John Doe, Jane Smith, and Bob Brown. I recommend reviewing 'Quadratic Formulas' with them.";
-            else response = `I've received your request: "${userMsg}". Here is some helpful information...`;
+        try {
+            const response = await aiAPI.chat(userMsg, '', toApiHistory(messages));
+            const reply = response?.response?.trim() || 'No response returned by AI service.';
+            const suffix = response?.is_demo ? '\n\n[Demo mode response]' : '';
 
-            setMessages(prev => [...prev, { role: 'ai', content: response }]);
+            setMessages((prev) => [...prev, { role: 'ai', content: `${reply}${suffix}` }]);
+        } catch (e: any) {
+            const message = e?.message || 'AI request failed. Please verify API settings and try again.';
+            setError(message);
+            setMessages((prev) => [
+                ...prev,
+                {
+                    role: 'ai',
+                    content: `I could not complete that request right now. ${message}`,
+                },
+            ]);
+        } finally {
             setLoading(false);
-        }, 1500);
+        }
     };
 
     return (
         <>
-            {/* Collapsed Trigger Button */}
             {!isOpen && (
                 <div className="fixed right-0 top-1/2 transform -translate-y-1/2 z-40 hidden lg:block">
                     <Button
@@ -62,7 +83,6 @@ export function AITeachingAssistant() {
                 </div>
             )}
 
-            {/* Mobile Trigger */}
             <div className="fixed bottom-6 right-6 z-50 lg:hidden">
                 <Button
                     onClick={() => setIsOpen(true)}
@@ -73,17 +93,13 @@ export function AITeachingAssistant() {
                 </Button>
             </div>
 
-
-            {/* Expanded Panel (Overlay) */}
             {isOpen && (
                 <div className="fixed inset-0 z-50 flex justify-end">
-                    {/* Backdrop */}
                     <div
                         className="absolute inset-0 bg-black/20 backdrop-blur-sm"
                         onClick={() => setIsOpen(false)}
                     />
 
-                    {/* Panel */}
                     <div className="relative w-full max-w-md h-full bg-white shadow-2xl flex flex-col animate-in slide-in-from-right duration-300">
                         <div className="p-4 border-b flex items-center justify-between bg-indigo-50/50">
                             <div className="flex items-center gap-2 text-indigo-700 font-bold text-lg">
@@ -99,8 +115,8 @@ export function AITeachingAssistant() {
                             {messages.map((msg, i) => (
                                 <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                                     <div className={`max-w-[85%] p-3 rounded-lg text-sm ${msg.role === 'user'
-                                            ? 'bg-indigo-600 text-white rounded-tr-none'
-                                            : 'bg-white border shadow-sm text-slate-800 rounded-tl-none'
+                                        ? 'bg-indigo-600 text-white rounded-tr-none'
+                                        : 'bg-white border shadow-sm text-slate-800 rounded-tl-none'
                                         }`}>
                                         <div className="whitespace-pre-wrap">{msg.content}</div>
                                     </div>
@@ -117,7 +133,13 @@ export function AITeachingAssistant() {
                         </div>
 
                         <div className="p-4 border-t bg-white space-y-4">
-                            {/* Quick Actions */}
+                            {error && (
+                                <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700 flex items-center gap-2">
+                                    <AlertCircle className="h-3.5 w-3.5" />
+                                    {error}
+                                </div>
+                            )}
+
                             <div className="grid grid-cols-2 gap-2">
                                 {quickActions.map((action) => (
                                     <Button

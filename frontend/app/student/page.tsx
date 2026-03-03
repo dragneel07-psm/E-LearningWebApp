@@ -11,16 +11,21 @@ import {
     AlertCircle, TrendingUp, ChevronRight, PlayCircle,
     Sparkles, Lightbulb, Megaphone
 } from 'lucide-react';
-import { academicAPI, aiAPI, usersAPI, helpers, Subject } from '@/lib/api';
+import { academicAPI, aiAPI, usersAPI, helpers, Subject, Timetable, Attendance } from '@/lib/api';
 import { AITutorChat } from '@/components/ai-tutor-chat';
 import { GamificationWidget } from '@/components/student/GamificationWidget';
 import { SmartPathWidget } from '@/components/student/SmartPathWidget';
 import { UpcomingExamsWidget } from '@/components/student/UpcomingExamsWidget';
-import { useTranslation } from '@/lib/localization';
+
+type TimetableSlot = {
+    time: string;
+    subject: string;
+    type: string;
+    status: 'completed' | 'ongoing' | 'upcoming';
+};
 
 export default function StudentDashboard() {
     const router = useRouter();
-    const { t } = useTranslation();
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [studentId, setStudentId] = useState<string>('');
@@ -29,26 +34,90 @@ export default function StudentDashboard() {
     const [recommendations, setRecommendations] = useState<any>(null);
     const [user, setUser] = useState<any>(null);
 
-    // Mock Data based on requirements
-    const attendance = 92;
-    const pendingAssignments = 3;
-
-    // Daily Timetable Mock
-    const timetable = [
-        { time: '09:00 AM', subject: 'Mathematics', type: 'Lecture', status: 'completed' },
-        { time: '10:30 AM', subject: 'Physics', type: 'Lab', status: 'ongoing' },
-        { time: '01:00 PM', subject: 'English', type: 'Lecture', status: 'upcoming' },
-        { time: '02:30 PM', subject: 'Computer Science', type: 'Lab', status: 'upcoming' },
-    ];
-
     const [upcomingExamsCount, setUpcomingExamsCount] = useState(0);
     const [pendingAssignmentsCount, setPendingAssignmentsCount] = useState(0);
     const [notices, setNotices] = useState<any[]>([]);
     const [allAssessmentsState, setAllAssessmentsState] = useState<any[]>([]);
+    const [attendanceRate, setAttendanceRate] = useState(0);
+    const [attendanceTrend, setAttendanceTrend] = useState(0);
+    const [todayTimetable, setTodayTimetable] = useState<TimetableSlot[]>([]);
 
     useEffect(() => {
         loadData();
     }, []);
+
+    const getWeekdayName = () => new Date().toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase();
+
+    const toMinutes = (time: string) => {
+        const [h, m] = time.split(':').map(Number);
+        if (!Number.isFinite(h) || !Number.isFinite(m)) return 0;
+        return (h * 60) + m;
+    };
+
+    const formatClock = (time: string) => {
+        const [h, m] = time.split(':').map(Number);
+        if (!Number.isFinite(h) || !Number.isFinite(m)) return time;
+        const date = new Date();
+        date.setHours(h, m, 0, 0);
+        return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    };
+
+    const buildTodayTimetable = (entries: Timetable[]): TimetableSlot[] => {
+        const now = new Date();
+        const nowMinutes = now.getHours() * 60 + now.getMinutes();
+        const weekday = getWeekdayName();
+
+        return entries
+            .filter((entry) => String(entry.day_of_week || '').toLowerCase() === weekday)
+            .sort((a, b) => toMinutes(a.start_time) - toMinutes(b.start_time))
+            .map((entry) => {
+                const start = toMinutes(entry.start_time);
+                const end = toMinutes(entry.end_time);
+                let status: TimetableSlot['status'] = 'upcoming';
+                if (nowMinutes > end) status = 'completed';
+                else if (nowMinutes >= start && nowMinutes <= end) status = 'ongoing';
+
+                return {
+                    time: `${formatClock(entry.start_time)} - ${formatClock(entry.end_time)}`,
+                    subject: entry.subject_name || 'Subject',
+                    type: entry.room_number || entry.academic_class || 'Class',
+                    status,
+                };
+            });
+    };
+
+    const computeAttendance = (records: Attendance[]) => {
+        if (!records.length) return { rate: 0, trend: 0 };
+
+        const presentLike = records.filter((record) => record.status === 'present' || record.status === 'late').length;
+        const rate = Math.round((presentLike / records.length) * 100);
+
+        const now = new Date();
+        const currentMonth = now.getMonth();
+        const currentYear = now.getFullYear();
+        const prevMonthDate = new Date(currentYear, currentMonth - 1, 1);
+
+        const currentMonthRecords = records.filter((record) => {
+            const d = new Date(record.date);
+            return d.getFullYear() === currentYear && d.getMonth() === currentMonth;
+        });
+        const prevMonthRecords = records.filter((record) => {
+            const d = new Date(record.date);
+            return d.getFullYear() === prevMonthDate.getFullYear() && d.getMonth() === prevMonthDate.getMonth();
+        });
+
+        const currentRate = currentMonthRecords.length
+            ? (currentMonthRecords.filter((r) => r.status === 'present' || r.status === 'late').length / currentMonthRecords.length) * 100
+            : rate;
+        const prevRate = prevMonthRecords.length
+            ? (prevMonthRecords.filter((r) => r.status === 'present' || r.status === 'late').length / prevMonthRecords.length) * 100
+            : currentRate;
+
+        return {
+            rate,
+            trend: Math.round(currentRate - prevRate),
+        };
+    };
 
     const loadData = async () => {
         try {
@@ -65,8 +134,14 @@ export default function StudentDashboard() {
             const subjects = await helpers.getStudentSubjects(student.id);
             setCourses(subjects);
 
+            const [allAssessments, mySubmissions, myAttendance, myTimetable] = await Promise.all([
+                academicAPI.getAssessments(),
+                academicAPI.getSubmissions(),
+                academicAPI.getMyAttendance().catch(() => []),
+                academicAPI.getMyTimetable().catch(() => []),
+            ]);
+
             // 2. Fetch Assessments for counts
-            const allAssessments = await academicAPI.getAssessments();
             setAllAssessmentsState(allAssessments);
             const now = new Date();
 
@@ -77,10 +152,15 @@ export default function StudentDashboard() {
             setUpcomingExamsCount(upcomingExams.length);
 
             // 3. Fetch Submissions to find pending ones
-            const mySubmissions = await academicAPI.getSubmissions();
             const submittedIds = new Set(mySubmissions.filter(s => s.status !== 'draft').map(s => s.assessment));
             const pending = allAssessments.filter(a => !submittedIds.has(a.assessment_id));
             setPendingAssignmentsCount(pending.length);
+
+            // 4. Attendance + today's timetable (real-time from APIs)
+            const attendanceSummary = computeAttendance(myAttendance);
+            setAttendanceRate(attendanceSummary.rate);
+            setAttendanceTrend(attendanceSummary.trend);
+            setTodayTimetable(buildTodayTimetable(myTimetable));
 
             // 4. Fetch AI Recommendations
             try {
@@ -133,9 +213,10 @@ export default function StudentDashboard() {
                     <CardContent className="p-5 flex items-center justify-between">
                         <div>
                             <p className="text-sm font-medium text-slate-500 mb-1">Attendance</p>
-                            <h3 className="text-2xl font-bold text-slate-900">{attendance}%</h3>
-                            <p className="text-xs text-green-600 font-medium flex items-center mt-1">
-                                <TrendingUp className="h-3 w-3 mr-1" /> +2% this month
+                            <h3 className="text-2xl font-bold text-slate-900">{attendanceRate}%</h3>
+                            <p className={`text-xs font-medium flex items-center mt-1 ${attendanceTrend >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                <TrendingUp className={`h-3 w-3 mr-1 ${attendanceTrend < 0 ? 'rotate-180' : ''}`} />
+                                {attendanceTrend >= 0 ? '+' : ''}{attendanceTrend}% this month
                             </p>
                         </div>
                         <div className="h-12 w-12 rounded-full bg-green-50 flex items-center justify-center">
@@ -253,10 +334,15 @@ export default function StudentDashboard() {
                         </CardHeader>
                         <CardContent>
                             <div className="space-y-0">
-                                {timetable.map((slot, idx) => (
+                                {todayTimetable.length === 0 && (
+                                    <div className="text-center py-6 text-sm text-slate-500 border border-dashed border-slate-200 rounded-lg">
+                                        No classes scheduled for today.
+                                    </div>
+                                )}
+                                {todayTimetable.map((slot, idx) => (
                                     <div key={idx} className="flex relative pb-6 last:pb-0">
                                         {/* Timeline Line */}
-                                        {idx !== timetable.length - 1 && (
+                                        {idx !== todayTimetable.length - 1 && (
                                             <div className="absolute top-8 left-2.5 w-0.5 h-full bg-slate-200 -z-10"></div>
                                         )}
 
@@ -381,7 +467,7 @@ export default function StudentDashboard() {
                                             </div>
                                             <p className="text-xs text-slate-600 mb-2 line-clamp-2">{notice.content}</p>
                                             <span className="text-[10px] text-slate-500 font-medium whitespace-nowrap">
-                                                {new Date(notice.published_date).toLocaleDateString()}
+                                                {notice.published_date ? new Date(notice.published_date).toLocaleDateString() : 'N/A'}
                                             </span>
                                         </div>
                                     )

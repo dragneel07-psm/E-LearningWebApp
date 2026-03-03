@@ -15,8 +15,16 @@ import { AITeachingAssistant } from '@/components/ai-teaching-assistant';
 import { MyProfileDialog } from '@/components/my-profile-dialog';
 import { AttendanceTrends } from '@/components/attendance-trends';
 import Link from 'next/link';
-import { BarChart, Bar, XAxis, CartesianGrid, Tooltip, PieChart, Pie, Cell, Legend } from 'recharts';
+import { BarChart, Bar, XAxis, CartesianGrid, Tooltip } from 'recharts';
 import { SafeResponsiveContainer } from '@/components/ui/safe-responsive-container';
+
+type ScheduleSlot = {
+    time: string;
+    className: string;
+    subject: string;
+    room: string;
+    status: 'completed' | 'ongoing' | 'upcoming';
+};
 
 export default function TeacherDashboard() {
     const [loading, setLoading] = useState(true);
@@ -25,28 +33,45 @@ export default function TeacherDashboard() {
     const [stats, setStats] = useState({
         totalStudents: 0,
         classesAssigned: 0,
-        pendingReviews: 12,
-        aiEvaluations: 45
+        pendingReviews: 0,
+        aiEvaluations: 0,
+        todaysClasses: 0,
+        nextClassInMins: null as number | null,
     });
     const [schoolName, setSchoolName] = useState("Teacher");
+    const [schedule, setSchedule] = useState<ScheduleSlot[]>([]);
+    const [performanceTrends, setPerformanceTrends] = useState<Array<{ name: string; score: number }>>([]);
 
-    // Mock Data for Schedule
-    const schedule = [
-        { time: '09:00 - 09:45', class: 'Class 10-A', subject: 'Physics', room: 'Lab 2', status: 'upcoming' },
-        { time: '10:00 - 10:45', class: 'Class 9-B', subject: 'Physics', room: 'Room 304', status: 'upcoming' },
-        { time: '11:15 - 12:00', class: 'Class 11-A', subject: 'Physics (Adv)', room: 'Room 305', status: 'upcoming' },
-        { time: '14:00 - 14:45', class: 'Class 10-C', subject: 'Physics', room: 'Online', status: 'upcoming' },
-    ];
-
-    const [analytics, setAnalytics] = useState<any>(null);
     const [alerts, setAlerts] = useState<any[]>([]);
+
+    const toList = <T,>(payload: unknown): T[] => {
+        if (Array.isArray(payload)) return payload as T[];
+        if (payload && typeof payload === 'object' && Array.isArray((payload as any).results)) {
+            return (payload as any).results as T[];
+        }
+        return [];
+    };
+
+    const toMinutes = (time: string) => {
+        const [h, m] = String(time || '').split(':').map(Number);
+        if (!Number.isFinite(h) || !Number.isFinite(m)) return 0;
+        return (h * 60) + m;
+    };
+
+    const formatClock = (time: string) => {
+        const [h, m] = String(time || '').split(':').map(Number);
+        if (!Number.isFinite(h) || !Number.isFinite(m)) return time;
+        const d = new Date();
+        d.setHours(h, m, 0, 0);
+        return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    };
 
     useEffect(() => {
         async function loadData() {
             try {
-                // Fetch User & Tenant Info
                 const me = await usersAPI.getMe();
                 setUser(me);
+
                 if (me.tenant) {
                     try {
                         const tenant = await coreAPI.getTenant(me.tenant);
@@ -56,33 +81,103 @@ export default function TeacherDashboard() {
                     }
                 }
 
-                // Fetch Stats
-                const students = await academicAPI.getStudents().catch(() => []);
-                const courses = await academicAPI.getSubjects().catch(() => []);
-                setStats(prev => ({
-                    ...prev,
+                const [
+                    studentsRaw,
+                    subjectsRaw,
+                    submissionsRaw,
+                    aiLogs,
+                    timetableRaw,
+                    teachersRaw,
+                    analyticsData,
+                ] = await Promise.all([
+                    academicAPI.getStudents().catch(() => []),
+                    academicAPI.getSubjects().catch(() => []),
+                    academicAPI.getSubmissions().catch(() => []),
+                    aiAPI.getAILogs().catch(() => []),
+                    academicAPI.getTimetable().catch(() => []),
+                    academicAPI.getTeachers().catch(() => []),
+                    aiAPI.getTeacherAnalytics().catch(() => null),
+                ]);
+
+                const students = toList<any>(studentsRaw);
+                const subjects = toList<any>(subjectsRaw);
+                const submissions = toList<any>(submissionsRaw);
+                const timetable = toList<any>(timetableRaw);
+                const teachers = toList<any>(teachersRaw);
+                const logs = Array.isArray(aiLogs) ? aiLogs : [];
+
+                const teacherProfile = teachers.find((teacher) => String(teacher.user_id) === String(me.user_id));
+                const teacherName = `${me.first_name || ''} ${me.last_name || ''}`.trim().toLowerCase();
+                const weekday = new Date().toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase();
+                const nowMinutes = (new Date().getHours() * 60) + new Date().getMinutes();
+
+                const todaySchedule: ScheduleSlot[] = timetable
+                    .filter((entry) => String(entry.day_of_week || '').toLowerCase() === weekday)
+                    .filter((entry) => {
+                        if (teacherProfile?.id && entry.teacher) return String(entry.teacher) === String(teacherProfile.id);
+                        const entryName = String(entry.teacher_name || '').toLowerCase();
+                        return teacherName ? entryName.includes(teacherName) : true;
+                    })
+                    .sort((a, b) => toMinutes(a.start_time) - toMinutes(b.start_time))
+                    .map((entry) => {
+                        const start = toMinutes(entry.start_time);
+                        const end = toMinutes(entry.end_time);
+                        let status: ScheduleSlot['status'] = 'upcoming';
+                        if (nowMinutes > end) status = 'completed';
+                        else if (nowMinutes >= start && nowMinutes <= end) status = 'ongoing';
+
+                        return {
+                            time: `${formatClock(entry.start_time)} - ${formatClock(entry.end_time)}`,
+                            className: entry.academic_class_name || entry.academic_class || 'Class',
+                            subject: entry.subject_name || 'Subject',
+                            room: entry.room_number || 'Room not set',
+                            status,
+                        };
+                    });
+
+                setSchedule(todaySchedule);
+
+                const nextClass = todaySchedule.find((slot) => slot.status === 'upcoming');
+                const nextClassInMins = nextClass ? Math.max(0, toMinutes(nextClass.time.split(' - ')[0]) - nowMinutes) : null;
+
+                const pendingReviews = submissions.filter((submission) => !submission.is_graded && submission.status !== 'draft').length;
+                const aiEvaluations = logs.filter((log: any) => {
+                    const feature = String(log.feature_used || '').toLowerCase();
+                    return feature.includes('grading') || feature.includes('evaluation') || feature.includes('eval');
+                }).length;
+
+                setStats({
                     totalStudents: students.length,
-                    classesAssigned: courses.length
-                }));
+                    classesAssigned: subjects.length,
+                    pendingReviews,
+                    aiEvaluations,
+                    todaysClasses: todaySchedule.length,
+                    nextClassInMins,
+                });
 
-                // Fetch Predictive Analytics
-                try {
-                    const aiData = await aiAPI.getTeacherAnalytics();
-                    setAnalytics(aiData);
+                if (analyticsData) {
+                    const trend = Array.isArray(analyticsData.performance_trends)
+                        ? analyticsData.performance_trends.map((row: any) => ({
+                            name: row.week || 'Week',
+                            score: Number(row.avgScore || 0),
+                        }))
+                        : [];
+                    setPerformanceTrends(trend);
 
-                    // Map AI Data to Alerts
                     const newAlerts = [];
-                    if (aiData.at_risk_count > 0) {
+                    if (analyticsData.at_risk_count > 0) {
                         newAlerts.push({
                             id: 1,
                             type: 'alert',
-                            title: `${aiData.at_risk_count} Students At-Risk`,
-                            desc: `Critical: ${aiData.at_risk_students[0].name} and others show declining trends.`,
+                            title: `${analyticsData.at_risk_count} Students At-Risk`,
+                            desc: analyticsData.at_risk_students?.[0]
+                                ? `Critical: ${analyticsData.at_risk_students[0].name} and others show declining trends.`
+                                : 'Students show declining performance trends.',
                             action: 'View Analytics',
                             link: '/teacher/analytics'
                         });
                     }
-                    aiData.ai_insights.forEach((insight: string, i: number) => {
+                    (analyticsData.ai_insights || []).forEach((insight: string, i: number) => {
                         if (newAlerts.length < 3) {
                             newAlerts.push({
                                 id: i + 2,
@@ -94,11 +189,30 @@ export default function TeacherDashboard() {
                             });
                         }
                     });
+                    if (newAlerts.length === 0) {
+                        newAlerts.push({
+                            id: 99,
+                            type: 'info',
+                            title: 'No critical alerts',
+                            desc: 'Current class and assessment indicators are stable.',
+                            action: 'View Analytics',
+                            link: '/teacher/analytics'
+                        });
+                    }
                     setAlerts(newAlerts);
-                } catch (e) {
-                    console.warn("Predictive analytics failed to load", e);
+                } else {
+                    setPerformanceTrends([]);
+                    setAlerts([
+                        {
+                            id: 1,
+                            type: 'warning',
+                            title: 'Analytics unavailable',
+                            desc: 'AI analytics service is not returning data right now.',
+                            action: 'Retry Later',
+                            link: '/teacher/analytics'
+                        }
+                    ]);
                 }
-
             } catch (error) {
                 console.error('Dashboard load failed:', error);
             } finally {
@@ -128,8 +242,10 @@ export default function TeacherDashboard() {
                         <BookOpen className="h-4 w-4 text-indigo-500" />
                     </CardHeader>
                     <CardContent>
-                        <div className="text-2xl font-bold text-slate-900">4</div>
-                        <p className="text-xs text-slate-500 mt-1">Next class in 15 mins</p>
+                        <div className="text-2xl font-bold text-slate-900">{stats.todaysClasses}</div>
+                        <p className="text-xs text-slate-500 mt-1">
+                            {stats.nextClassInMins !== null ? `Next class in ${stats.nextClassInMins} mins` : 'No upcoming classes today'}
+                        </p>
                     </CardContent>
                 </Card>
                 <Card className="shadow-sm border-slate-200 hover:shadow-md transition-shadow">
@@ -161,7 +277,7 @@ export default function TeacherDashboard() {
                     </CardHeader>
                     <CardContent>
                         <div className="text-2xl font-bold text-slate-900">{stats.aiEvaluations}</div>
-                        <Progress value={65} className="h-1.5 mt-2 bg-purple-100" />
+                        <Progress value={Math.min(100, stats.aiEvaluations)} className="h-1.5 mt-2 bg-purple-100" />
                     </CardContent>
                 </Card>
             </div>
@@ -175,13 +291,20 @@ export default function TeacherDashboard() {
                             <CardTitle className="text-base font-bold text-slate-800 flex items-center gap-2">
                                 <Calendar className="h-4 w-4 text-indigo-500" /> Today&apos;s Schedule
                             </CardTitle>
-                            <Button variant="ghost" size="sm" className="text-xs text-indigo-600 h-8">View Full Timetable</Button>
+                            <Link href="/teacher/timetable">
+                                <Button variant="ghost" size="sm" className="text-xs text-indigo-600 h-8">View Full Timetable</Button>
+                            </Link>
                         </CardHeader>
                         <CardContent className="pt-6">
                             <div className="space-y-6 relative before:absolute before:inset-y-0 before:left-4 before:w-0.5 before:bg-slate-200">
+                                {schedule.length === 0 && (
+                                    <div className="text-center py-6 text-sm text-slate-500 border border-dashed border-slate-200 rounded-lg">
+                                        No classes assigned for today.
+                                    </div>
+                                )}
                                 {schedule.map((slot, i) => (
                                     <div key={i} className="relative pl-10 group">
-                                        <span className={`absolute left-[11px] top-1 h-3 w-3 rounded-full border-2 border-white ring-2 ring-indigo-100 bg-indigo-500`}></span>
+                                        <span className={`absolute left-[11px] top-1 h-3 w-3 rounded-full border-2 border-white ring-2 ${slot.status === 'completed' ? 'ring-emerald-100 bg-emerald-500' : slot.status === 'ongoing' ? 'ring-indigo-100 bg-indigo-500' : 'ring-slate-200 bg-slate-400'}`}></span>
                                         <div className="flex flex-col sm:flex-row sm:items-center justify-between p-4 bg-slate-50/50 rounded-lg border border-slate-100 group-hover:bg-indigo-50/30 transition-colors">
                                             <div className="space-y-1">
                                                 <div className="text-sm font-medium text-slate-500 font-mono flex items-center gap-2">
@@ -190,7 +313,7 @@ export default function TeacherDashboard() {
                                                 </div>
                                                 <div className="font-bold text-slate-900 text-lg">{slot.subject}</div>
                                                 <div className="text-sm text-slate-600 flex items-center gap-2">
-                                                    <Users className="h-3 w-3" /> {slot.class}
+                                                    <Users className="h-3 w-3" /> {slot.className}
                                                     <span className="text-slate-300">|</span>
                                                     <MapPin className="h-3 w-3" /> {slot.room}
                                                 </div>
@@ -213,19 +336,20 @@ export default function TeacherDashboard() {
                                 <CardTitle className="text-sm font-bold text-slate-700">Performance Trends</CardTitle>
                             </CardHeader>
                             <CardContent className="h-[200px] w-full">
-                                <SafeResponsiveContainer width="100%" height="100%">
-                                    <BarChart data={[
-                                        { name: 'Week 1', score: 78 },
-                                        { name: 'Week 2', score: 82 },
-                                        { name: 'Week 3', score: 75 },
-                                        { name: 'Week 4', score: 85 }
-                                    ]}>
-                                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                                        <XAxis dataKey="name" fontSize={10} axisLine={false} tickLine={false} />
-                                        <Tooltip contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} />
-                                        <Bar dataKey="score" fill="#6366f1" radius={[4, 4, 0, 0]} />
-                                    </BarChart>
-                                </SafeResponsiveContainer>
+                                {performanceTrends.length > 0 ? (
+                                    <SafeResponsiveContainer width="100%" height="100%">
+                                        <BarChart data={performanceTrends}>
+                                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                                            <XAxis dataKey="name" fontSize={10} axisLine={false} tickLine={false} />
+                                            <Tooltip contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} />
+                                            <Bar dataKey="score" fill="#6366f1" radius={[4, 4, 0, 0]} />
+                                        </BarChart>
+                                    </SafeResponsiveContainer>
+                                ) : (
+                                    <div className="h-full flex items-center justify-center text-sm text-slate-500 border border-dashed border-slate-200 rounded-lg">
+                                        Performance trend data is unavailable.
+                                    </div>
+                                )}
                             </CardContent>
                         </Card>
                         <AttendanceTrends />

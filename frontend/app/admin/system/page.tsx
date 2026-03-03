@@ -14,15 +14,18 @@ import { SafeResponsiveContainer } from '@/components/ui/safe-responsive-contain
 import Link from 'next/link'; // Ensure Link is imported
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
-import { coreAPI } from '@/lib/api';
+import { coreAPI, usersAPI, AuditLog } from '@/lib/api';
 
 export default function SystemAdminDashboard() {
     const [features, setFeatures] = useState({
-        aiTutor: true,
-        autoGrading: true,
+        aiTutor: false,
+        autoGrading: false,
         maintenanceMode: false,
         betaFeatures: false
     });
+    const [latencyHistory, setLatencyHistory] = useState<Array<{ time: string; load: number }>>([]);
+    const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
+    const [auditLoading, setAuditLoading] = useState(true);
 
     // Real-time System Stats
     const [systemStats, setSystemStats] = useState({
@@ -35,6 +38,15 @@ export default function SystemAdminDashboard() {
         try {
             const data = await coreAPI.getSystemStatus();
             setSystemStats(data);
+            const numericLatency = Number.parseInt(String(data.latency || '').replace(/[^\d]/g, ''), 10);
+            const point = {
+                time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                load: Number.isFinite(numericLatency) ? numericLatency : 0,
+            };
+            setLatencyHistory((prev) => {
+                const next = [...prev, point];
+                return next.slice(-24);
+            });
         } catch (error) {
             console.error('Failed to fetch system stats:', error);
             setSystemStats(prev => ({ ...prev, status: 'Offline' }));
@@ -42,31 +54,43 @@ export default function SystemAdminDashboard() {
     }, []);
 
     useEffect(() => {
-        // Initial Fetch
         fetchSystemStats();
-
-        // Poll every 5 seconds
         const interval = setInterval(fetchSystemStats, 5000);
         return () => clearInterval(interval);
     }, [fetchSystemStats]);
 
-    // Mock Data for Charts (Keep until real analytics API exists)
-    const serverLoadData = [
-        { time: '00:00', load: 12 },
-        { time: '04:00', load: 8 },
-        { time: '08:00', load: 45 },
-        { time: '12:00', load: 78 },
-        { time: '16:00', load: 65 },
-        { time: '20:00', load: 34 },
-        { time: '23:59', load: 20 },
-    ];
+    useEffect(() => {
+        async function loadFeatureState() {
+            try {
+                const me = await usersAPI.getMe();
+                const tenantFeatures = me?.tenant_features || {};
+                setFeatures((prev) => ({
+                    ...prev,
+                    aiTutor: tenantFeatures.student_ai_chatbot !== false,
+                    autoGrading: tenantFeatures.teacher_ai_grading !== false,
+                    betaFeatures: tenantFeatures.teacher_reports !== false,
+                }));
+            } catch (error) {
+                console.error('Failed to load feature state:', error);
+            }
+        }
 
-    const auditLogs = [
-        { id: 1, action: 'User Login', user: 'admin', ip: '192.168.1.1', time: '10 mins ago', status: 'success' },
-        { id: 2, action: 'Update Settings', user: 'admin', ip: '192.168.1.1', time: '1 hour ago', status: 'success' },
-        { id: 3, action: 'Failed Login', user: 'unknown', ip: '10.0.0.5', time: '2 hours ago', status: 'warning' },
-        { id: 4, action: 'Backup Created', user: 'system', ip: 'localhost', time: '5 hours ago', status: 'success' },
-    ];
+        async function loadAuditLogs() {
+            try {
+                setAuditLoading(true);
+                const logs = await coreAPI.getAuditLogs();
+                setAuditLogs(Array.isArray(logs) ? logs.slice(0, 6) : []);
+            } catch (error) {
+                console.error('Failed to load audit logs:', error);
+                setAuditLogs([]);
+            } finally {
+                setAuditLoading(false);
+            }
+        }
+
+        loadFeatureState();
+        loadAuditLogs();
+    }, []);
 
     return (
         <div className="p-6 space-y-8 bg-slate-50 min-h-screen dark:bg-slate-900">
@@ -104,7 +128,7 @@ export default function SystemAdminDashboard() {
                     </CardHeader>
                     <CardContent>
                         <div className="text-2xl font-bold">{systemStats.latency}</div>
-                        <p className="text-xs text-muted-foreground">Response time (simulated)</p>
+                        <p className="text-xs text-muted-foreground">Response time from live status checks</p>
                     </CardContent>
                 </Card>
                 <Card className="border-t-4 border-t-purple-500">
@@ -124,24 +148,30 @@ export default function SystemAdminDashboard() {
                 <Card className="col-span-2">
                     <CardHeader>
                         <CardTitle>Server Load (24h)</CardTitle>
-                        <CardDescription>CPU Usage Trend</CardDescription>
+                        <CardDescription>Latency trend from periodic health checks</CardDescription>
                     </CardHeader>
                     <CardContent className="h-[300px]">
-                        <SafeResponsiveContainer width="100%" height="100%">
-                            <AreaChart data={serverLoadData}>
-                                <defs>
-                                    <linearGradient id="colorLoad" x1="0" y1="0" x2="0" y2="1">
-                                        <stop offset="5%" stopColor="#8884d8" stopOpacity={0.8} />
-                                        <stop offset="95%" stopColor="#8884d8" stopOpacity={0} />
-                                    </linearGradient>
-                                </defs>
-                                <XAxis dataKey="time" />
-                                <YAxis />
-                                <CartesianGrid strokeDasharray="3 3" />
-                                <Tooltip />
-                                <Area type="monotone" dataKey="load" stroke="#8884d8" fillOpacity={1} fill="url(#colorLoad)" />
-                            </AreaChart>
-                        </SafeResponsiveContainer>
+                        {latencyHistory.length > 0 ? (
+                            <SafeResponsiveContainer width="100%" height="100%">
+                                <AreaChart data={latencyHistory}>
+                                    <defs>
+                                        <linearGradient id="colorLoad" x1="0" y1="0" x2="0" y2="1">
+                                            <stop offset="5%" stopColor="#8884d8" stopOpacity={0.8} />
+                                            <stop offset="95%" stopColor="#8884d8" stopOpacity={0} />
+                                        </linearGradient>
+                                    </defs>
+                                    <XAxis dataKey="time" />
+                                    <YAxis />
+                                    <CartesianGrid strokeDasharray="3 3" />
+                                    <Tooltip />
+                                    <Area type="monotone" dataKey="load" stroke="#8884d8" fillOpacity={1} fill="url(#colorLoad)" />
+                                </AreaChart>
+                            </SafeResponsiveContainer>
+                        ) : (
+                            <div className="h-full flex items-center justify-center text-sm text-slate-500 border border-dashed border-slate-200 rounded-lg">
+                                Waiting for enough health-check samples...
+                            </div>
+                        )}
                     </CardContent>
                 </Card>
 
@@ -155,20 +185,21 @@ export default function SystemAdminDashboard() {
                         <CardContent className="space-y-4">
                             <div className="flex items-center justify-between">
                                 <Label htmlFor="ai-tutor">AI Tutor Engine</Label>
-                                <Switch id="ai-tutor" checked={features.aiTutor} onCheckedChange={(c) => setFeatures({ ...features, aiTutor: c })} />
+                                <Switch id="ai-tutor" checked={features.aiTutor} disabled />
                             </div>
                             <div className="flex items-center justify-between">
                                 <Label htmlFor="auto-grade">Auto-Grading</Label>
-                                <Switch id="auto-grade" checked={features.autoGrading} onCheckedChange={(c) => setFeatures({ ...features, autoGrading: c })} />
+                                <Switch id="auto-grade" checked={features.autoGrading} disabled />
                             </div>
                             <div className="flex items-center justify-between">
                                 <Label htmlFor="beta">Beta Features</Label>
-                                <Switch id="beta" checked={features.betaFeatures} onCheckedChange={(c) => setFeatures({ ...features, betaFeatures: c })} />
+                                <Switch id="beta" checked={features.betaFeatures} disabled />
                             </div>
                             <div className="flex items-center justify-between pt-2 border-t">
                                 <Label htmlFor="maint" className="text-red-600 font-medium">Maintenance Mode</Label>
                                 <Switch id="maint" checked={features.maintenanceMode} onCheckedChange={(c) => setFeatures({ ...features, maintenanceMode: c })} />
                             </div>
+                            <p className="text-xs text-muted-foreground">Feature flags are controlled by your subscription plan and global settings.</p>
                         </CardContent>
                     </Card>
 
@@ -206,18 +237,30 @@ export default function SystemAdminDashboard() {
                 </CardHeader>
                 <CardContent>
                     <div className="space-y-4">
-                        {auditLogs.map((log) => (
-                            <div key={log.id} className="flex items-center justify-between border-b pb-2 last:border-0 last:pb-0">
-                                <div className="flex items-center gap-3">
-                                    <div className={`h-2 w-2 rounded-full ${log.status === 'success' ? 'bg-emerald-500' : 'bg-red-500'}`} />
-                                    <div>
-                                        <p className="text-sm font-medium">{log.action}</p>
-                                        <p className="text-xs text-muted-foreground">User: {log.user} • IP: {log.ip}</p>
+                        {auditLoading && (
+                            <div className="text-sm text-muted-foreground">Loading logs...</div>
+                        )}
+                        {!auditLoading && auditLogs.length === 0 && (
+                            <div className="text-sm text-muted-foreground">No audit logs found.</div>
+                        )}
+                        {!auditLoading && auditLogs.map((log) => {
+                            const when = (log.timestamp || log.created_at);
+                            const actor = log.user || log.actor || 'System';
+                            const ip = (log as any).ip_address || (log.metadata as any)?.ip_address || 'N/A';
+                            const isWarning = String(log.action || '').toLowerCase().includes('fail');
+                            return (
+                                <div key={String(log.id)} className="flex items-center justify-between border-b pb-2 last:border-0 last:pb-0">
+                                    <div className="flex items-center gap-3">
+                                        <div className={`h-2 w-2 rounded-full ${isWarning ? 'bg-red-500' : 'bg-emerald-500'}`} />
+                                        <div>
+                                            <p className="text-sm font-medium">{log.action}</p>
+                                            <p className="text-xs text-muted-foreground">User: {actor} • IP: {ip}</p>
+                                        </div>
                                     </div>
+                                    <span className="text-xs text-muted-foreground font-mono">{when ? new Date(when).toLocaleString() : '-'}</span>
                                 </div>
-                                <span className="text-xs text-muted-foreground font-mono">{log.time}</span>
-                            </div>
-                        ))}
+                            );
+                        })}
                     </div>
                 </CardContent>
             </Card>

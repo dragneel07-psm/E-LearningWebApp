@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Users, GraduationCap, School, TrendingUp, ArrowUpRight, ArrowDownRight, UserPlus, FilePlus, Calendar, MoreVertical, CreditCard, BookOpen } from 'lucide-react';
@@ -14,18 +15,22 @@ import { AddTeacherDialog } from '@/components/add-teacher-dialog';
 import { CreateNoticeDialog } from '@/components/create-notice-dialog';
 import { ManageScheduleDialog } from '@/components/manage-schedule-dialog';
 
+type ActivityItem = { id: number; type: string; message: string; time: string };
+
 export default function SchoolAdminDashboard() {
+    const router = useRouter();
     const [stats, setStats] = useState({
         totalStudents: 0,
         totalTeachers: 0,
         totalClasses: 0,
-        attendanceRate: 94,
+        attendanceRate: 0,
         revenue: 0,
         pendingFees: 0,
         loading: true
     });
 
-    const [recentActivity, setRecentActivity] = useState<Array<{ id: number; type: string; message: string; time: string }>>([]);
+    const [recentActivity, setRecentActivity] = useState<ActivityItem[]>([]);
+    const [classDistribution, setClassDistribution] = useState<Array<{ name: string; students: number }>>([]);
 
     // Dialog States
     const [showAddStudent, setShowAddStudent] = useState(false);
@@ -33,71 +38,131 @@ export default function SchoolAdminDashboard() {
     const [showCreateNotice, setShowCreateNotice] = useState(false);
     const [showManageSchedule, setShowManageSchedule] = useState(false);
 
-    useEffect(() => {
-        async function loadData() {
-            try {
-                const [students, teachers, classes, accounts, finance] = await Promise.all([
-                    academicAPI.getStudents().catch(e => { console.error("Students fetch failed:", e); return []; }),
-                    academicAPI.getTeachers().catch(e => { console.error("Teachers fetch failed:", e); return []; }),
-                    academicAPI.getClasses().catch(e => { console.error("Classes fetch failed:", e); return []; }),
-                    usersAPI.getAccounts().catch(e => { console.error("Accounts fetch failed:", e); return []; }),
-                    billingAPI.getFinanceDashboard().catch(e => {
-                        console.error("Finance fetch failed:", e);
-                        return { total_revenue: 0, total_pending: 0, total_expenses: 0, net_balance: 0, recent_payments: [], recent_expenses: [] };
-                    })
-                ]);
-
-                // Calculate robust stats
-                const studentCount = accounts.filter(u => u.role === 'student').length || students.length;
-
-                setStats({
-                    totalStudents: studentCount,
-                    totalTeachers: teachers.length,
-                    totalClasses: classes.length,
-                    attendanceRate: 94,
-                    revenue: finance.total_revenue || 0,
-                    pendingFees: finance.total_pending || 0,
-                    loading: false
-                });
-
-
-                // Mock Recent Activity
-                setRecentActivity([
-                    { id: 1, type: 'enrollment', message: 'New student John Doe enrolled in Class 10-A', time: '10:30 AM' },
-                    { id: 2, type: 'payment', message: `School fees of $${finance.total_revenue > 0 ? (finance.total_revenue / 10).toFixed(0) : 100} received`, time: '11:45 AM' },
-                    { id: 3, type: 'announcement', message: 'Exam schedule published for Grade 12', time: '2:15 PM' },
-                    { id: 4, type: 'attendance', message: 'Teacher Sarah marked attendance for Class 8-B', time: '3:00 PM' },
-                ]);
-
-            } catch (error) {
-                console.error("Dashboard Load Error", error);
-                setStats(prev => ({ ...prev, loading: false }));
-            }
+    const toList = <T,>(payload: unknown): T[] => {
+        if (Array.isArray(payload)) return payload as T[];
+        if (payload && typeof payload === 'object' && Array.isArray((payload as any).results)) {
+            return (payload as any).results as T[];
         }
-        loadData();
+        return [];
+    };
+
+    const loadData = useCallback(async () => {
+        try {
+            setStats((prev) => ({ ...prev, loading: true }));
+            const [
+                studentsRaw,
+                teachersRaw,
+                classesRaw,
+                accountsRaw,
+                finance,
+                attendanceRaw,
+                noticesRaw,
+                paymentsRaw,
+            ] = await Promise.all([
+                academicAPI.getStudents().catch((e) => { console.error("Students fetch failed:", e); return []; }),
+                academicAPI.getTeachers().catch((e) => { console.error("Teachers fetch failed:", e); return []; }),
+                academicAPI.getClasses().catch((e) => { console.error("Classes fetch failed:", e); return []; }),
+                usersAPI.getAccounts().catch((e) => { console.error("Accounts fetch failed:", e); return []; }),
+                billingAPI.getFinanceDashboard().catch((e) => {
+                    console.error("Finance fetch failed:", e);
+                    return { total_revenue: 0, total_pending: 0, total_expenses: 0, net_balance: 0, recent_payments: [], recent_expenses: [] };
+                }),
+                academicAPI.getAttendance().catch((e) => { console.error("Attendance fetch failed:", e); return []; }),
+                academicAPI.getNotices().catch((e) => { console.error("Notices fetch failed:", e); return []; }),
+                billingAPI.getPayments().catch((e) => { console.error("Payments fetch failed:", e); return []; }),
+            ]);
+
+            const students = toList<any>(studentsRaw);
+            const teachers = toList<any>(teachersRaw);
+            const classes = toList<any>(classesRaw);
+            const accounts = toList<any>(accountsRaw);
+            const attendanceRecords = toList<any>(attendanceRaw);
+            const notices = toList<any>(noticesRaw);
+            const payments = toList<any>(paymentsRaw);
+
+            const studentCount = accounts.filter((u) => u.role === 'student').length || students.length;
+            const presentLike = attendanceRecords.filter((entry) => entry.status === 'present' || entry.status === 'late').length;
+            const attendanceRate = attendanceRecords.length > 0 ? Math.round((presentLike / attendanceRecords.length) * 100) : 0;
+
+            setStats({
+                totalStudents: studentCount,
+                totalTeachers: teachers.length,
+                totalClasses: classes.length,
+                attendanceRate,
+                revenue: finance.total_revenue || 0,
+                pendingFees: finance.total_pending || 0,
+                loading: false
+            });
+
+            const distribution = classes.map((academicClass) => ({
+                name: academicClass.name,
+                students: students.filter((student) => Number(student.academic_class) === Number(academicClass.id)).length,
+            }));
+            const activeDistribution = distribution.filter((item) => item.students > 0);
+            setClassDistribution(activeDistribution.length > 0 ? activeDistribution : distribution.slice(0, 8));
+
+            const formatDate = (dateString?: string) => {
+                if (!dateString) return 'Recently';
+                const parsed = new Date(dateString);
+                if (Number.isNaN(parsed.getTime())) return 'Recently';
+                return parsed.toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+            };
+
+            const paymentActivity: ActivityItem[] = payments
+                .sort((a, b) => new Date(b.payment_date || '').getTime() - new Date(a.payment_date || '').getTime())
+                .slice(0, 2)
+                .map((payment, idx) => ({
+                    id: idx + 1,
+                    type: 'payment',
+                    message: `Payment received${payment.student_name ? ` from ${payment.student_name}` : ''} (${Number(payment.amount || 0).toLocaleString()}).`,
+                    time: formatDate(payment.payment_date),
+                }));
+
+            const noticeActivity: ActivityItem[] = notices
+                .sort((a, b) => new Date(b.published_date || '').getTime() - new Date(a.published_date || '').getTime())
+                .slice(0, 2)
+                .map((notice, idx) => ({
+                    id: idx + 10,
+                    type: 'announcement',
+                    message: `Notice published: ${notice.title}`,
+                    time: formatDate(notice.published_date),
+                }));
+
+            const attendanceActivity: ActivityItem[] = attendanceRecords.length > 0 ? [{
+                id: 50,
+                type: 'attendance',
+                message: `${presentLike} attendance entries marked present/late out of ${attendanceRecords.length}.`,
+                time: 'Today',
+            }] : [];
+
+            const merged = [...paymentActivity, ...noticeActivity, ...attendanceActivity].slice(0, 6);
+            setRecentActivity(merged.length > 0 ? merged : [{
+                id: 999,
+                type: 'system',
+                message: 'No recent operational events found.',
+                time: 'Now',
+            }]);
+        } catch (error) {
+            console.error("Dashboard Load Error", error);
+            setStats(prev => ({ ...prev, loading: false }));
+        }
     }, []);
 
-    // Mock Chart Data
-    const enrollmentData = [
-        { name: 'Jan', students: 250 },
-        { name: 'Feb', students: 380 },
-        { name: 'Mar', students: 420 },
-        { name: 'Apr', students: 580 },
-        { name: 'May', students: 850 },
-        { name: 'Jun', students: stats.totalStudents || 1200 },
-    ];
+    useEffect(() => {
+        loadData();
+    }, [loadData]);
 
     const feeCollectionData = [
-        { name: 'Collected', value: stats.revenue || 85, fill: '#6366f1' }, // Indigo
-        { name: 'Pending', value: stats.pendingFees || 15, fill: '#10b981' }, // Emerald
+        { name: 'Collected', value: stats.revenue || 0, fill: '#6366f1' },
+        { name: 'Pending', value: stats.pendingFees || 0, fill: '#10b981' },
     ];
 
     const KPI_CARDS = [
         {
             title: 'Total Students',
             value: stats.totalStudents.toLocaleString(),
-            trend: '+12% from last month',
-            trendUp: true,
+            trend: `${stats.totalClasses} active classes`,
+            trendUp: null,
             icon: GraduationCap,
             color: 'text-indigo-600',
             bg: 'bg-indigo-50'
@@ -105,7 +170,7 @@ export default function SchoolAdminDashboard() {
         {
             title: 'Teachers',
             value: stats.totalTeachers,
-            trend: 'No change',
+            trend: stats.totalTeachers > 0 ? `${Math.round((stats.totalStudents / Math.max(1, stats.totalTeachers)))} students / teacher` : 'No teacher assigned',
             trendUp: null,
             icon: Users,
             color: 'text-emerald-600',
@@ -114,8 +179,8 @@ export default function SchoolAdminDashboard() {
         {
             title: 'Attendance',
             value: `${stats.attendanceRate}%`,
-            trend: '+1.2%',
-            trendUp: true,
+            trend: stats.attendanceRate >= 90 ? 'Healthy attendance' : 'Needs attention',
+            trendUp: stats.attendanceRate >= 90,
             icon: School,
             color: 'text-blue-600',
             bg: 'bg-blue-50'
@@ -166,26 +231,32 @@ export default function SchoolAdminDashboard() {
                 {/* Line Chart */}
                 <Card className="lg:col-span-2 border-none shadow-sm">
                     <CardHeader>
-                        <CardTitle className="text-base font-semibold text-slate-800">Enrollment Trends (Past 6 Months)</CardTitle>
+                        <CardTitle className="text-base font-semibold text-slate-800">Students by Class</CardTitle>
                     </CardHeader>
                     <CardContent className="h-[300px]">
-                        <SafeResponsiveContainer width="100%" height="100%">
-                            <AreaChart data={enrollmentData}>
-                                <defs>
-                                    <linearGradient id="colorStudents" x1="0" y1="0" x2="0" y2="1">
-                                        <stop offset="5%" stopColor="#6366f1" stopOpacity={0.3} />
-                                        <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
-                                    </linearGradient>
-                                </defs>
-                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 12 }} dy={10} />
-                                <YAxis axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 12 }} />
-                                <Tooltip
-                                    contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-                                />
-                                <Area type="monotone" dataKey="students" stroke="#6366f1" strokeWidth={3} fillOpacity={1} fill="url(#colorStudents)" />
-                            </AreaChart>
-                        </SafeResponsiveContainer>
+                        {classDistribution.length > 0 ? (
+                            <SafeResponsiveContainer width="100%" height="100%">
+                                <AreaChart data={classDistribution}>
+                                    <defs>
+                                        <linearGradient id="colorStudents" x1="0" y1="0" x2="0" y2="1">
+                                            <stop offset="5%" stopColor="#6366f1" stopOpacity={0.3} />
+                                            <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
+                                        </linearGradient>
+                                    </defs>
+                                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                                    <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 12 }} dy={10} />
+                                    <YAxis axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 12 }} />
+                                    <Tooltip
+                                        contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                                    />
+                                    <Area type="monotone" dataKey="students" stroke="#6366f1" strokeWidth={3} fillOpacity={1} fill="url(#colorStudents)" />
+                                </AreaChart>
+                            </SafeResponsiveContainer>
+                        ) : (
+                            <div className="h-full flex items-center justify-center rounded-lg border border-dashed border-slate-200 text-sm text-slate-500">
+                                Class distribution data is not available.
+                            </div>
+                        )}
                     </CardContent>
                 </Card>
 
@@ -233,7 +304,7 @@ export default function SchoolAdminDashboard() {
                 <Card className="lg:col-span-2 border-none shadow-sm">
                     <CardHeader className="flex flex-row items-center justify-between">
                         <CardTitle className="text-base font-semibold text-slate-800">Recent Activity</CardTitle>
-                        <Button variant="ghost" size="sm" className="text-indigo-600">View All</Button>
+                        <Button variant="ghost" size="sm" className="text-indigo-600" onClick={() => router.push('/admin/notifications')}>View All</Button>
                     </CardHeader>
                     <CardContent>
                         <div className="space-y-4">
@@ -282,7 +353,7 @@ export default function SchoolAdminDashboard() {
                         <Button
                             variant="outline"
                             className="h-24 flex flex-col gap-2 border-slate-200 bg-white hover:bg-slate-50 hover:text-indigo-600"
-                            onClick={() => window.location.href = '/admin/finance'}
+                            onClick={() => router.push('/admin/finance')}
                         >
                             <CreditCard className="h-6 w-6" />
                             Finance
@@ -290,7 +361,7 @@ export default function SchoolAdminDashboard() {
                         <Button
                             variant="outline"
                             className="h-24 flex flex-col gap-2 border-slate-200 bg-white hover:bg-slate-50 hover:text-indigo-600"
-                            onClick={() => window.location.href = '/admin/library'}
+                            onClick={() => router.push('/admin/library')}
                         >
                             <BookOpen className="h-6 w-6" />
                             Library
@@ -316,9 +387,9 @@ export default function SchoolAdminDashboard() {
             </div>
 
             {/* Dialogs */}
-            <AddStudentDialog open={showAddStudent} onOpenChange={setShowAddStudent} onSuccess={() => window.location.reload()} />
-            <AddTeacherDialog open={showAddTeacher} onOpenChange={setShowAddTeacher} onSuccess={() => window.location.reload()} />
-            <CreateNoticeDialog open={showCreateNotice} onOpenChange={setShowCreateNotice} onSuccess={() => { }} />
+            <AddStudentDialog open={showAddStudent} onOpenChange={setShowAddStudent} onSuccess={() => { setShowAddStudent(false); loadData(); }} />
+            <AddTeacherDialog open={showAddTeacher} onOpenChange={setShowAddTeacher} onSuccess={() => { setShowAddTeacher(false); loadData(); }} />
+            <CreateNoticeDialog open={showCreateNotice} onOpenChange={setShowCreateNotice} onSuccess={() => { setShowCreateNotice(false); loadData(); }} />
             <ManageScheduleDialog open={showManageSchedule} onOpenChange={setShowManageSchedule} />
         </div>
     );
