@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { academicAPI, Lesson } from '@/lib/api';
+import { academicAPI, Lesson, aiAPI } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -68,22 +68,43 @@ export default function LessonEditorPage() {
         loadLesson();
     }, [lessonId, chapterId]);
 
-    const handleAIGenerate = (type: 'outline' | 'summary' | 'questions') => {
+    const handleAIGenerate = async (type: 'outline' | 'summary' | 'questions') => {
         setIsGenerating(true);
-        // Mock AI Generation delay
-        setTimeout(() => {
-            let addition = "";
-            if (type === 'outline') {
-                addition = "<h2>Lesson Outline</h2><ul><li>Introduction to Concept</li><li>Key Formulas</li><li>Real-world Examples</li><li>Practice Problems</li><li>Summary</li></ul>";
-            } else if (type === 'summary') {
-                addition = "<p><strong>Summary:</strong> This lesson covers the fundamental principles of the topic, emphasizing key definitions and core concepts.</p>";
-            } else if (type === 'questions') {
-                addition = "<h3>Review Questions</h3><ol><li>Explain the main concept in your own words.</li><li>What are the primary applications of this principle?</li><li>Describe a common use case.</li></ol>";
+        try {
+            const task = type === 'outline'
+                ? 'Generate a lesson outline with key headings and bullet points.'
+                : type === 'summary'
+                    ? 'Summarize this lesson in one concise paragraph.'
+                    : 'Generate 3 review questions for students at the end of this lesson.';
+            const prompt = [
+                `Task: ${task}`,
+                `Lesson title: ${title || lesson?.title || 'Untitled lesson'}`,
+                `Content type: ${contentType}`,
+                `Current content: ${content || 'No content yet.'}`,
+                'Return concise plain text.',
+            ].join('\n');
+
+            const response = await aiAPI.chat(prompt, '', []);
+            const generated = String(response?.response || '').trim();
+            if (!generated) {
+                toast.error('AI returned empty content.');
+                return;
             }
-            setContent(prev => prev + addition);
-            setIsGenerating(false);
+
+            const htmlBlock = generated
+                .split('\n')
+                .filter(Boolean)
+                .map((line) => `<p>${line}</p>`)
+                .join('');
+
+            setContent((prev) => `${prev}${prev ? '<hr />' : ''}${htmlBlock}`);
             toast.success(`AI ${type} generated`);
-        }, 1500);
+        } catch (error) {
+            console.error('AI generation failed', error);
+            toast.error('Failed to generate AI content');
+        } finally {
+            setIsGenerating(false);
+        }
     };
 
     const handleSave = async () => {

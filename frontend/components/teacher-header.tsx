@@ -1,21 +1,35 @@
 'use client';
 
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
-import { Bell, Globe } from 'lucide-react';
-import { User } from '@/lib/api';
+import { Globe } from 'lucide-react';
+import { User, usersAPI, academicAPI } from '@/lib/api';
 import { NotificationBell } from './notification-bell';
 
 export function TeacherHeader() {
-    const user: User = {
-        first_name: 'Sarah',
-        last_name: 'Wilson',
-        email: 'sarah.w@school.edu',
-        role: 'teacher',
-        user_id: 't1',
-        username: 'teacher1',
-        tenant: 'tenant1'
-    };
+    const [user, setUser] = useState<User | null>(null);
+    const [academicYear, setAcademicYear] = useState<string>('N/A');
+
+    useEffect(() => {
+        usersAPI.getMe()
+            .then((me) => setUser(me))
+            .catch((err) => console.error('Failed to load teacher profile for header', err));
+
+        academicAPI.getAcademicYears()
+            .then((years) => {
+                const current = years.find((year) => year.is_current);
+                if (current?.name) setAcademicYear(current.name);
+            })
+            .catch((err) => console.error('Failed to load academic year for header', err));
+    }, []);
+
+    const quarter = useMemo(() => {
+        const month = new Date().getMonth();
+        return `Q${Math.floor(month / 3) + 1}`;
+    }, []);
+
+    const displayName = user?.first_name || 'T';
 
     return (
         <header className="sticky top-0 z-30 bg-white border-b h-16 px-6 flex items-center justify-between shadow-sm">
@@ -39,14 +53,13 @@ export function TeacherHeader() {
             </div>
 
             <div className="flex items-center gap-6">
-                {/* Academic Year Selector (Mock) */}
                 <div className="hidden md:flex items-center gap-2 text-sm bg-slate-50 px-3 py-1.5 rounded-md border">
                     <span className="text-muted-foreground">Year:</span>
-                    <span className="font-medium">2025-2026</span>
+                    <span className="font-medium">{academicYear}</span>
                 </div>
                 <div className="hidden md:flex items-center gap-2 text-sm bg-slate-50 px-3 py-1.5 rounded-md border">
                     <span className="text-muted-foreground">Term:</span>
-                    <span className="font-medium">Fall</span>
+                    <span className="font-medium">{quarter}</span>
                 </div>
 
                 <div className="h-6 w-px bg-slate-200 hidden md:block"></div>
@@ -57,7 +70,7 @@ export function TeacherHeader() {
                         <Globe className="h-4 w-4" /> EN
                     </Button>
                     <div className="h-10 w-10 bg-indigo-100 rounded-full flex items-center justify-center border-2 border-white shadow-sm cursor-pointer">
-                        <span className="font-bold text-indigo-700">{user?.first_name?.[0]}</span>
+                        <span className="font-bold text-indigo-700">{displayName[0] || 'T'}</span>
                     </div>
                 </div>
             </div>

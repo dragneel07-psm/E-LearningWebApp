@@ -17,6 +17,14 @@ import {
 import { academicAPI, Assessment, Submission, Student } from '@/lib/api';
 import QuestionManager from './QuestionManager';
 
+function toList<T>(payload: unknown): T[] {
+    if (Array.isArray(payload)) return payload as T[];
+    if (payload && typeof payload === 'object' && Array.isArray((payload as any).results)) {
+        return (payload as any).results as T[];
+    }
+    return [];
+}
+
 export default function AssignmentDetailsPage() {
     const params = useParams();
     const router = useRouter();
@@ -36,11 +44,14 @@ export default function AssignmentDetailsPage() {
     const loadData = useCallback(async () => {
         try {
             setLoading(true);
-            const [assessmentData, submissionsData, studentsData] = await Promise.all([
+            const [assessmentData, submissionsRaw, studentsRaw] = await Promise.all([
                 academicAPI.getAssessment(id),
                 academicAPI.getSubmissions(id).catch(() => []),
-                academicAPI.getStudents().catch(() => []) // Optimization: In real app, fetch only relevant students
+                academicAPI.getStudents().catch(() => [])
             ]);
+
+            const submissionsData = toList<Submission>(submissionsRaw);
+            const studentsData = toList<Student>(studentsRaw);
 
             setAssessment(assessmentData);
             setSubmissions(submissionsData);
@@ -71,21 +82,13 @@ export default function AssignmentDetailsPage() {
         if (!selectedSubmission) return;
         setGradingLoading(true);
         try {
-            // In a real implementation, this would update the Result model
-            // For now we mock the successful grading flow or use a specific API if available
             await academicAPI.gradeSubmission(selectedSubmission.submission_id, {
                 score: gradeScore,
                 feedback: feedback
             });
 
-            // Update local state
-            setSubmissions(prev => prev.map(s =>
-                s.submission_id === selectedSubmission.submission_id
-                    ? { ...s, status: 'graded', is_graded: true, result: { ...s.result!, score: gradeScore, teacher_feedback: feedback } }
-                    : s
-            ));
-
             setSelectedSubmission(null);
+            await loadData();
         } catch (error) {
             console.error('Grading failed:', error);
             alert('Failed to save grade.');

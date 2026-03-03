@@ -1,47 +1,60 @@
 'use client';
 
-import { useState } from 'react';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { useEffect, useState } from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { apiRequest } from '@/lib/api';
+import { academicAPI, AcademicClass } from '@/lib/api';
 import { toast } from 'sonner';
 import { Send, Users, User, School } from 'lucide-react';
 
 export default function AnnouncementBlast() {
     const [target, setTarget] = useState<'all' | 'role' | 'class'>('all');
     const [role, setRole] = useState('parent');
-    const [className, setClassName] = useState(''); // Just text input for demo for now, ideally drop down
+    const [classes, setClasses] = useState<AcademicClass[]>([]);
+    const [classId, setClassId] = useState('');
     const [subject, setSubject] = useState('');
     const [message, setMessage] = useState('');
     const [sending, setSending] = useState(false);
 
+    useEffect(() => {
+        academicAPI.getClasses()
+            .then((data) => setClasses(Array.isArray(data) ? data : []))
+            .catch((error) => console.error('Failed to load classes for announcements', error));
+    }, []);
+
     const handleSend = async () => {
-        if (!subject || !message) {
+        if (!subject.trim() || !message.trim()) {
             toast.error('Subject and message are required');
+            return;
+        }
+        if (target === 'class' && !classId) {
+            toast.error('Please select a class.');
             return;
         }
 
         setSending(true);
         try {
-            // We need a backend endpoint for this. 
-            // Currently using a placeholder logic or reusing templates endpoint?
-            // Let's assume we implement a specific action or just post to notifications/blast
-            // Since we didn't implement backend for 'blast' yet, we'll mock success or use a loop if possible.
-            // But wait, the plan said "Teacher-Parent Announcement Blast".
+            const payload = {
+                title: subject.trim(),
+                content: target === 'role' ? `[Role: ${role}]\n${message.trim()}` : message.trim(),
+                category: 'announcement',
+                priority: 'normal' as const,
+                target_audience: target === 'class' ? 'class' : 'school',
+                target_class: target === 'class' ? Number(classId) : null,
+            };
 
-            // Just simulate for UI demo if backend endpoint missing, or call a generic one.
-            // Let's simulate for now as we didn't add the `blast` action in ViewSet.
-
-            await new Promise(resolve => setTimeout(resolve, 1000));
-            toast.success('Announcement broadcasted successfully!');
+            await academicAPI.createNotice(payload as any);
+            toast.success('Announcement published successfully.');
             setMessage('');
             setSubject('');
+            setClassId('');
         } catch (error) {
+            console.error('Failed to send announcement', error);
             toast.error('Failed to send announcement');
         } finally {
             setSending(false);
@@ -52,7 +65,7 @@ export default function AnnouncementBlast() {
         <div className="max-w-3xl mx-auto space-y-6">
             <div>
                 <h2 className="text-2xl font-bold tracking-tight">Make an Announcement</h2>
-                <p className="text-muted-foreground">Send a broadcast message to parents, students, or staff.</p>
+                <p className="text-muted-foreground">Send a broadcast message to school, role groups, or a class.</p>
             </div>
 
             <Card>
@@ -65,21 +78,15 @@ export default function AnnouncementBlast() {
                         <RadioGroup defaultValue="all" value={target} onValueChange={(v: any) => setTarget(v)} className="flex gap-4">
                             <div className="flex items-center space-x-2 border p-3 rounded-md cursor-pointer hover:bg-slate-50 w-full">
                                 <RadioGroupItem value="all" id="r-all" />
-                                <Label htmlFor="r-all" className="cursor-pointer flex items-center gap-2">
-                                    <School className="h-4 w-4" /> All Users
-                                </Label>
+                                <Label htmlFor="r-all" className="cursor-pointer flex items-center gap-2"><School className="h-4 w-4" /> All Users</Label>
                             </div>
                             <div className="flex items-center space-x-2 border p-3 rounded-md cursor-pointer hover:bg-slate-50 w-full">
                                 <RadioGroupItem value="role" id="r-role" />
-                                <Label htmlFor="r-role" className="cursor-pointer flex items-center gap-2">
-                                    <Users className="h-4 w-4" /> Specific Role
-                                </Label>
+                                <Label htmlFor="r-role" className="cursor-pointer flex items-center gap-2"><Users className="h-4 w-4" /> Specific Role</Label>
                             </div>
                             <div className="flex items-center space-x-2 border p-3 rounded-md cursor-pointer hover:bg-slate-50 w-full">
                                 <RadioGroupItem value="class" id="r-class" />
-                                <Label htmlFor="r-class" className="cursor-pointer flex items-center gap-2">
-                                    <User className="h-4 w-4" /> Specific Class
-                                </Label>
+                                <Label htmlFor="r-class" className="cursor-pointer flex items-center gap-2"><User className="h-4 w-4" /> Specific Class</Label>
                             </div>
                         </RadioGroup>
                     </div>
@@ -88,9 +95,7 @@ export default function AnnouncementBlast() {
                         <div className="space-y-2">
                             <Label>Select Role</Label>
                             <Select value={role} onValueChange={setRole}>
-                                <SelectTrigger>
-                                    <SelectValue />
-                                </SelectTrigger>
+                                <SelectTrigger><SelectValue /></SelectTrigger>
                                 <SelectContent>
                                     <SelectItem value="parent">Parents</SelectItem>
                                     <SelectItem value="student">Students</SelectItem>
@@ -102,24 +107,26 @@ export default function AnnouncementBlast() {
 
                     {target === 'class' && (
                         <div className="space-y-2">
-                            <Label>Class Name / ID</Label>
-                            <Input value={className} onChange={e => setClassName(e.target.value)} placeholder="e.g. 10-A" />
+                            <Label>Select Class</Label>
+                            <Select value={classId} onValueChange={setClassId}>
+                                <SelectTrigger><SelectValue placeholder="Select class" /></SelectTrigger>
+                                <SelectContent>
+                                    {classes.map((cls) => (
+                                        <SelectItem key={cls.id} value={String(cls.id)}>{cls.name}</SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
                         </div>
                     )}
 
                     <div className="space-y-2">
                         <Label>Subject</Label>
-                        <Input value={subject} onChange={e => setSubject(e.target.value)} placeholder="Announcement Title" />
+                        <Input value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="Announcement Title" />
                     </div>
 
                     <div className="space-y-2">
                         <Label>Message</Label>
-                        <Textarea
-                            value={message}
-                            onChange={e => setMessage(e.target.value)}
-                            placeholder="Type your message here..."
-                            rows={6}
-                        />
+                        <Textarea value={message} onChange={(e) => setMessage(e.target.value)} placeholder="Type your message here..." rows={6} />
                     </div>
 
                     <div className="flex justify-end">

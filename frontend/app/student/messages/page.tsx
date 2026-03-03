@@ -361,7 +361,7 @@ export default function MessagingPage() {
                         {/* Messages Area */}
                         <div className="flex-1 overflow-y-auto p-6 space-y-6 bg-slate-50/20">
                             {messages.map((msg, idx) => {
-                                const isMe = msg.sender_details.role === 'admin'; // Mock check
+                                const isMe = String(msg.sender) === String(currentUser?.user_id);
                                 return (
                                     <div key={msg.message_id} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
                                         <div className={`flex gap-3 max-w-[80%] ${isMe ? 'flex-row-reverse' : 'flex-row'}`}>

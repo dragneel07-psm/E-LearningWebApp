@@ -10,7 +10,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ChevronLeft, ChevronRight, BrainCircuit, Plus, Trash2, CheckCircle, Loader2 } from 'lucide-react';
 import Link from 'next/link';
-import { academicAPI, Subject } from '@/lib/api';
+import { academicAPI, Subject, aiAPI } from '@/lib/api';
 
 export default function CreateAssignmentPage() {
     const params = useParams();
@@ -18,7 +18,8 @@ export default function CreateAssignmentPage() {
     const classId = params.id as string;
 
     const [step, setStep] = useState(1);
-    const [loading, setLoading] = useState(false);
+    const [publishing, setPublishing] = useState(false);
+    const [aiGenerating, setAiGenerating] = useState(false);
     const [courses, setCourses] = useState<Subject[]>([]);
 
     // Form Data
@@ -28,6 +29,7 @@ export default function CreateAssignmentPage() {
     const [dueDate, setDueDate] = useState('');
     const [questions, setQuestions] = useState<{ id: number; text: string; points: number }[]>([]);
     const [newQuestion, setNewQuestion] = useState('');
+    const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
         const init = async () => {
@@ -71,17 +73,50 @@ export default function CreateAssignmentPage() {
         setNewQuestion('');
     };
 
-    const handleAIGenerateQuestions = () => {
-        setLoading(true);
-        setTimeout(() => {
-            const aiQuestions = [
-                { id: Date.now() + 1, text: "Explain Newton's Second Law in your own words.", points: 10 },
-                { id: Date.now() + 2, text: "Calculate the force required to accelerate a 10kg mass at 3m/s².", points: 5 },
-                { id: Date.now() + 3, text: "Describe the difference between mass and weight.", points: 5 }
-            ];
-            setQuestions(prev => [...prev, ...aiQuestions]);
-            setLoading(false);
-        }, 1500);
+    const handleAIGenerateQuestions = async () => {
+        if (!title.trim() && !description.trim()) {
+            setError('Please provide title or instructions before generating questions.');
+            return;
+        }
+
+        setAiGenerating(true);
+        setError(null);
+        try {
+            const prompt = [
+                'Generate 5 assignment questions for a school class.',
+                `Title: ${title || 'Untitled Assignment'}`,
+                `Instructions: ${description || 'No description provided.'}`,
+                'Return plain text as numbered lines only.',
+            ].join('\n');
+
+            const response = await aiAPI.chat(prompt, '', []);
+            const raw = String(response?.response || '');
+            const lines = raw
+                .split('\n')
+                .map((line) => line.trim())
+                .filter(Boolean)
+                .map((line) => line.replace(/^\d+[\).\s-]*/, '').replace(/^[-*]\s*/, '').trim())
+                .filter((line) => line.length > 10);
+
+            const unique = Array.from(new Set(lines)).slice(0, 8);
+            const generated = unique.map((text, idx) => ({
+                id: Date.now() + idx,
+                text,
+                points: 5,
+            }));
+
+            if (generated.length === 0) {
+                setError('AI did not return usable questions. Please refine title/instructions and retry.');
+                return;
+            }
+
+            setQuestions((prev) => [...prev, ...generated]);
+        } catch (err: any) {
+            console.error('AI question generation failed', err);
+            setError(err?.message || 'Failed to generate questions from AI.');
+        } finally {
+            setAiGenerating(false);
+        }
     };
 
     const handlePublish = async () => {
@@ -89,9 +124,10 @@ export default function CreateAssignmentPage() {
             alert("Please select a valid subject/course.");
             return;
         }
-        setLoading(true);
+        setPublishing(true);
+        setError(null);
         try {
-            await academicAPI.createAssessment({
+            const createdAssessment = await academicAPI.createAssessment({
                 subject: parseInt(selectedCourseId),
                 title: title,
                 description: description,
@@ -100,13 +136,29 @@ export default function CreateAssignmentPage() {
                 due_date: dueDate ? new Date(dueDate).toISOString() : undefined,
                 blooms_level: 'apply' // Default
             });
+
+            if (questions.length > 0) {
+                await Promise.all(
+                    questions.map((question, index) =>
+                        academicAPI.createQuestion({
+                            assessment: createdAssessment.assessment_id,
+                            text: question.text,
+                            type: 'short_answer',
+                            options: [],
+                            points: question.points,
+                            order: index + 1,
+                        } as any)
+                    )
+                );
+            }
+
             // Success
             router.push(`/teacher/classes/${classId}`);
         } catch (error) {
             console.error("Failed to create assignment", error);
-            alert("Failed to create assignment. Please try again.");
+            setError("Failed to create assignment. Please try again.");
         } finally {
-            setLoading(false);
+            setPublishing(false);
         }
     };
 
@@ -180,11 +232,12 @@ export default function CreateAssignmentPage() {
                 <Card>
                     <CardHeader className="flex flex-row items-center justify-between">
                         <CardTitle>Questions</CardTitle>
-                        <Button variant="outline" onClick={handleAIGenerateQuestions} disabled={loading} className="text-indigo-600 border-indigo-200 bg-indigo-50 hover:bg-indigo-100">
-                            <BrainCircuit className="mr-2 h-4 w-4" /> {loading ? 'Generating...' : 'AI Generate Questions'}
+                        <Button variant="outline" onClick={handleAIGenerateQuestions} disabled={aiGenerating || publishing} className="text-indigo-600 border-indigo-200 bg-indigo-50 hover:bg-indigo-100">
+                            <BrainCircuit className="mr-2 h-4 w-4" /> {aiGenerating ? 'Generating...' : 'AI Generate Questions'}
                         </Button>
                     </CardHeader>
                     <CardContent className="space-y-6">
+                        {error && <p className="text-sm text-red-600">{error}</p>}
                         {/* Question List */}
                         <div className="space-y-3">
                             {questions.map((q, i) => (
@@ -255,8 +308,8 @@ export default function CreateAssignmentPage() {
                     </CardContent>
                     <CardFooter className="flex justify-between">
                         <Button variant="ghost" onClick={handleBack}>Back</Button>
-                        <Button onClick={handlePublish} disabled={loading} className="bg-indigo-600 hover:bg-indigo-700 w-32">
-                            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Publish'}
+                        <Button onClick={handlePublish} disabled={publishing || aiGenerating} className="bg-indigo-600 hover:bg-indigo-700 w-32">
+                            {publishing ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Publish'}
                         </Button>
                     </CardFooter>
                 </Card>

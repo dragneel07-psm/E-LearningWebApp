@@ -35,12 +35,9 @@ export function CreateLessonDialog({ trigger }: CreateLessonDialogProps) {
     const handleCreate = () => {
         if (!selectedClassId) return;
         setCreating(true);
-        // Simulate a small delay or just navigate
-        setTimeout(() => {
-            setOpen(false);
-            router.push(`/teacher/classes/${selectedClassId}/lessons/new`);
-            setCreating(false);
-        }, 500);
+        setOpen(false);
+        router.push(`/teacher/classes/${selectedClassId}/lessons/new`);
+        setCreating(false);
     };
 
     return (

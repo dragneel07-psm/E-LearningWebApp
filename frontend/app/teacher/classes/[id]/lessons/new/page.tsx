@@ -10,7 +10,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ChevronLeft, Save, Sparkles, Upload, FileText, ListChecks, LayoutTemplate, BrainCircuit } from 'lucide-react';
 import Link from 'next/link';
-import { academicAPI, AcademicClass, Subject, Chapter } from '@/lib/api';
+import { academicAPI, AcademicClass, Subject, Chapter, aiAPI } from '@/lib/api';
 import { useEffect } from 'react';
 import { toast } from 'sonner';
 
@@ -55,19 +55,38 @@ export default function CreateLessonPage() {
         }).catch(err => console.error("Failed to load chapters", err));
     }, [selectedSubjectId]);
 
-    const handleAIGenerate = (type: 'outline' | 'summary' | 'questions') => {
+    const handleAIGenerate = async (type: 'outline' | 'summary' | 'questions') => {
         setIsGenerating(true);
-        // Mock AI Generation delay
-        setTimeout(() => {
-            if (type === 'outline') {
-                setContent(prev => prev + "\n\n## Lesson Outline\n1. Introduction to Concept\n2. Key Formulas\n3. Real-world Examples\n4. Practice Problems\n5. Summary");
-            } else if (type === 'summary') {
-                setContent(prev => prev + "\n\n**Summary:** This lesson covers the fundamental principles of Newton's Laws of Motion, emphasizing inertia, acceleration, and action-reaction pairs.");
-            } else if (type === 'questions') {
-                setContent(prev => prev + "\n\n### Review Questions\n1. Define inertia.\n2. Calculate force given mass=5kg and acceleration=2m/s².\n3. Give an example of the 3rd law.");
+        try {
+            const task = type === 'outline'
+                ? 'Create a concise lesson outline with 5 points.'
+                : type === 'summary'
+                    ? 'Write a short summary paragraph for this lesson.'
+                    : 'Generate 3 review questions for students.';
+            const prompt = [
+                `Task: ${task}`,
+                `Class context: ${academicClass?.name || 'Class'}`,
+                `Subject context: ${subjects.find((s) => s.id.toString() === selectedSubjectId)?.name || 'Subject'}`,
+                `Lesson title: ${title || 'Untitled lesson'}`,
+                `Current draft content: ${content || 'No draft content yet.'}`,
+                'Return plain text only.',
+            ].join('\n');
+
+            const response = await aiAPI.chat(prompt, '', []);
+            const generated = String(response?.response || '').trim();
+            if (!generated) {
+                toast.error('AI returned empty content.');
+                return;
             }
+
+            setContent((prev) => `${prev}${prev ? '\n\n' : ''}${generated}`);
+            toast.success(`AI ${type} generated`);
+        } catch (error) {
+            console.error('AI generation failed', error);
+            toast.error('Failed to generate AI content.');
+        } finally {
             setIsGenerating(false);
-        }, 1500);
+        }
     };
 
     const handleSave = async () => {
