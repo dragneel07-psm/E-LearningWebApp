@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ArrowLeft, Building, Users, CreditCard, Activity, Loader2, RefreshCcw, Search, MoreHorizontal, Eye, Key, ShieldAlert, ShieldCheck, Save, Plus, Download, Upload } from "lucide-react";
+import { ArrowLeft, Building, Users, CreditCard, Activity, Loader2, RefreshCcw, Search, MoreHorizontal, Eye, EyeOff, Key, ShieldAlert, ShieldCheck, Save, Plus, Download, Upload, Copy } from "lucide-react";
 import { coreAPI, getApiBaseUrl, Invoice, saasApi, Subscription, SubscriptionPlan, SubscriptionPlanHistory, Tenant, User } from "@/lib/api";
 import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
@@ -147,6 +147,9 @@ export default function SchoolDetailsPage() {
     const [passwordResetValue, setPasswordResetValue] = useState('');
     const [passwordResetDialogOpen, setPasswordResetDialogOpen] = useState(false);
     const [isResettingUserPassword, setIsResettingUserPassword] = useState(false);
+    const [adminSharePassword, setAdminSharePassword] = useState('');
+    const [showSharePassword, setShowSharePassword] = useState(false);
+    const [isResettingAdminPassword, setIsResettingAdminPassword] = useState(false);
 
     const [invoices, setInvoices] = useState<Invoice[]>([]);
     const [invoicesLoading, setInvoicesLoading] = useState(false);
@@ -449,6 +452,54 @@ export default function SchoolDetailsPage() {
         }
     };
 
+    const generateTemporaryPassword = () => {
+        const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%&*";
+        const length = 14;
+        const randomValues = new Uint32Array(length);
+        crypto.getRandomValues(randomValues);
+        let password = '';
+        for (let i = 0; i < length; i += 1) {
+            password += alphabet[randomValues[i] % alphabet.length];
+        }
+        return password;
+    };
+
+    const copyText = async (label: string, value: string) => {
+        if (!value) {
+            toast.error(`No ${label.toLowerCase()} to copy.`);
+            return;
+        }
+        try {
+            await navigator.clipboard.writeText(value);
+            toast.success(`${label} copied.`);
+        } catch (error) {
+            console.error(error);
+            toast.error(`Failed to copy ${label.toLowerCase()}.`);
+        }
+    };
+
+    const handleGenerateAdminSharePassword = async () => {
+        if (!school) return;
+        const tenantId = String(school.id ?? school.tenant_id ?? '');
+        if (!tenantId) {
+            toast.error("Missing tenant identifier.");
+            return;
+        }
+        const temporaryPassword = generateTemporaryPassword();
+        setIsResettingAdminPassword(true);
+        try {
+            await saasApi.resetAdminPassword(tenantId, temporaryPassword);
+            setAdminSharePassword(temporaryPassword);
+            setShowSharePassword(true);
+            toast.success("Temporary admin password generated and applied.");
+        } catch (error) {
+            console.error(error);
+            toast.error("Failed to generate temporary admin password.");
+        } finally {
+            setIsResettingAdminPassword(false);
+        }
+    };
+
     const handleDownloadInvoice = async (invoice: Invoice) => {
         try {
             const apiBase = getApiBaseUrl();
@@ -616,6 +667,10 @@ export default function SchoolDetailsPage() {
         () => Math.max(users.length, school?.total_users ?? 0, studentCount + teacherCount + adminCount),
         [users.length, school?.total_users, studentCount, teacherCount, adminCount]
     );
+    const primaryAdmin = useMemo(
+        () => users.find((u) => u.role === 'admin') || null,
+        [users]
+    );
 
     const aiTokensUsed = school?.ai_tokens_used ?? 0;
     const aiTokenLimit = school?.ai_token_limit ?? 0;
@@ -637,6 +692,8 @@ export default function SchoolDetailsPage() {
     const schoolDomain = school?.domain
         || school?.website
         || (school?.subdomain ? `${school.subdomain}` : 'Not configured');
+    const schoolCode = (school?.subdomain || school?.schema_name || '').trim();
+    const adminLoginEmail = (primaryAdmin?.email || school?.contact_email || '').trim();
 
     const paidInvoices = invoices.filter(inv => inv.status === 'paid');
     const pendingInvoices = invoices.filter(inv => inv.status === 'pending');
@@ -852,6 +909,98 @@ export default function SchoolDetailsPage() {
                                 <div className="rounded-md border p-4">
                                     <div className="text-slate-500">Pending Revenue</div>
                                     <div className="font-semibold">${numberFmt.format(pendingRevenue)}</div>
+                                </div>
+                            </div>
+
+                            <div className="rounded-md border p-4 space-y-4">
+                                <div>
+                                    <div className="font-medium">School Access Credentials</div>
+                                    <p className="text-xs text-slate-500 mt-1">
+                                        Existing passwords are encrypted and cannot be viewed. Generate a temporary password when you need to share credentials.
+                                    </p>
+                                </div>
+                                <div className="grid gap-3 md:grid-cols-2">
+                                    <div className="space-y-2">
+                                        <Label>School Code</Label>
+                                        <div className="flex gap-2">
+                                            <Input value={schoolCode || 'Not configured'} readOnly />
+                                            <Button
+                                                type="button"
+                                                variant="outline"
+                                                size="icon"
+                                                onClick={() => copyText('School code', schoolCode)}
+                                            >
+                                                <Copy className="h-4 w-4" />
+                                            </Button>
+                                        </div>
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label>Admin Login Email</Label>
+                                        <div className="flex gap-2">
+                                            <Input value={adminLoginEmail || 'No admin user found'} readOnly />
+                                            <Button
+                                                type="button"
+                                                variant="outline"
+                                                size="icon"
+                                                onClick={() => copyText('Admin email', adminLoginEmail)}
+                                            >
+                                                <Copy className="h-4 w-4" />
+                                            </Button>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="space-y-2">
+                                    <Label>Temporary Admin Password</Label>
+                                    <div className="flex gap-2">
+                                        <Input
+                                            type={showSharePassword ? 'text' : 'password'}
+                                            value={adminSharePassword || 'Generate to view temporary password'}
+                                            readOnly
+                                        />
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            size="icon"
+                                            onClick={() => setShowSharePassword((prev) => !prev)}
+                                            disabled={!adminSharePassword}
+                                        >
+                                            {showSharePassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                                        </Button>
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            size="icon"
+                                            onClick={() => copyText('Temporary password', adminSharePassword)}
+                                            disabled={!adminSharePassword}
+                                        >
+                                            <Copy className="h-4 w-4" />
+                                        </Button>
+                                    </div>
+                                </div>
+
+                                <div className="flex flex-wrap gap-2">
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        onClick={handleGenerateAdminSharePassword}
+                                        disabled={isResettingAdminPassword}
+                                    >
+                                        {isResettingAdminPassword ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Key className="mr-2 h-4 w-4" />}
+                                        Generate Temporary Password
+                                    </Button>
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        onClick={() => copyText(
+                                            'Credentials',
+                                            `School Code: ${schoolCode}\nAdmin Email: ${adminLoginEmail}\nTemporary Password: ${adminSharePassword}`
+                                        )}
+                                        disabled={!schoolCode || !adminLoginEmail || !adminSharePassword}
+                                    >
+                                        <Copy className="mr-2 h-4 w-4" />
+                                        Copy Full Credentials
+                                    </Button>
                                 </div>
                             </div>
 
