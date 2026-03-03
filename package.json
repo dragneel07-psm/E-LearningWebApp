@@ -1,0 +1,21 @@
+{
+  "name": "e-learningwebapp",
+  "version": "1.0.0",
+  "description": "[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE) [![Django](https://img.shields.io/badge/Django-5.1-green.svg)](https://www.djangoproject.com/) [![Next.js](https://img.shields.io/badge/Next.js-14-black.svg)](https://nextjs.org/) [![TypeScript](https://img.shields.io/badge/TypeScript-5.0-blue.svg)](https://www.typescriptlang.org/)",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "test:e2e": "playwright test",
+    "test:e2e:critical": "playwright test tests/e2e/critical/lms-critical.spec.ts",
+    "test:e2e:smoke": "playwright test tests/e2e/smoke"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@playwright/test": "^1.58.2",
+    "@types/node": "^25.3.3"
+  }
+}
