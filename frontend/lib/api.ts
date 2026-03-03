@@ -1921,10 +1921,19 @@ export const saasApi = {
             method: 'POST',
             body: JSON.stringify({ new_password: newPassword }),
         }),
-    resetAdminPassword: (tenantId: string | number, newPassword: string) =>
-        apiRequest<{ message: string }>('/core/reset-admin-password/', {
+    resetAdminPassword: (
+        tenantId: string | number,
+        newPassword: string,
+        options?: { adminUserId?: string; adminEmail?: string }
+    ) =>
+        apiRequest<{ message: string; admin_user_id?: string; admin_email?: string }>('/core/reset-admin-password/', {
             method: 'POST',
-            body: JSON.stringify({ tenant_id: tenantId, new_password: newPassword })
+            body: JSON.stringify({
+                tenant_id: tenantId,
+                new_password: newPassword,
+                admin_user_id: options?.adminUserId,
+                admin_email: options?.adminEmail,
+            })
         }),
     helpers: helpers,
 };

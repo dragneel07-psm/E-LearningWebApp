@@ -383,9 +383,13 @@ class TenantAdminPasswordResetView(APIView):
     def post(self, request):
         tenant_id = request.data.get('tenant_id')
         new_password = request.data.get('new_password')
+        admin_user_id = request.data.get('admin_user_id')
+        admin_email = (request.data.get('admin_email') or '').strip()
 
         if not tenant_id or not new_password:
             return Response({"error": "tenant_id and new_password are required"}, status=400)
+        if len(str(new_password)) < 6:
+            return Response({"error": "new_password must be at least 6 characters"}, status=400)
 
         try:
             from django_tenants.utils import schema_context
@@ -394,16 +398,32 @@ class TenantAdminPasswordResetView(APIView):
             tenant = Tenant.objects.get(id=tenant_id)
             
             with schema_context(tenant.schema_name):
-                # Find the admin user for this tenant
-                # Generally, there's only one 'admin' role user created during onboarding
-                admin_user = UserAccount.objects.filter(role='admin').first()
+                admin_queryset = UserAccount.objects.filter(role='admin')
+                admin_user = None
+
+                if admin_user_id:
+                    admin_user = admin_queryset.filter(pk=admin_user_id).first()
+                    if not admin_user:
+                        return Response({"error": "Specified admin user was not found for this tenant"}, status=404)
+                elif admin_email:
+                    admin_user = admin_queryset.filter(email__iexact=admin_email).first()
+                    if not admin_user:
+                        return Response({"error": "Specified admin email was not found for this tenant"}, status=404)
+                else:
+                    # Deterministic fallback when caller does not specify a user.
+                    admin_user = admin_queryset.order_by('date_joined', 'email').first()
+
                 if not admin_user:
                     return Response({"error": "Admin user not found for this tenant"}, status=404)
                 
                 admin_user.set_password(new_password)
-                admin_user.save()
+                admin_user.save(update_fields=['password'])
                 
-            return Response({"message": f"Password reset successfully for admin of {tenant.name}"})
+            return Response({
+                "message": f"Password reset successfully for admin of {tenant.name}",
+                "admin_user_id": str(admin_user.user_id),
+                "admin_email": admin_user.email,
+            })
         except Tenant.DoesNotExist:
             return Response({"error": "Tenant not found"}, status=404)
         except Exception as e:

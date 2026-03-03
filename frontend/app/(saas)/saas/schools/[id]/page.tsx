@@ -485,13 +485,20 @@ export default function SchoolDetailsPage() {
             toast.error("Missing tenant identifier.");
             return;
         }
+        if (!primaryAdmin?.user_id) {
+            toast.error("No admin user found for this school.");
+            return;
+        }
         const temporaryPassword = generateTemporaryPassword();
         setIsResettingAdminPassword(true);
         try {
-            await saasApi.resetAdminPassword(tenantId, temporaryPassword);
+            const result = await saasApi.resetAdminPassword(tenantId, temporaryPassword, {
+                adminUserId: primaryAdmin.user_id,
+                adminEmail: primaryAdmin.email || undefined,
+            });
             setAdminSharePassword(temporaryPassword);
             setShowSharePassword(true);
-            toast.success("Temporary admin password generated and applied.");
+            toast.success(`Temporary password set for ${result.admin_email || primaryAdmin.email || 'admin user'}.`);
         } catch (error) {
             console.error(error);
             toast.error("Failed to generate temporary admin password.");
@@ -693,7 +700,7 @@ export default function SchoolDetailsPage() {
         || school?.website
         || (school?.subdomain ? `${school.subdomain}` : 'Not configured');
     const schoolCode = (school?.subdomain || school?.schema_name || '').trim();
-    const adminLoginEmail = (primaryAdmin?.email || school?.contact_email || '').trim();
+    const adminLoginEmail = (primaryAdmin?.email || '').trim();
 
     const paidInvoices = invoices.filter(inv => inv.status === 'paid');
     const pendingInvoices = invoices.filter(inv => inv.status === 'pending');
@@ -984,7 +991,7 @@ export default function SchoolDetailsPage() {
                                         type="button"
                                         variant="outline"
                                         onClick={handleGenerateAdminSharePassword}
-                                        disabled={isResettingAdminPassword}
+                                        disabled={isResettingAdminPassword || !primaryAdmin?.user_id}
                                     >
                                         {isResettingAdminPassword ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Key className="mr-2 h-4 w-4" />}
                                         Generate Temporary Password
