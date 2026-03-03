@@ -377,14 +377,20 @@ export interface LearningPath {
 // (Moved definitions to top)
 
 export interface Subscription {
-    id: string;
+    id?: string;
     subscription_id: string;
     tenant: string;
     plan: string;
-    active: boolean;
+    status?: 'active' | 'past_due' | 'cancelled' | 'trial' | string;
+    billing_cycle?: 'monthly' | 'yearly' | string;
+    auto_renew?: boolean;
+    start_date?: string;
+    end_date?: string | null;
+    active?: boolean;
     student_limit: number;
     storage_limit_gb: number;
     ai_token_limit: number;
+    plan_details?: SubscriptionPlan;
 }
 
 export interface SubscriptionPlan {
@@ -1768,6 +1774,41 @@ export const saasApi = {
 
         return all;
     },
+    getSubscriptions: async () => {
+        const firstPage = await apiRequest<Subscription[] | PaginatedResponse<Subscription>>('/billing/subscriptions/');
+        if (Array.isArray(firstPage)) return firstPage;
+        if (!firstPage || !Array.isArray(firstPage.results)) return [];
+
+        const all = [...firstPage.results];
+        const totalCount = typeof firstPage.count === 'number' ? firstPage.count : all.length;
+        let page = 2;
+        let hasMore = Boolean(firstPage.next);
+
+        while (hasMore && all.length < totalCount) {
+            const nextPage = await apiRequest<Subscription[] | PaginatedResponse<Subscription>>(`/billing/subscriptions/?page=${page}`);
+            if (Array.isArray(nextPage)) {
+                all.push(...nextPage);
+                break;
+            }
+            const batch = Array.isArray(nextPage?.results) ? nextPage.results : [];
+            if (batch.length === 0) break;
+            all.push(...batch);
+            hasMore = Boolean(nextPage?.next);
+            page += 1;
+        }
+
+        return all;
+    },
+    createSubscription: (data: Partial<Subscription>) =>
+        apiRequest<Subscription>('/billing/subscriptions/', {
+            method: 'POST',
+            body: JSON.stringify(data),
+        }),
+    updateSubscription: (id: string, data: Partial<Subscription>) =>
+        apiRequest<Subscription>(`/billing/subscriptions/${id}/`, {
+            method: 'PATCH',
+            body: JSON.stringify(data),
+        }),
     getPublicPlans: async () => {
         const response = await fetch(`${API_BASE_URL}/billing/plans/public/`, {
             headers: {

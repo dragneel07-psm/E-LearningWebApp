@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ArrowLeft, Building, Users, CreditCard, Activity, Loader2, RefreshCcw, Search, MoreHorizontal, Eye, Key, ShieldAlert, ShieldCheck, Save, Plus, Download, Upload } from "lucide-react";
-import { coreAPI, getApiBaseUrl, Invoice, saasApi, SubscriptionPlanHistory, Tenant, User } from "@/lib/api";
+import { coreAPI, getApiBaseUrl, Invoice, saasApi, Subscription, SubscriptionPlan, SubscriptionPlanHistory, Tenant, User } from "@/lib/api";
 import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -152,6 +152,12 @@ export default function SchoolDetailsPage() {
     const [invoicesLoading, setInvoicesLoading] = useState(false);
     const [planHistory, setPlanHistory] = useState<SubscriptionPlanHistory[]>([]);
     const [planHistoryLoading, setPlanHistoryLoading] = useState(false);
+    const [subscription, setSubscription] = useState<Subscription | null>(null);
+    const [availablePlans, setAvailablePlans] = useState<SubscriptionPlan[]>([]);
+    const [subscriptionLoading, setSubscriptionLoading] = useState(false);
+    const [selectedPlanId, setSelectedPlanId] = useState('');
+    const [selectedBillingCycle, setSelectedBillingCycle] = useState<'monthly' | 'yearly'>('monthly');
+    const [isUpdatingSubscription, setIsUpdatingSubscription] = useState(false);
 
     const loadUsers = useCallback(async (tenant: TenantDetails) => {
         setUsersLoading(true);
@@ -209,6 +215,59 @@ export default function SchoolDetailsPage() {
         }
     }, []);
 
+    const loadSubscriptionContext = useCallback(async (tenant: TenantDetails) => {
+        setSubscriptionLoading(true);
+        try {
+            const tenantId = String(tenant.id ?? tenant.tenant_id ?? '');
+            if (!tenantId) {
+                setSubscription(null);
+                setAvailablePlans([]);
+                setSelectedPlanId('');
+                return;
+            }
+
+            const [plans, subscriptions] = await Promise.all([
+                saasApi.getPlans(),
+                saasApi.getSubscriptions(),
+            ]);
+
+            const safePlans = Array.isArray(plans) ? plans : [];
+            const safeSubscriptions = Array.isArray(subscriptions) ? subscriptions : [];
+            const matchedSubscription = safeSubscriptions.find((sub) => {
+                const subTenantId = String((sub as { tenant?: string | number }).tenant ?? '');
+                return subTenantId === tenantId;
+            }) || null;
+
+            const currentPlanId = String(matchedSubscription?.plan ?? '');
+            const visiblePlans = safePlans.filter((plan) => {
+                const planId = String(plan.plan_id || plan.id || '');
+                if (!planId) return false;
+                if (plan.is_active) return true;
+                return currentPlanId !== '' && planId === currentPlanId;
+            });
+
+            setAvailablePlans(visiblePlans);
+            setSubscription(matchedSubscription);
+
+            if (matchedSubscription) {
+                setSelectedPlanId(currentPlanId);
+                const cycle = (matchedSubscription.billing_cycle || 'monthly').toLowerCase();
+                setSelectedBillingCycle(cycle === 'yearly' ? 'yearly' : 'monthly');
+            } else {
+                const fallbackPlanId = String(visiblePlans[0]?.plan_id || visiblePlans[0]?.id || '');
+                setSelectedPlanId(fallbackPlanId);
+                setSelectedBillingCycle('monthly');
+            }
+        } catch (error) {
+            console.error(error);
+            toast.error("Failed to load subscription plans.");
+            setSubscription(null);
+            setAvailablePlans([]);
+        } finally {
+            setSubscriptionLoading(false);
+        }
+    }, []);
+
     const loadSchoolAndUsers = useCallback(async (id: string) => {
         setIsLoading(true);
         try {
@@ -233,6 +292,7 @@ export default function SchoolDetailsPage() {
                 loadUsers(tenant),
                 loadInvoices(tenant),
                 loadPlanHistory(tenant),
+                loadSubscriptionContext(tenant),
             ]);
         } catch (error) {
             console.error(error);
@@ -240,7 +300,7 @@ export default function SchoolDetailsPage() {
         } finally {
             setIsLoading(false);
         }
-    }, [loadUsers, loadInvoices, loadPlanHistory]);
+    }, [loadUsers, loadInvoices, loadPlanHistory, loadSubscriptionContext]);
 
     useEffect(() => {
         if (schoolId) {
@@ -261,6 +321,11 @@ export default function SchoolDetailsPage() {
     const handleRefreshPlanHistory = async () => {
         if (!school) return;
         await loadPlanHistory(school);
+    };
+
+    const handleRefreshSubscriptionContext = async () => {
+        if (!school) return;
+        await loadSubscriptionContext(school);
     };
 
     const handleOpenUserDialog = (user: User) => {
@@ -399,6 +464,53 @@ export default function SchoolDetailsPage() {
         } catch (error) {
             console.error(error);
             toast.error("Failed to download invoice.");
+        }
+    };
+
+    const handleApplyPlanChange = async () => {
+        if (!school) return;
+        const tenantId = String(school.id ?? school.tenant_id ?? '');
+        if (!tenantId) return;
+        if (!selectedPlanId) {
+            toast.error("Please select a subscription plan.");
+            return;
+        }
+
+        setIsUpdatingSubscription(true);
+        try {
+            const payload = {
+                plan: selectedPlanId,
+                billing_cycle: selectedBillingCycle,
+            };
+
+            if (subscription?.subscription_id) {
+                await saasApi.updateSubscription(subscription.subscription_id, payload);
+            } else {
+                await saasApi.createSubscription({
+                    tenant: tenantId,
+                    plan: selectedPlanId,
+                    billing_cycle: selectedBillingCycle,
+                    status: 'active',
+                });
+            }
+
+            const selectedPlan = availablePlans.find(
+                (plan) => String(plan.plan_id || plan.id || '') === selectedPlanId
+            );
+            setSchool((prev) => prev ? ({
+                ...prev,
+                plan_name: selectedPlan?.name || prev.plan_name,
+                billing_cycle: selectedBillingCycle,
+                subscription_status: 'active',
+            }) : prev);
+
+            toast.success("Subscription plan updated successfully.");
+            await loadSchoolAndUsers(schoolId);
+        } catch (error) {
+            console.error(error);
+            toast.error("Failed to update subscription plan.");
+        } finally {
+            setIsUpdatingSubscription(false);
         }
     };
 
@@ -547,6 +659,34 @@ export default function SchoolDetailsPage() {
         }
         return next.toLocaleDateString();
     }, [invoices, school?.billing_cycle]);
+
+    const currentPlan = useMemo(() => {
+        if (!subscription?.plan) return null;
+        const currentPlanId = String(subscription.plan);
+        return availablePlans.find(plan => String(plan.plan_id || plan.id || '') === currentPlanId) || null;
+    }, [availablePlans, subscription?.plan]);
+
+    const selectedPlan = useMemo(() => {
+        if (!selectedPlanId) return null;
+        return availablePlans.find(plan => String(plan.plan_id || plan.id || '') === selectedPlanId) || null;
+    }, [availablePlans, selectedPlanId]);
+
+    const planChangeLabel = useMemo(() => {
+        if (!currentPlan || !selectedPlan) return 'Apply Plan Change';
+        const currentMonthly = Number(currentPlan.price_monthly || 0);
+        const nextMonthly = Number(selectedPlan.price_monthly || 0);
+        if (nextMonthly > currentMonthly) return 'Upgrade Plan';
+        if (nextMonthly < currentMonthly) return 'Downgrade Plan';
+        return 'Apply Plan Change';
+    }, [currentPlan, selectedPlan]);
+
+    const hasPendingPlanChange = useMemo(() => {
+        if (!subscription) return Boolean(selectedPlanId);
+        const currentPlanId = String(subscription.plan || '');
+        const selectedId = String(selectedPlanId || '');
+        const currentCycle = (subscription.billing_cycle || 'monthly').toLowerCase();
+        return currentPlanId !== selectedId || currentCycle !== selectedBillingCycle;
+    }, [subscription, selectedPlanId, selectedBillingCycle]);
 
     if (isLoading) {
         return <div className="p-8 flex items-center justify-center h-full"><Loader2 className="w-8 h-8 animate-spin text-slate-400" /></div>;
@@ -950,6 +1090,73 @@ export default function SchoolDetailsPage() {
                             <CardDescription>Plan usage, invoices, and payment status for this school.</CardDescription>
                         </CardHeader>
                         <CardContent className="space-y-4">
+                            <div className="rounded-md border p-4 space-y-4">
+                                <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                                    <div>
+                                        <h4 className="font-semibold">Upgrade / Downgrade Plan</h4>
+                                        <p className="text-sm text-slate-500">
+                                            Change the subscription plan and billing cycle for this school.
+                                        </p>
+                                    </div>
+                                    <Button variant="outline" size="sm" onClick={handleRefreshSubscriptionContext} disabled={subscriptionLoading}>
+                                        {subscriptionLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCcw className="mr-2 h-4 w-4" />}
+                                        Refresh Plans
+                                    </Button>
+                                </div>
+
+                                <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                                    <div className="space-y-2">
+                                        <Label>Subscription Plan</Label>
+                                        <Select value={selectedPlanId} onValueChange={setSelectedPlanId} disabled={subscriptionLoading || isUpdatingSubscription}>
+                                            <SelectTrigger>
+                                                <SelectValue placeholder={subscriptionLoading ? "Loading plans..." : "Select plan"} />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {availablePlans.length === 0 ? (
+                                                    <SelectItem value="none" disabled>No active plans available</SelectItem>
+                                                ) : (
+                                                    availablePlans.map((plan) => {
+                                                        const planValue = String(plan.plan_id || plan.id || '');
+                                                        return (
+                                                            <SelectItem key={planValue} value={planValue}>
+                                                                {plan.name} - ${numberFmt.format(Number(plan.price_monthly || 0))}/mo
+                                                            </SelectItem>
+                                                        );
+                                                    })
+                                                )}
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label>Billing Cycle</Label>
+                                        <Select value={selectedBillingCycle} onValueChange={(value) => setSelectedBillingCycle(value as 'monthly' | 'yearly')} disabled={subscriptionLoading || isUpdatingSubscription}>
+                                            <SelectTrigger>
+                                                <SelectValue />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="monthly">Monthly</SelectItem>
+                                                <SelectItem value="yearly">Yearly</SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                </div>
+
+                                <div className="text-xs text-slate-500">
+                                    Current: {currentPlan?.name || school.plan_name || 'Trial (Plan Pending)'} • {(subscription?.billing_cycle || school.billing_cycle || 'monthly')}
+                                </div>
+
+                                <div className="flex flex-wrap gap-2">
+                                    <Button onClick={handleApplyPlanChange} disabled={!selectedPlanId || isUpdatingSubscription || !hasPendingPlanChange}>
+                                        {isUpdatingSubscription ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                                        {planChangeLabel}
+                                    </Button>
+                                    <Button variant="outline" onClick={handleRefreshPlanHistory} disabled={planHistoryLoading}>
+                                        {planHistoryLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCcw className="mr-2 h-4 w-4" />}
+                                        Refresh History
+                                    </Button>
+                                </div>
+                            </div>
+
                             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                                 <div>
                                     <span className="font-semibold block">Plan:</span> {school.plan_name || 'Trial (Plan Pending)'}
