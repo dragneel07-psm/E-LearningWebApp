@@ -9,4 +9,4 @@ CPLUS_INCLUDE_PATH = "/usr/include"
 cmds = ["python -m venv --copies /opt/venv && . /opt/venv/bin/activate && pip install setuptools && pip install -r requirements.txt"]
 
 [start]
-cmd = "cd backend && python manage.py migrate_schemas --shared --noinput && python manage.py migrate_schemas --schema=public --noinput && python manage.py init_prod && gunicorn config.wsgi --bind 0.0.0.0:$PORT"
+cmd = "cd backend && python manage.py migrate_schemas --shared --noinput && python manage.py migrate_schemas --schema=public --noinput && python manage.py migrate_schemas --tenant --noinput && python manage.py init_prod && gunicorn config.wsgi --bind 0.0.0.0:$PORT"

@@ -1,1 +1,1 @@
-web: cd backend && python manage.py migrate_schemas --shared && gunicorn config.wsgi --bind 0.0.0.0:$PORT
+web: cd backend && python manage.py migrate_schemas --shared --noinput && python manage.py migrate_schemas --schema=public --noinput && python manage.py migrate_schemas --tenant --noinput && gunicorn config.wsgi --bind 0.0.0.0:$PORT

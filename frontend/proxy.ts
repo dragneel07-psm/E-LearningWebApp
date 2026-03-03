@@ -55,15 +55,19 @@ export async function proxy(request: NextRequest) {
     try {
         let user: UserPayload;
 
-        // In production, we MUST verify the JWT signature using the backend's secret key.
-        // During local dev, if no secret is provided, fallback to decoding (NOT SECURE FOR PROD).
+        // In production, JWT signature verification is mandatory.
+        // Decode-only mode is allowed only for local development.
         const jwtSecret = process.env.JWT_SECRET;
-        if (jwtSecret) {
+        const isProduction = process.env.NODE_ENV === 'production';
+        if (!jwtSecret) {
+            if (isProduction) {
+                throw new Error('JWT_SECRET is required in production');
+            }
+            user = decodeJwt(token) as UserPayload;
+        } else {
             const secretKey = new TextEncoder().encode(jwtSecret);
             const { payload } = await jwtVerify(token, secretKey);
             user = payload as unknown as UserPayload;
-        } else {
-            user = decodeJwt(token) as UserPayload;
         }
 
         const userRole = (user.role || 'student').toLowerCase();
@@ -112,6 +116,7 @@ export async function proxy(request: NextRequest) {
         console.error('[Proxy] JWT Decode/Verify error:', e);
         const response = NextResponse.redirect(new URL('/login', request.url));
         response.cookies.delete('access_token');
+        response.cookies.delete('refresh_token');
         return response;
     }
 
