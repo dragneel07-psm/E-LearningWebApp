@@ -68,16 +68,32 @@ class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
         return token
 
     def validate(self, attrs):
-        data = super().validate(attrs)
+        try:
+            data = super().validate(attrs)
+        except Exception as e:
+            # Login failure (401) is handled by super()
+            raise e
+
         # Attach the user profile to every login response
-        data['user'] = {
-            'user_id':    str(self.user.user_id),
-            'email':      self.user.email,
-            'first_name': self.user.first_name,
-            'last_name':  self.user.last_name,
-            'role':       self.user.role,
-            'tenant_features': _safe_tenant_features(self.user),
-        }
+        try:
+            user = self.user
+            user_id_val = getattr(user, 'user_id', None) or getattr(user, 'pk', None)
+            
+            data['user'] = {
+                'user_id':    str(user_id_val) if user_id_val else "",
+                'email':      getattr(user, 'email', ''),
+                'first_name': getattr(user, 'first_name', ''),
+                'last_name':  getattr(user, 'last_name', ''),
+                'role':       getattr(user, 'role', 'student'),
+                'tenant_features': _safe_tenant_features(user),
+            }
+        except Exception as e:
+            import sys, traceback
+            print(f"DEBUG: Login validation failed during profile attachment: {e}", file=sys.stderr)
+            traceback.print_exc(file=sys.stderr)
+            # We don't want to crash the whole login if just plan features fail, 
+            # but here it's better to log the exact cause of 500.
+        
         return data
 
 

@@ -27,8 +27,11 @@ def get_tenant_plan(tenant) -> Optional[Any]:
         return None
 
     try:
+        # Accessing subscription via reverse OneToOne
         sub = getattr(tenant, "subscription", None)
-    except Exception:
+    except Exception as e:
+        import sys
+        print(f"DEBUG: Error retrieving subscription for tenant {getattr(tenant, 'schema_name', 'unknown')}: {e}", file=sys.stderr)
         # Missing reverse O2O (no subscription yet) or inconsistent tenant relation.
         return None
 
