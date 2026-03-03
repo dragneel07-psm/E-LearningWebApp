@@ -132,7 +132,7 @@ export default function TeachersPage() {
             setNewTeacher({
                 first_name: '', last_name: '', email: '', username: '', password: 'ChangeMe123!', designation: 'subject_teacher', assigned_classes: []
             });
-            loadData();
+            await loadData();
         } catch (error: any) {
             console.error(error);
             const message = error.message || 'Unknown error';

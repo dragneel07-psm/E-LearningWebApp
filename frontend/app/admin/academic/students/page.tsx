@@ -131,7 +131,7 @@ export default function StudentsPage() {
             }
 
             setIsDialogOpen(false);
-            loadData(); // Reload to get updates
+            await loadData(); // Reload to get updates
         } catch (error) {
             console.error(error);
             toast.error("Failed to save student");

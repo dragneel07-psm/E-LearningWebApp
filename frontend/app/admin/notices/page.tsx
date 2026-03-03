@@ -91,7 +91,7 @@ export default function NoticesManagementPage() {
                 toast.success('Notice published successfully');
             }
             setIsDialogOpen(false);
-            loadData();
+            await loadData();
         } catch (error) {
             console.error(error);
             toast.error('Failed to save notice');

@@ -90,7 +90,7 @@ export default function AcademicYearsPage() {
                 toast.success("Academic year created");
             }
             setIsDialogOpen(false);
-            loadYears();
+            await loadYears();
         } catch (err) {
             console.error(err);
             toast.error("Failed to save academic year");

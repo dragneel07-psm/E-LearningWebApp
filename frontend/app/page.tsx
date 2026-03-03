@@ -24,7 +24,8 @@ import {
 } from 'lucide-react';
 import { motion, useScroll, useTransform, useSpring } from 'framer-motion';
 import { Button } from "@/components/ui/button";
-import { useRef } from "react";
+import { useEffect, useRef, useState } from "react";
+import { saasApi, SubscriptionPlan } from "@/lib/api";
 
 const features = [
   {
@@ -74,7 +75,18 @@ const testimonials = [
   }
 ];
 
-const pricing = [
+type LandingPricingCard = {
+  name: string;
+  price: string;
+  description: string;
+  features: string[];
+  button: string;
+  popular: boolean;
+  billingSuffix?: string;
+  yearlyNote?: string;
+};
+
+const fallbackPricing: LandingPricingCard[] = [
   {
     name: "Starter",
     price: "$49",
@@ -101,8 +113,63 @@ const pricing = [
   }
 ];
 
+const getCurrencyPrefix = (currency?: string) => {
+  const normalized = (currency || "USD").toUpperCase();
+  if (normalized === "NPR") return "Rs. ";
+  if (normalized === "USD") return "$";
+  return `${normalized} `;
+};
+
+const formatAmount = (value: number | string, currency?: string) => {
+  const numericValue = Number(value) || 0;
+  return `${getCurrencyPrefix(currency)}${numericValue.toLocaleString("en-US", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  })}`;
+};
+
+const toReadableLimit = (value: number, label: string) => {
+  if (!Number.isFinite(value) || value <= 0) return `Unlimited ${label}`;
+  return `Up to ${value.toLocaleString("en-US")} ${label}`;
+};
+
+const mapPlanToCard = (plan: SubscriptionPlan, index: number, total: number): LandingPricingCard => {
+  const baseFeatures = [
+    toReadableLimit(Number(plan.student_limit), "students"),
+    toReadableLimit(Number(plan.teacher_limit), "teachers"),
+    `${Number(plan.storage_limit_gb) || 0} GB storage`,
+  ];
+
+  if ((Number(plan.ai_token_limit) || 0) > 0) {
+    baseFeatures.push(`${Number(plan.ai_token_limit).toLocaleString("en-US")} AI tokens/month`);
+  }
+  if (plan.has_ai_tutor) baseFeatures.push("AI Tutor included");
+  if (plan.has_ai_eval) baseFeatures.push("AI Evaluation included");
+  if (plan.has_parent_portal) baseFeatures.push("Parent Portal included");
+  if (plan.has_analytics) baseFeatures.push("Advanced Analytics included");
+  if (plan.has_career_guidance) baseFeatures.push("Career Guidance included");
+
+  const middleIndex = Math.floor((total - 1) / 2);
+  const name = plan.name || "Plan";
+  const keywordPopular = /professional|pro|business|growth/i.test(name);
+  const popular = keywordPopular || (total > 1 && index === middleIndex);
+
+  return {
+    name,
+    price: formatAmount(plan.price_monthly, plan.currency),
+    description: plan.description || "Includes core LMS with plan-based limits and features.",
+    features: baseFeatures.slice(0, 6),
+    button: keywordPopular ? "Get Pro Now" : "Start Free Trial",
+    popular,
+    billingSuffix: "/MO",
+    yearlyNote: `${formatAmount(plan.price_yearly, plan.currency)} /YEAR`,
+  };
+};
+
 export default function LandingPage() {
   const targetRef = useRef(null);
+  const [pricingCards, setPricingCards] = useState<LandingPricingCard[]>(fallbackPricing);
+  const [isPricingFallback, setIsPricingFallback] = useState(false);
   const { scrollYProgress } = useScroll({
     target: targetRef,
     offset: ["start start", "end start"]
@@ -111,6 +178,41 @@ export default function LandingPage() {
   const opacity = useTransform(scrollYProgress, [0, 0.5], [1, 0]);
   const scale = useTransform(scrollYProgress, [0, 0.5], [1, 0.8]);
   const y = useTransform(scrollYProgress, [0, 0.5], [0, -100]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadPublicPlans = async () => {
+      try {
+        const plans = await saasApi.getPublicPlans();
+        if (!isMounted) return;
+
+        const activePlans = plans
+          .filter((plan) => plan && plan.is_active !== false)
+          .sort((a, b) => Number(a.price_monthly || 0) - Number(b.price_monthly || 0));
+
+        if (activePlans.length === 0) {
+          setPricingCards(fallbackPricing);
+          setIsPricingFallback(true);
+          return;
+        }
+
+        setPricingCards(activePlans.map((plan, index) => mapPlanToCard(plan, index, activePlans.length)));
+        setIsPricingFallback(false);
+      } catch (error) {
+        console.error("Failed to load public subscription plans for landing page", error);
+        if (!isMounted) return;
+        setPricingCards(fallbackPricing);
+        setIsPricingFallback(true);
+      }
+    };
+
+    loadPublicPlans();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   return (
     <div className="min-h-screen bg-[#020205] text-white selection:bg-indigo-500/30 selection:text-indigo-200 overflow-x-hidden">
@@ -380,10 +482,13 @@ export default function LandingPage() {
             <div className="text-center mb-24 space-y-4">
               <h2 className="text-5xl lg:text-7xl font-black tracking-tighter">PRICING BUILT <br /> <span className="text-indigo-500 uppercase">For Scale</span>.</h2>
               <p className="text-slate-400 font-medium">No hidden fees. Every plan includes our core AI engine.</p>
+              {isPricingFallback && (
+                <p className="text-xs text-slate-500 font-bold uppercase tracking-widest">Live plan pricing temporarily unavailable</p>
+              )}
             </div>
 
             <div className="grid md:grid-cols-3 gap-8">
-              {pricing.map((plan) => (
+              {pricingCards.map((plan) => (
                 <div
                   key={plan.name}
                   className={`relative p-10 rounded-[40px] border transition-all ${plan.popular ? 'bg-indigo-600 border-indigo-400' : 'bg-white/[0.02] border-white/10 hover:border-white/20'}`}
@@ -397,8 +502,9 @@ export default function LandingPage() {
                   <p className={`${plan.popular ? 'text-indigo-100' : 'text-slate-500'} text-sm font-medium mb-8`}>{plan.description}</p>
                   <div className="flex items-baseline gap-2 mb-10">
                     <span className="text-5xl font-black">{plan.price}</span>
-                    {plan.price !== 'Custom' && <span className={`${plan.popular ? 'text-indigo-200' : 'text-slate-500'} text-xs font-bold`}>/MO</span>}
+                    {plan.billingSuffix && <span className={`${plan.popular ? 'text-indigo-200' : 'text-slate-500'} text-xs font-bold`}>{plan.billingSuffix}</span>}
                   </div>
+                  {plan.yearlyNote && <p className={`${plan.popular ? 'text-indigo-100' : 'text-slate-500'} text-xs font-bold mb-6`}>{plan.yearlyNote}</p>}
                   <div className="space-y-4 mb-10">
                     {plan.features.map((f) => (
                       <div key={f} className="flex items-center gap-3">

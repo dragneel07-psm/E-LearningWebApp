@@ -71,6 +71,12 @@ class SubscriptionPlanViewSet(viewsets.ModelViewSet):
             'plans': serializer.data,
         }, status=status.HTTP_200_OK)
 
+    @action(detail=False, methods=['get'], url_path='public', permission_classes=[permissions.AllowAny])
+    def public(self, request):
+        queryset = SubscriptionPlan.objects.filter(is_active=True).order_by('price_monthly', 'name')
+        serializer = self.get_serializer(queryset, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
 class SubscriptionViewSet(viewsets.ModelViewSet):
     queryset = Subscription.objects.select_related('tenant', 'plan').all()
     serializer_class = SubscriptionSerializer

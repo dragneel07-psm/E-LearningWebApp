@@ -89,7 +89,7 @@ export default function ExamManagementPage() {
                 seating_capacity: 30,
                 instructions: ''
             });
-            loadData();
+            await loadData();
         } catch (error: any) {
             toast.error(error.message || "Failed to create exam");
         } finally {

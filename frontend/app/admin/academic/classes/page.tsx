@@ -63,7 +63,7 @@ export default function ClassManagementPage() {
             toast.success("Class created successfully");
             setIsCreateDialogOpen(false);
             setCreateForm({ name: '', order: 0 });
-            loadClasses();
+            await loadClasses();
         } catch (err) {
             console.error(err);
             toast.error("Failed to create class");
@@ -77,7 +77,7 @@ export default function ClassManagementPage() {
         try {
             await academicAPI.deleteClass(id);
             toast.success("Class deleted");
-            loadClasses();
+            await loadClasses();
         } catch (error) {
             console.error(error);
             toast.error("Failed to delete class");
@@ -102,7 +102,7 @@ export default function ClassManagementPage() {
             setNewSection({ name: '', capacity: 40 });
             // Reload classes only (or fetch class specific? getClasses includes sections normally?)
             // Assuming getClasses serializer includes nested sections
-            loadClasses();
+            await loadClasses();
             // Update selected class ref if needed, but getClasses updates 'classes' state which re-renders table
             // However, the Dialog uses 'selectedClass' state. We need to update that too or close dialog
             // Better to re-fetch or find the updated class in the new 'classes' list.
@@ -124,7 +124,7 @@ export default function ClassManagementPage() {
         try {
             await academicAPI.deleteSection(sectionId);
             toast.success("Section deleted");
-            loadClasses(); // Reloads list
+            await loadClasses(); // Reloads list
             // Manually update selectedClass for immediate UI feedback if dialog is open?
             if (selectedClass && selectedClass.sections) {
                 setSelectedClass({

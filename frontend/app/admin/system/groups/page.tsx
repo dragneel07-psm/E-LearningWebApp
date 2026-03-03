@@ -79,7 +79,7 @@ export default function GroupsPage() {
             await usersAPI.createGroup({ name: newGroupName });
             setIsOpen(false);
             setNewGroupName('');
-            loadGroups();
+            await loadGroups();
         } catch (err: unknown) {
             console.error('Failed to create group:', err);
             const status = err && typeof err === 'object' && 'status' in err ? (err as { status?: number }).status : undefined;

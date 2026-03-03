@@ -67,7 +67,7 @@ export default function NoticeManagementPage() {
             toast.success('Notice published successfully');
             setTitle('');
             setContent('');
-            loadData(); // Refresh list
+            await loadData(); // Refresh list
         } catch (error) {
             toast.error('Failed to publish notice');
         } finally {

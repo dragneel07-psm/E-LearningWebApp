@@ -79,7 +79,7 @@ export default function TeacherLibraryPage() {
                 total_copies: 1,
                 description: ''
             });
-            loadData();
+            await loadData();
         } catch (error: any) {
             toast.error(error.message || "Failed to add book");
         }
@@ -89,7 +89,7 @@ export default function TeacherLibraryPage() {
         try {
             await libraryAPI.returnBook(issueId);
             toast.success("Book marked as returned");
-            loadData();
+            await loadData();
         } catch (error: any) {
             toast.error(error.message || "Failed to return book");
         }
@@ -100,7 +100,7 @@ export default function TeacherLibraryPage() {
         try {
             await libraryAPI.deleteBook(bookId);
             toast.success("Book removed from collection");
-            loadData();
+            await loadData();
         } catch (error: any) {
             toast.error(error.message || "Failed to delete book");
         }

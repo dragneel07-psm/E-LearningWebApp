@@ -41,7 +41,7 @@ export default function BackupsPage() {
         try {
             await api.backups.create({ schema: 'demo' }); // Explicitly for demo tenant for now
             toast.success('Backup created successfully');
-            loadBackups();
+            await loadBackups();
         } catch (error) {
             console.error(error);
             toast.error('Failed to create backup');

@@ -760,11 +760,48 @@ function getAuthToken(): string | null {
     return null;
 }
 
+export const DATA_MUTATED_EVENT = 'elearn:data-mutated';
+const LAST_MUTATION_AT_KEY = 'elearn:last-mutation-at';
+const FRESH_FETCH_WINDOW_MS = 30_000;
+
+function getRequestMethod(options: RequestInit): string {
+    return (options.method || 'GET').toUpperCase();
+}
+
+function isMutationMethod(method: string): boolean {
+    return method === 'POST' || method === 'PUT' || method === 'PATCH' || method === 'DELETE';
+}
+
+function readLastMutationAt(): number | null {
+    if (typeof window === 'undefined') return null;
+    const raw = localStorage.getItem(LAST_MUTATION_AT_KEY);
+    if (!raw) return null;
+    const parsed = Number(raw);
+    return Number.isFinite(parsed) ? parsed : null;
+}
+
+function markMutationNow(endpoint: string, method: string): void {
+    if (typeof window === 'undefined') return;
+    const timestamp = Date.now();
+    localStorage.setItem(LAST_MUTATION_AT_KEY, String(timestamp));
+    window.dispatchEvent(
+        new CustomEvent(DATA_MUTATED_EVENT, {
+            detail: { endpoint, method, timestamp },
+        })
+    );
+}
+
+function appendFreshQuery(endpoint: string, marker: number): string {
+    const separator = endpoint.includes('?') ? '&' : '?';
+    return `${endpoint}${separator}_fresh=${marker}`;
+}
+
 // Generic fetch wrapper with error handling
 export async function apiRequest<T>(
     endpoint: string,
     options: RequestInit = {}
 ): Promise<T> {
+    const method = getRequestMethod(options);
     const token = getAuthToken();
 
     const headers: Record<string, string> = {
@@ -789,7 +826,15 @@ export async function apiRequest<T>(
     }
 
     try {
-        const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+        let resolvedEndpoint = endpoint;
+        if (method === 'GET') {
+            const lastMutationAt = readLastMutationAt();
+            if (lastMutationAt && (Date.now() - lastMutationAt) <= FRESH_FETCH_WINDOW_MS) {
+                resolvedEndpoint = appendFreshQuery(endpoint, lastMutationAt);
+            }
+        }
+
+        const response = await fetch(`${API_BASE_URL}${resolvedEndpoint}`, {
             ...options,
             headers,
         });
@@ -827,6 +872,19 @@ export async function apiRequest<T>(
             }
 
             throw error;
+        }
+
+        if (isMutationMethod(method)) {
+            markMutationNow(endpoint, method);
+        }
+
+        if (response.status === 204) {
+            return undefined as T;
+        }
+
+        const contentType = response.headers.get('content-type') || '';
+        if (!contentType.toLowerCase().includes('application/json')) {
+            return undefined as T;
         }
 
         return await response.json();
@@ -1657,6 +1715,21 @@ export const saasApi = {
         }
 
         return all;
+    },
+    getPublicPlans: async () => {
+        const response = await fetch(`${API_BASE_URL}/billing/plans/public/`, {
+            headers: {
+                'Content-Type': 'application/json',
+                'x-tenant-id': 'public',
+            },
+        });
+
+        if (!response.ok) {
+            throw new Error(`Failed to load public plans (${response.status})`);
+        }
+
+        const data = await response.json();
+        return Array.isArray(data) ? data : [];
     },
     getSubscriptionHistoryByTenant: async (tenantId: string | number) => {
         const firstPage = await apiRequest<SubscriptionPlanHistory[] | PaginatedResponse<SubscriptionPlanHistory>>(
