@@ -1097,7 +1097,10 @@ export const usersAPI = {
 // Academic API
 export const academicAPI = {
     // Academic Years
-    getAcademicYears: () => apiRequest<AcademicYear[]>('/academic/years/'),
+    getAcademicYears: async () => {
+        const payload = await apiRequest<AcademicYear[] | PaginatedResponse<AcademicYear>>('/academic/years/');
+        return normalizeArrayPayload(payload);
+    },
     getAcademicYear: (id: number) => apiRequest<AcademicYear>(`/academic/years/${id}/`),
     createAcademicYear: (data: Partial<AcademicYear>) => apiRequest<AcademicYear>('/academic/years/', {
         method: 'POST',
@@ -1112,7 +1115,10 @@ export const academicAPI = {
     }),
 
     // Classes
-    getClasses: () => apiRequest<AcademicClass[]>('/academic/classes/'),
+    getClasses: async () => {
+        const payload = await apiRequest<AcademicClass[] | PaginatedResponse<AcademicClass>>('/academic/classes/');
+        return normalizeArrayPayload(payload);
+    },
     getClass: (id: number) => apiRequest<AcademicClass>(`/academic/classes/${id}/`),
     createClass: (data: Partial<AcademicClass>) => apiRequest<AcademicClass>('/academic/classes/', {
         method: 'POST',
@@ -1136,7 +1142,10 @@ export const academicAPI = {
     }),
 
     // Subjects
-    getSubjects: () => apiRequest<Subject[]>('/academic/subjects/'),
+    getSubjects: async () => {
+        const payload = await apiRequest<Subject[] | PaginatedResponse<Subject>>('/academic/subjects/');
+        return normalizeArrayPayload(payload);
+    },
     getSubject: (id: number) => apiRequest<Subject>(`/academic/subjects/${id}/`),
     createSubject: (data: Partial<Subject> & { academic_class: number }) => apiRequest<Subject>('/academic/subjects/', {
         method: 'POST',
@@ -1159,7 +1168,10 @@ export const academicAPI = {
     },
 
     // Assessments
-    getAssessments: () => apiRequest<Assessment[]>('/academic/assessments/'),
+    getAssessments: async () => {
+        const payload = await apiRequest<Assessment[] | PaginatedResponse<Assessment>>('/academic/assessments/');
+        return normalizeArrayPayload(payload);
+    },
     getAssessment: (id: string) => apiRequest<Assessment>(`/academic/assessments/${id}/`),
     createAssessment: (data: Partial<Assessment>) => apiRequest<Assessment>('/academic/assessments/', {
         method: 'POST',
@@ -1184,8 +1196,14 @@ export const academicAPI = {
 
 
     // Attendance
-    getAttendance: () => apiRequest<Attendance[]>('/academic/attendance/'),
-    getMyAttendance: () => apiRequest<Attendance[]>('/academic/attendance/my_attendance/'),
+    getAttendance: async () => {
+        const payload = await apiRequest<Attendance[] | PaginatedResponse<Attendance>>('/academic/attendance/');
+        return normalizeArrayPayload(payload);
+    },
+    getMyAttendance: async () => {
+        const payload = await apiRequest<Attendance[] | PaginatedResponse<Attendance>>('/academic/attendance/my_attendance/');
+        return normalizeArrayPayload(payload);
+    },
     createAttendance: (data: Partial<Attendance>) => apiRequest<Attendance>('/academic/attendance/', {
         method: 'POST',
         body: JSON.stringify(data)
@@ -1196,8 +1214,14 @@ export const academicAPI = {
     }),
 
     // Timetable
-    getTimetable: () => apiRequest<Timetable[]>('/academic/timetable/'),
-    getMyTimetable: () => apiRequest<Timetable[]>('/academic/timetable/my_timetable/'),
+    getTimetable: async () => {
+        const payload = await apiRequest<Timetable[] | PaginatedResponse<Timetable>>('/academic/timetable/');
+        return normalizeArrayPayload(payload);
+    },
+    getMyTimetable: async () => {
+        const payload = await apiRequest<Timetable[] | PaginatedResponse<Timetable>>('/academic/timetable/my_timetable/');
+        return normalizeArrayPayload(payload);
+    },
     createTimetable: (data: Partial<Timetable>) => apiRequest<Timetable>('/academic/timetable/', {
         method: 'POST',
         body: JSON.stringify(data)
@@ -1211,7 +1235,10 @@ export const academicAPI = {
     }),
 
     // Teachers
-    getTeachers: () => apiRequest<Teacher[]>('/academic/teachers/'),
+    getTeachers: async () => {
+        const payload = await apiRequest<Teacher[] | PaginatedResponse<Teacher>>('/academic/teachers/');
+        return normalizeArrayPayload(payload);
+    },
     getTeacher: (id: string) => apiRequest<Teacher>(`/academic/teachers/${id}/`),
     createTeacher: (data: Partial<Teacher> & { password?: string }) => apiRequest<Teacher>('/academic/teachers/', {
         method: 'POST',
@@ -1231,9 +1258,10 @@ export const academicAPI = {
     }>('/academic/stats/'),
 
     // Students
-    getStudents: (params?: { section_id?: string }) => {
+    getStudents: async (params?: { section_id?: string }) => {
         const query = params?.section_id ? `?section=${params.section_id}` : '';
-        return apiRequest<Student[]>(`/academic/students/${query}`);
+        const payload = await apiRequest<Student[] | PaginatedResponse<Student>>(`/academic/students/${query}`);
+        return normalizeArrayPayload(payload);
     },
     getStudent: (id: string) => apiRequest<Student>(`/academic/students/${id}/`),
     getMyStudent: () => apiRequest<Student>('/academic/students/me/'),

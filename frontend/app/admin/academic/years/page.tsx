@@ -40,7 +40,7 @@ export default function AcademicYearsPage() {
         try {
             const data = await academicAPI.getAcademicYears();
             // Sort by start_date descending
-            const sorted = data.sort((a, b) => new Date(b.start_date).getTime() - new Date(a.start_date).getTime());
+            const sorted = [...data].sort((a, b) => new Date(b.start_date).getTime() - new Date(a.start_date).getTime());
             setYears(sorted);
         } catch (error) {
             console.error('Failed to load academic years', error);

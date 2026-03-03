@@ -5,7 +5,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { usersAPI, academicAPI, User } from '@/lib/api';
+import { academicAPI } from '@/lib/api';
 import { toast } from 'sonner';
 
 interface AddTeacherDialogProps {
@@ -29,22 +29,16 @@ export function AddTeacherDialog({ open, onOpenChange, onSuccess }: AddTeacherDi
         setLoading(true);
 
         try {
-            // Create user account
-            const userData: Partial<User> & { password: string } = {
+            // Backend creates both account + teacher profile in one request.
+            await academicAPI.createTeacher({
                 username: formData.username,
                 email: formData.email,
                 password: formData.password,
                 first_name: formData.first_name,
                 last_name: formData.last_name,
-                role: 'teacher' as const
-            };
-
-            const user = await usersAPI.createAccount(userData);
-
-            // Create teacher profile
-            await academicAPI.createTeacher({
-                user_id: user.user_id
-            } as any);
+                designation: 'subject_teacher',
+                assigned_classes: []
+            });
 
             toast.success('Teacher created successfully');
             onOpenChange(false);

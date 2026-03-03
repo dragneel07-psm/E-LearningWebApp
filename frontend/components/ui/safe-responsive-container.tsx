@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ResponsiveContainer, type ResponsiveContainerProps } from 'recharts';
 
 type SafeResponsiveContainerProps = ResponsiveContainerProps & {
@@ -14,23 +14,45 @@ export function SafeResponsiveContainer({
     fallbackClassName = 'w-full',
     ...props
 }: SafeResponsiveContainerProps) {
-    const [isMounted, setIsMounted] = useState(false);
+    const containerRef = useRef<HTMLDivElement>(null);
+    const [size, setSize] = useState({ width: 0, height: 0 });
 
     useEffect(() => {
-        setIsMounted(true);
+        if (!containerRef.current || typeof ResizeObserver === 'undefined') return;
+
+        const observer = new ResizeObserver((entries) => {
+            const entry = entries[0];
+            if (!entry) return;
+
+            const width = Math.floor(entry.contentRect.width);
+            const height = Math.floor(entry.contentRect.height);
+            setSize((prev) => {
+                if (prev.width === width && prev.height === height) {
+                    return prev;
+                }
+                return { width, height };
+            });
+        });
+
+        observer.observe(containerRef.current);
+        return () => observer.disconnect();
     }, []);
 
-    if (!isMounted) {
-        return <div className={fallbackClassName} style={{ height: fallbackHeight }} aria-hidden="true" />;
-    }
+    const canRenderChart = size.width > 0 && size.height > 0;
 
     return (
-        <ResponsiveContainer
-            minWidth={props.minWidth ?? 0}
-            minHeight={props.minHeight ?? 1}
-            {...props}
-        >
-            {children}
-        </ResponsiveContainer>
+        <div ref={containerRef} className={fallbackClassName} style={{ minHeight: fallbackHeight, height: '100%' }}>
+            {canRenderChart ? (
+                <ResponsiveContainer
+                    minWidth={props.minWidth ?? 0}
+                    minHeight={props.minHeight ?? 1}
+                    {...props}
+                >
+                    {children}
+                </ResponsiveContainer>
+            ) : (
+                <div style={{ height: fallbackHeight }} aria-hidden="true" />
+            )}
+        </div>
     );
 }
