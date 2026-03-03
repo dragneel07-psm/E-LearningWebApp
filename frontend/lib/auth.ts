@@ -48,9 +48,11 @@ export const removeTokens = () => {
     if (typeof window !== 'undefined') {
         localStorage.removeItem(ACCESS_KEY);
         localStorage.removeItem(REFRESH_KEY);
+        localStorage.removeItem('tenant_id');
 
         // Clear cookie
         document.cookie = `access_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT`;
+        document.cookie = `tenant_id=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT`;
 
         console.log('[Auth] Tokens removed');
     }

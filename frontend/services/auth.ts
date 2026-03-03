@@ -11,6 +11,12 @@ import {
 import { setTokens, removeTokens, isAuthenticated, getAccessToken } from '@/lib/auth';
 import { getTenantFromSubdomain } from '@/lib/tenant';
 
+function setTenantCookie(tenantId: string) {
+    if (typeof window === 'undefined') return;
+    const isSecure = window.location.protocol === 'https:';
+    document.cookie = `tenant_id=${encodeURIComponent(tenantId)}; path=/; ${isSecure ? 'secure;' : ''} samesite=lax`;
+}
+
 export const authService = {
     async login(credentials: LoginCredentials) {
         // Pull school_code out — it's a header, not a POST body field
@@ -42,6 +48,7 @@ export const authService = {
             // Cache school_code so subsequent requests use the right tenant
             if (typeof window !== 'undefined') {
                 localStorage.setItem('tenant_id', tenantId);
+                setTenantCookie(tenantId);
                 if (response.data.user?.role) {
                     localStorage.setItem('user_role', response.data.user.role);
                 }
@@ -62,6 +69,7 @@ export const authService = {
             setTokens(response.data.tokens.access, response.data.tokens.refresh);
             if (typeof window !== 'undefined') {
                 localStorage.setItem('tenant_id', tenantId);
+                setTenantCookie(tenantId);
                 if (response.data.user?.role) {
                     localStorage.setItem('user_role', response.data.user.role);
                 }

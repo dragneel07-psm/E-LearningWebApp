@@ -9,6 +9,12 @@ interface UserPayload {
     exp: number;
 }
 
+interface BackendUserProfile {
+    user_id?: string;
+    username?: string;
+    role?: string;
+}
+
 const PUBLIC_PATHS = [
     '/login',
     '/register',
@@ -19,6 +25,52 @@ const PUBLIC_PATHS = [
     '/sw.js',
     '/icons/'
 ];
+
+function getBackendApiBaseUrl(): string | null {
+    let url = (process.env.NEXT_PUBLIC_API_URL || '').trim();
+    if (!url) return null;
+
+    if (!url.startsWith('http://') && !url.startsWith('https://')) {
+        url = `https://${url}`;
+    }
+
+    url = url.replace(/\/$/, '');
+    if (url.endsWith('/api')) {
+        url = url.slice(0, -4);
+    }
+
+    return url;
+}
+
+async function getUserFromBackend(token: string, tenantId: string): Promise<UserPayload | null> {
+    const backendBase = getBackendApiBaseUrl();
+    if (!backendBase) return null;
+
+    try {
+        const response = await fetch(`${backendBase}/api/users/accounts/me/`, {
+            method: 'GET',
+            headers: {
+                Authorization: `Bearer ${token}`,
+                'x-tenant-id': tenantId || 'public',
+            },
+            cache: 'no-store',
+        });
+
+        if (!response.ok) return null;
+
+        const profile = await response.json() as BackendUserProfile;
+        const decoded = decodeJwt(token) as Partial<UserPayload>;
+
+        return {
+            user_id: String(profile.user_id || decoded.user_id || ''),
+            username: String(profile.username || decoded.username || ''),
+            role: String(profile.role || decoded.role || 'student'),
+            exp: Number(decoded.exp || 0),
+        };
+    } catch {
+        return null;
+    }
+}
 
 export async function proxy(request: NextRequest) {
     const { pathname, hostname } = request.nextUrl;
@@ -53,21 +105,29 @@ export async function proxy(request: NextRequest) {
 
     // 3. Role & Expiry Check
     try {
-        let user: UserPayload;
+        let user: UserPayload | null = null;
+        const tenantCookie = (request.cookies.get('tenant_id')?.value || '').trim().toLowerCase();
+        const tenantForValidation = tenantCookie || tenantSubdomain || 'public';
 
-        // In production, JWT signature verification is mandatory.
-        // Decode-only mode is allowed only for local development.
+        // Prefer local signature verification when secret is configured.
+        // Fall back to backend validation so valid users are not logged out when envs drift.
         const jwtSecret = process.env.JWT_SECRET;
-        const isProduction = process.env.NODE_ENV === 'production';
-        if (!jwtSecret) {
-            if (isProduction) {
-                throw new Error('JWT_SECRET is required in production');
+        if (jwtSecret) {
+            try {
+                const secretKey = new TextEncoder().encode(jwtSecret);
+                const { payload } = await jwtVerify(token, secretKey);
+                user = payload as unknown as UserPayload;
+            } catch {
+                user = null;
             }
-            user = decodeJwt(token) as UserPayload;
-        } else {
-            const secretKey = new TextEncoder().encode(jwtSecret);
-            const { payload } = await jwtVerify(token, secretKey);
-            user = payload as unknown as UserPayload;
+        }
+
+        if (!user) {
+            user = await getUserFromBackend(token, tenantForValidation);
+        }
+
+        if (!user) {
+            throw new Error('Unable to validate access token');
         }
 
         const userRole = (user.role || 'student').toLowerCase();
