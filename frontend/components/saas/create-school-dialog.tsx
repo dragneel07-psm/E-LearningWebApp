@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Button } from "@/components/ui/button";
 import {
     Dialog,
@@ -25,6 +25,13 @@ type CreateTenantPayload = Parameters<typeof coreAPI.createTenant>[0] & {
     type: string;
 };
 
+function resolveTenantTypeFromPlanName(planName: string): 'standard' | 'premium' | 'enterprise' {
+    const normalized = planName.trim().toLowerCase();
+    if (normalized === 'premium' || normalized.includes('premium')) return 'premium';
+    if (normalized === 'enterprise' || normalized.includes('enterprise')) return 'enterprise';
+    return 'standard';
+}
+
 export function CreateSchoolDialog({ onCreated }: { onCreated: () => void }) {
     const [open, setOpen] = useState(false);
     const [loading, setLoading] = useState(false);
@@ -40,12 +47,7 @@ export function CreateSchoolDialog({ onCreated }: { onCreated: () => void }) {
     const [plansLoading, setPlansLoading] = useState(false);
     const [selectedPlanId, setSelectedPlanId] = useState("");
 
-    useEffect(() => {
-        if (!open) return;
-        loadPlans();
-    }, [open]);
-
-    const loadPlans = async () => {
+    const loadPlans = useCallback(async () => {
         setPlansLoading(true);
         try {
             const data = await saasApi.getPlans();
@@ -60,7 +62,12 @@ export function CreateSchoolDialog({ onCreated }: { onCreated: () => void }) {
         } finally {
             setPlansLoading(false);
         }
-    };
+    }, [selectedPlanId]);
+
+    useEffect(() => {
+        if (!open) return;
+        loadPlans();
+    }, [open, loadPlans]);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -81,7 +88,7 @@ export function CreateSchoolDialog({ onCreated }: { onCreated: () => void }) {
             const payload: CreateTenantPayload = {
                 name,
                 subdomain,
-                type: selectedPlan.name,
+                type: resolveTenantTypeFromPlanName(selectedPlan.name),
                 plan_id: selectedPlan.plan_id || selectedPlan.id,
                 status: 'active',
                 admin_email: adminEmail,

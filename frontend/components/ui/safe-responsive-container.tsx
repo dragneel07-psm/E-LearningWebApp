@@ -38,15 +38,19 @@ export function SafeResponsiveContainer({
         return () => observer.disconnect();
     }, []);
 
-    const canRenderChart = size.width > 0 && size.height > 0;
+    const resolvedWidth = typeof props.width === 'number' ? props.width : size.width;
+    const resolvedHeight = typeof props.height === 'number' ? props.height : size.height;
+    const canRenderChart = resolvedWidth > 0 && resolvedHeight > 0;
 
     return (
         <div ref={containerRef} className={fallbackClassName} style={{ minHeight: fallbackHeight, height: '100%' }}>
             {canRenderChart ? (
                 <ResponsiveContainer
+                    {...props}
+                    width={resolvedWidth}
+                    height={resolvedHeight}
                     minWidth={props.minWidth ?? 0}
                     minHeight={props.minHeight ?? 1}
-                    {...props}
                 >
                     {children}
                 </ResponsiveContainer>
