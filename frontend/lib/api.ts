@@ -781,6 +781,7 @@ function getAuthToken(): string | null {
 export const DATA_MUTATED_EVENT = 'elearn:data-mutated';
 const LAST_MUTATION_AT_KEY = 'elearn:last-mutation-at';
 const FRESH_FETCH_WINDOW_MS = 30_000;
+type ApiRequestOptions = RequestInit & { skipAuthRedirectOn401?: boolean };
 
 function getRequestMethod(options: RequestInit): string {
     return (options.method || 'GET').toUpperCase();
@@ -817,17 +818,18 @@ function appendFreshQuery(endpoint: string, marker: number): string {
 // Generic fetch wrapper with error handling
 export async function apiRequest<T>(
     endpoint: string,
-    options: RequestInit = {}
+    options: ApiRequestOptions = {}
 ): Promise<T> {
-    const method = getRequestMethod(options);
+    const { skipAuthRedirectOn401 = false, ...fetchOptions } = options;
+    const method = getRequestMethod(fetchOptions);
     const token = getAuthToken();
 
     const headers: Record<string, string> = {
         'Content-Type': 'application/json',
-        ...options.headers as Record<string, string>,
+        ...fetchOptions.headers as Record<string, string>,
     };
 
-    if (options.body instanceof FormData) {
+    if (fetchOptions.body instanceof FormData) {
         delete headers['Content-Type'];
     }
 
@@ -853,7 +855,7 @@ export async function apiRequest<T>(
         }
 
         const response = await fetch(`${API_BASE_URL}${resolvedEndpoint}`, {
-            ...options,
+            ...fetchOptions,
             headers,
         });
 
@@ -880,7 +882,7 @@ export async function apiRequest<T>(
             error.status = response.status;
             error.details = errorDetails;
 
-            if (response.status === 401) {
+            if (response.status === 401 && !skipAuthRedirectOn401) {
                 if (typeof window !== 'undefined') {
                     removeTokens();
                     if (!window.location.pathname.startsWith('/login')) {
@@ -1632,15 +1634,22 @@ export const aiAPI = {
 // Notifications API
 export const notificationsAPI = {
     getNotifications: async () => {
-        const payload = await apiRequest<Notification[] | PaginatedResponse<Notification>>('/notifications/notifications/');
+        const payload = await apiRequest<Notification[] | PaginatedResponse<Notification>>('/notifications/notifications/', {
+            skipAuthRedirectOn401: true,
+        });
         return normalizeArrayPayload(payload);
     },
-    getUnreadCount: () => apiRequest<{ count: number }>('/notifications/notifications/unread_count/'),
+    getUnreadCount: () =>
+        apiRequest<{ count: number }>('/notifications/notifications/unread_count/', {
+            skipAuthRedirectOn401: true,
+        }),
     markAsRead: (id: number) => apiRequest<{ status: string }>(`/notifications/notifications/${id}/mark_as_read/`, {
-        method: 'POST'
+        method: 'POST',
+        skipAuthRedirectOn401: true,
     }),
     markAllAsRead: () => apiRequest<{ status: string }>('/notifications/notifications/mark_all_as_read/', {
-        method: 'POST'
+        method: 'POST',
+        skipAuthRedirectOn401: true,
     }),
 };
 

@@ -1,11 +1,11 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Bell } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { apiRequest, notificationsAPI, Notification } from '@/lib/api';
+import { notificationsAPI, Notification } from '@/lib/api';
 import { toast } from 'sonner';
 import { formatDistanceToNow } from 'date-fns';
 
@@ -14,44 +14,49 @@ export default function NotificationCenter() {
     const [unreadCount, setUnreadCount] = useState(0);
     const [isOpen, setIsOpen] = useState(false);
 
-    useEffect(() => {
-        // Initial fetch
-        fetchNotifications();
-
-        // Poll every 60 seconds
-        const interval = setInterval(fetchNotifications, 60000);
-        return () => clearInterval(interval);
-    }, []);
-
-    const fetchNotifications = async () => {
+    const fetchNotifications = useCallback(async () => {
         try {
             const data = await notificationsAPI.getNotifications();
             setNotifications(data);
             setUnreadCount(data.filter(n => !n.is_read).length);
-        } catch (error) {
+        } catch {
             console.error('Failed to fetch notifications');
             setNotifications([]);
             setUnreadCount(0);
         }
-    };
+    }, []);
+
+    useEffect(() => {
+        // Defer first fetch to avoid synchronous state updates in effect body.
+        const firstFetchTimer = setTimeout(() => {
+            void fetchNotifications();
+        }, 0);
+
+        // Poll every 60 seconds
+        const interval = setInterval(fetchNotifications, 60000);
+        return () => {
+            clearTimeout(firstFetchTimer);
+            clearInterval(interval);
+        };
+    }, [fetchNotifications]);
 
     const markAsRead = async (id: number) => {
         try {
-            await apiRequest(`/notifications/notifications/${id}/mark_as_read/`, { method: 'POST' });
+            await notificationsAPI.markAsRead(id);
             setNotifications(prev => prev.map(n => n.id === id ? { ...n, is_read: true } : n));
             setUnreadCount(prev => Math.max(0, prev - 1));
-        } catch (error) {
+        } catch {
             toast.error('Failed to mark as read');
         }
     };
 
     const markAllAsRead = async () => {
         try {
-            await apiRequest('/notifications/notifications/mark_all_as_read/', { method: 'POST' });
+            await notificationsAPI.markAllAsRead();
             setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
             setUnreadCount(0);
             toast.success('All marked as read');
-        } catch (error) {
+        } catch {
             toast.error('Failed to mark all as read');
         }
     };
