@@ -2,10 +2,25 @@ import axios from 'axios';
 import { getAccessToken } from '@/lib/auth';
 import { getTenantFromSubdomain } from '@/lib/tenant';
 
-const base_url = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-const API_URL = (base_url.startsWith('http://') || base_url.startsWith('https://'))
-    ? base_url
-    : `https://${base_url}`;
+function normalizeApiBaseUrl(rawUrl: string): string {
+    let normalized = (rawUrl || '').trim();
+    if (!normalized) {
+        normalized = 'http://localhost:8000';
+    }
+
+    if (!normalized.startsWith('http://') && !normalized.startsWith('https://')) {
+        normalized = `https://${normalized}`;
+    }
+
+    normalized = normalized.replace(/\/+$/, '');
+    if (normalized.endsWith('/api')) {
+        normalized = normalized.slice(0, -4);
+    }
+
+    return normalized;
+}
+
+const API_URL = normalizeApiBaseUrl(process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000');
 
 const api = axios.create({
     baseURL: API_URL,
@@ -14,15 +29,20 @@ const api = axios.create({
     },
 });
 
-function readTenantHeader(config: any): string | null {
+function readTenantHeader(config: { headers?: unknown }): string | null {
     const headers = config?.headers;
     if (!headers) return null;
 
-    if (typeof headers.get === 'function') {
+    if (typeof headers === 'object' && headers !== null && 'get' in headers && typeof headers.get === 'function') {
         return headers.get('x-tenant-id') || headers.get('X-Tenant-Id') || null;
     }
 
-    return headers['x-tenant-id'] || headers['X-Tenant-Id'] || null;
+    if (typeof headers === 'object' && headers !== null) {
+        const recordHeaders = headers as Record<string, string | undefined>;
+        return recordHeaders['x-tenant-id'] || recordHeaders['X-Tenant-Id'] || null;
+    }
+
+    return null;
 }
 
 // Add interceptor to include token and tenant context

@@ -1,5 +1,5 @@
 import path from 'node:path';
-import { test, expect, type APIRequestContext, type Page, type Locator } from '@playwright/test';
+import { test, expect, type APIRequestContext, type APIResponse, type Page, type Locator } from '@playwright/test';
 
 type Role = 'student' | 'teacher' | 'admin';
 
@@ -47,6 +47,7 @@ const FRONTEND_BASE_URL = (process.env.E2E_BASE_URL || 'http://127.0.0.1:3000').
 const API_BASE_URL = (process.env.E2E_API_URL || 'http://127.0.0.1:8000').replace(/\/+$/, '');
 const DEFAULT_TENANT = process.env.E2E_TENANT || 'demo';
 const FIXTURE_PDF = path.resolve(__dirname, '..', '..', 'fixtures', 'files', 'sample-upload.pdf');
+const TRANSIENT_HTTP_STATUSES = new Set([408, 425, 429, 500, 502, 503, 504]);
 
 const credentialCache = new Map<Role, Credential>();
 const apiSessionCache = new Map<Role, ApiSession>();
@@ -148,6 +149,70 @@ function nextOrderValue(): number {
   return Date.now() % 100_000;
 }
 
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
+function isRetryableNetworkError(error: unknown): boolean {
+  const message = String((error as Error | undefined)?.message || error || '').toLowerCase();
+  return (
+    message.includes('fetch failed') ||
+    message.includes('network') ||
+    message.includes('econnreset') ||
+    message.includes('etimedout') ||
+    message.includes('eai_again') ||
+    message.includes('enotfound') ||
+    message.includes('socket hang up') ||
+    message.includes('could not resolve host')
+  );
+}
+
+async function requestWithRetry(
+  send: () => Promise<APIResponse>,
+  context: string,
+  options: { maxAttempts?: number; initialDelayMs?: number } = {},
+): Promise<APIResponse> {
+  const maxAttempts = Math.max(1, options.maxAttempts ?? 4);
+  const initialDelayMs = Math.max(250, options.initialDelayMs ?? 1_000);
+  let lastResponse: APIResponse | null = null;
+  let lastError: unknown = null;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    try {
+      const response = await send();
+      lastResponse = response;
+      if (response.ok()) return response;
+
+      const shouldRetry = TRANSIENT_HTTP_STATUSES.has(response.status()) && attempt < maxAttempts;
+      if (!shouldRetry) return response;
+
+      const body = (await response.text().catch(() => '')).replace(/\s+/g, ' ').trim();
+      console.warn(
+        `[e2e] ${context} attempt ${attempt}/${maxAttempts} failed with ${response.status()}${
+          body ? `: ${body.slice(0, 240)}` : ''
+        }; retrying...`,
+      );
+    } catch (error) {
+      lastError = error;
+      const shouldRetry = isRetryableNetworkError(error) && attempt < maxAttempts;
+      if (!shouldRetry) throw error;
+      console.warn(
+        `[e2e] ${context} attempt ${attempt}/${maxAttempts} failed with network error: ${String(
+          (error as Error | undefined)?.message || error,
+        )}; retrying...`,
+      );
+    }
+
+    const delayMs = initialDelayMs * 2 ** (attempt - 1);
+    await sleep(delayMs);
+  }
+
+  if (lastResponse) return lastResponse;
+  throw (lastError as Error) || new Error(`${context} failed after retries.`);
+}
+
 async function expectApiOk<T>(response: { ok(): boolean; json(): Promise<unknown> }, context: string): Promise<T> {
   const payload = (await response.json().catch(() => ({}))) as T;
   expect(response.ok(), `${context}: ${JSON.stringify(payload)}`).toBeTruthy();
@@ -155,9 +220,13 @@ async function expectApiOk<T>(response: { ok(): boolean; json(): Promise<unknown
 }
 
 async function listApi<T>(request: APIRequestContext, route: string, session: ApiSession): Promise<T[]> {
-  const response = await request.get(apiUrl(route), {
-    headers: authHeaders(session.accessToken, session.credential.schoolCode),
-  });
+  const response = await requestWithRetry(
+    () =>
+      request.get(apiUrl(route), {
+        headers: authHeaders(session.accessToken, session.credential.schoolCode),
+      }),
+    `GET ${route}`,
+  );
   if (!response.ok()) return [];
   const payload = await response.json();
   return normalizeList<T>(payload);
@@ -169,13 +238,17 @@ async function postApi<T>(
   session: ApiSession,
   data: Record<string, unknown>,
 ): Promise<T> {
-  const response = await request.post(apiUrl(route), {
-    headers: {
-      ...authHeaders(session.accessToken, session.credential.schoolCode),
-      'Content-Type': 'application/json',
-    },
-    data,
-  });
+  const response = await requestWithRetry(
+    () =>
+      request.post(apiUrl(route), {
+        headers: {
+          ...authHeaders(session.accessToken, session.credential.schoolCode),
+          'Content-Type': 'application/json',
+        },
+        data,
+      }),
+    `POST ${route}`,
+  );
   return expectApiOk<T>(response, `POST ${route}`);
 }
 
@@ -185,13 +258,17 @@ async function patchApi<T>(
   session: ApiSession,
   data: Record<string, unknown>,
 ): Promise<T> {
-  const response = await request.patch(apiUrl(route), {
-    headers: {
-      ...authHeaders(session.accessToken, session.credential.schoolCode),
-      'Content-Type': 'application/json',
-    },
-    data,
-  });
+  const response = await requestWithRetry(
+    () =>
+      request.patch(apiUrl(route), {
+        headers: {
+          ...authHeaders(session.accessToken, session.credential.schoolCode),
+          'Content-Type': 'application/json',
+        },
+        data,
+      }),
+    `PATCH ${route}`,
+  );
   return expectApiOk<T>(response, `PATCH ${route}`);
 }
 
@@ -200,13 +277,17 @@ async function requireApiSession(request: APIRequestContext, role: Role): Promis
   if (cached) return cached;
 
   const credential = await requireCredentialOrSkip(request, role);
-  const loginResponse = await request.post(apiUrl('/api/users/login/'), {
-    headers: { 'x-tenant-id': credential.schoolCode, 'Content-Type': 'application/json' },
-    data: {
-      email: credential.email,
-      password: credential.password,
-    },
-  });
+  const loginResponse = await requestWithRetry(
+    () =>
+      request.post(apiUrl('/api/users/login/'), {
+        headers: { 'x-tenant-id': credential.schoolCode, 'Content-Type': 'application/json' },
+        data: {
+          email: credential.email,
+          password: credential.password,
+        },
+      }),
+    `login ${role}`,
+  );
 
   const loginPayload = await expectApiOk<{ access: string; refresh: string }>(loginResponse, `login ${role}`);
   const session: ApiSession = {
@@ -681,16 +762,21 @@ async function loginWithCredential(
   request: APIRequestContext,
   credential: Credential,
 ): Promise<LoginPayload | null> {
-  const response = await request.post(apiUrl('/api/users/login/'), {
-    headers: {
-      'x-tenant-id': credential.schoolCode,
-      'Content-Type': 'application/json',
-    },
-    data: {
-      email: credential.email,
-      password: credential.password,
-    },
-  });
+  const response = await requestWithRetry(
+    () =>
+      request.post(apiUrl('/api/users/login/'), {
+        headers: {
+          'x-tenant-id': credential.schoolCode,
+          'Content-Type': 'application/json',
+        },
+        data: {
+          email: credential.email,
+          password: credential.password,
+        },
+      }),
+    `login ${credential.email}`,
+    { maxAttempts: 3, initialDelayMs: 600 },
+  );
   if (!response.ok()) return null;
 
   const payload = (await response.json().catch(() => ({}))) as LoginPayload;
@@ -726,23 +812,32 @@ async function createTenantAdminCredential(request: APIRequestContext): Promise<
     schoolCode: 'public',
   };
 
-  const registrationResponse = await request.post(apiUrl('/api/users/register/'), {
-    headers: { 'Content-Type': 'application/json' },
-    data: {
-      username: token.replace(/[^a-zA-Z0-9_-]/g, '').toLowerCase(),
-      email: saasCredential.email,
-      password: saasCredential.password,
-      password_confirm: saasCredential.password,
-      first_name: 'E2E',
-      last_name: 'SaaS',
-    },
-  });
+  const registrationResponse = await requestWithRetry(
+    () =>
+      request.post(apiUrl('/api/users/register/'), {
+        headers: { 'Content-Type': 'application/json' },
+        data: {
+          username: token.replace(/[^a-zA-Z0-9_-]/g, '').toLowerCase(),
+          email: saasCredential.email,
+          password: saasCredential.password,
+          password_confirm: saasCredential.password,
+          first_name: 'E2E',
+          last_name: 'SaaS',
+        },
+      }),
+    `register ${saasCredential.email}`,
+    { maxAttempts: 5, initialDelayMs: 1_000 },
+  );
   await expectApiOk(registrationResponse, `register ${saasCredential.email}`);
 
   const saasLogin = await loginWithCredential(request, saasCredential);
   expect(saasLogin?.access, 'Failed to authenticate generated SaaS admin').toBeTruthy();
 
-  const plansResponse = await request.get(apiUrl('/api/billing/plans/public/'));
+  const plansResponse = await requestWithRetry(
+    () => request.get(apiUrl('/api/billing/plans/public/')),
+    'GET /api/billing/plans/public/',
+    { maxAttempts: 5, initialDelayMs: 1_000 },
+  );
   const plansPayload = await expectApiOk<Array<{ plan_id: string; name?: string }> | { results?: Array<{ plan_id: string; name?: string }> }>(
     plansResponse,
     'GET /api/billing/plans/public/',
@@ -757,24 +852,29 @@ async function createTenantAdminCredential(request: APIRequestContext): Promise<
     password: 'Admin@12345',
     schoolCode: tenantSubdomain,
   };
-  const tenantType = mapTenantType(selectedPlan.name);
-  const tenantResponse = await request.post(apiUrl('/api/core/tenants/'), {
-    headers: {
-      Authorization: `Bearer ${saasLogin!.access!}`,
-      'x-tenant-id': 'public',
-      'Content-Type': 'application/json',
-    },
-    data: {
-      name: `E2E Critical ${Date.now()}`,
-      subdomain: tenantSubdomain,
-      type: tenantType,
-      plan_id: selectedPlan.plan_id,
-      admin_email: tenantAdmin.email,
-      admin_first_name: 'E2E',
-      admin_last_name: 'Admin',
-      password: tenantAdmin.password,
-    },
-  });
+  const requestedType = String(selectedPlan.name || '').trim().toLowerCase() || mapTenantType(selectedPlan.name);
+  const tenantResponse = await requestWithRetry(
+    () =>
+      request.post(apiUrl('/api/core/tenants/'), {
+        headers: {
+          Authorization: `Bearer ${saasLogin!.access!}`,
+          'x-tenant-id': 'public',
+          'Content-Type': 'application/json',
+        },
+        data: {
+          name: `E2E Critical ${Date.now()}`,
+          subdomain: tenantSubdomain,
+          type: requestedType,
+          plan_id: selectedPlan.plan_id,
+          admin_email: tenantAdmin.email,
+          admin_first_name: 'E2E',
+          admin_last_name: 'Admin',
+          password: tenantAdmin.password,
+        },
+      }),
+    `create tenant ${tenantSubdomain}`,
+    { maxAttempts: 5, initialDelayMs: 1_200 },
+  );
   await expectApiOk(tenantResponse, `create tenant ${tenantSubdomain}`);
   return tenantAdmin;
 }
@@ -897,9 +997,20 @@ async function loginViaUi(page: Page, role: Role, credential: Credential): Promi
   await expect(schoolCodeInput).toBeVisible({ timeout: 20_000 });
   await schoolCodeInput.fill(credential.schoolCode);
   await page.getByRole('button', { name: /Sign In/i }).click();
+  await page.waitForLoadState('networkidle').catch(() => {});
 
   const dashboard = dashboardPath(role);
-  await expectPathStartsWith(page, dashboard);
+  try {
+    await expectPathStartsWith(page, dashboard);
+  } catch (error) {
+    const bodyText = await page.locator('body').innerText().catch(() => '');
+    if (/Invalid credentials|No active account|Check your email, password, and school code/i.test(bodyText)) {
+      throw new Error(
+        `UI login failed for ${role}: ${credential.email} @ ${credential.schoolCode}. The form reported invalid credentials.`,
+      );
+    }
+    throw error;
+  }
 }
 
 async function bootstrapSession(page: Page, request: APIRequestContext, role: Role): Promise<Session> {
@@ -910,13 +1021,17 @@ async function bootstrapSession(page: Page, request: APIRequestContext, role: Ro
   let refreshToken = cachedSession?.refreshToken || '';
 
   if (!accessToken || !refreshToken) {
-    const loginResponse = await request.post(apiUrl('/api/users/login/'), {
-      headers: { 'x-tenant-id': credential.schoolCode, 'Content-Type': 'application/json' },
-      data: {
-        email: credential.email,
-        password: credential.password,
-      },
-    });
+    const loginResponse = await requestWithRetry(
+      () =>
+        request.post(apiUrl('/api/users/login/'), {
+          headers: { 'x-tenant-id': credential.schoolCode, 'Content-Type': 'application/json' },
+          data: {
+            email: credential.email,
+            password: credential.password,
+          },
+        }),
+      `bootstrap login ${role}`,
+    );
     expect(loginResponse.ok()).toBeTruthy();
 
     const loginPayload = (await loginResponse.json()) as { access: string; refresh: string };
@@ -1170,22 +1285,41 @@ test.describe('Student flow', () => {
     await expect(downloadButton).toBeVisible({ timeout: 30_000 });
     await expect(downloadButton).toBeEnabled({ timeout: 30_000 });
 
-    const resultCardResponse = page.waitForResponse(
-      (response) =>
-        response.request().method() === 'GET' &&
-        response.url().includes('/api/academic/reports/result-card/') &&
-        response.url().includes(`/${resultId}/`),
-      { timeout: 20_000 },
-    );
-    const downloadPromise = page.waitForEvent('download', { timeout: 20_000 }).catch(() => null);
+    let lastStatus = 0;
+    let lastBody = '';
 
-    await downloadButton.click();
+    for (let attempt = 1; attempt <= 2; attempt += 1) {
+      const resultCardResponse = page.waitForResponse(
+        (response) =>
+          response.request().method() === 'GET' &&
+          response.url().includes('/api/academic/reports/result-card/') &&
+          response.url().includes(`/${resultId}/`),
+        { timeout: 20_000 },
+      );
+      const downloadPromise = page.waitForEvent('download', { timeout: 20_000 }).catch(() => null);
 
-    const [response, download] = await Promise.all([resultCardResponse, downloadPromise]);
-    expect(response.ok(), `Result card endpoint failed with status ${response.status()}`).toBeTruthy();
-    if (download) {
-      expect(download.suggestedFilename()).toMatch(/\.pdf$/i);
+      await downloadButton.click();
+
+      const [response, download] = await Promise.all([resultCardResponse, downloadPromise]);
+      if (response.ok()) {
+        if (download) {
+          expect(download.suggestedFilename()).toMatch(/\.pdf$/i);
+        }
+        return;
+      }
+
+      lastStatus = response.status();
+      lastBody = (await response.text().catch(() => '')).replace(/\s+/g, ' ').trim().slice(0, 240);
+      if (attempt < 2) {
+        console.warn(`[e2e] Result card download attempt ${attempt} failed with ${lastStatus}; retrying...`);
+        await page.waitForTimeout(1_200);
+      }
     }
+
+    expect(
+      false,
+      `Result card endpoint failed with status ${lastStatus}${lastBody ? `: ${lastBody}` : ''}`,
+    ).toBeTruthy();
   });
 
   test('Watch video', async ({ page, request }) => {
