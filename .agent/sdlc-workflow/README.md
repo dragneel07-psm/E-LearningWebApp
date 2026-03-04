@@ -12,6 +12,8 @@ This folder is the execution guide for product, design, engineering, QA, and ope
   - `project-design-used.md`
 - Real database model and ERD in use:
   - `database-design-used.md`
+- Detailed ER diagrams (module-wise):
+  - `database-er-diagrams.md`
 
 ## Lifecycle Overview
 | Phase | Name | Primary Owners | Key Output |
@@ -36,6 +38,7 @@ This folder is the execution guide for product, design, engineering, QA, and ope
 ├── project-sdlc-as-implemented.md
 ├── project-design-used.md
 ├── database-design-used.md
+├── database-er-diagrams.md
 ├── 01-discovery-problem-definition.md
 ├── 02-mvp-scope-and-roadmap.md
 ├── 03-system-architecture-and-tech-decisions.md

@@ -134,6 +134,7 @@ Execution artifacts and templates for this process are maintained in:
 - `.agent/sdlc-workflow/project-sdlc-as-implemented.md`
 - `.agent/sdlc-workflow/project-design-used.md`
 - `.agent/sdlc-workflow/database-design-used.md`
+- `.agent/sdlc-workflow/database-er-diagrams.md`
 
 ### SDLC Phases
 1. Discovery and Requirement Definition

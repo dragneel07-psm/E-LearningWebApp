@@ -119,6 +119,10 @@ Core fields:
 - `GlobalSettings` (singleton pattern)
 
 ## 8. Relationship View (Condensed ERD)
+Detailed diagrams are available in:
+- `database-er-diagrams.md`
+
+## 8.1 Condensed ERD
 ```mermaid
 erDiagram
     TENANT ||--o{ USER_ACCOUNT : has
@@ -177,4 +181,3 @@ python manage.py init_prod
 - Many tenant-linked FKs use `db_constraint=False` to avoid cross-schema FK enforcement issues.
 - Data isolation is primarily controlled by schema routing and tenant middleware.
 - UI/API should normalize list payloads because some endpoints return paginated objects and others arrays.
-
