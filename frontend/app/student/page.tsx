@@ -80,7 +80,7 @@ export default function StudentDashboard() {
                 return {
                     time: `${formatClock(entry.start_time)} - ${formatClock(entry.end_time)}`,
                     subject: entry.subject_name || 'Subject',
-                    type: entry.room_number || entry.academic_class || 'Class',
+                    type: String(entry.room_number || entry.academic_class || 'Class'),
                     status,
                 };
             });

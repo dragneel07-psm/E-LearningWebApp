@@ -6,6 +6,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { authService } from '@/services/auth';
+import type { LoginCredentials } from '@/types/auth';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -43,7 +44,7 @@ export function LoginForm({ role, title, subtitle }: LoginFormProps) {
             if (role === 'saas_admin') {
                 data.school_code = 'public';
             }
-            const result = await authService.login(data as any);
+            const result = await authService.login(data as LoginCredentials);
 
             toast.success('Welcome back! Sign in successful.');
 
@@ -54,17 +55,19 @@ export function LoginForm({ role, title, subtitle }: LoginFormProps) {
                 switch (userRole) {
                     case 'saas_admin': targetPath = '/saas'; break;
                     case 'admin': targetPath = '/admin'; break;
+                    case 'staff': targetPath = '/admin'; break;
                     case 'teacher': targetPath = '/teacher'; break;
                     case 'parent': targetPath = '/parent'; break;
                     default: targetPath = '/student'; break;
                 }
             }
 
-            window.location.href = targetPath;
-        } catch (err: any) {
+            router.replace(targetPath);
+        } catch (err: unknown) {
             console.error("Login Error:", err);
-            const msg = err.response?.data?.detail
-                || err.response?.data?.non_field_errors?.[0]
+            const axiosLike = err as { response?: { data?: { detail?: string; non_field_errors?: string[] } } };
+            const msg = axiosLike.response?.data?.detail
+                || axiosLike.response?.data?.non_field_errors?.[0]
                 || 'Invalid credentials. Check your email, password, and school code.';
             toast.error(msg);
             setIsLoading(false);
@@ -205,7 +208,7 @@ export function LoginForm({ role, title, subtitle }: LoginFormProps) {
 
                 <div className="py-5 px-8 bg-white/5 border-t border-white/5 flex items-center justify-center space-x-1">
                     <p className="text-xs text-slate-500">
-                        Don't have an account?
+                        Don&apos;t have an account?
                     </p>
                     <Link href="/register" className="text-xs text-white hover:underline font-medium">
                         Create an account

@@ -16,6 +16,7 @@ const navigation: NavigationItem[] = [
     { name: 'Dashboard', href: '/admin', icon: LayoutDashboard },
     { name: 'Academic Years', href: '/admin/academic/years', icon: Calendar },
     { name: 'Classes', href: '/admin/academic/classes', icon: School },
+    { name: 'Timetable', href: '/admin/timetable', icon: Calendar },
     { name: 'Subjects', href: '/admin/academic/subjects', icon: BookOpen },
     { name: 'Assessments', href: '/admin/academic/assessments', icon: ClipboardList },
     { name: 'Exams', href: '/admin/exams', icon: ClipboardList },

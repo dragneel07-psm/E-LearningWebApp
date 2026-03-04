@@ -143,7 +143,7 @@ export async function proxy(request: NextRequest) {
         }
 
         // Role Protection Logic
-        if (pathname.startsWith('/admin') && userRole !== 'admin') {
+        if (pathname.startsWith('/admin') && userRole !== 'admin' && userRole !== 'staff') {
             return NextResponse.redirect(new URL('/unauthorized', request.url));
         }
         if (pathname.startsWith('/saas') && userRole !== 'saas_admin') {
@@ -163,6 +163,7 @@ export async function proxy(request: NextRequest) {
         if (pathname === '/' || pathname.startsWith('/login') || pathname.startsWith('/register')) {
             const dashboardMap: Record<string, string> = {
                 admin: '/admin',
+                staff: '/admin',
                 teacher: '/teacher',
                 student: '/student',
                 saas_admin: '/saas',

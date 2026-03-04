@@ -17,12 +17,21 @@ export function LessonMaterialsManager({ lessonId }: LessonMaterialsManagerProps
     const [loading, setLoading] = useState(true);
     const [uploading, setUploading] = useState(false);
 
+    const normalizeMaterials = (payload: unknown): LessonMaterial[] => {
+        if (Array.isArray(payload)) return payload as LessonMaterial[];
+        if (payload && typeof payload === 'object' && Array.isArray((payload as { results?: unknown[] }).results)) {
+            return (payload as { results: LessonMaterial[] }).results;
+        }
+        return [];
+    };
+
     const loadMaterials = async () => {
         try {
             const data = await academicAPI.getMaterials(lessonId);
-            setMaterials(data);
+            setMaterials(normalizeMaterials(data));
         } catch (error) {
             console.error("Failed to load materials", error);
+            setMaterials([]);
         } finally {
             setLoading(false);
         }
