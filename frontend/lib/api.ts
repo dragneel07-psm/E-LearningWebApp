@@ -1460,9 +1460,10 @@ export const academicAPI = {
 
 
     // Results
-    getResults: (studentId?: string) => {
+    getResults: async (studentId?: string) => {
         const query = studentId ? `?student_id=${studentId}` : '';
-        return apiRequest<Result[]>(`/academic/results/${query}`);
+        const payload = await apiRequest<Result[] | PaginatedResponse<Result>>(`/academic/results/${query}`);
+        return normalizeArrayPayload(payload);
     },
     getResult: (id: string) => apiRequest<Result>(`/academic/results/${id}/`),
     createResult: (data: Partial<Result>) => apiRequest<Result>('/academic/results/', {
@@ -1478,9 +1479,10 @@ export const academicAPI = {
     }),
 
     // Submissions
-    getSubmissions: (assessmentId?: string) => {
+    getSubmissions: async (assessmentId?: string) => {
         const query = assessmentId ? `?assessment=${assessmentId}` : '';
-        return apiRequest<Submission[]>(`/academic/submissions/${query}`);
+        const payload = await apiRequest<Submission[] | PaginatedResponse<Submission>>(`/academic/submissions/${query}`);
+        return normalizeArrayPayload(payload);
     },
     getSubmission: (id: string) => apiRequest<Submission>(`/academic/submissions/${id}/`),
     createSubmission: (data: Partial<Submission>) => apiRequest<Submission>('/academic/submissions/', {
@@ -1506,9 +1508,13 @@ export const academicAPI = {
     }),
 
     // Questions
-    getQuestions: () => apiRequest<Question[]>('/academic/questions/'),
+    getQuestions: async () => {
+        const payload = await apiRequest<Question[] | PaginatedResponse<Question>>('/academic/questions/');
+        return normalizeArrayPayload(payload);
+    },
     getQuestionsByAssessment: (assessmentId: string) => {
-        return apiRequest<Question[]>(`/academic/questions/?assessment=${assessmentId}`);
+        return apiRequest<Question[] | PaginatedResponse<Question>>(`/academic/questions/?assessment=${assessmentId}`)
+            .then((payload) => normalizeArrayPayload(payload));
     },
     createQuestion: (data: Partial<Question>) => apiRequest<Question>('/academic/questions/', {
         method: 'POST',
@@ -1530,7 +1536,10 @@ export const academicAPI = {
     getMyParent: () => apiRequest<Parent>('/academic/parents/me/'),
 
     // Notices
-    getNotices: () => apiRequest<Notice[]>('/academic/notices/'),
+    getNotices: async () => {
+        const payload = await apiRequest<Notice[] | PaginatedResponse<Notice>>('/academic/notices/');
+        return normalizeArrayPayload(payload);
+    },
     getNotice: (id: number) => apiRequest<Notice>(`/academic/notices/${id}/`),
     createNotice: (data: Partial<Notice>) => apiRequest<Notice>('/academic/notices/', {
         method: 'POST',

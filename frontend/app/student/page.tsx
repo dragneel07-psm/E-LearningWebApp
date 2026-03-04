@@ -140,27 +140,31 @@ export default function StudentDashboard() {
                 academicAPI.getMyAttendance().catch(() => []),
                 academicAPI.getMyTimetable().catch(() => []),
             ]);
+            const safeAssessments = Array.isArray(allAssessments) ? allAssessments : [];
+            const safeSubmissions = Array.isArray(mySubmissions) ? mySubmissions : [];
+            const safeAttendance = Array.isArray(myAttendance) ? myAttendance : [];
+            const safeTimetable = Array.isArray(myTimetable) ? myTimetable : [];
 
             // 2. Fetch Assessments for counts
-            setAllAssessmentsState(allAssessments);
+            setAllAssessmentsState(safeAssessments);
             const now = new Date();
 
-            const upcomingExams = allAssessments.filter(a =>
+            const upcomingExams = safeAssessments.filter(a =>
                 (a.type === 'exam' || a.type === 'quiz') &&
                 a.due_date && new Date(a.due_date) > now
             );
             setUpcomingExamsCount(upcomingExams.length);
 
             // 3. Fetch Submissions to find pending ones
-            const submittedIds = new Set(mySubmissions.filter(s => s.status !== 'draft').map(s => s.assessment));
-            const pending = allAssessments.filter(a => !submittedIds.has(a.assessment_id));
+            const submittedIds = new Set(safeSubmissions.filter(s => s.status !== 'draft').map(s => s.assessment));
+            const pending = safeAssessments.filter(a => !submittedIds.has(a.assessment_id));
             setPendingAssignmentsCount(pending.length);
 
             // 4. Attendance + today's timetable (real-time from APIs)
-            const attendanceSummary = computeAttendance(myAttendance);
+            const attendanceSummary = computeAttendance(safeAttendance);
             setAttendanceRate(attendanceSummary.rate);
             setAttendanceTrend(attendanceSummary.trend);
-            setTodayTimetable(buildTodayTimetable(myTimetable));
+            setTodayTimetable(buildTodayTimetable(safeTimetable));
 
             // 4. Fetch AI Recommendations
             try {
@@ -173,7 +177,7 @@ export default function StudentDashboard() {
             // 5. Fetch Notices
             try {
                 const noticesData = await academicAPI.getNotices();
-                setNotices(noticesData.slice(0, 3)); // Only show top 3 on dashboard
+                setNotices((Array.isArray(noticesData) ? noticesData : []).slice(0, 3)); // Only show top 3 on dashboard
             } catch (noticeError) {
                 console.warn("Could not fetch notices", noticeError);
             }
