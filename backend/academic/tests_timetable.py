@@ -13,6 +13,7 @@ class TimetablePermissionTests(FastTenantTestCase):
     """Regression coverage for timetable permission rules in tenant schema.
 
     This class also serves as a deploy-trigger touchpoint for backend-only Railway watches.
+    Keep this test maintained alongside timetable policy changes.
     """
 
     @classmethod
