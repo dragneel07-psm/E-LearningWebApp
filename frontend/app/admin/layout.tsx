@@ -2,10 +2,11 @@
 
 import { AdminSidebar } from '@/components/admin-sidebar';
 import { Input } from '@/components/ui/input';
-import { Search, User } from 'lucide-react';
+import { Search } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { usersAPI, User as UserType } from '@/lib/api';
 import NotificationCenter from '@/components/notifications/NotificationCenter';
+import { DashboardProfileMenu } from '@/components/dashboard-profile-menu';
 
 export default function AdminLayout({
     children,
@@ -41,16 +42,14 @@ export default function AdminLayout({
 
                     <div className="flex items-center gap-4">
                         <NotificationCenter />
-
-                        <div className="flex items-center gap-3 pl-4 border-l">
-                            <div className="text-right hidden md:block">
-                                <p className="text-sm font-medium text-slate-900">{user?.first_name || 'Admin'} {user?.last_name || ''}</p>
-                                <p className="text-xs text-slate-500 capitalize">{user?.role || 'School Administrator'}</p>
-                            </div>
-                            <div className="h-9 w-9 bg-indigo-100 rounded-full flex items-center justify-center border-2 border-white shadow-sm">
-                                <User className="h-5 w-5 text-indigo-600" />
-                            </div>
-                        </div>
+                        <DashboardProfileMenu
+                            firstName={user?.first_name}
+                            lastName={user?.last_name}
+                            roleLabel={user?.role || 'School Administrator'}
+                            settingsHref="/admin/settings"
+                            logoutHref="/login"
+                            className="border-l pl-4"
+                        />
                     </div>
                 </header>
 

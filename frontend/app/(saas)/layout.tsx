@@ -2,6 +2,7 @@ import { SaasSidebar } from '@/components/saas/sidebar';
 import { Bell, Search } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { ThemeToggle } from '@/components/theme-toggle';
+import { DashboardProfileMenu } from '@/components/dashboard-profile-menu';
 
 export default function SaasLayout({
     children,
@@ -31,9 +32,14 @@ export default function SaasLayout({
                             <Bell className="h-5 w-5 text-slate-300" />
                             <span className="absolute top-1.5 right-1.5 h-2 w-2 bg-red-500 rounded-full"></span>
                         </button>
-                        <div className="h-8 w-8 rounded-full bg-gradient-to-r from-indigo-500 to-purple-500 flex items-center justify-center text-white text-sm font-bold">
-                            SA
-                        </div>
+                        <DashboardProfileMenu
+                            firstName="SaaS"
+                            lastName="Admin"
+                            roleLabel="SaaS Admin"
+                            settingsHref="/saas/settings"
+                            logoutHref="/login/saas"
+                            showName={false}
+                        />
                     </div>
                 </div>
 

@@ -22,6 +22,7 @@ import { HeaderStats } from '@/components/gamification/header-stats';
 import { ConnectionIndicator } from '@/components/offline-banner';
 import { useOffline } from '@/hooks/use-offline';
 import { PWAInstallPrompt } from '@/components/pwa-install-prompt';
+import { DashboardProfileMenu } from '@/components/dashboard-profile-menu';
 
 export default function StudentLayout({ children }: { children: React.ReactNode }) {
     const pathname = usePathname();
@@ -192,7 +193,17 @@ export default function StudentLayout({ children }: { children: React.ReactNode 
                             <Menu className="h-6 w-6 text-slate-600" />
                         </Button>
                         <span className="font-bold text-slate-900 flex-1 text-center">Student Portal</span>
-                        <ConnectionIndicator />
+                        <div className="flex items-center gap-2">
+                            <ConnectionIndicator />
+                            <DashboardProfileMenu
+                                firstName={user?.first_name}
+                                lastName={user?.last_name}
+                                roleLabel={user?.role || 'Student'}
+                                settingsHref="/student/profile"
+                                logoutHref="/login"
+                                showName={false}
+                            />
+                        </div>
                     </header>
 
                     <main className="flex-1 p-4 lg:p-8 overflow-y-auto">
@@ -214,6 +225,14 @@ export default function StudentLayout({ children }: { children: React.ReactNode 
                                     <HeaderStats />
                                     <LanguageSelector />
                                     <NotificationBell />
+                                    <DashboardProfileMenu
+                                        firstName={user?.first_name}
+                                        lastName={user?.last_name}
+                                        roleLabel={user?.role || 'Student'}
+                                        settingsHref="/student/profile"
+                                        logoutHref="/login"
+                                        showName={false}
+                                    />
                                     {isOnline && (
                                         <Button className="bg-indigo-600 hover:bg-indigo-700 text-white rounded-full px-6 shadow-md shadow-indigo-200">
                                             Join Online Class
