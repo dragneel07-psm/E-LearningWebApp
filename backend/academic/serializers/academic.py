@@ -13,6 +13,7 @@ class SectionSerializer(serializers.ModelSerializer):
 
 class SubjectSerializer(serializers.ModelSerializer):
     teacher_name = serializers.CharField(source='teacher.user.username', read_only=True)
+    additional_teacher_names = serializers.SerializerMethodField()
     total_lessons = serializers.SerializerMethodField()
     completed_lessons = serializers.SerializerMethodField()
     progress_percentage = serializers.SerializerMethodField()
@@ -24,6 +25,13 @@ class SubjectSerializer(serializers.ModelSerializer):
     def get_total_lessons(self, obj):
         from ..models.lesson import Lesson
         return Lesson.objects.filter(chapter__subject=obj).count()
+
+    def get_additional_teacher_names(self, obj):
+        names = []
+        for teacher in obj.additional_teachers.all():
+            full_name = f"{teacher.user.first_name} {teacher.user.last_name}".strip()
+            names.append(full_name or teacher.user.username)
+        return names
 
     def get_completed_lessons(self, obj):
         request = self.context.get('request')

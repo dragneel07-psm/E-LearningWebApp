@@ -36,7 +36,8 @@ export default function SubjectsPage() {
         description: '',
         credits: 1.0,
         is_elective: false,
-        teacher: 'unassigned' // string for Select value
+        teacher: 'unassigned', // string for Select value
+        additional_teachers: [] as string[],
     });
     const [submitting, setSubmitting] = useState(false);
 
@@ -68,6 +69,23 @@ export default function SubjectsPage() {
         return cls ? cls.name : 'Unknown Class';
     };
 
+    const getTeacherDisplayName = (teacher: Teacher) => {
+        const fullName = `${teacher.first_name || ''} ${teacher.last_name || ''}`.trim();
+        return fullName || teacher.username || teacher.email || 'Teacher';
+    };
+
+    const getAdditionalTeacherNames = (subject: Subject) => {
+        if (Array.isArray(subject.additional_teacher_names) && subject.additional_teacher_names.length > 0) {
+            return subject.additional_teacher_names;
+        }
+
+        const ids = Array.isArray(subject.additional_teachers) ? subject.additional_teachers.map((id) => String(id)) : [];
+        return ids
+            .map((teacherId) => teachers.find((teacher) => String(teacher.id) === teacherId))
+            .filter((teacher): teacher is Teacher => Boolean(teacher))
+            .map((teacher) => getTeacherDisplayName(teacher));
+    };
+
     function openCreateDialog() {
         setFormData({
             name: '',
@@ -76,7 +94,8 @@ export default function SubjectsPage() {
             description: '',
             credits: 1.0,
             is_elective: false,
-            teacher: 'unassigned'
+            teacher: 'unassigned',
+            additional_teachers: [],
         });
         setIsEditMode(false);
         setCurrentSubjectId(null);
@@ -91,7 +110,10 @@ export default function SubjectsPage() {
             description: subject.description || '',
             credits: subject.credits || 1.0,
             is_elective: subject.is_elective,
-            teacher: subject.teacher ? subject.teacher.toString() : 'unassigned'
+            teacher: subject.teacher ? subject.teacher.toString() : 'unassigned',
+            additional_teachers: Array.isArray(subject.additional_teachers)
+                ? subject.additional_teachers.map((id) => String(id))
+                : [],
         });
         setIsEditMode(true);
         setCurrentSubjectId(subject.id);
@@ -106,6 +128,8 @@ export default function SubjectsPage() {
 
         try {
             setSubmitting(true);
+            const leadTeacherId = formData.teacher && formData.teacher !== 'unassigned' ? formData.teacher : null;
+            const additionalTeacherIds = formData.additional_teachers.filter((id) => id && id !== leadTeacherId);
             const payload = {
                 name: formData.name,
                 code: formData.code,
@@ -113,7 +137,8 @@ export default function SubjectsPage() {
                 description: formData.description,
                 credits: formData.credits,
                 is_elective: formData.is_elective,
-                teacher: formData.teacher && formData.teacher !== 'unassigned' ? formData.teacher : null
+                teacher: leadTeacherId,
+                additional_teachers: additionalTeacherIds,
             };
 
             if (isEditMode && currentSubjectId) {
@@ -210,7 +235,7 @@ export default function SubjectsPage() {
                                 <TableHead>Subject Name</TableHead>
                                 <TableHead>Code</TableHead>
                                 <TableHead>Credits</TableHead>
-                                <TableHead>Assigned Teacher</TableHead>
+                                <TableHead>Assigned Teachers</TableHead>
                                 <TableHead>Type</TableHead>
                                 <TableHead className="text-right">Actions</TableHead>
                             </TableRow>
@@ -244,14 +269,21 @@ export default function SubjectsPage() {
                                         <TableCell className="font-mono text-xs">{subject.code || '-'}</TableCell>
                                         <TableCell>{subject.credits}</TableCell>
                                         <TableCell>
-                                            {subject.teacher_name ? (
-                                                <div className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
-                                                    <User className="h-3 w-3 text-emerald-500" />
-                                                    {subject.teacher_name}
-                                                </div>
-                                            ) : (
-                                                <span className="text-xs text-slate-400 italic">Unassigned</span>
-                                            )}
+                                            <div className="space-y-1">
+                                                {subject.teacher_name ? (
+                                                    <div className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
+                                                        <User className="h-3 w-3 text-emerald-500" />
+                                                        <span>Lead: {subject.teacher_name}</span>
+                                                    </div>
+                                                ) : (
+                                                    <span className="text-xs text-slate-400 italic">Lead: Unassigned</span>
+                                                )}
+                                                {getAdditionalTeacherNames(subject).length > 0 && (
+                                                    <p className="text-xs text-slate-500">
+                                                        Additional: {getAdditionalTeacherNames(subject).join(', ')}
+                                                    </p>
+                                                )}
+                                            </div>
                                         </TableCell>
                                         <TableCell>
                                             {subject.is_elective ?
@@ -349,7 +381,13 @@ export default function SubjectsPage() {
                             <Label>Lead Teacher</Label>
                             <Select
                                 value={formData.teacher}
-                                onValueChange={val => setFormData({ ...formData, teacher: val })}
+                                onValueChange={(val) =>
+                                    setFormData((prev) => ({
+                                        ...prev,
+                                        teacher: val,
+                                        additional_teachers: prev.additional_teachers.filter((id) => id !== val),
+                                    }))
+                                }
                             >
                                 <SelectTrigger>
                                     <SelectValue placeholder="Assign a teacher" />
@@ -358,11 +396,59 @@ export default function SubjectsPage() {
                                     <SelectItem value="unassigned">Unassigned</SelectItem>
                                     {teachers.map(t => (
                                         <SelectItem key={t.id} value={t.id.toString()}>
-                                            {t.first_name ? `${t.first_name} ${t.last_name}` : t.username}
+                                            {getTeacherDisplayName(t)}
                                         </SelectItem>
                                     ))}
                                 </SelectContent>
                             </Select>
+                        </div>
+
+                        <div className="grid gap-2">
+                            <Label>Additional Teachers</Label>
+                            <div className="max-h-40 overflow-y-auto rounded-md border border-slate-200 p-3 space-y-2">
+                                {teachers.length === 0 ? (
+                                    <p className="text-xs text-slate-400 italic">No teachers available.</p>
+                                ) : (
+                                    teachers.map((teacher) => {
+                                        const teacherId = String(teacher.id);
+                                        const isLead = teacherId === formData.teacher;
+                                        const isChecked = formData.additional_teachers.includes(teacherId);
+
+                                        return (
+                                            <label
+                                                key={teacherId}
+                                                className={`flex items-center gap-2 text-sm ${
+                                                    isLead ? 'text-slate-400' : 'text-slate-700'
+                                                }`}
+                                            >
+                                                <input
+                                                    type="checkbox"
+                                                    className="h-4 w-4 rounded border-slate-300"
+                                                    checked={isChecked}
+                                                    disabled={isLead}
+                                                    onChange={(event) => {
+                                                        const checked = event.target.checked;
+                                                        setFormData((prev) => {
+                                                            const current = prev.additional_teachers;
+                                                            return {
+                                                                ...prev,
+                                                                additional_teachers: checked
+                                                                    ? [...current, teacherId]
+                                                                    : current.filter((id) => id !== teacherId),
+                                                            };
+                                                        });
+                                                    }}
+                                                />
+                                                <span>{getTeacherDisplayName(teacher)}</span>
+                                                {isLead && <span className="text-xs italic">(Lead)</span>}
+                                            </label>
+                                        );
+                                    })
+                                )}
+                            </div>
+                            <p className="text-xs text-slate-500">
+                                Assign co-teachers who can also teach this subject.
+                            </p>
                         </div>
 
                         <div className="grid gap-2">

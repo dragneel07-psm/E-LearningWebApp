@@ -12,6 +12,11 @@ class Subject(models.Model):
     is_elective = models.BooleanField(default=False)
     is_active = models.BooleanField(default=False)
     teacher = models.ForeignKey('academic.Teacher', on_delete=models.SET_NULL, null=True, blank=True, related_name='subjects')
+    additional_teachers = models.ManyToManyField(
+        'academic.Teacher',
+        blank=True,
+        related_name='additional_subjects',
+    )
 
     class Meta:
         unique_together = ('name', 'academic_class')

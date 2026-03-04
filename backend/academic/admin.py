@@ -39,9 +39,14 @@ class ParentAdmin(admin.ModelAdmin):
 
 @admin.register(Subject)
 class SubjectAdmin(admin.ModelAdmin):
-    list_display = ('name', 'academic_class', 'teacher')
-    list_filter = ('academic_class', 'teacher')
+    list_display = ('name', 'academic_class', 'teacher', 'additional_teacher_count')
+    list_filter = ('academic_class', 'teacher', 'additional_teachers')
     search_fields = ('name',)
+    filter_horizontal = ('additional_teachers',)
+
+    def additional_teacher_count(self, obj):
+        return obj.additional_teachers.count()
+    additional_teacher_count.short_description = 'Additional Teachers'
 
 @admin.register(Chapter)
 class ChapterAdmin(admin.ModelAdmin):

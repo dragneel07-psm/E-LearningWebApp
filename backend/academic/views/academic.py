@@ -20,6 +20,9 @@ class SectionViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
 
 class SubjectViewSet(viewsets.ModelViewSet):
-    queryset = Subject.objects.select_related('academic_class').all()
+    queryset = Subject.objects.select_related('academic_class', 'teacher', 'teacher__user').prefetch_related(
+        'additional_teachers',
+        'additional_teachers__user',
+    )
     serializer_class = SubjectSerializer
     permission_classes = [IsAuthenticated]

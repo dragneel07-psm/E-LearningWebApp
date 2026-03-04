@@ -99,6 +99,8 @@ export interface Subject {
     is_elective: boolean;
     teacher?: string | null; // UUID
     teacher_name?: string;
+    additional_teachers?: string[]; // UUID[]
+    additional_teacher_names?: string[];
     total_lessons?: number;
     completed_lessons?: number;
     progress_percentage?: number;
@@ -1708,8 +1710,13 @@ export const helpers = {
         try {
             // Fetch all subjects and filter? Ideally backend endpoint S3-4
             const subjects = await academicAPI.getSubjects();
-            // Frontend filter logic (Subject.teacher is string UUID)
-            return subjects.filter(s => s.teacher === teacherId);
+            // Include both lead teacher and co-teacher assignments.
+            return subjects.filter((subject) => {
+                if (String(subject.teacher || '') === String(teacherId)) return true;
+                return Array.isArray(subject.additional_teachers)
+                    ? subject.additional_teachers.some((assignedId) => String(assignedId) === String(teacherId))
+                    : false;
+            });
         } catch (e) {
             console.error("Error fetching teacher subjects", e);
             return [];
