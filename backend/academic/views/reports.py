@@ -11,6 +11,18 @@ from academic.models.class_section import Section
 from core.reports import generate_pdf_response, generate_excel_response
 from django.shortcuts import get_object_or_404
 
+
+def _student_last_name_for_filename(student: Student) -> str:
+    user = getattr(student, 'user', None)
+    last_name = (getattr(user, 'last_name', '') or '').strip()
+    if last_name:
+        return last_name.replace(' ', '_')
+    username = (getattr(user, 'username', '') or '').strip()
+    if username:
+        return username.replace(' ', '_')
+    return 'student'
+
+
 class ReportViewSet(viewsets.ViewSet):
     """
     ViewSet for generating various reports.
@@ -19,7 +31,7 @@ class ReportViewSet(viewsets.ViewSet):
     @action(detail=False, methods=['get'], url_path='student-performance/(?P<student_id>[^/.]+)')
     def student_performance_pdf(self, request, student_id=None):
         using_db = getattr(request, 'db_alias', 'default')
-        student = get_object_or_404(Student.objects.using(using_db), id=student_id)
+        student = get_object_or_404(Student.objects.using(using_db).select_related('user'), id=student_id)
         
         # Use ReportingService to get comprehensive data including AI summary
         # Transform results for template since we are using service now
@@ -38,6 +50,21 @@ class ReportViewSet(viewsets.ViewSet):
                 'submitted_at': r.submitted_at
             })
 
+        avg_percentage = round(sum(item['percentage'] for item in results_data) / len(results_data), 1) if results_data else 0
+        report_data = {
+            'results_data': results_data,
+            'metrics': {
+                'total_assessments': len(results_data),
+                'average_percentage': avg_percentage,
+            },
+            'ai_report': {
+                'summary': 'Performance insights are generated from recent assessment attempts.',
+                'strengths': [],
+                'weaknesses': [],
+                'recommendations': [],
+            },
+        }
+
         context = {
             'student': student,
             'report': report_data,
@@ -47,8 +74,8 @@ class ReportViewSet(viewsets.ViewSet):
             'school_name': request.headers.get('x-tenant-id', 'Our School').capitalize(),
             'date': timezone.now().strftime("%B %d, %Y")
         }
-        
-        filename = f"performance_report_{student.last_name}_{student_id[:8]}.pdf"
+
+        filename = f"performance_report_{_student_last_name_for_filename(student)}_{student_id[:8]}.pdf"
         response = generate_pdf_response('reports/student_performance.html', context, filename)
         
         if response:
@@ -58,7 +85,7 @@ class ReportViewSet(viewsets.ViewSet):
     @action(detail=False, methods=['get'], url_path='student-performance-excel/(?P<student_id>[^/.]+)')
     def student_performance_excel(self, request, student_id=None):
         using_db = getattr(request, 'db_alias', 'default')
-        student = get_object_or_404(Student.objects.using(using_db), id=student_id)
+        student = get_object_or_404(Student.objects.using(using_db).select_related('user'), id=student_id)
         results = Result.objects.using(using_db).filter(student=student).select_related('assessment', 'assessment__subject')
         
         data = []
@@ -74,7 +101,7 @@ class ReportViewSet(viewsets.ViewSet):
             })
             
         columns = ['Subject', 'Assessment', 'Type', 'Score', 'Total Marks', 'Percentage', 'Date']
-        filename = f"performance_report_{student.last_name}_{student_id[:8]}.xlsx"
+        filename = f"performance_report_{_student_last_name_for_filename(student)}_{student_id[:8]}.xlsx"
         
         return generate_excel_response(data, columns, filename)
 
@@ -212,8 +239,8 @@ class ReportViewSet(viewsets.ViewSet):
             'school_name': request.headers.get('x-tenant-id', 'Our School').split('.')[0].capitalize(),
             'date': timezone.now().strftime("%B %d, %Y")
         }
-        
-        filename = f"result_card_{student.last_name}_{result.assessment.title.replace(' ', '_')}.pdf"
+
+        filename = f"result_card_{_student_last_name_for_filename(student)}_{result.assessment.title.replace(' ', '_')}.pdf"
         response = generate_pdf_response('reports/result_card.html', context, filename)
         
         if response:
@@ -305,4 +332,3 @@ class ReportViewSet(viewsets.ViewSet):
         response = HttpResponse(zip_buffer.getvalue(), content_type='application/zip')
         response['Content-Disposition'] = f'attachment; filename="hall_tickets_{exam.assessment.title.replace(" ", "_")}.zip"'
         return response
-

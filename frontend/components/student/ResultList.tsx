@@ -85,7 +85,8 @@ export function ResultList({ results }: ResultListProps) {
                             size="sm"
                             className="text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 gap-2 h-8 px-2"
                             onClick={() => {
-                                const url = reportsAPI.getResultCardPDF(result.student.toString(), result.result_id || result.id);
+                                const resultPk = result.id || result.result_id;
+                                const url = reportsAPI.getResultCardPDF(result.student.toString(), resultPk);
                                 const filename = `Result_Card_${result.assessmentDetails?.title || 'Report'}.pdf`;
                                 helpers.downloadFile(url, filename);
                             }}
