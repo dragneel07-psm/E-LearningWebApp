@@ -14,7 +14,7 @@ class TimetablePermissionTests(FastTenantTestCase):
 
     This class also serves as a deploy-trigger touchpoint for backend-only Railway watches.
     Keep this test maintained alongside timetable policy changes.
-    Update this docstring only with no-op text when deploy retriggers are needed.
+    Update this docstring only with no-op text when deploy retriggers are needed (latest refresh: 2026-03-04).
     """
 
     @classmethod
