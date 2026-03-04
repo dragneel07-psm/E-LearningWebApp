@@ -2,10 +2,17 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, Users, GraduationCap, School, CreditCard, BarChart3, Settings, LogOut, Bell, BookOpen, Calendar, Library, Wallet, DollarSign, ClipboardList, FileText, MessageSquare } from 'lucide-react';
+import { LayoutDashboard, Users, GraduationCap, School, CreditCard, BarChart3, Settings, LogOut, Bell, BookOpen, Calendar, Library, Wallet, DollarSign, ClipboardList, FileText, MessageSquare, type LucideIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
-const navigation = [
+type NavigationItem = {
+    name: string;
+    href: string;
+    icon: LucideIcon;
+    indent?: boolean;
+};
+
+const navigation: NavigationItem[] = [
     { name: 'Dashboard', href: '/admin', icon: LayoutDashboard },
     { name: 'Academic Years', href: '/admin/academic/years', icon: Calendar },
     { name: 'Classes', href: '/admin/academic/classes', icon: School },
@@ -31,7 +38,7 @@ export function AdminSidebar() {
     const pathname = usePathname();
 
     return (
-        <div className="flex bg-slate-900 text-white w-64 min-h-screen flex-col">
+        <div className="flex h-full bg-slate-900 text-white w-64 flex-col overflow-hidden">
             <div className="p-6">
                 <div className="flex items-center gap-3">
                     <div className="h-8 w-8 rounded-lg bg-indigo-500 flex items-center justify-center">
@@ -41,19 +48,19 @@ export function AdminSidebar() {
                 </div>
             </div>
 
-            <nav className="flex-1 px-4 space-y-1">
+            <nav className="flex-1 min-h-0 overflow-y-auto px-4 space-y-1 pb-4">
                 {navigation.map((item) => {
                     const isActive = pathname === item.href || (item.href !== '/admin' && pathname.startsWith(item.href));
                     return (
                         <Link
                             key={item.name}
                             href={item.href}
-                            className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${(item as any).indent ? 'ml-6 text-xs py-1.5' : ''} ${isActive
+                            className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${item.indent ? 'ml-6 text-xs py-1.5' : ''} ${isActive
                                 ? 'bg-indigo-600 text-white shadow-md'
                                 : 'text-slate-400 hover:text-white hover:bg-slate-800'
                                 }`}
                         >
-                            <item.icon className={`h-5 w-5 ${isActive ? 'text-white' : 'text-slate-400'} ${(item as any).indent ? 'h-4 w-4' : ''}`} />
+                            <item.icon className={`h-5 w-5 ${isActive ? 'text-white' : 'text-slate-400'} ${item.indent ? 'h-4 w-4' : ''}`} />
                             {item.name}
                         </Link>
                     );
