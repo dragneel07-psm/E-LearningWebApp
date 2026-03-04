@@ -9,7 +9,8 @@
   "scripts": {
     "test:e2e": "playwright test",
     "test:e2e:critical": "playwright test tests/e2e/critical/lms-critical.spec.ts",
-    "test:e2e:smoke": "playwright test tests/e2e/smoke"
+    "test:e2e:smoke": "playwright test tests/e2e/smoke",
+    "test:e2e:scale": "playwright test tests/e2e/critical/lms-deployed-scale.spec.ts"
   },
   "keywords": [],
   "author": "",

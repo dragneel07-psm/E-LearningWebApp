@@ -60,3 +60,32 @@ tests/
 - `npm run test:e2e`
 - `npm run test:e2e:critical`
 - `npm run test:e2e:smoke`
+- `npm run test:e2e:scale`
+
+## Deployed Scale Run
+
+`test:e2e:scale` seeds and validates a large LMS dataset on a deployed environment:
+
+- 100 students
+- 20 teachers
+- 3 staff
+- 10 classes (with sections)
+- subjects, chapters, lessons, and lesson materials
+
+Required env vars for deployed execution:
+
+- `E2E_BASE_URL` (frontend URL)
+- `E2E_API_URL` (backend URL)
+- `E2E_ADMIN_EMAIL`
+- `E2E_ADMIN_PASSWORD`
+- `E2E_ADMIN_SCHOOL_CODE` (or `E2E_TENANT`)
+
+Optional size overrides:
+
+- `E2E_DUMMY_STUDENTS`
+- `E2E_DUMMY_TEACHERS`
+- `E2E_DUMMY_STAFF`
+- `E2E_DUMMY_CLASSES`
+- `E2E_DUMMY_SUBJECTS_PER_CLASS`
+- `E2E_DUMMY_CHAPTERS_PER_SUBJECT`
+- `E2E_DUMMY_LESSONS_PER_CHAPTER`
