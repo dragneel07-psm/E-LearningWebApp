@@ -5,6 +5,7 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from django.db import transaction, models
 from django.db.models import Count, Q
+from django.utils import timezone
 from django.contrib.auth import get_user_model
 from django.shortcuts import get_object_or_404
 
@@ -196,7 +197,7 @@ class StudentViewSet(TenantScopedQuerysetMixin, viewsets.ModelViewSet):
     tenant_field = 'user__tenant'  # Student is related to tenant through user
     
     def get_permissions(self):
-        if self.action in ['me', 'list', 'retrieve']:
+        if self.action in ['me', 'list', 'retrieve', 'profile_overview']:
             return [IsAuthenticated()]
         return [IsAdminOrSaaSAdmin()]
     
@@ -225,6 +226,349 @@ class StudentViewSet(TenantScopedQuerysetMixin, viewsets.ModelViewSet):
             queryset = queryset.filter(section_id=section_id)
         
         return queryset
+
+    @action(detail=True, methods=['get'], url_path='profile-overview')
+    def profile_overview(self, request, pk=None):
+        """
+        Enriched student profile view for Admin/Teacher dashboards.
+        Includes subject progress, results, assignments, and overall analytics.
+        """
+        student = self.get_object()
+        requester_role = getattr(request.user, 'role', None)
+
+        if requester_role in ['admin', 'saas_admin', 'staff']:
+            pass
+        # Students can only view their own profile.
+        elif requester_role == 'student':
+            if student.user_id != request.user.user_id:
+                return Response({'detail': 'You can only view your own profile.'}, status=status.HTTP_403_FORBIDDEN)
+        # Teachers can only view students from their assigned classes.
+        elif requester_role == 'teacher':
+            teacher_profile = Teacher.objects.prefetch_related('assigned_classes').filter(user=request.user).first()
+            student_class_id = getattr(student, 'academic_class_id', None)
+            if not teacher_profile or not student_class_id:
+                return Response({'detail': 'Not allowed to view this student profile.'}, status=status.HTTP_403_FORBIDDEN)
+            assigned_class_ids = set(teacher_profile.assigned_classes.values_list('id', flat=True))
+            if student_class_id not in assigned_class_ids:
+                return Response({'detail': 'Not allowed to view this student profile.'}, status=status.HTTP_403_FORBIDDEN)
+        # Parents can only view linked students.
+        elif requester_role == 'parent':
+            parent_profile = Parent.objects.prefetch_related('students').filter(user=request.user).first()
+            if not parent_profile or not parent_profile.students.filter(student_id=student.student_id).exists():
+                return Response({'detail': 'Not allowed to view this student profile.'}, status=status.HTTP_403_FORBIDDEN)
+        else:
+            return Response({'detail': 'Not allowed to view this student profile.'}, status=status.HTTP_403_FORBIDDEN)
+
+        from ..models import Subject
+        from ..models.lesson import Lesson, LessonProgress
+        from ..models.assessment import Assessment, Result
+        from ..models.submission import Submission
+
+        subjects = []
+        if student.academic_class_id:
+            subjects = list(
+                Subject.objects.filter(academic_class_id=student.academic_class_id)
+                .select_related('academic_class')
+                .order_by('name')
+            )
+
+        subject_ids = [subject.id for subject in subjects]
+
+        lesson_total_map = {}
+        completed_lesson_map = {}
+        if subject_ids:
+            lesson_total_map = {
+                row['chapter__subject_id']: row['total_lessons']
+                for row in Lesson.objects.filter(chapter__subject_id__in=subject_ids)
+                .values('chapter__subject_id')
+                .annotate(total_lessons=Count('id'))
+            }
+
+            completed_lesson_map = {
+                row['lesson__chapter__subject_id']: row['completed_lessons']
+                for row in LessonProgress.objects.filter(
+                    student=student,
+                    completed=True,
+                    lesson__chapter__subject_id__in=subject_ids,
+                )
+                .values('lesson__chapter__subject_id')
+                .annotate(completed_lessons=Count('id', distinct=True))
+            }
+
+        assessments = []
+        if subject_ids:
+            assessments_qs = Assessment.objects.filter(subject_id__in=subject_ids).select_related('subject')
+            if student.section_id:
+                assessments_qs = assessments_qs.filter(Q(section_id=student.section_id) | Q(section__isnull=True))
+            else:
+                assessments_qs = assessments_qs.filter(section__isnull=True)
+            assessments = list(assessments_qs.order_by('due_date', 'scheduled_at', 'assessment_id'))
+
+        assessment_ids = [assessment.assessment_id for assessment in assessments]
+
+        results = []
+        submissions = []
+        if assessment_ids:
+            results = list(
+                Result.objects.filter(student=student, assessment_id__in=assessment_ids)
+                .select_related('assessment', 'assessment__subject')
+                .order_by('-submitted_at')
+            )
+            submissions = list(
+                Submission.objects.filter(student=student, assessment_id__in=assessment_ids)
+                .select_related('assessment', 'assessment__subject')
+                .order_by('-submitted_at')
+            )
+
+        assessments_by_subject = {}
+        for assessment in assessments:
+            assessments_by_subject.setdefault(assessment.subject_id, []).append(assessment)
+
+        results_by_subject = {}
+        for result in results:
+            results_by_subject.setdefault(result.assessment.subject_id, []).append(result)
+
+        submissions_by_subject = {}
+        for submission in submissions:
+            submissions_by_subject.setdefault(submission.assessment.subject_id, []).append(submission)
+
+        submission_by_assessment = {str(submission.assessment_id): submission for submission in submissions}
+        result_by_assessment = {str(result.assessment_id): result for result in results}
+
+        subject_progress = []
+        subject_average_scores = []
+        for subject in subjects:
+            total_lessons = int(lesson_total_map.get(subject.id, 0))
+            completed_lessons = int(completed_lesson_map.get(subject.id, 0))
+            progress_percentage = round((completed_lessons / total_lessons) * 100, 1) if total_lessons else 0.0
+
+            subject_assessments = assessments_by_subject.get(subject.id, [])
+            subject_results = results_by_subject.get(subject.id, [])
+
+            result_percentages = [
+                (float(result.score) / float(result.assessment.total_marks) * 100)
+                for result in subject_results
+                if result.assessment.total_marks
+            ]
+            average_score_percentage = round(sum(result_percentages) / len(result_percentages), 1) if result_percentages else 0.0
+
+            assignment_assessments = [assessment for assessment in subject_assessments if assessment.type == 'assignment']
+            assignment_total = len(assignment_assessments)
+            assignment_submitted = 0
+            for assignment in assignment_assessments:
+                submission = submission_by_assessment.get(str(assignment.assessment_id))
+                submission_done = submission and submission.status in ['submitted', 'graded', 'late']
+                result_done = str(assignment.assessment_id) in result_by_assessment
+                if submission_done or result_done:
+                    assignment_submitted += 1
+            assignment_pending = max(assignment_total - assignment_submitted, 0)
+
+            completed_assessment_ids = {
+                str(result.assessment_id)
+                for result in subject_results
+            }
+            completed_assessment_ids.update(
+                str(submission.assessment_id)
+                for submission in submissions_by_subject.get(subject.id, [])
+                if submission.status in ['submitted', 'graded', 'late']
+            )
+
+            latest_result_payload = None
+            if subject_results:
+                latest = subject_results[0]
+                latest_percentage = round((float(latest.score) / float(latest.assessment.total_marks)) * 100, 1) if latest.assessment.total_marks else 0.0
+                latest_result_payload = {
+                    'assessment_id': str(latest.assessment.assessment_id),
+                    'assessment_title': latest.assessment.title,
+                    'type': latest.assessment.type,
+                    'score': latest.score,
+                    'total_marks': latest.assessment.total_marks,
+                    'percentage': latest_percentage,
+                    'submitted_at': latest.submitted_at.isoformat() if latest.submitted_at else None,
+                }
+
+            subject_progress.append({
+                'subject_id': subject.id,
+                'subject_name': subject.name,
+                'subject_code': subject.code,
+                'class_name': subject.academic_class.name if subject.academic_class_id else None,
+                'total_lessons': total_lessons,
+                'completed_lessons': completed_lessons,
+                'progress_percentage': progress_percentage,
+                'assessments_total': len(subject_assessments),
+                'assessments_completed': len(completed_assessment_ids),
+                'assignment_total': assignment_total,
+                'assignment_submitted': assignment_submitted,
+                'assignment_pending': assignment_pending,
+                'average_score_percentage': average_score_percentage,
+                'latest_result': latest_result_payload,
+            })
+
+            subject_average_scores.append({
+                'subject_id': subject.id,
+                'subject_name': subject.name,
+                'average_score_percentage': average_score_percentage,
+                'progress_percentage': progress_percentage,
+            })
+
+        subject_progress.sort(key=lambda item: item['subject_name'].lower())
+
+        recent_results = []
+        for result in results[:12]:
+            total_marks = result.assessment.total_marks or 0
+            percentage = round((float(result.score) / float(total_marks) * 100), 1) if total_marks else 0.0
+            recent_results.append({
+                'result_id': str(result.result_id),
+                'assessment_id': str(result.assessment.assessment_id),
+                'assessment_title': result.assessment.title,
+                'assessment_type': result.assessment.type,
+                'subject_id': result.assessment.subject_id,
+                'subject_name': result.assessment.subject.name,
+                'score': result.score,
+                'total_marks': total_marks,
+                'percentage': percentage,
+                'submitted_at': result.submitted_at.isoformat() if result.submitted_at else None,
+                'teacher_feedback': result.teacher_feedback,
+            })
+
+        assignments = []
+        now = timezone.now()
+        for assessment in assessments:
+            if assessment.type != 'assignment':
+                continue
+
+            submission = submission_by_assessment.get(str(assessment.assessment_id))
+            result = result_by_assessment.get(str(assessment.assessment_id))
+
+            status_value = 'pending'
+            if submission and submission.status:
+                status_value = submission.status
+            elif result:
+                status_value = 'graded'
+            elif assessment.due_date and assessment.due_date < now:
+                status_value = 'late'
+
+            percentage = 0.0
+            if result and assessment.total_marks:
+                percentage = round((float(result.score) / float(assessment.total_marks) * 100), 1)
+
+            assignments.append({
+                'assessment_id': str(assessment.assessment_id),
+                'title': assessment.title,
+                'subject_id': assessment.subject_id,
+                'subject_name': assessment.subject.name,
+                'due_date': assessment.due_date.isoformat() if assessment.due_date else None,
+                'status': status_value,
+                'submitted_at': submission.submitted_at.isoformat() if submission and submission.submitted_at else None,
+                'is_graded': bool(result),
+                'score': result.score if result else None,
+                'total_marks': assessment.total_marks,
+                'percentage': percentage if result else None,
+            })
+
+        assignments.sort(
+            key=lambda item: (
+                item['due_date'] is None,
+                item['due_date'] or '',
+                item['title'].lower(),
+            )
+        )
+
+        total_subjects = len(subjects)
+        total_lessons = sum(item['total_lessons'] for item in subject_progress)
+        completed_lessons = sum(item['completed_lessons'] for item in subject_progress)
+        overall_progress_percentage = round((completed_lessons / total_lessons) * 100, 1) if total_lessons else 0.0
+
+        total_assessments = len(assessments)
+        completed_assessments = len(
+            {
+                *[
+                    str(result.assessment_id)
+                    for result in results
+                ],
+                *[
+                    str(submission.assessment_id)
+                    for submission in submissions
+                    if submission.status in ['submitted', 'graded', 'late']
+                ],
+            }
+        )
+
+        total_assignments = len(assignments)
+        submitted_assignments = sum(1 for item in assignments if item['status'] in ['submitted', 'graded', 'late'])
+        graded_assignments = sum(1 for item in assignments if item['is_graded'])
+        pending_assignments = max(total_assignments - submitted_assignments, 0)
+
+        overall_average_score = 0.0
+        if recent_results:
+            score_points = [item['percentage'] for item in recent_results]
+            overall_average_score = round(sum(score_points) / len(score_points), 1)
+
+        scored_subjects = [item for item in subject_average_scores if item['average_score_percentage'] > 0]
+        best_subject = None
+        weakest_subject = None
+        if scored_subjects:
+            sorted_by_score = sorted(scored_subjects, key=lambda item: item['average_score_percentage'])
+            weakest_subject = sorted_by_score[0]
+            best_subject = sorted_by_score[-1]
+
+        needs_attention_subjects = [
+            item['subject_name']
+            for item in subject_average_scores
+            if item['progress_percentage'] < 50 or (item['average_score_percentage'] > 0 and item['average_score_percentage'] < 50)
+        ]
+
+        focus_score = student.focus_score or 0
+        current_streak = student.current_streak or 0
+        if focus_score >= 80 and current_streak >= 7:
+            momentum_label = 'excellent'
+        elif focus_score >= 60 and current_streak >= 3:
+            momentum_label = 'steady'
+        else:
+            momentum_label = 'needs_support'
+
+        response_payload = {
+            'student': {
+                'id': str(student.student_id),
+                'user_id': str(student.user.user_id),
+                'first_name': student.user.first_name,
+                'last_name': student.user.last_name,
+                'email': student.user.email,
+                'class_id': student.academic_class_id,
+                'class_name': student.academic_class.name if student.academic_class_id else None,
+                'section_id': student.section_id,
+                'section_name': student.section.name if student.section_id else None,
+                'learning_style': student.learning_style,
+                'daily_study_goal': student.daily_study_goal,
+                'focus_score': student.focus_score,
+                'current_streak': student.current_streak,
+                'total_minutes_learned': student.total_minutes_learned,
+            },
+            'overall': {
+                'total_subjects': total_subjects,
+                'total_lessons': total_lessons,
+                'completed_lessons': completed_lessons,
+                'progress_percentage': overall_progress_percentage,
+                'total_assessments': total_assessments,
+                'completed_assessments': completed_assessments,
+                'total_assignments': total_assignments,
+                'submitted_assignments': submitted_assignments,
+                'pending_assignments': pending_assignments,
+                'graded_assignments': graded_assignments,
+                'average_score_percentage': overall_average_score,
+            },
+            'subject_progress': subject_progress,
+            'recent_results': recent_results,
+            'assignments': assignments,
+            'analytics': {
+                'best_subject': best_subject,
+                'weakest_subject': weakest_subject,
+                'needs_attention_subjects': needs_attention_subjects,
+                'momentum_label': momentum_label,
+            },
+        }
+
+        return Response(response_payload)
     
     @action(detail=False, methods=['get'])
     def me(self, request):

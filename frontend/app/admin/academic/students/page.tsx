@@ -1,21 +1,22 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
-    Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger
+    Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle
 } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { ArrowLeft, Plus, Trash2, Search, Loader2, User, Filter, Edit, GraduationCap, Mail } from 'lucide-react';
-import { academicAPI, AcademicClass, Student, Section } from '@/lib/api';
+import { ArrowLeft, Plus, Trash2, Loader2, User, Filter, Edit, Mail, Eye } from 'lucide-react';
+import { academicAPI, AcademicClass, Student } from '@/lib/api';
 import { ImportStudentsDialog } from './import-students-dialog';
 import Link from 'next/link';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { StudentProfileOverviewDialog } from '@/components/student/student-profile-overview-dialog';
 
 export default function StudentsPage() {
     const [students, setStudents] = useState<Student[]>([]);
@@ -27,6 +28,7 @@ export default function StudentsPage() {
     const [isDialogOpen, setIsDialogOpen] = useState(false);
     const [isEditMode, setIsEditMode] = useState(false);
     const [currentStudentId, setCurrentStudentId] = useState<string | null>(null);
+    const [profileStudent, setProfileStudent] = useState<Student | null>(null);
     const [submitting, setSubmitting] = useState(false);
 
     const [formData, setFormData] = useState({
@@ -107,7 +109,7 @@ export default function StudentsPage() {
 
         try {
             setSubmitting(true);
-            const payload: any = {
+            const payload: Partial<Student> & { password?: string } = {
                 first_name: formData.first_name,
                 last_name: formData.last_name,
                 email: formData.email,
@@ -262,6 +264,9 @@ export default function StudentsPage() {
                                             <TableCell className="capitalize">{student.learning_style || '-'}</TableCell>
                                             <TableCell className="text-right">
                                                 <div className="flex justify-end gap-2">
+                                                    <Button variant="ghost" size="icon" onClick={() => setProfileStudent(student)}>
+                                                        <Eye className="h-4 w-4 text-slate-500" />
+                                                    </Button>
                                                     <Button variant="ghost" size="icon" onClick={() => openEditDialog(student)}>
                                                         <Edit className="h-4 w-4 text-slate-500" />
                                                     </Button>
@@ -348,7 +353,12 @@ export default function StudentsPage() {
                         <div className="grid grid-cols-2 gap-4">
                             <div className="grid gap-2">
                                 <Label>Learning Style</Label>
-                                <Select value={formData.learning_style} onValueChange={val => setFormData({ ...formData, learning_style: val as any })}>
+                                <Select
+                                    value={formData.learning_style}
+                                    onValueChange={(val) =>
+                                        setFormData({ ...formData, learning_style: val as NonNullable<Student['learning_style']> })
+                                    }
+                                >
                                     <SelectTrigger><SelectValue /></SelectTrigger>
                                     <SelectContent>
                                         <SelectItem value="visual">Visual (Video)</SelectItem>
@@ -372,6 +382,14 @@ export default function StudentsPage() {
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
+
+            <StudentProfileOverviewDialog
+                student={profileStudent}
+                open={!!profileStudent}
+                onOpenChange={(open) => {
+                    if (!open) setProfileStudent(null);
+                }}
+            />
         </div>
     );
 }

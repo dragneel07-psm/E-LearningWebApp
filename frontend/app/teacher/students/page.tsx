@@ -6,16 +6,14 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import {
-    Search, User, Mail,
+    Search, User,
     GraduationCap, MoreHorizontal
 } from 'lucide-react';
-import {
-    Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription
-} from '@/components/ui/dialog';
 import {
     DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
 import { academicAPI, Student } from '@/lib/api';
+import { StudentProfileOverviewDialog } from '@/components/student/student-profile-overview-dialog';
 
 export default function TeacherStudentsPage() {
     const [loading, setLoading] = useState(true);
@@ -128,66 +126,13 @@ export default function TeacherStudentsPage() {
                 </div>
             )}
 
-            {/* Student Profile Dialog */}
-            <Dialog open={!!selectedStudent} onOpenChange={(open) => !open && setSelectedStudent(null)}>
-                <DialogContent className="max-w-2xl">
-                    <DialogHeader>
-                        <DialogTitle className="flex items-center gap-2">
-                            Student Profile
-                        </DialogTitle>
-                        <DialogDescription>
-                            Detailed information for {selectedStudent?.first_name} {selectedStudent?.last_name}
-                        </DialogDescription>
-                    </DialogHeader>
-
-                    {selectedStudent && (
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 py-4">
-                            <div className="space-y-6">
-                                <div className="flex items-center gap-4">
-                                    <div className="h-20 w-20 rounded-full bg-slate-100 flex items-center justify-center border-2 border-indigo-100">
-                                        <User className="h-10 w-10 text-indigo-400" />
-                                    </div>
-                                    <div>
-                                        <h2 className="text-xl font-bold text-slate-900">{selectedStudent.first_name} {selectedStudent.last_name}</h2>
-                                        <p className="text-sm text-slate-500">ID: {selectedStudent.id?.substring(0, 8)}</p>
-                                        <Badge className="mt-2 bg-indigo-100 text-indigo-700 hover:bg-indigo-200">
-                                            Class {selectedStudent.academic_class || 'N/A'}
-                                        </Badge>
-                                    </div>
-                                </div>
-
-                                <div className="space-y-3">
-                                    <h3 className="text-sm font-semibold text-slate-900 uppercase tracking-wider">Personal Details</h3>
-                                    <div className="grid grid-cols-1 gap-3">
-
-                                        <div className="flex items-center gap-3 text-sm text-slate-600">
-                                            <Mail className="h-4 w-4 text-slate-400" />
-                                            <span>{selectedStudent.email || 'No email provided'}</span>
-                                        </div>
-
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div className="space-y-6">
-                                <div className="space-y-3">
-                                    <h3 className="text-sm font-semibold text-slate-900 uppercase tracking-wider">Academic Overview</h3>
-                                    <div className="grid grid-cols-2 gap-3">
-                                        <div className="p-3 bg-indigo-50 rounded-lg text-center">
-                                            <div className="text-xl font-bold text-indigo-600">{selectedStudent.current_streak || 0}</div>
-                                            <div className="text-xs text-indigo-600/80">Streak</div>
-                                        </div>
-                                        <div className="p-3 bg-emerald-50 rounded-lg text-center">
-                                            <div className="text-xl font-bold text-emerald-600">{selectedStudent.focus_score || 0}</div>
-                                            <div className="text-xs text-emerald-600/80">Focus Score</div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    )}
-                </DialogContent>
-            </Dialog>
+            <StudentProfileOverviewDialog
+                student={selectedStudent}
+                open={!!selectedStudent}
+                onOpenChange={(open) => {
+                    if (!open) setSelectedStudent(null);
+                }}
+            />
         </div>
     );
 }

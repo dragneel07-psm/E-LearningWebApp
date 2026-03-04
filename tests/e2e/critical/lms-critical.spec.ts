@@ -1339,6 +1339,172 @@ test.describe('Admin flow', () => {
     await expect(page.locator('body')).not.toContainText(/Failed to create teacher/i);
   });
 
+  test('View teacher profile shows subjects, class responsibilities, and teaching progress', async ({ page, request }) => {
+    test.setTimeout(120_000);
+
+    const adminSession = await requireApiSession(request, 'admin');
+    const { classId } = await ensureClassAndSection(request, adminSession);
+
+    const teachers = await listApi<{
+      id: string;
+      email?: string;
+      username?: string;
+      first_name?: string;
+      last_name?: string;
+      assigned_classes?: number[];
+    }>(request, '/api/academic/teachers/', adminSession);
+
+    let primaryTeacherId = '';
+    let primaryEmail = '';
+    let primarySearchText = '';
+    let primaryAssignedClasses: number[] = [];
+
+    const existingTeacher = teachers.find((item) => Boolean(item.id) && Boolean(item.email)) || teachers.find((item) => Boolean(item.id));
+    if (existingTeacher) {
+      primaryTeacherId = String(existingTeacher.id || '');
+      primaryEmail = String(existingTeacher.email || '');
+      const username = String(existingTeacher.username || '').trim();
+      const fullName = `${String(existingTeacher.first_name || '').trim()} ${String(existingTeacher.last_name || '').trim()}`.trim();
+      primarySearchText = fullName || username || primaryEmail;
+      primaryAssignedClasses = Array.isArray(existingTeacher.assigned_classes)
+        ? existingTeacher.assigned_classes.map((value) => Number(value)).filter((value) => Number.isFinite(value))
+        : [];
+    } else {
+      const createdPrimary = await postApi<{ id?: string; email?: string }>(request, '/api/academic/teachers/', adminSession, {
+        first_name: 'Profile',
+        last_name: 'Teacher',
+        email: `${uniqueId('teacher-profile')}@example.com`,
+        username: uniqueId('teacherprofile').replace(/[^a-zA-Z0-9_-]/g, '').toLowerCase(),
+        password: 'Teacher@1234',
+        designation: 'class_teacher',
+        assigned_classes: [classId],
+      });
+      primaryTeacherId = String(createdPrimary.id || '');
+      primaryEmail = String(createdPrimary.email || '');
+      primarySearchText = 'Profile Teacher';
+      primaryAssignedClasses = [classId];
+    }
+
+    expect(primaryTeacherId.length > 0, 'Primary teacher id should exist').toBeTruthy();
+    expect(primarySearchText.length > 0, 'Primary teacher search text should exist').toBeTruthy();
+
+    const nextAssignedClasses = Array.from(new Set([...primaryAssignedClasses, classId]));
+    await patchApi(request, `/api/academic/teachers/${primaryTeacherId}/`, adminSession, {
+      assigned_classes: nextAssignedClasses,
+    });
+
+    const secondaryEmail = `${uniqueId('teacher-secondary')}@example.com`;
+    const secondaryUsername = uniqueId('teachersecondary').replace(/[^a-zA-Z0-9_-]/g, '').toLowerCase();
+    const createdSecondaryTeacher = await postApi<{ id?: string }>(request, '/api/academic/teachers/', adminSession, {
+      first_name: 'Secondary',
+      last_name: 'Teacher',
+      email: secondaryEmail,
+      username: secondaryUsername,
+      password: 'Teacher@1234',
+      designation: 'subject_teacher',
+      assigned_classes: [classId],
+    });
+    const secondaryTeacherId = String(createdSecondaryTeacher.id || '');
+    expect(secondaryTeacherId.length > 0, 'Secondary teacher id should exist').toBeTruthy();
+
+    const leadSubjectName = uniqueId('E2E Lead Subject');
+    const additionalSubjectName = uniqueId('E2E Additional Subject');
+
+    const leadSubject = await postApi<{ id?: number }>(request, '/api/academic/subjects/', adminSession, {
+      name: leadSubjectName,
+      code: `LS${Date.now() % 100_000}`,
+      academic_class: classId,
+      description: 'Lead subject for profile verification',
+      is_elective: false,
+      is_active: true,
+      teacher: primaryTeacherId,
+    });
+    const leadSubjectId = Number(leadSubject.id);
+    expect(Number.isFinite(leadSubjectId), 'Lead subject id should be numeric').toBeTruthy();
+
+    const additionalSubject = await postApi<{ id?: number }>(request, '/api/academic/subjects/', adminSession, {
+      name: additionalSubjectName,
+      code: `AS${Date.now() % 100_000}`,
+      academic_class: classId,
+      description: 'Additional subject for profile verification',
+      is_elective: false,
+      is_active: true,
+      teacher: secondaryTeacherId,
+    });
+    const additionalSubjectId = Number(additionalSubject.id);
+    expect(Number.isFinite(additionalSubjectId), 'Additional subject id should be numeric').toBeTruthy();
+    await patchApi(request, `/api/academic/subjects/${additionalSubjectId}/`, adminSession, {
+      additional_teachers: [primaryTeacherId],
+    });
+
+    const leadChapter = await postApi<{ id?: number }>(request, '/api/academic/chapters/', adminSession, {
+      subject: leadSubjectId,
+      title: `${leadSubjectName} Chapter`,
+      description: 'Chapter for lead subject progress',
+      order: nextOrderValue(),
+      is_published: true,
+    });
+    const leadChapterId = Number(leadChapter.id);
+    expect(Number.isFinite(leadChapterId), 'Lead chapter id should be numeric').toBeTruthy();
+    await postApi(request, '/api/academic/lessons/', adminSession, {
+      chapter: leadChapterId,
+      title: `${leadSubjectName} Lesson 1`,
+      content_type: 'text',
+      content: '<p>Published lesson</p>',
+      order: 1,
+      duration_minutes: 30,
+      is_published: true,
+    });
+    await postApi(request, '/api/academic/lessons/', adminSession, {
+      chapter: leadChapterId,
+      title: `${leadSubjectName} Lesson 2`,
+      content_type: 'text',
+      content: '<p>Draft lesson</p>',
+      order: 2,
+      duration_minutes: 30,
+      is_published: false,
+    });
+
+    const additionalChapter = await postApi<{ id?: number }>(request, '/api/academic/chapters/', adminSession, {
+      subject: additionalSubjectId,
+      title: `${additionalSubjectName} Chapter`,
+      description: 'Chapter for additional subject progress',
+      order: nextOrderValue(),
+      is_published: true,
+    });
+    const additionalChapterId = Number(additionalChapter.id);
+    expect(Number.isFinite(additionalChapterId), 'Additional chapter id should be numeric').toBeTruthy();
+    await postApi(request, '/api/academic/lessons/', adminSession, {
+      chapter: additionalChapterId,
+      title: `${additionalSubjectName} Lesson 1`,
+      content_type: 'text',
+      content: '<p>Published lesson</p>',
+      order: 1,
+      duration_minutes: 30,
+      is_published: true,
+    });
+
+    await bootstrapSession(page, request, 'admin');
+    await page.goto(appUrl('/admin/academic/teachers'));
+
+    await page.getByPlaceholder('Search by name, email, or designation...').fill(primarySearchText);
+    const teacherRow = page.locator('tr', { hasText: primarySearchText }).first();
+    await expect(teacherRow).toBeVisible({ timeout: 20_000 });
+
+    await teacherRow.locator('button').last().click();
+    await page.getByRole('menuitem', { name: /View Profile/i }).click();
+
+    const profilePanel = page.locator('.fixed.inset-0').last();
+    await expect(profilePanel).toContainText('Teaching Coverage', { timeout: 20_000 });
+    await expect(profilePanel).toContainText(leadSubjectName, { timeout: 20_000 });
+    await expect(profilePanel).toContainText(additionalSubjectName, { timeout: 20_000 });
+    await expect(profilePanel).toContainText(/Lead Teacher/i);
+    await expect(profilePanel).toContainText(/Additional Teacher/i);
+    await expect(profilePanel).toContainText(/Class & Section Responsibilities/i);
+    await expect(profilePanel).toContainText(/Lessons Taught/i);
+    await expect(profilePanel).toContainText(/Lessons Left/i);
+  });
+
   test('Add student', async ({ page, request }) => {
     await ensureReportPrerequisites(request);
     await bootstrapSession(page, request, 'admin');

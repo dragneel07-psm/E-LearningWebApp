@@ -147,6 +147,110 @@ export interface Student {
     is_active?: boolean;
 }
 
+export interface StudentSubjectProgress {
+    subject_id: number;
+    subject_name: string;
+    subject_code?: string | null;
+    class_name?: string | null;
+    total_lessons: number;
+    completed_lessons: number;
+    progress_percentage: number;
+    assessments_total: number;
+    assessments_completed: number;
+    assignment_total: number;
+    assignment_submitted: number;
+    assignment_pending: number;
+    average_score_percentage: number;
+    latest_result?: {
+        assessment_id: string;
+        assessment_title: string;
+        type: 'quiz' | 'exam' | 'assignment';
+        score: number;
+        total_marks: number;
+        percentage: number;
+        submitted_at: string | null;
+    } | null;
+}
+
+export interface StudentResultOverview {
+    result_id: string;
+    assessment_id: string;
+    assessment_title: string;
+    assessment_type: 'quiz' | 'exam' | 'assignment';
+    subject_id: number;
+    subject_name: string;
+    score: number;
+    total_marks: number;
+    percentage: number;
+    submitted_at: string | null;
+    teacher_feedback?: string | null;
+}
+
+export interface StudentAssignmentOverview {
+    assessment_id: string;
+    title: string;
+    subject_id: number;
+    subject_name: string;
+    due_date: string | null;
+    status: 'pending' | 'draft' | 'submitted' | 'graded' | 'late';
+    submitted_at: string | null;
+    is_graded: boolean;
+    score: number | null;
+    total_marks: number;
+    percentage: number | null;
+}
+
+export interface StudentProfileOverview {
+    student: {
+        id: string;
+        user_id: string;
+        first_name: string;
+        last_name: string;
+        email: string;
+        class_id: number | null;
+        class_name: string | null;
+        section_id: number | null;
+        section_name: string | null;
+        learning_style?: string;
+        daily_study_goal?: number;
+        focus_score?: number;
+        current_streak?: number;
+        total_minutes_learned?: number;
+    };
+    overall: {
+        total_subjects: number;
+        total_lessons: number;
+        completed_lessons: number;
+        progress_percentage: number;
+        total_assessments: number;
+        completed_assessments: number;
+        total_assignments: number;
+        submitted_assignments: number;
+        pending_assignments: number;
+        graded_assignments: number;
+        average_score_percentage: number;
+    };
+    subject_progress: StudentSubjectProgress[];
+    recent_results: StudentResultOverview[];
+    assignments: StudentAssignmentOverview[];
+    analytics: {
+        best_subject?: {
+            subject_id: number;
+            subject_name: string;
+            average_score_percentage: number;
+            progress_percentage: number;
+        } | null;
+        weakest_subject?: {
+            subject_id: number;
+            subject_name: string;
+            average_score_percentage: number;
+            progress_percentage: number;
+        } | null;
+        needs_attention_subjects: string[];
+        momentum_label: 'excellent' | 'steady' | 'needs_support';
+    };
+}
+
 export interface Badge {
     id: string;
     name: string;
@@ -1418,6 +1522,7 @@ export const academicAPI = {
         return normalizeArrayPayload(payload);
     },
     getStudent: (id: string) => apiRequest<Student>(`/academic/students/${id}/`),
+    getStudentProfileOverview: (id: string) => apiRequest<StudentProfileOverview>(`/academic/students/${id}/profile-overview/`),
     getMyStudent: () => apiRequest<Student>('/academic/students/me/'),
     createStudent: (data: Partial<Student>) => apiRequest<Student>('/academic/students/', {
         method: 'POST',
