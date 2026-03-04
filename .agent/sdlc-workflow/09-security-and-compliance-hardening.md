@@ -3,6 +3,17 @@
 ## Objective
 Harden the platform for school data protection and operational resilience.
 
+## E-LearningWebApp Current Implementation
+- Status: `Partially implemented`
+- Implemented controls:
+  - JWT-based auth + role checks
+  - tenant routing/isolation middleware
+  - audit model (`core.AuditLog`)
+  - DRF throttling and CORS/CSRF baseline
+- Remaining work:
+  - formal compliance control mapping
+  - recurring restore-drill evidence and policy documentation
+
 ## Core Activities
 - Enforce RBAC with least privilege.
 - Execute tenant isolation tests and abuse scenarios.
@@ -27,4 +38,3 @@ Harden the platform for school data protection and operational resilience.
 ## File Outputs
 - `templates/security-hardening-template.md`
 - `templates/incident-response-template.md`
-

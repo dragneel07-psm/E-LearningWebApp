@@ -3,6 +3,21 @@
 ## Objective
 Create a stable technical foundation and decision log before full implementation.
 
+## E-LearningWebApp Current Implementation
+- Status: `Implemented`
+- Source of truth:
+  - `.agent/sdlc-workflow/project-design-used.md`
+  - `.agent/architecture/architecture-diagrams.md`
+  - `backend/config/settings/base.py`
+- Architecture currently used:
+  - Backend: Django + DRF + `django-tenants`
+  - DB: PostgreSQL schema-per-tenant
+  - Frontend: Next.js App Router
+  - Mobile: Expo/React Native
+  - Auth: JWT + tenant context via `x-tenant-id`
+- Key middleware:
+  - `core.middleware.TenantFromHeaderMiddleware`
+
 ## Core Activities
 - Confirm stack and runtime boundaries:
   - Django/DRF
@@ -41,4 +56,3 @@ Create a stable technical foundation and decision log before full implementation
 ## File Outputs
 - `templates/adr-template.md`
 - `templates/observability-plan-template.md`
-

@@ -5,6 +5,14 @@
 
 This folder is the execution guide for product, design, engineering, QA, and operations.
 
+## Start Here (Project-Real Version)
+- SDLC as implemented in this repository:
+  - `project-sdlc-as-implemented.md`
+- Real architecture and technology in use:
+  - `project-design-used.md`
+- Real database model and ERD in use:
+  - `database-design-used.md`
+
 ## Lifecycle Overview
 | Phase | Name | Primary Owners | Key Output |
 |---|---|---|---|
@@ -25,6 +33,9 @@ This folder is the execution guide for product, design, engineering, QA, and ope
 ```text
 .agent/sdlc-workflow/
 ├── README.md
+├── project-sdlc-as-implemented.md
+├── project-design-used.md
+├── database-design-used.md
 ├── 01-discovery-problem-definition.md
 ├── 02-mvp-scope-and-roadmap.md
 ├── 03-system-architecture-and-tech-decisions.md
@@ -59,4 +70,3 @@ This folder is the execution guide for product, design, engineering, QA, and ope
 - Planning artifacts: `.agent/planning/`
 - Architecture artifacts: `.agent/architecture/`
 - Delivery board setup: `.agent/project-management/project-board-setup.md`
-

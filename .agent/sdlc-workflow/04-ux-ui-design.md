@@ -3,6 +3,16 @@
 ## Objective
 Define clear, role-based user journeys and consistent interface standards.
 
+## E-LearningWebApp Current Implementation
+- Status: `Partially formalized, actively implemented`
+- Evidence in code:
+  - Role dashboards and flows under `frontend/app/`
+  - Shared components under `frontend/components/`
+  - Radix + Tailwind component system in use
+- Gaps to formalize:
+  - Centralized Figma/source prototype links are not tracked in repo.
+  - Accessibility evidence should be documented per release.
+
 ## Core Activities
 - Produce wireframes and clickable prototype.
 - Define design system rules:
@@ -33,4 +43,3 @@ Define clear, role-based user journeys and consistent interface standards.
 
 ## File Outputs
 - `templates/ux-review-checklist.md`
-

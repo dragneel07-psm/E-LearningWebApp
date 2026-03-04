@@ -3,6 +3,13 @@
 ## Objective
 Guarantee behavior, security, and tenancy correctness before broad production exposure.
 
+## E-LearningWebApp Current Implementation
+- Status: `Implemented and expanding`
+- Evidence:
+  - Playwright suites in `tests/e2e/critical/` and `tests/e2e/smoke/`
+  - Deployed test bootstrap in `tests/setup/bootstrap-deployed-tenant.mjs`
+  - CI automation in `.github/workflows/playwright.yml`
+
 ## Core Activities
 - Unit tests for core business logic.
 - Integration tests for API and DB workflows.
@@ -26,4 +33,3 @@ Guarantee behavior, security, and tenancy correctness before broad production ex
 ## File Outputs
 - `templates/test-strategy-template.md`
 - `checklists/release-test-gate-checklist.md`
-

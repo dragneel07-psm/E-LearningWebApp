@@ -3,6 +3,15 @@
 ## Objective
 Validate product-market fit, usability, and operational readiness with real institutions.
 
+## E-LearningWebApp Current Implementation
+- Status: `Partially implemented`
+- Evidence:
+  - Deployed tenant bootstrap and seeded-user testing scripts
+  - Deployed critical-flow Playwright execution against real environments
+- Next formalization needed:
+  - named pilot school register
+  - pilot KPI dashboard artifact in repo
+
 ## Core Activities
 - Onboard 1-5 pilot schools.
 - Gather feedback from admins, teachers, and students.
@@ -29,4 +38,3 @@ Validate product-market fit, usability, and operational readiness with real inst
 
 ## File Outputs
 - `templates/beta-launch-template.md`
-
