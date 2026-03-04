@@ -1525,7 +1525,10 @@ export const billingAPI = {
 // Library API
 export const libraryAPI = {
     // Books
-    getBooks: () => apiRequest<Book[]>('/library/books/'),
+    getBooks: async () => {
+        const payload = await apiRequest<Book[] | PaginatedResponse<Book>>('/library/books/');
+        return normalizeArrayPayload(payload);
+    },
     getBook: (id: string) => apiRequest<Book>(`/library/books/${id}/`),
     createBook: (data: Partial<Book>) => apiRequest<Book>('/library/books/', {
         method: 'POST',
@@ -1540,7 +1543,10 @@ export const libraryAPI = {
     }),
 
     // Book Issues
-    getBookIssues: () => apiRequest<BookIssue[]>('/library/issues/'),
+    getBookIssues: async () => {
+        const payload = await apiRequest<BookIssue[] | PaginatedResponse<BookIssue>>('/library/issues/');
+        return normalizeArrayPayload(payload);
+    },
     getBookIssue: (id: string) => apiRequest<BookIssue>(`/library/issues/${id}/`),
     issueBook: (data: { book: string; student: string }) => apiRequest<BookIssue>('/library/issues/', {
         method: 'POST',
