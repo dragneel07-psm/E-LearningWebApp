@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Download, Clock, MapPin, Loader2 } from 'lucide-react';
 import { academicAPI, Timetable } from '@/lib/api';
@@ -13,7 +14,6 @@ export default function TimetablePage() {
     const weekDays = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
     const [timetable, setTimetable] = useState<Timetable[]>([]);
     const [loading, setLoading] = useState(true);
-    const [selectedDay, setSelectedDay] = useState('Monday');
 
     useEffect(() => {
         loadTimetable();
@@ -45,12 +45,13 @@ export default function TimetablePage() {
             t.day_of_week,
             `${t.start_time} - ${t.end_time}`,
             t.subject_name,
+            t.entry_type === 'extra' ? 'Extra' : 'Main',
             t.room_number || '-',
             t.teacher_name || '-'
         ]);
 
         autoTable(doc, {
-            head: [['Day', 'Time', 'Subject', 'Room', 'Teacher']],
+            head: [['Day', 'Time', 'Subject', 'Type', 'Room', 'Teacher']],
             body: tableData,
             startY: 30,
         });
@@ -73,7 +74,7 @@ export default function TimetablePage() {
             </div>
 
             <Card className="p-6 border-0 shadow-lg bg-white">
-                <Tabs defaultValue="Monday" onValueChange={setSelectedDay} className="w-full">
+                <Tabs defaultValue="Monday" className="w-full">
                     <TabsList className="grid grid-cols-2 md:grid-cols-5 lg:grid-cols-7 mb-8 h-auto p-1 bg-slate-100 rounded-xl gap-1">
                         {weekDays.map(day => (
                             <TabsTrigger
@@ -100,7 +101,12 @@ export default function TimetablePage() {
                                                 <div className="bg-white p-5 rounded-xl border border-slate-100 shadow-sm hover:shadow-md transition-shadow group">
                                                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                                                         <div>
-                                                            <h3 className="font-bold text-lg text-indigo-900 group-hover:text-indigo-600 transition-colors">{slot.subject_name}</h3>
+                                                            <div className="flex items-center gap-2">
+                                                                <h3 className="font-bold text-lg text-indigo-900 group-hover:text-indigo-600 transition-colors">{slot.subject_name}</h3>
+                                                                <Badge variant={slot.entry_type === 'extra' ? 'secondary' : 'outline'}>
+                                                                    {slot.entry_type === 'extra' ? 'Extra Class' : 'Main'}
+                                                                </Badge>
+                                                            </div>
                                                             <div className="flex items-center gap-4 mt-2 text-sm text-slate-600">
                                                                 <div className="flex items-center gap-1">
                                                                     <Clock className="h-4 w-4 text-indigo-400" />

@@ -528,6 +528,47 @@ async function ensureTeacherContextWithClassAndSubject(
   return { teacherId, classId, subjectId };
 }
 
+async function resolveTeacherProfileForSession(
+  request: APIRequestContext,
+  adminSession: ApiSession,
+  teacherSession: ApiSession,
+): Promise<{ teacherId: string; assignedClassIds: number[] }> {
+  const meResponse = await request.get(apiUrl('/api/users/accounts/me/'), {
+    headers: authHeaders(teacherSession.accessToken, teacherSession.credential.schoolCode),
+  });
+  const mePayload = await expectApiOk<Record<string, unknown>>(meResponse, 'GET /api/users/accounts/me/ (teacher)');
+  const teacherUserId = String(mePayload.user_id || '');
+
+  const teachers = await listApi<{ id: string; user_id?: string; email?: string; assigned_classes?: number[] }>(
+    request,
+    '/api/academic/teachers/',
+    adminSession,
+  );
+  const teacher = teachers.find(
+    (item) => String(item.user_id || '') === teacherUserId || String(item.email || '') === teacherSession.credential.email,
+  );
+  expect(Boolean(teacher), 'Teacher profile not found for timetable flow').toBeTruthy();
+
+  return {
+    teacherId: String(teacher?.id || ''),
+    assignedClassIds: (teacher?.assigned_classes || []).map((id) => Number(id)).filter((id) => Number.isFinite(id)),
+  };
+}
+
+async function ensureTeacherAssignedToClass(
+  request: APIRequestContext,
+  adminSession: ApiSession,
+  teacherSession: ApiSession,
+  classId: number,
+): Promise<string> {
+  const teacher = await resolveTeacherProfileForSession(request, adminSession, teacherSession);
+  const nextAssigned = Array.from(new Set([...teacher.assignedClassIds, classId]));
+  await patchApi(request, `/api/academic/teachers/${teacher.teacherId}/`, adminSession, {
+    assigned_classes: nextAssigned,
+  });
+  return teacher.teacherId;
+}
+
 async function ensureReportPrerequisites(request: APIRequestContext): Promise<void> {
   const adminSession = await requireApiSession(request, 'admin');
   const { classId, sectionId } = await ensureClassAndSection(request, adminSession);
@@ -914,6 +955,24 @@ async function selectFirstOptionFromCombobox(page: Page, combobox: Locator): Pro
   return true;
 }
 
+async function selectComboboxOptionByText(page: Page, combobox: Locator, optionText: string): Promise<boolean> {
+  if (!(await combobox.isVisible()) || !(await combobox.isEnabled())) {
+    return false;
+  }
+
+  await combobox.click();
+  const option = page.getByRole('option', { name: new RegExp(`^${escapeRegExp(optionText)}$`, 'i') }).first();
+  try {
+    await option.waitFor({ state: 'visible', timeout: 3_000 });
+  } catch {
+    await page.keyboard.press('Escape');
+    return false;
+  }
+
+  await option.click();
+  return true;
+}
+
 async function completeFirstAvailableQuiz(page: Page, assessmentId?: string): Promise<boolean> {
   if (assessmentId) {
     await page.goto(appUrl(`/student/quizzes/${assessmentId}`));
@@ -1272,6 +1331,186 @@ test.describe('Admin flow', () => {
     const [popup] = await Promise.all([page.waitForEvent('popup'), downloadButton.click()]);
     await popup.waitForLoadState('domcontentloaded');
     await expect(popup).toHaveURL(/\/api\/academic\/reports\/student-performance\//);
+  });
+});
+
+test.describe('Timetable flow', () => {
+  test('Admin creates main timetable slot', async ({ page, request }) => {
+    const adminSession = await requireApiSession(request, 'admin');
+    await ensureClassAndSection(request, adminSession);
+    const className = uniqueId('E2E Timetable Class');
+    const createdClass = await postApi<{ id?: number }>(request, '/api/academic/classes/', adminSession, {
+      name: className,
+      order: nextOrderValue(),
+    });
+    const classId = Number(createdClass.id || 0);
+    expect(classId > 0, 'Created class id missing for timetable test').toBeTruthy();
+
+    await bootstrapSession(page, request, 'admin');
+    await page.goto(appUrl('/admin/timetable'));
+    await expect(page.getByRole('heading', { name: /Timetable Management/i })).toBeVisible({ timeout: 20_000 });
+
+    await page.getByRole('button', { name: /Open Timetable Manager/i }).click();
+    const dialog = page.getByRole('dialog');
+    await expect(dialog.getByRole('heading', { name: /Timetable Management/i })).toBeVisible({ timeout: 20_000 });
+    const classSelected = await selectComboboxOptionByText(page, dialog.getByRole('combobox').first(), className);
+    expect(classSelected, 'Created class should be selectable in timetable manager').toBeTruthy();
+
+    const subjectName = uniqueId('E2E Main Timetable');
+    const timeInputs = dialog.locator('input[type="time"]');
+    await expect.poll(async () => timeInputs.count(), { timeout: 20_000 }).toBeGreaterThanOrEqual(2);
+    await timeInputs.nth(0).fill('05:30');
+    await timeInputs.nth(1).fill('06:00');
+    await dialog.getByPlaceholder('Physics').fill(subjectName);
+    await dialog.getByPlaceholder('101').fill('E2E-R1');
+    await dialog.getByRole('button', { name: /Add Main Slot/i }).click();
+
+    await expect
+      .poll(
+        async () => {
+          const rows = await listApi<{ subject_name?: string }>(
+            request,
+            `/api/academic/timetable/?academic_class=${classId}&entry_type=main`,
+            adminSession,
+          );
+          return rows.some((row) => String(row.subject_name || '') === subjectName);
+        },
+        { timeout: 30_000 },
+      )
+      .toBeTruthy();
+  });
+
+  test('Teacher submits extra class request', async ({ page, request }) => {
+    await ensureTeacherContextWithClassAndSubject(request);
+    await bootstrapSession(page, request, 'teacher');
+    await page.goto(appUrl('/teacher/timetable'));
+    await expect(page.getByRole('heading', { name: /^Timetable$/i })).toBeVisible({ timeout: 20_000 });
+
+    const subjectName = uniqueId('E2E Extra Request');
+    const timeInputs = page.locator('input[type="time"]');
+    await expect.poll(async () => timeInputs.count(), { timeout: 20_000 }).toBeGreaterThanOrEqual(2);
+    await timeInputs.nth(0).fill('21:00');
+    await timeInputs.nth(1).fill('21:45');
+    await page.getByPlaceholder('Remedial Mathematics').fill(subjectName);
+    await page.getByPlaceholder('Lab 2').fill('E2E-LAB');
+
+    const submitButton = page.getByRole('button', { name: /Submit Request/i });
+    await expect(submitButton).toBeEnabled({ timeout: 20_000 });
+    const createResponsePromise = page.waitForResponse((response) => {
+      const isTimetableCreate = /\/api\/academic\/timetable\/$/.test(response.url());
+      return isTimetableCreate && response.request().method() === 'POST';
+    });
+    await submitButton.click();
+    const createResponse = await createResponsePromise;
+    const createPayload = (await createResponse.json().catch(() => ({}))) as {
+      timetable_id?: number;
+      id?: number;
+      subject_name?: string;
+      status?: string;
+    };
+    expect(createResponse.ok(), `Timetable request create failed: ${JSON.stringify(createPayload)}`).toBeTruthy();
+    expect(String(createPayload.subject_name || '')).toBe(subjectName);
+    expect(Number(createPayload.timetable_id || createPayload.id || 0) > 0).toBeTruthy();
+    await expect(page.getByText(/Extra class request submitted for approval/i)).toBeVisible({ timeout: 20_000 });
+  });
+
+  test('Teacher cannot modify main timetable and admin approval is visible to student', async ({ page, request }) => {
+    const adminSession = await requireApiSession(request, 'admin');
+    const teacherSession = await requireApiSession(request, 'teacher');
+    const studentSession = await requireApiSession(request, 'student');
+    const studentContext = await ensureStudentContext(request, studentSession, adminSession);
+    const teacherId = await ensureTeacherAssignedToClass(
+      request,
+      adminSession,
+      teacherSession,
+      studentContext.classId,
+    );
+
+    const lockedMainSubject = uniqueId('E2E Main Locked');
+    const mainEntry = await postApi<{ timetable_id?: number; id?: number }>(
+      request,
+      '/api/academic/timetable/',
+      adminSession,
+      {
+        academic_class: studentContext.classId,
+        day_of_week: 'Sunday',
+        start_time: '05:30',
+        end_time: '06:00',
+        subject_name: lockedMainSubject,
+        room_number: 'LOCK-01',
+        teacher: teacherId,
+        entry_type: 'main',
+        status: 'approved',
+      },
+    );
+    const mainTimetableId = Number(mainEntry.timetable_id || mainEntry.id || 0);
+    expect(mainTimetableId > 0, 'Main timetable entry id missing').toBeTruthy();
+
+    const forbiddenPatch = await request.patch(apiUrl(`/api/academic/timetable/${mainTimetableId}/`), {
+      headers: {
+        ...authHeaders(teacherSession.accessToken, teacherSession.credential.schoolCode),
+        'Content-Type': 'application/json',
+      },
+      data: { subject_name: `${lockedMainSubject} (Edited by teacher)` },
+    });
+    expect(
+      forbiddenPatch.status(),
+      'Expected 403. A 200 response means the backend timetable permission patch is not deployed in this environment yet.',
+    ).toBe(403);
+
+    const extraSubject = uniqueId('E2E Extra Approval');
+    const pendingRequest = await request.post(apiUrl('/api/academic/timetable/'), {
+      headers: {
+        ...authHeaders(teacherSession.accessToken, teacherSession.credential.schoolCode),
+        'Content-Type': 'application/json',
+      },
+      data: {
+        academic_class: studentContext.classId,
+        day_of_week: 'Monday',
+        start_time: '21:00',
+        end_time: '21:45',
+        subject_name: extraSubject,
+        room_number: 'EXTRA-01',
+        teacher: teacherId,
+        entry_type: 'extra',
+      },
+    });
+    const createdRequest = await expectApiOk<{ timetable_id?: number; id?: number; status?: string }>(
+      pendingRequest,
+      'POST /api/academic/timetable/ as teacher',
+    );
+    const pendingRequestId = Number(createdRequest.timetable_id || createdRequest.id || 0);
+    expect(pendingRequestId > 0, 'Pending extra timetable request id missing').toBeTruthy();
+    expect(String(createdRequest.status || '')).toBe('pending');
+
+    await bootstrapSession(page, request, 'admin');
+    await page.goto(appUrl('/admin/timetable'));
+    await page.getByRole('button', { name: /Open Timetable Manager/i }).click();
+
+    const dialog = page.getByRole('dialog');
+    const pendingCard = dialog.locator('div').filter({ hasText: extraSubject }).first();
+    await expect(pendingCard).toBeVisible({ timeout: 30_000 });
+    await pendingCard.getByRole('button', { name: /Approve/i }).click();
+
+    await expect
+      .poll(
+        async () => {
+          const rows = await listApi<{ timetable_id?: number; id?: number; status?: string }>(
+            request,
+            `/api/academic/timetable/?academic_class=${studentContext.classId}&entry_type=extra`,
+            adminSession,
+          );
+          const matched = rows.find((row) => Number(row.timetable_id || row.id || 0) === pendingRequestId);
+          return String(matched?.status || '');
+        },
+        { timeout: 30_000 },
+      )
+      .toBe('approved');
+
+    await bootstrapSession(page, request, 'student');
+    await page.goto(appUrl('/student/timetable'));
+    await expect(page.getByText(extraSubject).first()).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByText(/Extra Class|Extra/i).first()).toBeVisible({ timeout: 20_000 });
   });
 });
 

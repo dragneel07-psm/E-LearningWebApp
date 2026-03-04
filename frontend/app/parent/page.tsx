@@ -6,8 +6,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
-import { User, AlertCircle, Loader2, Brain, FileText, CheckCircle, Target, HelpCircle } from 'lucide-react';
-import { academicAPI, aiAPI, Parent, Student } from '@/lib/api';
+import { User, AlertCircle, Loader2, Brain, FileText, CheckCircle, Target, HelpCircle, Calendar, Clock, MapPin } from 'lucide-react';
+import { academicAPI, aiAPI, Parent, Student, Timetable } from '@/lib/api';
 import { useToast } from '@/hooks/use-toast';
 import {
     Dialog,
@@ -19,10 +19,15 @@ import {
 } from "@/components/ui/dialog";
 
 export default function ParentDashboard() {
+    const weekDays = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
     const [parentData, setParentData] = useState<Parent | null>(null);
     const [loading, setLoading] = useState(true);
     const [reportLoading, setReportLoading] = useState<string | null>(null);
     const [selectedReport, setSelectedReport] = useState<any>(null);
+    const [timetableOpen, setTimetableOpen] = useState(false);
+    const [selectedChild, setSelectedChild] = useState<Student | null>(null);
+    const [childTimetable, setChildTimetable] = useState<Timetable[]>([]);
+    const [timetableLoading, setTimetableLoading] = useState(false);
     const { toast } = useToast();
 
     useEffect(() => {
@@ -59,6 +64,33 @@ export default function ParentDashboard() {
             });
         } finally {
             setReportLoading(null);
+        }
+    };
+
+    const fetchChildTimetable = async (child: Student) => {
+        setSelectedChild(child);
+        setTimetableOpen(true);
+        setTimetableLoading(true);
+        try {
+            if (!child.academic_class) {
+                setChildTimetable([]);
+                return;
+            }
+            const timetable = await academicAPI.getTimetable({
+                academic_class: child.academic_class,
+                status: 'approved',
+            });
+            setChildTimetable(Array.isArray(timetable) ? timetable : []);
+        } catch (error) {
+            console.error('Failed to fetch child timetable:', error);
+            setChildTimetable([]);
+            toast({
+                title: 'Error',
+                description: 'Failed to load class timetable.',
+                variant: 'destructive',
+            });
+        } finally {
+            setTimetableLoading(false);
         }
     };
 
@@ -203,6 +235,14 @@ export default function ParentDashboard() {
                                 </ul>
                             </div>
 
+                            <Button
+                                className="w-full"
+                                variant="secondary"
+                                onClick={() => fetchChildTimetable(child)}
+                            >
+                                <Calendar className="mr-2 h-4 w-4" /> View Timetable
+                            </Button>
+
                             <Dialog>
                                 <DialogTrigger asChild>
                                     <Button
@@ -307,6 +347,76 @@ export default function ParentDashboard() {
                     </Card>
                 )}
             </div>
+
+            <Dialog
+                open={timetableOpen}
+                onOpenChange={(open) => {
+                    setTimetableOpen(open);
+                    if (!open) {
+                        setSelectedChild(null);
+                        setChildTimetable([]);
+                    }
+                }}
+            >
+                <DialogContent className="sm:max-w-[700px] max-h-[80vh] overflow-y-auto">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2">
+                            <Calendar className="h-5 w-5 text-primary" />
+                            {selectedChild ? `${selectedChild.first_name} ${selectedChild.last_name} - Class Timetable` : 'Class Timetable'}
+                        </DialogTitle>
+                        <DialogDescription>
+                            Weekly subject periods including approved extra classes.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    {timetableLoading ? (
+                        <div className="py-16 flex items-center justify-center">
+                            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                        </div>
+                    ) : childTimetable.length === 0 ? (
+                        <div className="py-10 text-center text-sm text-muted-foreground">
+                            No timetable entries found for this class.
+                        </div>
+                    ) : (
+                        <div className="space-y-4">
+                            {weekDays.map((day) => {
+                                const daySlots = childTimetable
+                                    .filter((slot) => slot.day_of_week === day)
+                                    .sort((a, b) => a.start_time.localeCompare(b.start_time));
+                                if (daySlots.length === 0) return null;
+
+                                return (
+                                    <div key={day} className="border rounded-lg p-3">
+                                        <h4 className="font-semibold text-sm text-primary mb-2">{day}</h4>
+                                        <div className="space-y-2">
+                                            {daySlots.map((slot) => (
+                                                <div key={slot.timetable_id} className="rounded-md border bg-slate-50 p-3 text-xs">
+                                                    <div className="font-semibold text-slate-800">{slot.subject_name}</div>
+                                                    <div className="mt-1 flex flex-wrap items-center gap-3 text-slate-600">
+                                                        <span className="flex items-center gap-1">
+                                                            <Clock className="h-3 w-3" />
+                                                            {slot.start_time.slice(0, 5)} - {slot.end_time.slice(0, 5)}
+                                                        </span>
+                                                        {slot.room_number && (
+                                                            <span className="flex items-center gap-1">
+                                                                <MapPin className="h-3 w-3" />
+                                                                Room {slot.room_number}
+                                                            </span>
+                                                        )}
+                                                        <Badge variant={slot.entry_type === 'extra' ? 'secondary' : 'outline'}>
+                                                            {slot.entry_type === 'extra' ? 'Extra' : 'Main'}
+                                                        </Badge>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    )}
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }

@@ -69,7 +69,7 @@ export interface User {
     email: string;
     first_name: string;
     last_name: string;
-    role: 'student' | 'teacher' | 'parent' | 'admin' | 'saas_admin';
+    role: 'student' | 'teacher' | 'parent' | 'admin' | 'staff' | 'saas_admin';
     tenant: string;
     is_active?: boolean;
     phone_number?: string;
@@ -626,14 +626,46 @@ export interface ChatMessage {
 
 export interface Timetable {
     timetable_id: number;
-    academic_class: string;
+    academic_class: number | string;
+    academic_class_name?: string;
     day_of_week: string;
     start_time: string;
     end_time: string;
     subject_name: string;
-    room_number: string;
+    room_number?: string | null;
     teacher: string | null;
     teacher_name?: string; // Optional expansion
+    entry_type?: 'main' | 'extra';
+    status?: 'pending' | 'approved' | 'rejected';
+    approval_comment?: string;
+    approved_at?: string | null;
+    created_by?: string | null;
+    created_by_name?: string;
+    approved_by?: string | null;
+    approved_by_name?: string;
+}
+
+export interface TimetableOverviewDay {
+    day_of_week: string;
+    total_slots: number;
+    approved_slots: number;
+    main_slots: number;
+    extra_slots: number;
+    slots: Timetable[];
+}
+
+export interface TimetableOverview {
+    academic_class: number;
+    academic_class_name: string;
+    total_slots: number;
+    approved_slots: number;
+    pending_slots: number;
+    main_slots: number;
+    extra_slots: number;
+    days: TimetableOverviewDay[];
+    created_count?: number;
+    source_class?: number;
+    target_class?: number;
 }
 
 export interface Attendance {
@@ -1218,18 +1250,83 @@ export const academicAPI = {
     }),
 
     // Timetable
-    getTimetable: async () => {
-        const payload = await apiRequest<Timetable[] | PaginatedResponse<Timetable>>('/academic/timetable/');
+    getTimetable: async (params?: {
+        academic_class?: number | string;
+        day_of_week?: string;
+        status?: 'pending' | 'approved' | 'rejected';
+        entry_type?: 'main' | 'extra';
+    }) => {
+        const search = new URLSearchParams();
+        if (params?.academic_class !== undefined && params?.academic_class !== null && params?.academic_class !== '') {
+            search.set('academic_class', String(params.academic_class));
+        }
+        if (params?.day_of_week) search.set('day_of_week', params.day_of_week);
+        if (params?.status) search.set('status', params.status);
+        if (params?.entry_type) search.set('entry_type', params.entry_type);
+        const query = search.toString();
+        const endpoint = `/academic/timetable/${query ? `?${query}` : ''}`;
+        const payload = await apiRequest<Timetable[] | PaginatedResponse<Timetable>>(endpoint);
         return normalizeArrayPayload(payload);
     },
     getMyTimetable: async () => {
         const payload = await apiRequest<Timetable[] | PaginatedResponse<Timetable>>('/academic/timetable/my_timetable/');
         return normalizeArrayPayload(payload);
     },
+    getTimetableOverview: (academicClass: number | string) =>
+        apiRequest<TimetableOverview>(`/academic/timetable/overview/?academic_class=${encodeURIComponent(String(academicClass))}`),
+    getMyTimetableRequests: async () => {
+        const payload = await apiRequest<Timetable[] | PaginatedResponse<Timetable>>('/academic/timetable/my_requests/');
+        return normalizeArrayPayload(payload);
+    },
+    getPendingTimetableRequests: async () => {
+        const payload = await apiRequest<Timetable[] | PaginatedResponse<Timetable>>('/academic/timetable/pending_requests/');
+        return normalizeArrayPayload(payload);
+    },
+    approveTimetableRequest: (
+        id: number,
+        data: { status: 'approved' | 'rejected'; approval_comment?: string }
+    ) =>
+        apiRequest<Timetable>(`/academic/timetable/${id}/approve/`, {
+            method: 'POST',
+            body: JSON.stringify(data),
+        }),
     createTimetable: (data: Partial<Timetable>) => apiRequest<Timetable>('/academic/timetable/', {
         method: 'POST',
         body: JSON.stringify(data)
     }),
+    bulkReplaceMainTimetable: (
+        academicClass: number | string,
+        slots: Array<{
+            day_of_week: string;
+            start_time: string;
+            end_time: string;
+            subject_name: string;
+            room_number?: string | null;
+            teacher?: string | null;
+        }>,
+        overwriteExisting = true,
+    ) =>
+        apiRequest<TimetableOverview>('/academic/timetable/bulk_replace_main/', {
+            method: 'POST',
+            body: JSON.stringify({
+                academic_class: academicClass,
+                slots,
+                overwrite_existing: overwriteExisting,
+            }),
+        }),
+    cloneMainTimetable: (
+        sourceClass: number | string,
+        targetClass: number | string,
+        overwriteExisting = true,
+    ) =>
+        apiRequest<TimetableOverview>('/academic/timetable/clone_main/', {
+            method: 'POST',
+            body: JSON.stringify({
+                source_class: sourceClass,
+                target_class: targetClass,
+                overwrite_existing: overwriteExisting,
+            }),
+        }),
     updateTimetable: (id: number, data: Partial<Timetable>) => apiRequest<Timetable>(`/academic/timetable/${id}/`, {
         method: 'PATCH',
         body: JSON.stringify(data)

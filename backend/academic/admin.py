@@ -78,8 +78,8 @@ class AttendanceAdmin(admin.ModelAdmin):
 
 @admin.register(Timetable)
 class TimetableAdmin(admin.ModelAdmin):
-    list_display = ('academic_class', 'day_of_week', 'start_time', 'end_time', 'subject_name')
-    list_filter = ('day_of_week', 'academic_class')
+    list_display = ('academic_class', 'day_of_week', 'start_time', 'end_time', 'subject_name', 'entry_type', 'status')
+    list_filter = ('day_of_week', 'academic_class', 'entry_type', 'status')
 
 @admin.register(Assessment)
 class AssessmentAdmin(admin.ModelAdmin):

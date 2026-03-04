@@ -1,157 +1,467 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
+import { useEffect, useMemo, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Calendar, Clock, MapPin, Users, ChevronRight, School } from 'lucide-react';
-import { academicAPI, usersAPI, Timetable, Teacher } from '@/lib/api';
+import { Calendar, Clock, Loader2, MapPin, Plus, School, Trash2 } from 'lucide-react';
+import { academicAPI, Timetable, Teacher, usersAPI, AcademicClass } from '@/lib/api';
 import { toast } from 'sonner';
+
+const WEEK_DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
 export default function TeacherTimetablePage() {
     const [loading, setLoading] = useState(true);
-    const [timetable, setTimetable] = useState<Timetable[]>([]);
-    const [myTeacherProfile, setMyTeacherProfile] = useState<Teacher | null>(null);
-    const [currentDay, setCurrentDay] = useState<string>(
-        new Date().toLocaleDateString('en-US', { weekday: 'long' })
-    );
+    const [teacherProfile, setTeacherProfile] = useState<Teacher | null>(null);
+    const [assignedClasses, setAssignedClasses] = useState<AcademicClass[]>([]);
+    const [selectedClassId, setSelectedClassId] = useState<string>('');
+    const [classTimetable, setClassTimetable] = useState<Timetable[]>([]);
+    const [myRequests, setMyRequests] = useState<Timetable[]>([]);
+    const [activeDay, setActiveDay] = useState(new Date().toLocaleDateString('en-US', { weekday: 'long' }));
+    const [requestSubmitting, setRequestSubmitting] = useState(false);
 
-    const weekDays = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+    const [requestForm, setRequestForm] = useState({
+        academic_class: '',
+        day_of_week: 'Monday',
+        start_time: '',
+        end_time: '',
+        subject_name: '',
+        room_number: '',
+    });
+
+    const refreshMyRequests = async (options?: {
+        teacherId?: string;
+        assignedClassIds?: number[];
+        optimisticRequest?: Timetable;
+    }) => {
+        try {
+            const requests = await academicAPI.getMyTimetableRequests();
+            let normalized = Array.isArray(requests) ? requests : [];
+
+            if (normalized.length === 0 && options?.teacherId) {
+                const fallback = await academicAPI.getTimetable({ entry_type: 'extra' });
+                const teacherId = options.teacherId;
+                const assignedClassIds = options.assignedClassIds || [];
+                normalized = (Array.isArray(fallback) ? fallback : []).filter((request) => {
+                    const requestTeacherId = String(request.teacher || '');
+                    const requestClassId = Number(request.academic_class);
+                    const isAssignedClass = Number.isFinite(requestClassId) && assignedClassIds.includes(requestClassId);
+                    return requestTeacherId === teacherId || isAssignedClass;
+                });
+            }
+
+            if (options?.optimisticRequest) {
+                const optimisticId = Number(options.optimisticRequest.timetable_id || 0);
+                const alreadyPresent = normalized.some((request) => Number(request.timetable_id || 0) === optimisticId);
+                if (!alreadyPresent) {
+                    normalized = [options.optimisticRequest, ...normalized];
+                }
+            }
+
+            normalized.sort((a, b) => Number(b.timetable_id || 0) - Number(a.timetable_id || 0));
+            setMyRequests(normalized);
+        } catch (error) {
+            console.error('Failed to load extra class requests', error);
+            if (options?.optimisticRequest) {
+                const optimisticRequest = options.optimisticRequest;
+                setMyRequests((previous) => {
+                    const optimisticId = Number(optimisticRequest.timetable_id || 0);
+                    const alreadyPresent = previous.some((request) => Number(request.timetable_id || 0) === optimisticId);
+                    if (alreadyPresent) return previous;
+                    return [optimisticRequest, ...previous];
+                });
+                return;
+            }
+            setMyRequests([]);
+        }
+    };
 
     useEffect(() => {
-        async function loadSchedule() {
+        const loadTeacherContext = async () => {
             try {
-                // 1. Get Current User and Teacher Profile
                 const user = await usersAPI.getMe();
-                // Fetch all teachers to match user_id (since getMe only returns User account)
-                const teachers = await academicAPI.getTeachers();
-                const me = teachers.find(t => t.user_id === user.user_id);
+                const [teachers, allClasses] = await Promise.all([
+                    academicAPI.getTeachers(),
+                    academicAPI.getClasses(),
+                ]);
 
-                if (me) {
-                    setMyTeacherProfile(me);
-                    // 2. Fetch Timetable
-                    // If we have a dedicated "getMyTimetable" endpoint for teachers, use it.
-                    // Otherwise, fetch all and filter. API definition shows getMyTimetable under generic academic section
-                    // likely pointing to student view or generic filtered view. Let's try generic first with filtering.
-                    const allTimetable = await academicAPI.getTimetable();
+                const me = teachers.find((teacher) => teacher.user_id === user.user_id) || null;
+                setTeacherProfile(me);
 
-                    // Filter for this teacher
-                    const mySchedule = allTimetable.filter(slot => slot.teacher === me.id || slot.teacher_name === user.username); // Fallback to matching name if IDs tricky
-
-                    // Better approach: use ID match
-                    const myScheduleById = allTimetable.filter(slot => slot.teacher === me.id);
-                    setTimetable(myScheduleById);
-                } else {
-                    toast.error("Teacher profile not found.");
+                if (!me) {
+                    setAssignedClasses([]);
+                    return;
                 }
+
+                const classMap = new Map(allClasses.map((academicClass) => [Number(academicClass.id), academicClass]));
+                const resolvedAssigned = (me.assigned_classes || [])
+                    .map((classId) => classMap.get(Number(classId)))
+                    .filter((value): value is AcademicClass => Boolean(value));
+
+                setAssignedClasses(resolvedAssigned);
+
+                if (resolvedAssigned.length > 0) {
+                    const defaultClass = String(resolvedAssigned[0].id);
+                    setSelectedClassId(defaultClass);
+                    setRequestForm((prev) => ({ ...prev, academic_class: defaultClass }));
+                }
+
+                await refreshMyRequests({
+                    teacherId: String(me.id),
+                    assignedClassIds: resolvedAssigned.map((academicClass) => Number(academicClass.id)),
+                });
             } catch (error) {
-                console.error("Failed to load timetable", error);
-                toast.error("Failed to load schedule");
+                console.error('Failed to load teacher timetable context', error);
+                toast.error('Failed to load timetable data');
             } finally {
                 setLoading(false);
             }
-        }
-        loadSchedule();
+        };
+
+        void loadTeacherContext();
     }, []);
 
-    const getSlotsForDay = (day: string) => {
-        return timetable
-            .filter(t => t.day_of_week === day)
-            .sort((a, b) => a.start_time.localeCompare(b.start_time));
+    useEffect(() => {
+        if (!selectedClassId) {
+            setClassTimetable([]);
+            return;
+        }
+
+        const loadClassTimetable = async () => {
+            try {
+                const data = await academicAPI.getTimetable({
+                    academic_class: selectedClassId,
+                    status: 'approved',
+                });
+                setClassTimetable(Array.isArray(data) ? data : []);
+            } catch (error) {
+                console.error('Failed to load class timetable', error);
+                toast.error('Failed to load class timetable');
+            }
+        };
+
+        void loadClassTimetable();
+    }, [selectedClassId]);
+
+    const daySlots = useMemo(
+        () =>
+            WEEK_DAYS.reduce<Record<string, Timetable[]>>((acc, day) => {
+                acc[day] = classTimetable
+                    .filter((slot) => slot.day_of_week === day)
+                    .sort((a, b) => a.start_time.localeCompare(b.start_time));
+                return acc;
+            }, {}),
+        [classTimetable],
+    );
+
+    const handleSubmitExtraRequest = async (event: React.FormEvent) => {
+        event.preventDefault();
+        if (!teacherProfile) return;
+
+        setRequestSubmitting(true);
+        try {
+            const createdRequest = await academicAPI.createTimetable({
+                academic_class: requestForm.academic_class,
+                day_of_week: requestForm.day_of_week,
+                start_time: requestForm.start_time,
+                end_time: requestForm.end_time,
+                subject_name: requestForm.subject_name,
+                room_number: requestForm.room_number,
+                teacher: teacherProfile.id,
+                entry_type: 'extra',
+                status: 'pending',
+            });
+
+            await refreshMyRequests({
+                teacherId: String(teacherProfile.id),
+                assignedClassIds: assignedClasses.map((academicClass) => Number(academicClass.id)),
+                optimisticRequest: createdRequest,
+            });
+            setRequestForm((prev) => ({
+                ...prev,
+                start_time: '',
+                end_time: '',
+                subject_name: '',
+                room_number: '',
+            }));
+            toast.success('Extra class request submitted for approval');
+        } catch (error: unknown) {
+            const message = error instanceof Error ? error.message : 'Unknown error';
+            toast.error(`Failed to submit request: ${message}`);
+        } finally {
+            setRequestSubmitting(false);
+        }
+    };
+
+    const handleDeleteRequest = async (requestId: number) => {
+        if (!confirm('Delete this extra class request?')) return;
+        try {
+            await academicAPI.deleteTimetable(requestId);
+            await refreshMyRequests({
+                teacherId: teacherProfile ? String(teacherProfile.id) : '',
+                assignedClassIds: assignedClasses.map((academicClass) => Number(academicClass.id)),
+            });
+            toast.success('Extra class request deleted');
+        } catch (error: unknown) {
+            const message = error instanceof Error ? error.message : 'Unknown error';
+            toast.error(`Failed to delete request: ${message}`);
+        }
     };
 
     if (loading) return <div className="p-12 text-center text-slate-400">Loading schedule...</div>;
 
-    if (!myTeacherProfile) return (
-        <div className="p-12 text-center">
-            <h2 className="text-xl font-bold text-slate-700">Teacher Profile Not Found</h2>
-            <p className="text-slate-500">Please contact administration.</p>
-        </div>
-    );
+    if (!teacherProfile) {
+        return (
+            <div className="p-12 text-center">
+                <h2 className="text-xl font-bold text-slate-700">Teacher Profile Not Found</h2>
+                <p className="text-slate-500">Please contact administration.</p>
+            </div>
+        );
+    }
 
     return (
         <div className="space-y-6 animate-in fade-in duration-500">
             <div>
                 <h1 className="text-3xl font-bold text-slate-900 flex items-center gap-3">
-                    <Calendar className="h-8 w-8 text-indigo-600" /> My Timetable
+                    <Calendar className="h-8 w-8 text-indigo-600" /> Timetable
                 </h1>
-                <p className="text-slate-500">Weekly class schedule and upcoming lessons</p>
+                <p className="text-slate-500">
+                    View class timetable and submit extra class requests for admin approval.
+                </p>
             </div>
 
             <Card className="border-slate-200 shadow-sm">
-                <Tabs defaultValue={currentDay} onValueChange={setCurrentDay} className="w-full">
-                    <CardHeader className="border-b border-slate-100 pb-0">
-                        <div className="flex items-center justify-between mb-4">
-                            <CardTitle>Weekly Schedule</CardTitle>
-                            <Badge variant="outline" className="px-3 py-1 bg-indigo-50 text-indigo-700 border-indigo-200">
-                                {timetable.length} Classes Total
-                            </Badge>
-                        </div>
-                        <TabsList className="w-full justify-start h-12 bg-transparent p-0 gap-2 overflow-x-auto">
-                            {weekDays.map(day => (
-                                <TabsTrigger
-                                    key={day}
-                                    value={day}
-                                    className="data-[state=active]:bg-indigo-600 data-[state=active]:text-white data-[state=active]:shadow-md rounded-full px-6 transition-all border border-transparent data-[state=inactive]:border-slate-200 data-[state=inactive]:hover:bg-slate-50"
-                                >
-                                    {day}
-                                </TabsTrigger>
-                            ))}
-                        </TabsList>
-                    </CardHeader>
-                    {weekDays.map(day => (
-                        <TabsContent key={day} value={day} className="p-6 m-0">
-                            <div className="space-y-4">
-                                {getSlotsForDay(day).length === 0 ? (
-                                    <div className="py-12 text-center bg-slate-50 rounded-xl border border-dashed border-slate-200">
-                                        <School className="h-10 w-10 text-slate-300 mx-auto mb-3" />
-                                        <p className="text-slate-500 font-medium">No classes scheduled for {day}</p>
-                                        <p className="text-sm text-slate-400">Enjoy your free time!</p>
-                                    </div>
-                                ) : (
-                                    getSlotsForDay(day).map((slot, index) => (
-                                        <div key={index} className="flex flex-col md:flex-row gap-4 p-4 border border-slate-200 rounded-xl hover:shadow-md hover:border-indigo-100 transition-all bg-white group">
-                                            <div className="flex flex-col justify-center items-center md:items-start min-w-[120px] pr-4 md:border-r border-slate-100 text-slate-600">
-                                                <div className="flex items-center gap-2 font-bold text-lg text-slate-900">
-                                                    <Clock className="h-4 w-4 text-indigo-500" />
-                                                    {slot.start_time.slice(0, 5)}
-                                                </div>
-                                                <div className="text-xs font-medium text-slate-400 mt-1 uppercase tracking-wide">
-                                                    To {slot.end_time.slice(0, 5)}
-                                                </div>
-                                            </div>
-                                            <div className="flex-1 flex flex-col md:flex-row md:items-center justify-between gap-4">
-                                                <div>
-                                                    <h3 className="font-bold text-lg text-slate-800 flex items-center gap-2">
-                                                        {slot.subject_name}
-                                                    </h3>
-                                                    <div className="flex items-center gap-4 mt-2 text-sm text-slate-500">
-                                                        <span className="flex items-center gap-1 bg-slate-100 px-2 py-1 rounded-md">
-                                                            <Users className="h-3 w-3" /> Class {slot.academic_class}
+                <CardHeader className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                    <CardTitle>Class Timetable (Read-only)</CardTitle>
+                    <div className="w-full md:w-72">
+                        <Select value={selectedClassId} onValueChange={setSelectedClassId}>
+                            <SelectTrigger>
+                                <SelectValue placeholder="Select assigned class" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {assignedClasses.map((academicClass) => (
+                                    <SelectItem key={academicClass.id} value={String(academicClass.id)}>
+                                        {academicClass.name}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    </div>
+                </CardHeader>
+                <CardContent>
+                    {assignedClasses.length === 0 ? (
+                        <div className="text-slate-500 text-sm">No classes are assigned to your profile.</div>
+                    ) : (
+                        <Tabs value={activeDay} onValueChange={setActiveDay}>
+                            <TabsList className="w-full justify-start h-12 bg-transparent p-0 gap-2 overflow-x-auto">
+                                {WEEK_DAYS.map((day) => (
+                                    <TabsTrigger
+                                        key={day}
+                                        value={day}
+                                        className="data-[state=active]:bg-indigo-600 data-[state=active]:text-white rounded-full px-5 border border-slate-200"
+                                    >
+                                        {day}
+                                    </TabsTrigger>
+                                ))}
+                            </TabsList>
+
+                            {WEEK_DAYS.map((day) => (
+                                <TabsContent key={day} value={day} className="pt-4">
+                                    {daySlots[day]?.length ? (
+                                        <div className="space-y-3">
+                                            {daySlots[day].map((slot) => (
+                                                <div key={slot.timetable_id} className="border rounded-lg p-4 bg-white">
+                                                    <div className="flex flex-wrap items-center gap-2 mb-2">
+                                                        <Badge variant="outline">{slot.entry_type === 'extra' ? 'Extra' : 'Main'}</Badge>
+                                                        <Badge variant="secondary">{slot.status || 'approved'}</Badge>
+                                                    </div>
+                                                    <h3 className="font-semibold text-slate-900">{slot.subject_name}</h3>
+                                                    <div className="text-sm text-slate-600 mt-2 flex flex-wrap items-center gap-4">
+                                                        <span className="flex items-center gap-1">
+                                                            <Clock className="h-4 w-4 text-indigo-500" />
+                                                            {slot.start_time.slice(0, 5)} - {slot.end_time.slice(0, 5)}
                                                         </span>
-                                                        <span className="flex items-center gap-1 bg-slate-100 px-2 py-1 rounded-md">
-                                                            <MapPin className="h-3 w-3" /> {slot.room_number}
-                                                        </span>
+                                                        {slot.room_number && (
+                                                            <span className="flex items-center gap-1">
+                                                                <MapPin className="h-4 w-4 text-indigo-500" />
+                                                                Room {slot.room_number}
+                                                            </span>
+                                                        )}
+                                                        {slot.teacher_name && (
+                                                            <span className="flex items-center gap-1">
+                                                                <School className="h-4 w-4 text-indigo-500" />
+                                                                {slot.teacher_name}
+                                                            </span>
+                                                        )}
                                                     </div>
                                                 </div>
-                                                <div className="flex items-center gap-2">
-                                                    <Button size="sm" className="w-full md:w-auto bg-white border-slate-200 text-slate-700 hover:bg-slate-50 hover:text-indigo-600 border shadow-sm">
-                                                        Prepare Lesson
-                                                    </Button>
-                                                    <Button size="sm" className="w-full md:w-auto bg-indigo-600 hover:bg-indigo-700 shadow-sm shadow-indigo-200">
-                                                        Start Class <ChevronRight className="ml-1 h-3 w-3" />
-                                                    </Button>
+                                            ))}
+                                        </div>
+                                    ) : (
+                                        <div className="py-10 text-center text-slate-500">
+                                            No classes scheduled for {day}.
+                                        </div>
+                                    )}
+                                </TabsContent>
+                            ))}
+                        </Tabs>
+                    )}
+                </CardContent>
+            </Card>
+
+            <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+                <Card className="xl:col-span-1 border-slate-200 shadow-sm">
+                    <CardHeader>
+                        <CardTitle>Request Extra Class</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        <form onSubmit={handleSubmitExtraRequest} className="space-y-3">
+                            <div className="grid gap-1">
+                                <Label>Class</Label>
+                                <Select
+                                    value={requestForm.academic_class}
+                                    onValueChange={(value) => setRequestForm((prev) => ({ ...prev, academic_class: value }))}
+                                >
+                                    <SelectTrigger><SelectValue placeholder="Select class" /></SelectTrigger>
+                                    <SelectContent>
+                                        {assignedClasses.map((academicClass) => (
+                                            <SelectItem key={academicClass.id} value={String(academicClass.id)}>
+                                                {academicClass.name}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <div className="grid gap-1">
+                                <Label>Day</Label>
+                                <Select
+                                    value={requestForm.day_of_week}
+                                    onValueChange={(value) => setRequestForm((prev) => ({ ...prev, day_of_week: value }))}
+                                >
+                                    <SelectTrigger><SelectValue /></SelectTrigger>
+                                    <SelectContent>
+                                        {WEEK_DAYS.map((day) => (
+                                            <SelectItem key={day} value={day}>{day}</SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <div className="grid grid-cols-2 gap-2">
+                                <div className="grid gap-1">
+                                    <Label>Start</Label>
+                                    <Input
+                                        type="time"
+                                        required
+                                        value={requestForm.start_time}
+                                        onChange={(e) => setRequestForm((prev) => ({ ...prev, start_time: e.target.value }))}
+                                    />
+                                </div>
+                                <div className="grid gap-1">
+                                    <Label>End</Label>
+                                    <Input
+                                        type="time"
+                                        required
+                                        value={requestForm.end_time}
+                                        onChange={(e) => setRequestForm((prev) => ({ ...prev, end_time: e.target.value }))}
+                                    />
+                                </div>
+                            </div>
+                            <div className="grid gap-1">
+                                <Label>Subject</Label>
+                                <Input
+                                    required
+                                    placeholder="Remedial Mathematics"
+                                    value={requestForm.subject_name}
+                                    onChange={(e) => setRequestForm((prev) => ({ ...prev, subject_name: e.target.value }))}
+                                />
+                            </div>
+                            <div className="grid gap-1">
+                                <Label>Room</Label>
+                                <Input
+                                    placeholder="Lab 2"
+                                    value={requestForm.room_number}
+                                    onChange={(e) => setRequestForm((prev) => ({ ...prev, room_number: e.target.value }))}
+                                />
+                            </div>
+                            <Button
+                                type="submit"
+                                className="w-full"
+                                disabled={requestSubmitting || !requestForm.academic_class}
+                            >
+                                {requestSubmitting ? (
+                                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                                ) : (
+                                    <Plus className="h-4 w-4 mr-2" />
+                                )}
+                                Submit Request
+                            </Button>
+                        </form>
+                    </CardContent>
+                </Card>
+
+                <Card className="xl:col-span-2 border-slate-200 shadow-sm">
+                    <CardHeader>
+                        <CardTitle>My Extra Class Requests</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                        {myRequests.length === 0 ? (
+                            <div className="text-slate-500 text-sm">No extra class requests created yet.</div>
+                        ) : (
+                            myRequests.map((request) => {
+                                const canDelete = request.status !== 'approved';
+                                return (
+                                    <div key={request.timetable_id} className="border rounded-lg p-3 bg-white">
+                                        <div className="flex flex-wrap items-center justify-between gap-3">
+                                            <div className="space-y-1">
+                                                <div className="font-semibold text-slate-900">{request.subject_name}</div>
+                                                <div className="text-xs text-slate-600">
+                                                    Class {request.academic_class_name || request.academic_class} • {request.day_of_week}
+                                                    {' '}
+                                                    {request.start_time.slice(0, 5)}-{request.end_time.slice(0, 5)}
+                                                    {request.room_number ? ` • Room ${request.room_number}` : ''}
                                                 </div>
+                                                {request.approval_comment && (
+                                                    <div className="text-xs text-slate-500">
+                                                        Note: {request.approval_comment}
+                                                    </div>
+                                                )}
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                <Badge
+                                                    variant={
+                                                        request.status === 'approved'
+                                                            ? 'default'
+                                                            : request.status === 'rejected'
+                                                                ? 'destructive'
+                                                                : 'secondary'
+                                                    }
+                                                    className="capitalize"
+                                                >
+                                                    {request.status || 'pending'}
+                                                </Badge>
+                                                {canDelete && (
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="sm"
+                                                        className="text-red-500"
+                                                        onClick={() => handleDeleteRequest(request.timetable_id)}
+                                                    >
+                                                        <Trash2 className="h-4 w-4" />
+                                                    </Button>
+                                                )}
                                             </div>
                                         </div>
-                                    ))
-                                )}
-                            </div>
-                        </TabsContent>
-                    ))}
-                </Tabs>
-            </Card>
+                                    </div>
+                                );
+                            })
+                        )}
+                    </CardContent>
+                </Card>
+            </div>
         </div>
     );
 }
