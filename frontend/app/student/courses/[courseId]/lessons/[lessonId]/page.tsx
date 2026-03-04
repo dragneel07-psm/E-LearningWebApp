@@ -16,6 +16,14 @@ import { SafeHTML } from "@/components/ui/safe-html";
 import { toast } from "sonner";
 import { academicAPI, Lesson, Chapter } from "@/lib/api";
 
+function normalizeChapters(payload: unknown): Chapter[] {
+    if (Array.isArray(payload)) return payload as Chapter[];
+    if (payload && typeof payload === 'object' && Array.isArray((payload as { results?: unknown[] }).results)) {
+        return (payload as { results: Chapter[] }).results;
+    }
+    return [];
+}
+
 export default function LessonPlayerPage() {
     const params = useParams();
     const router = useRouter();
@@ -61,28 +69,14 @@ export default function LessonPlayerPage() {
 
             setLoading(true);
             try {
-                // Fetch lesson details and course chapters (for sidebar)
-                // Note: We might need a specific endpoint to get chapters with lessons included
-                // verify api.getChapters in api.ts
-
+                const subjectId = parseInt(courseId, 10);
                 const [lessonData, chaptersData] = await Promise.all([
                     academicAPI.getLesson(lessonId),
-                    academicAPI.getChapters(undefined) // TODO: Filter by subject/course if possible. For now fetching all or handled by backend context?
-                    // academicAPI.getChapters definitions says `getChapters: (subjectId?: number)`
-                    // We need to parse courseId to number if it's subjectId
+                    academicAPI.getChapters(subjectId)
                 ]);
 
-                // Correction: fetching chapters for specific subject
-                const subjectId = parseInt(courseId);
-                const properChapters = await academicAPI.getChapters(subjectId);
-
-                // For each chapter, we might need to fetch lessons if not included
-                // The Chapter type has lessons?: Lesson[]
-                // If backend returns them, great. If not, we iterate.
-                // Assuming backend returns nested lessons for now based on UI requirements
-
                 setLesson(lessonData);
-                setChapters(properChapters);
+                setChapters(normalizeChapters(chaptersData));
             } catch (error) {
                 console.error("Failed to load lesson context", error);
                 toast.error("Failed to load lesson content");

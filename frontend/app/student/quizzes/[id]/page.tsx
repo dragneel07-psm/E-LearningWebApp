@@ -16,6 +16,14 @@ import {
 import { useGamification } from '@/components/providers/gamification-provider';
 import { academicAPI, Assessment, Question } from '@/lib/api';
 
+function normalizeList<T>(payload: unknown): T[] {
+    if (Array.isArray(payload)) return payload as T[];
+    if (payload && typeof payload === 'object' && Array.isArray((payload as { results?: unknown[] }).results)) {
+        return (payload as { results: T[] }).results;
+    }
+    return [];
+}
+
 export default function StudentQuizPage() {
     const params = useParams();
     const router = useRouter();
@@ -43,7 +51,7 @@ export default function StudentQuizPage() {
                     academicAPI.getQuestionsByAssessment(id)
                 ]);
                 setAssessment(assessmentData);
-                setQuestions(questionsData);
+                setQuestions(normalizeList<Question>(questionsData));
                 setTimeLeft(assessmentData.duration_minutes * 60);
             } catch (error) {
                 console.error("Failed to load quiz", error);

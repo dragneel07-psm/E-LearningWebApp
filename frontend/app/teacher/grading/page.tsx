@@ -14,6 +14,14 @@ import { academicAPI, Submission, Assessment } from '@/lib/api';
 import Link from 'next/link';
 import { useToast } from '@/hooks/use-toast';
 
+function normalizeList<T>(payload: unknown): T[] {
+    if (Array.isArray(payload)) return payload as T[];
+    if (payload && typeof payload === 'object' && Array.isArray((payload as { results?: unknown[] }).results)) {
+        return (payload as { results: T[] }).results;
+    }
+    return [];
+}
+
 export default function GradingListPage() {
     const { toast } = useToast();
     const [loading, setLoading] = useState(true);
@@ -31,8 +39,8 @@ export default function GradingListPage() {
                 academicAPI.getAssessments()
             ]);
 
-            setSubmissions(submissionsData);
-            setAssessments(assessmentsData);
+            setSubmissions(normalizeList<Submission>(submissionsData));
+            setAssessments(normalizeList<Assessment>(assessmentsData));
         } catch (error) {
             console.error('Failed to load grading data', error);
             toast({

@@ -21,6 +21,14 @@ import {
     useOffline
 } from '@/hooks/use-offline';
 
+function normalizeChapters(payload: unknown): Chapter[] {
+    if (Array.isArray(payload)) return payload as Chapter[];
+    if (payload && typeof payload === 'object' && Array.isArray((payload as { results?: unknown[] }).results)) {
+        return (payload as { results: Chapter[] }).results;
+    }
+    return [];
+}
+
 export default function StudentCourseLessonsPage() {
     const params = useParams();
     const router = useRouter();
@@ -42,12 +50,13 @@ export default function StudentCourseLessonsPage() {
                 academicAPI.getChapters(parseInt(courseId))
             ]);
             setSubject(subjectData);
-            setChapters(chaptersData);
+            const normalizedChapters = normalizeChapters(chaptersData);
+            setChapters(normalizedChapters);
 
             // Calculate completed lessons from the backend data
             const completed = new Set<number>();
             const downloaded = new Set<number>();
-            chaptersData.forEach(chapter => {
+            normalizedChapters.forEach(chapter => {
                 chapter.lessons?.forEach(lesson => {
                     if (lesson.completed) completed.add(lesson.id);
                     if (isLessonDownloaded(String(lesson.id))) downloaded.add(lesson.id);
