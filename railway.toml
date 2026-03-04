@@ -1,6 +1,6 @@
 [build]
 builder = "NIXPACKS"
-buildCommand = "pip install setuptools && pip install -r requirements.txt"
+buildCommand = "python3 -m pip install setuptools && python3 -m pip install -r requirements.txt"
 
 [deploy]
-startCommand = "cd backend && python manage.py migrate_schemas --shared --noinput && python manage.py migrate_schemas --schema=public --noinput && python manage.py migrate_schemas --tenant --noinput && python manage.py init_prod && gunicorn config.wsgi --bind 0.0.0.0:$PORT"
+startCommand = "cd backend && python3 manage.py migrate_schemas --shared --noinput && python3 manage.py migrate_schemas --schema=public --noinput && python3 manage.py migrate_schemas --tenant --noinput && python3 manage.py init_prod && gunicorn config.wsgi --bind 0.0.0.0:$PORT"
