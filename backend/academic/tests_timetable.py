@@ -10,7 +10,10 @@ User = get_user_model()
 
 
 class TimetablePermissionTests(FastTenantTestCase):
-    """Regression coverage for timetable permission rules in tenant schema."""
+    """Regression coverage for timetable permission rules in tenant schema.
+
+    This class also serves as a deploy-trigger touchpoint for backend-only Railway watches.
+    """
 
     @classmethod
     def setup_tenant(cls, tenant):
