@@ -31,7 +31,7 @@ class ReportViewSet(viewsets.ViewSet):
     @action(detail=False, methods=['get'], url_path='student-performance/(?P<student_id>[^/.]+)')
     def student_performance_pdf(self, request, student_id=None):
         using_db = getattr(request, 'db_alias', 'default')
-        student = get_object_or_404(Student.objects.using(using_db).select_related('user'), id=student_id)
+        student = get_object_or_404(Student.objects.using(using_db).select_related('user'), pk=student_id)
         
         # Use ReportingService to get comprehensive data including AI summary
         # Transform results for template since we are using service now
@@ -85,7 +85,7 @@ class ReportViewSet(viewsets.ViewSet):
     @action(detail=False, methods=['get'], url_path='student-performance-excel/(?P<student_id>[^/.]+)')
     def student_performance_excel(self, request, student_id=None):
         using_db = getattr(request, 'db_alias', 'default')
-        student = get_object_or_404(Student.objects.using(using_db).select_related('user'), id=student_id)
+        student = get_object_or_404(Student.objects.using(using_db).select_related('user'), pk=student_id)
         results = Result.objects.using(using_db).filter(student=student).select_related('assessment', 'assessment__subject')
         
         data = []
@@ -223,10 +223,13 @@ class ReportViewSet(viewsets.ViewSet):
     @action(detail=False, methods=['get'], url_path='result-card/(?P<student_id>[^/.]+)/(?P<result_id>[^/.]+)')
     def result_card_pdf(self, request, student_id=None, result_id=None):
         using_db = getattr(request, 'db_alias', 'default')
-        student = get_object_or_404(Student.objects.using(using_db).select_related('section', 'section__academic_class', 'user'), id=student_id)
+        student = get_object_or_404(
+            Student.objects.using(using_db).select_related('section', 'section__academic_class', 'user'),
+            pk=student_id,
+        )
         result = get_object_or_404(
             Result.objects.using(using_db).select_related('assessment', 'assessment__subject'), 
-            id=result_id, 
+            pk=result_id, 
             student=student
         )
         
