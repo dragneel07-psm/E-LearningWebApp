@@ -1444,7 +1444,10 @@ export const academicAPI = {
     }),
 
     // Exams
-    getExams: () => apiRequest<Exam[]>('/academic/exams/'),
+    getExams: async () => {
+        const payload = await apiRequest<Exam[] | PaginatedResponse<Exam>>('/academic/exams/');
+        return normalizeArrayPayload(payload);
+    },
     getExam: (id: string) => apiRequest<Exam>(`/academic/exams/${id}/`),
     createExam: (data: Partial<Exam>) => apiRequest<Exam>('/academic/exams/', {
         method: 'POST',
@@ -1460,9 +1463,10 @@ export const academicAPI = {
     generateHallTickets: (id: string) => apiRequest<{ message: string }>(`/academic/exams/${id}/generate_hall_tickets/`, {
         method: 'POST'
     }),
-    getExamSeating: (studentId?: string) => {
+    getExamSeating: async (studentId?: string) => {
         const query = studentId ? `?student=${studentId}` : '';
-        return apiRequest<ExamSeating[]>(`/academic/exam-seating/${query}`);
+        const payload = await apiRequest<ExamSeating[] | PaginatedResponse<ExamSeating>>(`/academic/exam-seating/${query}`);
+        return normalizeArrayPayload(payload);
     },
 };
 

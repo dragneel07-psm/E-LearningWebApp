@@ -11,6 +11,14 @@ import {
 import { academicAPI, reportsAPI, Exam, ExamSeating } from '@/lib/api';
 import { toast } from 'sonner';
 
+function toList<T>(payload: unknown): T[] {
+    if (Array.isArray(payload)) return payload as T[];
+    if (payload && typeof payload === 'object' && Array.isArray((payload as { results?: unknown[] }).results)) {
+        return (payload as { results: T[] }).results;
+    }
+    return [];
+}
+
 export default function StudentExamsPage() {
     const [loading, setLoading] = useState(true);
     const [exams, setExams] = useState<Exam[]>([]);
@@ -29,8 +37,8 @@ export default function StudentExamsPage() {
                 academicAPI.getExamSeating()
             ]);
 
-            setExams(examsData);
-            setSeatings(seatingsData);
+            setExams(toList<Exam>(examsData));
+            setSeatings(toList<ExamSeating>(seatingsData));
         } catch (error) {
             console.error("Failed to load exam data", error);
             toast.error("Failed to load your exam schedule");
