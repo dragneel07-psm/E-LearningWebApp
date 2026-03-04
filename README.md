@@ -93,6 +93,7 @@ E-LearningWebApp/
 ├── frontend/                # Next.js web app
 ├── mobile/                  # Expo React Native app
 ├── tests/                   # Playwright E2E and test fixtures
+├── .agent/sdlc-workflow/    # 12-phase professional SaaS delivery workflow
 ├── .github/workflows/       # CI/CD pipelines
 ├── docker-compose.yml       # Local multi-service stack
 ├── railway.toml             # Backend deploy config (Railway)
@@ -127,6 +128,9 @@ E-LearningWebApp/
 
 ## SDLC and Engineering Process
 This project follows a practical Agile + DevOps SDLC.
+
+Execution artifacts and templates for this process are maintained in:
+- `.agent/sdlc-workflow/README.md`
 
 ### SDLC Phases
 1. Discovery and Requirement Definition
