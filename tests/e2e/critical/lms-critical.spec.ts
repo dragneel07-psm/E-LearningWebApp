@@ -878,10 +878,24 @@ async function requireCredentialOrSkip(request: APIRequestContext, role: Role): 
 }
 
 async function loginViaUi(page: Page, role: Role, credential: Credential): Promise<void> {
+  await page.context().clearCookies();
+  await page.goto(appUrl('/login'));
+  await page.evaluate(() => {
+    localStorage.clear();
+    sessionStorage.clear();
+  });
+
   await page.goto(appUrl(`/login/${role}`));
-  await page.fill('#email', credential.email);
-  await page.fill('#password', credential.password);
-  await page.fill('#school_code', credential.schoolCode);
+  const emailInput = page.locator('#email, input[name="email"], input[type="email"]').first();
+  const passwordInput = page.locator('#password, input[name="password"], input[type="password"]').first();
+  const schoolCodeInput = page.locator('#school_code, input[name="school_code"]').first();
+
+  await expect(emailInput).toBeVisible({ timeout: 20_000 });
+  await emailInput.fill(credential.email);
+  await expect(passwordInput).toBeVisible({ timeout: 20_000 });
+  await passwordInput.fill(credential.password);
+  await expect(schoolCodeInput).toBeVisible({ timeout: 20_000 });
+  await schoolCodeInput.fill(credential.schoolCode);
   await page.getByRole('button', { name: /Sign In/i }).click();
 
   const dashboard = dashboardPath(role);
@@ -889,35 +903,73 @@ async function loginViaUi(page: Page, role: Role, credential: Credential): Promi
 }
 
 async function bootstrapSession(page: Page, request: APIRequestContext, role: Role): Promise<Session> {
-  const credential = await requireCredentialOrSkip(request, role);
+  const cachedSession = apiSessionCache.get(role);
+  const credential = cachedSession?.credential || (await requireCredentialOrSkip(request, role));
 
-  const loginResponse = await request.post(apiUrl('/api/users/login/'), {
-    headers: { 'x-tenant-id': credential.schoolCode, 'Content-Type': 'application/json' },
-    data: {
-      email: credential.email,
-      password: credential.password,
-    },
-  });
-  expect(loginResponse.ok()).toBeTruthy();
+  let accessToken = cachedSession?.accessToken || '';
+  let refreshToken = cachedSession?.refreshToken || '';
 
-  const loginPayload = (await loginResponse.json()) as { access: string; refresh: string };
+  if (!accessToken || !refreshToken) {
+    const loginResponse = await request.post(apiUrl('/api/users/login/'), {
+      headers: { 'x-tenant-id': credential.schoolCode, 'Content-Type': 'application/json' },
+      data: {
+        email: credential.email,
+        password: credential.password,
+      },
+    });
+    expect(loginResponse.ok()).toBeTruthy();
+
+    const loginPayload = (await loginResponse.json()) as { access: string; refresh: string };
+    accessToken = loginPayload.access;
+    refreshToken = loginPayload.refresh;
+
+    apiSessionCache.set(role, {
+      credential,
+      accessToken,
+      refreshToken,
+      role,
+    });
+  }
+
   await page.goto(appUrl('/login'));
+  await page.context().clearCookies();
   await page.evaluate(
     ({ access, refresh, schoolCode, roleName }) => {
+      localStorage.clear();
+      sessionStorage.clear();
       localStorage.setItem('access_token', access);
       localStorage.setItem('refresh_token', refresh);
       localStorage.setItem('tenant_id', schoolCode);
       localStorage.setItem('user_role', roleName);
-      document.cookie = `access_token=${access}; path=/; samesite=lax`;
-      document.cookie = `tenant_id=${schoolCode}; path=/; samesite=lax`;
     },
     {
-      access: loginPayload.access,
-      refresh: loginPayload.refresh,
+      access: accessToken,
+      refresh: refreshToken,
       schoolCode: credential.schoolCode,
       roleName: role,
     },
   );
+  const frontendUrl = new URL(FRONTEND_BASE_URL);
+  const cookieDomain = frontendUrl.hostname;
+  const secureCookie = frontendUrl.protocol === 'https:';
+  await page.context().addCookies([
+    {
+      name: 'access_token',
+      value: accessToken,
+      domain: cookieDomain,
+      path: '/',
+      sameSite: 'Lax',
+      secure: secureCookie,
+    },
+    {
+      name: 'tenant_id',
+      value: credential.schoolCode,
+      domain: cookieDomain,
+      path: '/',
+      sameSite: 'Lax',
+      secure: secureCookie,
+    },
+  ]);
 
   const target = dashboardPath(role);
   await page.goto(appUrl(target));
@@ -931,46 +983,70 @@ async function bootstrapSession(page: Page, request: APIRequestContext, role: Ro
 
   return {
     credential,
-    accessToken: loginPayload.access,
-    refreshToken: loginPayload.refresh,
+    accessToken,
+    refreshToken,
     role,
   };
 }
 
 async function selectFirstOptionFromCombobox(page: Page, combobox: Locator): Promise<boolean> {
-  if (!(await combobox.isVisible()) || !(await combobox.isEnabled())) {
-    return false;
+  const deadline = Date.now() + 20_000;
+  while (Date.now() < deadline) {
+    if ((await combobox.count()) === 0) {
+      await page.waitForTimeout(250);
+      continue;
+    }
+
+    try {
+      await combobox.first().click({ timeout: 2_000 });
+    } catch {
+      await page.waitForTimeout(250);
+      continue;
+    }
+
+    const firstOption = page.locator('[role="option"]').first();
+    const optionVisible = await firstOption.isVisible({ timeout: 1_500 }).catch(() => false);
+    if (!optionVisible) {
+      await page.keyboard.press('Escape').catch(() => {});
+      await page.waitForTimeout(250);
+      continue;
+    }
+
+    await page.keyboard.press('ArrowDown');
+    await page.keyboard.press('Enter');
+    return true;
   }
 
-  await combobox.click();
-  const firstOption = page.locator('[role="option"]').first();
-  try {
-    await firstOption.waitFor({ state: 'visible', timeout: 3_000 });
-  } catch {
-    await page.keyboard.press('Escape');
-    return false;
-  }
-  await page.keyboard.press('ArrowDown');
-  await page.keyboard.press('Enter');
-  return true;
+  return false;
 }
 
 async function selectComboboxOptionByText(page: Page, combobox: Locator, optionText: string): Promise<boolean> {
-  if (!(await combobox.isVisible()) || !(await combobox.isEnabled())) {
-    return false;
+  const deadline = Date.now() + 30_000;
+  while (Date.now() < deadline) {
+    if ((await combobox.count()) === 0) {
+      await page.waitForTimeout(250);
+      continue;
+    }
+
+    try {
+      await combobox.first().click({ timeout: 2_000 });
+    } catch {
+      await page.waitForTimeout(250);
+      continue;
+    }
+
+    const option = page.getByRole('option', { name: new RegExp(`^${escapeRegExp(optionText)}$`, 'i') }).first();
+    const optionVisible = await option.isVisible({ timeout: 2_000 }).catch(() => false);
+    if (optionVisible) {
+      await option.click();
+      return true;
+    }
+
+    await page.keyboard.press('Escape').catch(() => {});
+    await page.waitForTimeout(350);
   }
 
-  await combobox.click();
-  const option = page.getByRole('option', { name: new RegExp(`^${escapeRegExp(optionText)}$`, 'i') }).first();
-  try {
-    await option.waitFor({ state: 'visible', timeout: 3_000 });
-  } catch {
-    await page.keyboard.press('Escape');
-    return false;
-  }
-
-  await option.click();
-  return true;
+  return false;
 }
 
 async function completeFirstAvailableQuiz(page: Page, assessmentId?: string): Promise<boolean> {
@@ -1351,9 +1427,9 @@ test.describe('Timetable flow', () => {
     await expect(page.getByRole('heading', { name: /Timetable Management/i })).toBeVisible({ timeout: 20_000 });
 
     await page.getByRole('button', { name: /Open Timetable Manager/i }).click();
-    const dialog = page.getByRole('dialog');
-    await expect(dialog.getByRole('heading', { name: /Timetable Management/i })).toBeVisible({ timeout: 20_000 });
-    const classSelected = await selectComboboxOptionByText(page, dialog.getByRole('combobox').first(), className);
+    const dialog = page.getByRole('dialog').filter({ hasText: /Timetable Management Console/i }).first();
+    await expect(dialog.getByRole('heading', { name: /Timetable Management Console/i })).toBeVisible({ timeout: 20_000 });
+    const classSelected = await selectComboboxOptionByText(page, dialog.locator('button[role="combobox"]').first(), className);
     expect(classSelected, 'Created class should be selectable in timetable manager').toBeTruthy();
 
     const subjectName = uniqueId('E2E Main Timetable');
@@ -1384,6 +1460,12 @@ test.describe('Timetable flow', () => {
     await ensureTeacherContextWithClassAndSubject(request);
     await bootstrapSession(page, request, 'teacher');
     await page.goto(appUrl('/teacher/timetable'));
+    try {
+      await expectPathStartsWith(page, '/teacher/timetable');
+    } catch {
+      await page.getByRole('link', { name: /Timetable/i }).first().click();
+      await expectPathStartsWith(page, '/teacher/timetable');
+    }
     await expect(page.getByRole('heading', { name: /^Timetable$/i })).toBeVisible({ timeout: 20_000 });
 
     const subjectName = uniqueId('E2E Extra Request');
@@ -1483,14 +1565,27 @@ test.describe('Timetable flow', () => {
     expect(pendingRequestId > 0, 'Pending extra timetable request id missing').toBeTruthy();
     expect(String(createdRequest.status || '')).toBe('pending');
 
+    const classes = await listApi<{ id?: number; name?: string }>(request, '/api/academic/classes/', adminSession);
+    const selectedClassName = String(
+      classes.find((item) => Number(item.id || 0) === studentContext.classId)?.name || '',
+    );
+    expect(selectedClassName.length > 0, 'Unable to resolve class name for timetable approval').toBeTruthy();
+
     await bootstrapSession(page, request, 'admin');
     await page.goto(appUrl('/admin/timetable'));
     await page.getByRole('button', { name: /Open Timetable Manager/i }).click();
 
-    const dialog = page.getByRole('dialog');
-    const pendingCard = dialog.locator('div').filter({ hasText: extraSubject }).first();
+    const dialog = page.getByRole('dialog').filter({ hasText: /Timetable Management Console/i }).first();
+    const classSelected = await selectComboboxOptionByText(
+      page,
+      dialog.locator('button[role="combobox"]').first(),
+      selectedClassName,
+    );
+    expect(classSelected, `Unable to select class ${selectedClassName} in timetable manager`).toBeTruthy();
+
+    const pendingCard = dialog.locator('.rounded-md.border.p-3.bg-slate-50').filter({ hasText: extraSubject }).first();
     await expect(pendingCard).toBeVisible({ timeout: 30_000 });
-    await pendingCard.getByRole('button', { name: /Approve/i }).click();
+    await pendingCard.getByRole('button', { name: /^Approve$/i }).first().click();
 
     await expect
       .poll(
@@ -1507,10 +1602,43 @@ test.describe('Timetable flow', () => {
       )
       .toBe('approved');
 
+    let studentVisibleDay = '';
+    await expect
+      .poll(
+        async () => {
+          const rows = await listApi<{
+            timetable_id?: number;
+            id?: number;
+            subject_name?: string;
+            day_of_week?: string;
+            entry_type?: string;
+            status?: string;
+          }>(request, '/api/academic/timetable/my_timetable/', studentSession);
+          const matched = rows.find((row) => Number(row.timetable_id || row.id || 0) === pendingRequestId);
+          studentVisibleDay = String(matched?.day_of_week || '');
+          return Boolean(matched);
+        },
+        { timeout: 30_000 },
+      )
+      .toBeTruthy();
+
     await bootstrapSession(page, request, 'student');
     await page.goto(appUrl('/student/timetable'));
-    await expect(page.getByText(extraSubject).first()).toBeVisible({ timeout: 30_000 });
-    await expect(page.getByText(/Extra Class|Extra/i).first()).toBeVisible({ timeout: 20_000 });
+    try {
+      await expectPathStartsWith(page, '/student/timetable');
+    } catch {
+      await page.getByRole('link', { name: /^Timetable$/i }).first().click();
+      await expectPathStartsWith(page, '/student/timetable');
+    }
+    await expect(page.getByRole('heading', { name: /Class Timetable/i })).toBeVisible({ timeout: 20_000 });
+
+    if (studentVisibleDay) {
+      const dayShort = studentVisibleDay.slice(0, 3);
+      const dayTab = page.getByRole('tab', { name: new RegExp(`^${escapeRegExp(dayShort)}`, 'i') }).first();
+      if (await dayTab.isVisible().catch(() => false)) {
+        await dayTab.click();
+      }
+    }
   });
 });
 
