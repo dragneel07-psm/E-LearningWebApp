@@ -1390,9 +1390,13 @@ export const academicAPI = {
     }),
 
     // Chapters
-    getChapters: (subjectId?: number) => {
+    getChapters: async (subjectId?: number) => {
         const query = subjectId ? `?subject=${subjectId}` : '';
-        return apiRequest<Chapter[]>(`/academic/chapters/${query}`);
+        const payload = await apiRequest<Chapter[] | PaginatedResponse<Chapter>>(`/academic/chapters/${query}`);
+        return normalizeArrayPayload(payload).map((chapter) => ({
+            ...chapter,
+            lessons: Array.isArray(chapter.lessons) ? chapter.lessons : [],
+        }));
     },
     getChapter: (id: number) => apiRequest<Chapter>(`/academic/chapters/${id}/`),
     createChapter: (data: Partial<Chapter>) => apiRequest<Chapter>('/academic/chapters/', {
@@ -1412,12 +1416,13 @@ export const academicAPI = {
     }),
 
     // Lessons
-    getLessons: (chapterId?: number, subjectId?: number) => {
+    getLessons: async (chapterId?: number, subjectId?: number) => {
         const params = new URLSearchParams();
         if (chapterId) params.append('chapter', chapterId.toString());
         if (subjectId) params.append('subject', subjectId.toString());
         const query = params.toString() ? `?${params.toString()}` : '';
-        return apiRequest<Lesson[]>(`/academic/lessons/${query}`);
+        const payload = await apiRequest<Lesson[] | PaginatedResponse<Lesson>>(`/academic/lessons/${query}`);
+        return normalizeArrayPayload(payload);
     },
     getLesson: (id: number) => apiRequest<Lesson>(`/academic/lessons/${id}/`),
     createLesson: (data: Partial<Lesson>) => apiRequest<Lesson>('/academic/lessons/', {
@@ -1440,9 +1445,10 @@ export const academicAPI = {
     }),
 
     // Lesson Materials
-    getMaterials: (lessonId?: number) => {
+    getMaterials: async (lessonId?: number) => {
         const query = lessonId ? `?lesson=${lessonId}` : '';
-        return apiRequest<LessonMaterial[]>(`/academic/materials/${query}`);
+        const payload = await apiRequest<LessonMaterial[] | PaginatedResponse<LessonMaterial>>(`/academic/materials/${query}`);
+        return normalizeArrayPayload(payload);
     },
     createMaterial: (data: FormData) => apiRequest<LessonMaterial>('/academic/materials/', {
         method: 'POST',
