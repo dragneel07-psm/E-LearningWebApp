@@ -10,6 +10,8 @@ User = get_user_model()
 
 
 class TimetablePermissionTests(FastTenantTestCase):
+    """Regression coverage for timetable permission rules in tenant schema."""
+
     @classmethod
     def setup_tenant(cls, tenant):
         tenant.name = "Test School"
