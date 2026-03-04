@@ -14,11 +14,11 @@ import {
 } from '@/components/ui/dropdown-menu';
 import {
     ArrowLeft, Plus, Search, MoreHorizontal, User as UserIcon, Download,
-    ShieldCheck, ShieldAlert, X, Mail, Edit, Briefcase, Lock
+    ShieldCheck, ShieldAlert, X, Mail, Edit, Briefcase, Lock, BookOpen, GraduationCap, BarChart3
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import Link from 'next/link';
-import { academicAPI, usersAPI, Teacher, AcademicClass } from '@/lib/api';
+import { academicAPI, usersAPI, Teacher, AcademicClass, TeacherProfileOverview } from '@/lib/api';
 import { ChangePasswordDialog } from '@/components/admin/change-password-dialog';
 import { toast } from 'sonner';
 
@@ -40,6 +40,8 @@ export default function TeachersPage() {
     const [selectedTeacher, setSelectedTeacher] = useState<Teacher | null>(null);
     const [dialogOpen, setDialogOpen] = useState(false);
     const [dialogMode, setDialogMode] = useState<'view' | 'edit' | 'create'>('view');
+    const [teacherOverview, setTeacherOverview] = useState<TeacherProfileOverview | null>(null);
+    const [teacherOverviewLoading, setTeacherOverviewLoading] = useState(false);
 
     // Create Form State
     const [newTeacher, setNewTeacher] = useState<TeacherFormState>({
@@ -60,6 +62,42 @@ export default function TeachersPage() {
     useEffect(() => {
         loadData();
     }, []);
+
+    useEffect(() => {
+        if (!dialogOpen || dialogMode !== 'view' || !selectedTeacher?.id) {
+            setTeacherOverview(null);
+            setTeacherOverviewLoading(false);
+            return;
+        }
+
+        let cancelled = false;
+
+        const loadTeacherOverview = async () => {
+            setTeacherOverviewLoading(true);
+            try {
+                const overview = await academicAPI.getTeacherProfileOverview(selectedTeacher.id);
+                if (!cancelled) {
+                    setTeacherOverview(overview);
+                }
+            } catch (error) {
+                console.error('Failed to load teacher profile overview:', error);
+                if (!cancelled) {
+                    setTeacherOverview(null);
+                    toast.error('Failed to load teaching profile details.');
+                }
+            } finally {
+                if (!cancelled) {
+                    setTeacherOverviewLoading(false);
+                }
+            }
+        };
+
+        loadTeacherOverview();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [dialogOpen, dialogMode, selectedTeacher?.id]);
 
     const loadData = async () => {
         try {
@@ -133,9 +171,9 @@ export default function TeachersPage() {
                 first_name: '', last_name: '', email: '', username: '', password: 'ChangeMe123!', designation: 'subject_teacher', assigned_classes: []
             });
             await loadData();
-        } catch (error: any) {
+        } catch (error: unknown) {
             console.error(error);
-            const message = error.message || 'Unknown error';
+            const message = error instanceof Error ? error.message : 'Unknown error';
             toast.error(`Failed to create teacher: ${message}`);
         }
     };
@@ -410,7 +448,7 @@ export default function TeachersPage() {
             {/* Teacher Dialog (View/Edit/Create) */}
             {dialogOpen && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 transition-all duration-200">
-                    <Card className="w-full max-w-2xl bg-white dark:bg-slate-900 shadow-2xl overflow-hidden border-0 rounded-2xl ring-1 ring-slate-900/5">
+                    <Card className="w-full max-w-5xl bg-white dark:bg-slate-900 shadow-2xl overflow-hidden border-0 rounded-2xl ring-1 ring-slate-900/5">
 
                         {/* Profile Banner */}
                         <div className="h-32 bg-gradient-to-r from-teal-500 via-emerald-500 to-green-500 relative">
@@ -539,101 +577,228 @@ export default function TeachersPage() {
                                     </div>
                                 ) : (
                                     // View / Edit Mode Content
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                                        {/* Professional Info */}
-                                        <div className="space-y-4">
-                                            <h3 className="text-sm font-semibold uppercase tracking-wider text-slate-400 flex items-center">
-                                                <Briefcase className="h-4 w-4 mr-2" /> Professional Info
-                                            </h3>
-                                            <div className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-xl space-y-3">
-                                                <div>
-                                                    <label className="text-xs text-slate-500 block mb-1">Designation</label>
-                                                    {dialogMode === 'view' ? (
-                                                        <div className="font-medium text-slate-900 capitalize">{(selectedTeacher?.designation || 'Teacher').replace('_', ' ')}</div>
-                                                    ) : (
-                                                        <select
-                                                            className="w-full p-2 rounded-md border border-slate-200 text-sm bg-white focus:ring-2 focus:ring-indigo-500 outline-none"
-                                                            value={selectedTeacher?.designation || ''}
-                                                            onChange={(e) =>
-                                                                setSelectedTeacher(
-                                                                    selectedTeacher
-                                                                        ? { ...selectedTeacher, designation: e.target.value as Teacher['designation'] }
-                                                                        : null
-                                                                )
-                                                            }
-                                                        >
-                                                            <option value="subject_teacher">Subject Teacher</option>
-                                                            <option value="class_teacher">Class Teacher</option>
-                                                            <option value="program_director">Program Director</option>
-                                                        </select>
-                                                    )}
-                                                </div>
-                                                {/* Assigned Classes Logic */}
-                                                {dialogMode === 'view' ? (
-                                                    <div className="flex gap-2 flex-wrap">
-                                                        {getAssignedClasses(selectedTeacher?.assigned_classes).length > 0 ?
-                                                            getAssignedClasses(selectedTeacher?.assigned_classes).map((c) => (
-                                                                <span key={c.id} className="px-2 py-1 rounded-md border text-xs font-medium bg-white">
-                                                                    Grade {c.name}
-                                                                </span>
-                                                            ))
-                                                            : <span className="text-sm text-slate-400">No active assignments</span>}
+                                    <div className="space-y-6">
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                                            {/* Professional Info */}
+                                            <div className="space-y-4">
+                                                <h3 className="text-sm font-semibold uppercase tracking-wider text-slate-400 flex items-center">
+                                                    <Briefcase className="h-4 w-4 mr-2" /> Professional Info
+                                                </h3>
+                                                <div className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-xl space-y-3">
+                                                    <div>
+                                                        <label className="text-xs text-slate-500 block mb-1">Designation</label>
+                                                        {dialogMode === 'view' ? (
+                                                            <div className="font-medium text-slate-900 capitalize">{(selectedTeacher?.designation || 'Teacher').replace('_', ' ')}</div>
+                                                        ) : (
+                                                            <select
+                                                                className="w-full p-2 rounded-md border border-slate-200 text-sm bg-white focus:ring-2 focus:ring-indigo-500 outline-none"
+                                                                value={selectedTeacher?.designation || ''}
+                                                                onChange={(e) =>
+                                                                    setSelectedTeacher(
+                                                                        selectedTeacher
+                                                                            ? { ...selectedTeacher, designation: e.target.value as Teacher['designation'] }
+                                                                            : null
+                                                                    )
+                                                                }
+                                                            >
+                                                                <option value="subject_teacher">Subject Teacher</option>
+                                                                <option value="class_teacher">Class Teacher</option>
+                                                                <option value="program_director">Program Director</option>
+                                                            </select>
+                                                        )}
                                                     </div>
-                                                ) : (
-                                                    <div className="space-y-4">
-                                                        <div>
-                                                            <div className="border rounded-md p-3 max-h-60 overflow-y-auto bg-white">
-                                                                <div className="text-xs text-slate-500 mb-2">Select classes to teach:</div>
-                                                                <div className="space-y-3">
-                                                                    {classes.map(c => (
-                                                                        <div key={c.id} className="bg-slate-50 p-2 rounded border border-slate-100">
-                                                                            <label className="flex items-center space-x-2 cursor-pointer font-medium mb-1">
-                                                                                <input
-                                                                                    type="checkbox"
-                                                                                    className="rounded text-indigo-600 focus:ring-indigo-500 border-gray-300"
-                                                                                    checked={selectedTeacher?.assigned_classes?.includes(c.id) || false}
-                                                                                    onChange={(e) => {
-                                                                                        const checked = e.target.checked;
-                                                                                        setSelectedTeacher(prev => {
-                                                                                            if (!prev) return null;
-                                                                                            const current = prev.assigned_classes || [];
-                                                                                            if (checked) return { ...prev, assigned_classes: [...current, c.id] };
-                                                                                            else return { ...prev, assigned_classes: current.filter(id => id !== c.id) };
-                                                                                        });
-                                                                                    }}
-                                                                                />
-                                                                                <span className="text-sm text-slate-800">Grade {c.name}</span>
-                                                                            </label>
-                                                                        </div>
-                                                                    ))}
+                                                    {/* Assigned Classes Logic */}
+                                                    {dialogMode === 'view' ? (
+                                                        <div className="flex gap-2 flex-wrap">
+                                                            {getAssignedClasses(selectedTeacher?.assigned_classes).length > 0 ?
+                                                                getAssignedClasses(selectedTeacher?.assigned_classes).map((c) => (
+                                                                    <span key={c.id} className="px-2 py-1 rounded-md border text-xs font-medium bg-white">
+                                                                        Grade {c.name}
+                                                                    </span>
+                                                                ))
+                                                                : <span className="text-sm text-slate-400">No active assignments</span>}
+                                                        </div>
+                                                    ) : (
+                                                        <div className="space-y-4">
+                                                            <div>
+                                                                <div className="border rounded-md p-3 max-h-60 overflow-y-auto bg-white">
+                                                                    <div className="text-xs text-slate-500 mb-2">Select classes to teach:</div>
+                                                                    <div className="space-y-3">
+                                                                        {classes.map(c => (
+                                                                            <div key={c.id} className="bg-slate-50 p-2 rounded border border-slate-100">
+                                                                                <label className="flex items-center space-x-2 cursor-pointer font-medium mb-1">
+                                                                                    <input
+                                                                                        type="checkbox"
+                                                                                        className="rounded text-indigo-600 focus:ring-indigo-500 border-gray-300"
+                                                                                        checked={selectedTeacher?.assigned_classes?.includes(c.id) || false}
+                                                                                        onChange={(e) => {
+                                                                                            const checked = e.target.checked;
+                                                                                            setSelectedTeacher(prev => {
+                                                                                                if (!prev) return null;
+                                                                                                const current = prev.assigned_classes || [];
+                                                                                                if (checked) return { ...prev, assigned_classes: [...current, c.id] };
+                                                                                                else return { ...prev, assigned_classes: current.filter(id => id !== c.id) };
+                                                                                            });
+                                                                                        }}
+                                                                                    />
+                                                                                    <span className="text-sm text-slate-800">Grade {c.name}</span>
+                                                                                </label>
+                                                                            </div>
+                                                                        ))}
+                                                                    </div>
                                                                 </div>
                                                             </div>
                                                         </div>
-                                                    </div>
-                                                )}
-                                            </div>
-                                        </div>
-
-                                        {/* Account Check */}
-                                        <div className="space-y-4">
-                                            <h3 className="text-sm font-semibold uppercase tracking-wider text-slate-400 flex items-center">
-                                                <ShieldCheck className="h-4 w-4 mr-2" /> Account Status
-                                            </h3>
-                                            <div className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-xl space-y-3">
-                                                <div className="flex justify-between items-center">
-                                                    <div className="text-sm text-slate-600">Username</div>
-                                                    <div className="font-mono text-xs bg-white px-2 py-1 rounded border">{selectedTeacher?.username}</div>
-                                                </div>
-                                                <div className="flex justify-between items-center">
-                                                    <div className="text-sm text-slate-600">Account Status</div>
-                                                    {selectedTeacher?.is_active === false ? (
-                                                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-700">Suspended</span>
-                                                    ) : (
-                                                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700">Active</span>
                                                     )}
                                                 </div>
                                             </div>
+
+                                            {/* Account Check */}
+                                            <div className="space-y-4">
+                                                <h3 className="text-sm font-semibold uppercase tracking-wider text-slate-400 flex items-center">
+                                                    <ShieldCheck className="h-4 w-4 mr-2" /> Account Status
+                                                </h3>
+                                                <div className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-xl space-y-3">
+                                                    <div className="flex justify-between items-center">
+                                                        <div className="text-sm text-slate-600">Username</div>
+                                                        <div className="font-mono text-xs bg-white px-2 py-1 rounded border">{selectedTeacher?.username}</div>
+                                                    </div>
+                                                    <div className="flex justify-between items-center">
+                                                        <div className="text-sm text-slate-600">Account Status</div>
+                                                        {selectedTeacher?.is_active === false ? (
+                                                            <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-700">Suspended</span>
+                                                        ) : (
+                                                            <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700">Active</span>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            </div>
                                         </div>
+
+                                        {dialogMode === 'view' && (
+                                            <div className="space-y-4">
+                                                <h3 className="text-sm font-semibold uppercase tracking-wider text-slate-400 flex items-center">
+                                                    <BarChart3 className="h-4 w-4 mr-2" /> Teaching Coverage
+                                                </h3>
+
+                                                {teacherOverviewLoading && (
+                                                    <div className="flex items-center justify-center rounded-xl border border-slate-200 bg-slate-50 py-8 text-sm text-slate-500">
+                                                        <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-indigo-600 mr-3"></div>
+                                                        Loading teaching details...
+                                                    </div>
+                                                )}
+
+                                                {!teacherOverviewLoading && teacherOverview && (
+                                                    <>
+                                                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                                                            <div className="rounded-xl border bg-white p-3">
+                                                                <div className="text-xs text-slate-500 flex items-center gap-1"><BookOpen className="h-3.5 w-3.5" /> Subjects</div>
+                                                                <div className="text-2xl font-semibold text-slate-900">{teacherOverview.summary.total_subjects}</div>
+                                                            </div>
+                                                            <div className="rounded-xl border bg-white p-3">
+                                                                <div className="text-xs text-slate-500 flex items-center gap-1"><GraduationCap className="h-3.5 w-3.5" /> Classes</div>
+                                                                <div className="text-2xl font-semibold text-slate-900">{teacherOverview.summary.total_classes}</div>
+                                                                <div className="text-[11px] text-slate-500">
+                                                                    Class teacher: {teacherOverview.summary.total_classes_as_class_teacher} | Subject teacher: {teacherOverview.summary.total_classes_as_subject_teacher}
+                                                                </div>
+                                                            </div>
+                                                            <div className="rounded-xl border bg-white p-3">
+                                                                <div className="text-xs text-slate-500">Lessons Taught</div>
+                                                                <div className="text-2xl font-semibold text-emerald-600">{teacherOverview.summary.taught_lessons}</div>
+                                                            </div>
+                                                            <div className="rounded-xl border bg-white p-3">
+                                                                <div className="text-xs text-slate-500">Lessons Left</div>
+                                                                <div className="text-2xl font-semibold text-amber-600">{teacherOverview.summary.remaining_lessons}</div>
+                                                                <div className="text-[11px] text-slate-500">{teacherOverview.summary.progress_percentage}% completed</div>
+                                                            </div>
+                                                        </div>
+
+                                                        <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                                                            <div className="rounded-xl border bg-white p-4 space-y-3">
+                                                                <h4 className="text-sm font-semibold text-slate-800">Subjects Taught</h4>
+                                                                {teacherOverview.subjects.length === 0 ? (
+                                                                    <p className="text-sm text-slate-500">No subject assignments found.</p>
+                                                                ) : (
+                                                                    <div className="space-y-3 max-h-72 overflow-y-auto pr-1">
+                                                                        {teacherOverview.subjects.map((subject) => (
+                                                                            <div key={`${subject.class_id}-${subject.subject_id}-${subject.role}`} className="rounded-lg border border-slate-200 p-3">
+                                                                                <div className="flex items-center justify-between gap-2">
+                                                                                    <div>
+                                                                                        <div className="font-medium text-slate-900">{subject.subject_name}</div>
+                                                                                        <div className="text-xs text-slate-500">
+                                                                                            {subject.class_name} {subject.section_names.length > 0 ? `(${subject.section_names.join(', ')})` : ''}
+                                                                                        </div>
+                                                                                    </div>
+                                                                                    <Badge variant="outline" className="capitalize">
+                                                                                        {subject.role === 'lead_teacher' ? 'Lead Teacher' : 'Additional Teacher'}
+                                                                                    </Badge>
+                                                                                </div>
+                                                                                <div className="mt-2">
+                                                                                    <div className="flex justify-between text-xs text-slate-500">
+                                                                                        <span>Taught {subject.taught_lessons}/{subject.total_lessons}</span>
+                                                                                        <span>{subject.progress_percentage}%</span>
+                                                                                    </div>
+                                                                                    <div className="mt-1 h-2 w-full rounded-full bg-slate-100 overflow-hidden">
+                                                                                        <div className="h-full bg-emerald-500" style={{ width: `${subject.progress_percentage}%` }} />
+                                                                                    </div>
+                                                                                </div>
+                                                                            </div>
+                                                                        ))}
+                                                                    </div>
+                                                                )}
+                                                            </div>
+
+                                                            <div className="rounded-xl border bg-white p-4 space-y-3">
+                                                                <h4 className="text-sm font-semibold text-slate-800">Class & Section Responsibilities</h4>
+                                                                {teacherOverview.class_sections_progress.length === 0 ? (
+                                                                    <p className="text-sm text-slate-500">No class responsibilities found.</p>
+                                                                ) : (
+                                                                    <div className="space-y-3 max-h-72 overflow-y-auto pr-1">
+                                                                        {teacherOverview.class_sections_progress.map((classRow) => (
+                                                                            <div key={classRow.class_id} className="rounded-lg border border-slate-200 p-3">
+                                                                                <div className="flex items-start justify-between gap-2">
+                                                                                    <div>
+                                                                                        <div className="font-medium text-slate-900">{classRow.class_name}</div>
+                                                                                        <div className="text-xs text-slate-500">
+                                                                                            Sections: {classRow.section_names.length > 0 ? classRow.section_names.join(', ') : 'None'}
+                                                                                        </div>
+                                                                                    </div>
+                                                                                    <div className="flex gap-1 flex-wrap justify-end">
+                                                                                        {classRow.roles.map((role) => (
+                                                                                            <Badge key={`${classRow.class_id}-${role}`} variant="outline" className="capitalize">
+                                                                                                {role.replace('_', ' ')}
+                                                                                            </Badge>
+                                                                                        ))}
+                                                                                    </div>
+                                                                                </div>
+                                                                                <div className="mt-2 text-xs text-slate-600">
+                                                                                    Subjects: {classRow.subjects.length > 0 ? classRow.subjects.map((s) => s.subject_name).join(', ') : 'None'}
+                                                                                </div>
+                                                                                <div className="mt-2">
+                                                                                    <div className="flex justify-between text-xs text-slate-500">
+                                                                                        <span>Coverage {classRow.taught_lessons}/{classRow.total_lessons}</span>
+                                                                                        <span>{classRow.progress_percentage}%</span>
+                                                                                    </div>
+                                                                                    <div className="mt-1 h-2 w-full rounded-full bg-slate-100 overflow-hidden">
+                                                                                        <div className="h-full bg-indigo-500" style={{ width: `${classRow.progress_percentage}%` }} />
+                                                                                    </div>
+                                                                                </div>
+                                                                            </div>
+                                                                        ))}
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    </>
+                                                )}
+
+                                                {!teacherOverviewLoading && !teacherOverview && (
+                                                    <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 py-6 text-center text-sm text-slate-500">
+                                                        Teaching coverage details are not available for this teacher yet.
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
                                     </div>
                                 )}
                             </CardContent>

@@ -185,6 +185,57 @@ export interface Teacher {
     password?: string; // For creation
 }
 
+export interface TeacherSubjectProgress {
+    subject_id: number;
+    subject_name: string;
+    subject_code?: string | null;
+    class_id: number;
+    class_name: string;
+    section_names: string[];
+    role: 'lead_teacher' | 'additional_teacher';
+    total_lessons: number;
+    taught_lessons: number;
+    remaining_lessons: number;
+    progress_percentage: number;
+}
+
+export interface TeacherClassProgress {
+    class_id: number;
+    class_name: string;
+    section_names: string[];
+    is_class_teacher: boolean;
+    is_subject_teacher: boolean;
+    roles: Array<'class_teacher' | 'subject_teacher'>;
+    subjects: Array<{
+        subject_id: number;
+        subject_name: string;
+        role: 'lead_teacher' | 'additional_teacher';
+    }>;
+    total_subjects: number;
+    total_lessons: number;
+    taught_lessons: number;
+    remaining_lessons: number;
+    progress_percentage: number;
+}
+
+export interface TeacherProfileOverview {
+    teacher_id: string;
+    teacher_name: string;
+    designation: string;
+    subjects: TeacherSubjectProgress[];
+    class_sections_progress: TeacherClassProgress[];
+    summary: {
+        total_subjects: number;
+        total_classes: number;
+        total_classes_as_class_teacher: number;
+        total_classes_as_subject_teacher: number;
+        total_lessons: number;
+        taught_lessons: number;
+        remaining_lessons: number;
+        progress_percentage: number;
+    };
+}
+
 export interface Parent {
     parent_id: string;
     user: User;
@@ -1341,6 +1392,8 @@ export const academicAPI = {
         return normalizeArrayPayload(payload);
     },
     getTeacher: (id: string) => apiRequest<Teacher>(`/academic/teachers/${id}/`),
+    getTeacherProfileOverview: (id: string) =>
+        apiRequest<TeacherProfileOverview>(`/academic/teachers/${id}/profile-overview/`),
     createTeacher: (data: Partial<Teacher> & { password?: string }) => apiRequest<Teacher>('/academic/teachers/', {
         method: 'POST',
         body: JSON.stringify(data)
