@@ -1,4 +1,5 @@
 from django.contrib.auth import get_user_model
+from django.core.exceptions import ValidationError
 from django.utils import timezone
 from django_tenants.test.cases import FastTenantTestCase
 from django_tenants.utils import schema_context
@@ -85,6 +86,30 @@ class BillingBoundaryAndValidationTests(FastTenantTestCase):
         self.tenant_client.force_authenticate(user=self.saas_admin)
         response = self.tenant_client.get("/api/billing/subscriptions/")
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_tenant_fee_models_cannot_be_saved_in_public_schema(self):
+        with schema_context("public"):
+            with self.assertRaises(ValidationError):
+                FeeStructure.objects.create(
+                    tenant=self.tenant,
+                    name="Public Invalid Fee",
+                    amount="100.00",
+                    frequency="monthly",
+                )
+
+    def test_public_billing_models_cannot_be_saved_in_tenant_schema(self):
+        with schema_context(self.tenant.schema_name):
+            with self.assertRaises(ValidationError):
+                SubscriptionPlan.objects.create(
+                    name="Tenant Invalid Plan",
+                    price_monthly="5.00",
+                    price_yearly="30.00",
+                    student_limit=100,
+                    teacher_limit=10,
+                    storage_limit_gb=5,
+                    ai_token_limit=1000,
+                    is_active=True,
+                )
 
     def test_fee_structure_create_forces_authenticated_tenant(self):
         self.tenant_client.force_authenticate(user=self.tenant_admin)

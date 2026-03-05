@@ -233,6 +233,22 @@ class TenantViewSet(viewsets.ModelViewSet):
             },
         )
 
+    def perform_destroy(self, instance):
+        payload = {
+            "tenant_id": str(instance.id),
+            "tenant_schema": instance.schema_name,
+            "tenant_name": instance.name,
+            "status": instance.status,
+            "type": instance.type,
+        }
+        super().perform_destroy(instance)
+        record_audit_event(
+            action="core.tenant_deleted",
+            user=getattr(self.request, "user", None),
+            request=self.request,
+            details=payload,
+        )
+
 class AuditLogViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = AuditLog.objects.all()
     serializer_class = AuditLogSerializer
@@ -246,6 +262,21 @@ class GlobalSettingsViewSet(viewsets.ViewSet):
     """
     permission_classes = [IsSaaSAdmin]
 
+    @staticmethod
+    def _snapshot(settings_obj):
+        return {
+            "site_name": settings_obj.site_name,
+            "maintenance_mode": settings_obj.maintenance_mode,
+            "allow_registration": settings_obj.allow_registration,
+            "support_email": settings_obj.support_email,
+            "default_language": settings_obj.default_language,
+            "ai_enabled": settings_obj.ai_enabled,
+            "ai_provider_name": settings_obj.ai_provider_name,
+            "ai_base_url": settings_obj.ai_base_url,
+            "ai_model": settings_obj.ai_model,
+            "ai_api_key_configured": bool(settings_obj.ai_api_key),
+        }
+
     def list(self, request):
         settings, _ = GlobalSettings.objects.get_or_create(pk=1)
         serializer = GlobalSettingsSerializer(settings)
@@ -254,18 +285,38 @@ class GlobalSettingsViewSet(viewsets.ViewSet):
     def create(self, request):
         # Handle POST as update for singleton
         settings, _ = GlobalSettings.objects.get_or_create(pk=1)
+        before_state = self._snapshot(settings)
         serializer = GlobalSettingsSerializer(settings, data=request.data, partial=True)
         if serializer.is_valid():
-            serializer.save()
+            saved = serializer.save()
+            record_audit_event(
+                action="core.global_settings_updated",
+                user=getattr(request, "user", None),
+                request=request,
+                details={
+                    "before": before_state,
+                    "after": self._snapshot(saved),
+                },
+            )
             return Response(serializer.data)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     def update(self, request, pk=None):
         # Handle PUT/PATCH explicitly if router calls it
         settings, _ = GlobalSettings.objects.get_or_create(pk=1)
+        before_state = self._snapshot(settings)
         serializer = GlobalSettingsSerializer(settings, data=request.data, partial=True)
         if serializer.is_valid():
-            serializer.save()
+            saved = serializer.save()
+            record_audit_event(
+                action="core.global_settings_updated",
+                user=getattr(request, "user", None),
+                request=request,
+                details={
+                    "before": before_state,
+                    "after": self._snapshot(saved),
+                },
+            )
             return Response(serializer.data)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
@@ -346,6 +397,16 @@ class BackupViewSet(viewsets.ViewSet):
                         {"error": "Provide 'schema' for a tenant backup or set 'all': true for all tenants."},
                         status=status.HTTP_400_BAD_REQUEST,
                     )
+            record_audit_event(
+                action="core.backup_created",
+                user=request.user,
+                request=request,
+                details={
+                    "requested_schema": schema,
+                    "request_tenant_schema": getattr(request.tenant, "schema_name", None),
+                    "all": bool(request.data.get('all')),
+                },
+            )
                     
             return Response({"status": "Backup created successfully"})
         except Exception as e:

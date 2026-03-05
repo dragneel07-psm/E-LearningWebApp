@@ -14,24 +14,25 @@ Upgrade the LMS into a safer, tenant-correct, school-ERP-ready platform without 
 - [x] E25: Standardized API error shape added (`{code, message, field_errors, trace_id}`).
 - [x] E27: Tenant capabilities endpoint added (`/api/core/capabilities/`).
 
-## Phase 2: Tenant Data Architecture Correctness (Next)
-- [~] A4-A5: Billing API boundary enforcement started:
-  - shared billing APIs now public-schema only
-  - school finance APIs now tenant-schema only
-  - tenant-bound object validation added for fee/payment mutations
+## Phase 2: Tenant Data Architecture Correctness (Implemented)
+- [x] A4-A5: Billing boundary and data-scope enforcement completed:
+  - shared billing APIs are public-schema only
+  - school finance APIs are tenant-schema only
+  - model-level schema fences added so public-only billing models cannot be saved in tenant schema and tenant-only finance models cannot be saved in public schema
+  - tenant-bound object validation is enforced for fee/payment mutations
 - [x] A6: Tenant-aware upload paths implemented for tenant logos, notice attachments, and lesson material files (`tenant/<schema>/...`).
 - [x] A7: Tenant-aware cache key strategy implemented for tenant-facing analytics/report caches.
-- [~] B10-B11: Role + object-level authorization hardening in progress:
+- [x] B10-B11: Role + object-level authorization hardening completed for current LMS/ERP scope:
   - billing object validations + schema guards completed
   - attendance and library role/object restrictions implemented
   - assessment/question/submission/result/exam RBAC + object-scope restrictions implemented
-  - remaining modules pending (report/export edge cases and final permission cleanup)
-- [~] B13: Extend audit logging to marks edits, fee edits, role changes, result publishing, and sensitive exports.
+  - report/export endpoints now enforce role/object access (student self, parent child-only, teacher scoped class/subject, admin full access)
+- [x] B13: Audit logging coverage extended across sensitive education + admin workflows.
   - core audit utility added with structured details + trace/tenant metadata
   - coverage added for user role changes, billing mutations, result grading/edits, and publish/reopen result actions
   - sensitive export audit events added for academic reports, billing reports/invoices/receipts, and backup downloads
   - high-risk admin mutation audit events added for admin password resets and subscription/tenant-user management changes
-  - remaining: final pass for additional platform-admin workflows
+  - additional platform-admin workflow audits added for global settings updates, backup creation, and tenant deletion
 
 ## Phase 3: Security and API Productization (Next)
 - [ ] B9: Role-based token lifetimes and strict refresh rotation policies per role risk.

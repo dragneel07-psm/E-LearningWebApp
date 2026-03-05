@@ -1,13 +1,17 @@
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.exceptions import PermissionDenied
 from django.http import HttpResponse
 from django.utils import timezone
 from django.db.models import Count, Q
 from academic.models.student import Student
+from academic.models.parent import Parent
+from academic.models.teacher import Teacher
 from academic.models.assessment import Result
-from academic.models.attendance import Attendance
 from academic.models.class_section import Section
+from academic.models.exam import Exam, ExamSeating
 from core.reports import generate_pdf_response, generate_excel_response
 from core.utils.audit import record_audit_event
 from core.utils.cache_keys import tenant_cache_key
@@ -25,10 +29,111 @@ def _student_last_name_for_filename(student: Student) -> str:
     return 'student'
 
 
+def _role(user) -> str:
+    return (getattr(user, "role", "") or "").lower()
+
+
+def _is_admin_manager(user) -> bool:
+    return _role(user) in {"admin", "staff", "saas_admin", "management", "school_admin"}
+
+
+def _teacher_profile(user):
+    return Teacher.objects.prefetch_related("assigned_classes").filter(user=user).first()
+
+
+def _teacher_can_access_student(user, student: Student) -> bool:
+    teacher = _teacher_profile(user)
+    if not teacher:
+        return False
+
+    if student.academic_class_id and teacher.assigned_classes.filter(id=student.academic_class_id).exists():
+        return True
+
+    return Result.objects.filter(student=student).filter(
+        Q(assessment__subject__teacher=teacher)
+        | Q(assessment__subject__additional_teachers=teacher)
+    ).exists()
+
+
+def _teacher_can_access_section(user, section: Section) -> bool:
+    teacher = _teacher_profile(user)
+    if not teacher:
+        return False
+    return bool(section.academic_class_id and teacher.assigned_classes.filter(id=section.academic_class_id).exists())
+
+
+def _teacher_can_access_exam(user, exam: Exam) -> bool:
+    teacher = _teacher_profile(user)
+    if not teacher:
+        return False
+    subject = getattr(getattr(exam, "assessment", None), "subject", None)
+    if not subject:
+        return False
+    if teacher.teacher_id == getattr(subject, "teacher_id", None):
+        return True
+    if subject.additional_teachers.filter(teacher_id=teacher.teacher_id).exists():
+        return True
+    class_id = getattr(subject, "academic_class_id", None)
+    return bool(class_id and teacher.assigned_classes.filter(id=class_id).exists())
+
+
 class ReportViewSet(viewsets.ViewSet):
     """
     ViewSet for generating various reports.
     """
+    permission_classes = [IsAuthenticated]
+
+    def _school_name(self, request):
+        tenant = getattr(request, "tenant", None) or getattr(getattr(request, "user", None), "tenant", None)
+        return getattr(tenant, "name", None) or "Our School"
+
+    def _ensure_student_access(self, request, student: Student) -> None:
+        user = request.user
+        role = _role(user)
+
+        if _is_admin_manager(user):
+            return
+        if role == "teacher" and _teacher_can_access_student(user, student):
+            return
+        if role == "student" and getattr(student, "user_id", None) == getattr(user, "user_id", None):
+            return
+        if role == "parent":
+            parent = Parent.objects.prefetch_related("students").filter(user=user).first()
+            if parent and parent.students.filter(student_id=student.student_id).exists():
+                return
+        raise PermissionDenied("You do not have permission to access this student's report.")
+
+    def _ensure_section_summary_access(self, request, section: Section) -> None:
+        user = request.user
+        if _is_admin_manager(user):
+            return
+        if _role(user) == "teacher" and _teacher_can_access_section(user, section):
+            return
+        raise PermissionDenied("You do not have permission to access this section summary.")
+
+    def _ensure_seating_access(self, request, seating: ExamSeating) -> None:
+        user = request.user
+        role = _role(user)
+
+        if _is_admin_manager(user):
+            return
+        if role == "teacher" and _teacher_can_access_exam(user, seating.exam):
+            return
+        if role == "student" and getattr(seating.student, "user_id", None) == getattr(user, "user_id", None):
+            return
+        if role == "parent":
+            parent = Parent.objects.prefetch_related("students").filter(user=user).first()
+            if parent and parent.students.filter(student_id=seating.student_id).exists():
+                return
+        raise PermissionDenied("You do not have permission to access this hall ticket.")
+
+    def _ensure_exam_bulk_access(self, request, exam: Exam) -> None:
+        user = request.user
+        if _is_admin_manager(user):
+            return
+        if _role(user) == "teacher" and _teacher_can_access_exam(user, exam):
+            return
+        raise PermissionDenied("You do not have permission to export hall tickets for this exam.")
     
     def _log_export(self, request, *, report_type: str, fmt: str, details: dict | None = None):
         record_audit_event(
@@ -46,6 +151,7 @@ class ReportViewSet(viewsets.ViewSet):
     def student_performance_pdf(self, request, student_id=None):
         using_db = getattr(request, 'db_alias', 'default')
         student = get_object_or_404(Student.objects.using(using_db).select_related('user'), pk=student_id)
+        self._ensure_student_access(request, student)
         
         # Use ReportingService to get comprehensive data including AI summary
         # Transform results for template since we are using service now
@@ -85,7 +191,7 @@ class ReportViewSet(viewsets.ViewSet):
             'results_data': results_data, # Added this explicitly for the table loop
             'metrics': report_data.get('metrics', {}),
             'ai_report': report_data.get('ai_report', {}),
-            'school_name': request.headers.get('x-tenant-id', 'Our School').capitalize(),
+            'school_name': self._school_name(request),
             'date': timezone.now().strftime("%B %d, %Y")
         }
 
@@ -106,6 +212,7 @@ class ReportViewSet(viewsets.ViewSet):
     def student_performance_excel(self, request, student_id=None):
         using_db = getattr(request, 'db_alias', 'default')
         student = get_object_or_404(Student.objects.using(using_db).select_related('user'), pk=student_id)
+        self._ensure_student_access(request, student)
         results = Result.objects.using(using_db).filter(student=student).select_related('assessment', 'assessment__subject')
         
         data = []
@@ -134,7 +241,7 @@ class ReportViewSet(viewsets.ViewSet):
     def attendance_summary_pdf(self, request, section_id=None):
         using_db = getattr(request, 'db_alias', 'default')
         section = get_object_or_404(Section.objects.using(using_db).select_related('academic_class'), id=section_id)
-        students = Student.objects.using(using_db).filter(section=section).select_related('user')
+        self._ensure_section_summary_access(request, section)
         
         start_date = request.query_params.get('start_date')
         end_date = request.query_params.get('end_date') or timezone.now().strftime("%Y-%m-%d")
@@ -188,7 +295,7 @@ class ReportViewSet(viewsets.ViewSet):
         context = {
             'class_name': f"{section.academic_class.name} - {section.name}",
             'attendance_data': data,
-            'school_name': request.headers.get('x-tenant-id', 'Our School').capitalize(),
+            'school_name': self._school_name(request),
             'date': timezone.now().strftime("%B %d, %Y"),
             'start_date': start_date or "Initial Session",
             'end_date': end_date
@@ -211,7 +318,7 @@ class ReportViewSet(viewsets.ViewSet):
     def attendance_summary_excel(self, request, section_id=None):
         using_db = getattr(request, 'db_alias', 'default')
         section = get_object_or_404(Section.objects.using(using_db).select_related('academic_class'), id=section_id)
-        students = Student.objects.using(using_db).filter(section=section).select_related('user')
+        self._ensure_section_summary_access(request, section)
         
         start_date = request.query_params.get('start_date')
         end_date = request.query_params.get('end_date') or timezone.now().strftime("%Y-%m-%d")
@@ -277,6 +384,7 @@ class ReportViewSet(viewsets.ViewSet):
             Student.objects.using(using_db).select_related('section', 'section__academic_class', 'user'),
             pk=student_id,
         )
+        self._ensure_student_access(request, student)
         result = get_object_or_404(
             Result.objects.using(using_db).select_related('assessment', 'assessment__subject'), 
             pk=result_id, 
@@ -289,7 +397,7 @@ class ReportViewSet(viewsets.ViewSet):
             'assessment': result.assessment,
             'subject': result.assessment.subject,
             'percentage': round((result.score / result.assessment.total_marks) * 100, 1),
-            'school_name': request.headers.get('x-tenant-id', 'Our School').split('.')[0].capitalize(),
+            'school_name': self._school_name(request),
             'date': timezone.now().strftime("%B %d, %Y")
         }
 
@@ -313,14 +421,13 @@ class ReportViewSet(viewsets.ViewSet):
     @action(detail=False, methods=['get'], url_path='hall-ticket/(?P<seating_id>[^/.]+)')
     def hall_ticket_pdf(self, request, seating_id=None):
         """Generate individual hall ticket PDF for a student"""
-        from academic.models.exam import ExamSeating
-        
         using_db = getattr(request, 'db_alias', 'default')
         # Avoid cross-DB joins - fetch without select_related on user
         seating = get_object_or_404(
             ExamSeating.objects.using(using_db),
             seating_id=seating_id
         )
+        self._ensure_seating_access(request, seating)
         
         # Access related objects individually (they'll use the router)
         context = {
@@ -334,7 +441,7 @@ class ReportViewSet(viewsets.ViewSet):
             'exam_date': seating.exam.created_at.strftime("%B %d, %Y") if seating.exam.created_at else "To Be Announced",
             'exam_center': seating.exam.exam_center or "Main Examination Hall",
             'room_number': seating.room_number,
-            'school_name': request.headers.get('x-tenant-id', 'Our School').split('.')[0].capitalize(),
+            'school_name': self._school_name(request),
             'generation_date': timezone.now().strftime("%B %d, %Y at %I:%M %p")
         }
         
@@ -360,6 +467,7 @@ class ReportViewSet(viewsets.ViewSet):
         
         using_db = getattr(request, 'db_alias', 'default')
         exam = get_object_or_404(Exam.objects.using(using_db), exam_id=exam_id)
+        self._ensure_exam_bulk_access(request, exam)
         # Avoid cross-DB joins
         seatings = ExamSeating.objects.using(using_db).filter(exam=exam)
         
@@ -382,7 +490,7 @@ class ReportViewSet(viewsets.ViewSet):
                     'exam_date': exam.created_at.strftime("%B %d, %Y") if exam.created_at else "To Be Announced",
                     'exam_center': exam.exam_center or "Main Examination Hall",
                     'room_number': seating.room_number,
-                    'school_name': request.headers.get('x-tenant-id', 'Our School').split('.')[0].capitalize(),
+                    'school_name': self._school_name(request),
                     'generation_date': timezone.now().strftime("%B %d, %Y at %I:%M %p")
                 }
                 

@@ -1,10 +1,39 @@
 from django.db import models
+from django.db import connection
 import uuid as uuid_lib
 from core.models.tenant import Tenant
 from django.conf import settings
 from django.utils import timezone
+from django.core.exceptions import ValidationError
 
-class SubscriptionPlan(models.Model):
+
+def _current_schema_name() -> str:
+    return str(getattr(connection, "schema_name", "public") or "public").strip().lower()
+
+
+class SchemaScopedBillingModel(models.Model):
+    SCHEMA_SCOPE = "any"  # "public" | "tenant" | "any"
+
+    class Meta:
+        abstract = True
+
+    def _validate_schema_scope(self):
+        schema_name = _current_schema_name()
+        if self.SCHEMA_SCOPE == "public" and schema_name != "public":
+            raise ValidationError(
+                f"{self.__class__.__name__} is public-schema only and cannot be saved in '{schema_name}' schema."
+            )
+        if self.SCHEMA_SCOPE == "tenant" and schema_name == "public":
+            raise ValidationError(
+                f"{self.__class__.__name__} is tenant-schema only and cannot be saved in public schema."
+            )
+
+    def save(self, *args, **kwargs):
+        self._validate_schema_scope()
+        return super().save(*args, **kwargs)
+
+class SubscriptionPlan(SchemaScopedBillingModel, models.Model):
+    SCHEMA_SCOPE = "public"
     plan_id = models.UUIDField(primary_key=True, default=uuid_lib.uuid4, editable=False)
     name = models.CharField(max_length=100)
     description = models.TextField(blank=True, null=True)
@@ -32,7 +61,8 @@ class SubscriptionPlan(models.Model):
     def __str__(self):
         return self.name
 
-class Subscription(models.Model):
+class Subscription(SchemaScopedBillingModel, models.Model):
+    SCHEMA_SCOPE = "public"
     subscription_id = models.UUIDField(primary_key=True, default=uuid_lib.uuid4, editable=False)
     tenant = models.OneToOneField(Tenant, on_delete=models.CASCADE, related_name='subscription')
     # Link to plan
@@ -61,7 +91,8 @@ class Subscription(models.Model):
         return f"{self.tenant.name} - {self.plan.name if self.plan else 'No Plan'}"
 
 
-class SubscriptionPlanHistory(models.Model):
+class SubscriptionPlanHistory(SchemaScopedBillingModel, models.Model):
+    SCHEMA_SCOPE = "public"
     history_id = models.UUIDField(primary_key=True, default=uuid_lib.uuid4, editable=False)
     tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE, related_name='subscription_plan_history')
     subscription = models.ForeignKey(Subscription, on_delete=models.CASCADE, related_name='plan_history')
@@ -108,7 +139,8 @@ class SubscriptionPlanHistory(models.Model):
     def __str__(self):
         return f"{self.tenant.name}: {self.previous_plan_name or 'None'} -> {self.new_plan_name or 'None'}"
 
-class Invoice(models.Model):
+class Invoice(SchemaScopedBillingModel, models.Model):
+    SCHEMA_SCOPE = "public"
     invoice_id = models.UUIDField(primary_key=True, default=uuid_lib.uuid4, editable=False)
     tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE, related_name='invoices')
     subscription = models.ForeignKey(Subscription, on_delete=models.SET_NULL, null=True, blank=True)
@@ -126,10 +158,11 @@ class Invoice(models.Model):
 # SCHOOL FINANCE MODELS (School Admin Level)
 # ==========================================
 
-class FeeStructure(models.Model):
+class FeeStructure(SchemaScopedBillingModel, models.Model):
     """
     Defines the types of fees and their default amounts.
     """
+    SCHEMA_SCOPE = "tenant"
     fee_id = models.UUIDField(primary_key=True, default=uuid_lib.uuid4, editable=False)
     tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE, related_name='fee_structures', db_constraint=False)
     name = models.CharField(max_length=100) # e.g., "Tuition Fee", "Exam Fee"
@@ -148,10 +181,11 @@ class FeeStructure(models.Model):
     def __str__(self):
         return f"{self.name} - {self.amount}"
 
-class StudentFee(models.Model):
+class StudentFee(SchemaScopedBillingModel, models.Model):
     """
     Records a specific fee assigned to a student.
     """
+    SCHEMA_SCOPE = "tenant"
     student_fee_id = models.UUIDField(primary_key=True, default=uuid_lib.uuid4, editable=False)
     tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE, related_name='student_fees', db_constraint=False)
     student = models.ForeignKey('academic.Student', on_delete=models.CASCADE, related_name='fees', db_constraint=False)
@@ -176,10 +210,11 @@ class StudentFee(models.Model):
     def __str__(self):
         return f"{self.student} - {self.fee_structure.name} - {self.status}"
 
-class Payment(models.Model):
+class Payment(SchemaScopedBillingModel, models.Model):
     """
     Records a payment transaction.
     """
+    SCHEMA_SCOPE = "tenant"
     payment_id = models.UUIDField(primary_key=True, default=uuid_lib.uuid4, editable=False)
     tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE, related_name='payments', db_constraint=False)
     student = models.ForeignKey('academic.Student', on_delete=models.CASCADE, related_name='payments', db_constraint=False)
@@ -206,10 +241,11 @@ class Payment(models.Model):
     def __str__(self):
         return f"{self.student} - {self.amount} - {self.payment_date}"
 
-class Expense(models.Model):
+class Expense(SchemaScopedBillingModel, models.Model):
     """
     Records school operational expenses.
     """
+    SCHEMA_SCOPE = "tenant"
     expense_id = models.UUIDField(primary_key=True, default=uuid_lib.uuid4, editable=False)
     tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE, related_name='expenses', db_constraint=False)
     
@@ -237,10 +273,11 @@ class Expense(models.Model):
         return f"{self.title} - {self.amount}"
 
 
-class BillingIdempotencyKey(models.Model):
+class BillingIdempotencyKey(SchemaScopedBillingModel, models.Model):
     """
     Stores idempotency state for billing write endpoints.
     """
+    SCHEMA_SCOPE = "tenant"
 
     idempotency_id = models.UUIDField(primary_key=True, default=uuid_lib.uuid4, editable=False)
     tenant = models.ForeignKey(
@@ -281,3 +318,8 @@ class BillingIdempotencyKey(models.Model):
 
     def __str__(self):
         return f"{self.endpoint}:{self.idempotency_key}"
+    SCHEMA_SCOPE = "tenant"
+    SCHEMA_SCOPE = "tenant"
+    SCHEMA_SCOPE = "tenant"
+    SCHEMA_SCOPE = "tenant"
+    SCHEMA_SCOPE = "tenant"
