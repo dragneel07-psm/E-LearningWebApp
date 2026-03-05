@@ -417,7 +417,7 @@ class StudentFeeViewSet(BillingIdempotencyMixin, BillingSchemaGuardMixin, Tenant
 
     def get_queryset(self):
         queryset = super().get_queryset()
-        return queryset.select_related('student', 'fee_structure')
+        return queryset.select_related('student__user', 'fee_structure')
 
     def create(self, request, *args, **kwargs):
         def _execute():
@@ -565,7 +565,7 @@ class PaymentViewSet(BillingIdempotencyMixin, BillingSchemaGuardMixin, TenantSco
 
     def get_queryset(self):
         queryset = super().get_queryset()
-        return queryset.select_related('student', 'recorded_by')
+        return queryset.select_related('student__user', 'recorded_by', 'student_fee__fee_structure')
 
     def create(self, request, *args, **kwargs):
         def _execute():
@@ -737,7 +737,7 @@ class PaymentViewSet(BillingIdempotencyMixin, BillingSchemaGuardMixin, TenantSco
         )
         return response
 
-class ExpenseViewSet(BillingSchemaGuardMixin, TenantScopedQuerysetMixin, viewsets.ModelViewSet):
+class ExpenseViewSet(BillingIdempotencyMixin, BillingSchemaGuardMixin, TenantScopedQuerysetMixin, viewsets.ModelViewSet):
     require_tenant_schema = True
     allow_unscoped_for_saas = False
     queryset = Expense.objects.all()
@@ -746,7 +746,19 @@ class ExpenseViewSet(BillingSchemaGuardMixin, TenantScopedQuerysetMixin, viewset
 
     def get_queryset(self):
         queryset = super().get_queryset()
-        return queryset.order_by('-date')
+        return queryset.select_related('recorded_by').order_by('-date')
+
+    def create(self, request, *args, **kwargs):
+        def _execute():
+            return super(ExpenseViewSet, self).create(request, *args, **kwargs)
+
+        return self._idempotent_execute(
+            request,
+            endpoint="billing.expenses.create",
+            resource_type="expense",
+            resource_id_field="expense_id",
+            execute=_execute,
+        )
     
     def perform_create(self, serializer):
         expense = serializer.save(
@@ -876,7 +888,7 @@ class FinanceDashboardViewSet(BillingSchemaGuardMixin, viewsets.ViewSet):
         
         # Recent activity
         recent_payments = Payment.objects.filter(tenant=tenant).select_related('student__user', 'student_fee__fee_structure').order_by('-payment_date')[:5]
-        recent_expenses = Expense.objects.filter(tenant=tenant).order_by('-date')[:5]
+        recent_expenses = Expense.objects.filter(tenant=tenant).select_related('recorded_by').order_by('-date')[:5]
         
         return Response({
             'total_revenue': float(total_revenue),

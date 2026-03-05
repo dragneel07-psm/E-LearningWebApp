@@ -207,6 +207,12 @@ class StudentFee(SchemaScopedBillingModel, models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+    class Meta:
+        indexes = [
+            models.Index(fields=['tenant', 'status', 'due_date'], name='bill_stfee_t_stat_due_idx'),
+            models.Index(fields=['student', 'status'], name='bill_stfee_student_stat_idx'),
+        ]
+
     def __str__(self):
         return f"{self.student} - {self.fee_structure.name} - {self.status}"
 
@@ -238,6 +244,12 @@ class Payment(SchemaScopedBillingModel, models.Model):
     recorded_by = models.ForeignKey('users.UserAccount', on_delete=models.SET_NULL, null=True, related_name='recorded_payments', db_constraint=False)
     remarks = models.TextField(blank=True, null=True)
 
+    class Meta:
+        indexes = [
+            models.Index(fields=['tenant', 'payment_date'], name='bill_pay_tenant_date_idx'),
+            models.Index(fields=['student', 'payment_date'], name='bill_pay_student_date_idx'),
+        ]
+
     def __str__(self):
         return f"{self.student} - {self.amount} - {self.payment_date}"
 
@@ -268,6 +280,12 @@ class Expense(SchemaScopedBillingModel, models.Model):
     
     recorded_by = models.ForeignKey('users.UserAccount', on_delete=models.SET_NULL, null=True, related_name='recorded_expenses', db_constraint=False)
     created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['tenant', 'date'], name='bill_exp_tenant_date_idx'),
+            models.Index(fields=['tenant', 'category', 'date'], name='bill_exp_t_cat_d_idx'),
+        ]
 
     def __str__(self):
         return f"{self.title} - {self.amount}"
@@ -318,8 +336,3 @@ class BillingIdempotencyKey(SchemaScopedBillingModel, models.Model):
 
     def __str__(self):
         return f"{self.endpoint}:{self.idempotency_key}"
-    SCHEMA_SCOPE = "tenant"
-    SCHEMA_SCOPE = "tenant"
-    SCHEMA_SCOPE = "tenant"
-    SCHEMA_SCOPE = "tenant"
-    SCHEMA_SCOPE = "tenant"

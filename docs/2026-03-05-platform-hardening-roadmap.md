@@ -52,15 +52,31 @@ Upgrade the LMS into a safer, tenant-correct, school-ERP-ready platform without 
   - request context logging filter + middleware wiring added
   - env-driven Sentry init added (safe no-op when SDK is unavailable)
 
-## Phase 4: Scale and Throughput (Next)
-- [ ] C14: Redis + async workers (Celery/RQ/Dramatiq) for notifications, report/PDF generation, imports, AI tasks.
-- [ ] C16-C18: Query optimization policy, indexing pass, and pagination/max-page standardization.
-- [~] C19: Idempotency keys for billing/payment mutations.
-  - payment create endpoint now supports `Idempotency-Key`/`X-Idempotency-Key` replay and payload-hash conflict protection
-  - student-fee create and bulk assignment endpoints now support the same replay/conflict protection
-  - remaining: extend same pattern to other billing writes (for example expense create if needed)
+## Phase 4: Scale and Throughput (In Progress)
+- [~] C14: Redis + async workers (Celery/RQ/Dramatiq) for notifications, report/PDF generation, imports, AI tasks.
+  - Redis service + worker container added to local compose stack
+  - Celery app bootstrap added (`config/celery.py`) with safe fallback when Celery package is not yet present
+  - async task abstraction added (`core.async_jobs`) supporting `sync` and `celery` modes
+  - notifications email/SMS delivery moved to background task dispatch with sync fallback for dev/tests
+  - deployment scaffolding added (`backend/Procfile` worker process)
+  - remaining: move heavy report/PDF/import/AI pipelines to worker queues and add retry/backoff policies
+- [~] C16-C18: Query optimization policy, indexing pass, and pagination/max-page standardization.
+  - query hot paths updated with `select_related` for billing lists and dashboard recent feeds
+  - global pagination policy added (`core.pagination.StandardResultsSetPagination`) with max page cap (`MAX_PAGE_SIZE`)
+  - index migrations added for high-cardinality paths:
+    - users: `(tenant, role)`, `(tenant, is_active)`
+    - academic: `(student, date)`, `(subject, date)`, `(academic_class, section)`
+    - billing: `(tenant, date/payment_date/status)` and related student/status composites
+  - remaining: add formal query optimization lint/check policy and wider endpoint-level pagination audits
+- [x] C19: Idempotency keys for billing/payment mutations.
+  - payment create endpoint supports `Idempotency-Key`/`X-Idempotency-Key` replay + payload-hash conflict protection
+  - student-fee create and bulk assignment support same replay/conflict protection
+  - expense create now supports same replay/conflict protection (duplicate expense writes blocked)
 - [ ] C15: Read-replica strategy for reporting workloads.
-- [ ] D22: Prometheus/metrics baseline (latency, error rate, DB time, queue depth).
+- [~] D22: Prometheus/metrics baseline (latency, error rate, DB time, queue depth).
+  - Prometheus endpoint added: `/metrics` and `/api/core/metrics/`
+  - request counters, latency histogram, and in-progress gauge added via middleware
+  - remaining: DB timing breakdown and async queue-depth metrics (after worker rollout)
 
 ## Phase 5: Mobile UX and Media Delivery (Next)
 - [ ] F28: Offline write queue + sync/conflict strategy for attendance/remarks.

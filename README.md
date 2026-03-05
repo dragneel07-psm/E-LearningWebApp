@@ -529,6 +529,19 @@ Fix:
   - requires backend API running and npm network access for `npx openapi-typescript`
   - outputs schema + generated TS types for `frontend/` and `mobile/`
 
+### Phase 4 Throughput Baseline
+- Added capped global pagination policy with `page_size` support and server-side max cap (`MAX_PAGE_SIZE`).
+- Added Prometheus metrics endpoint and request metrics middleware:
+  - `GET /metrics`
+  - `GET /api/core/metrics/`
+- Expanded billing write idempotency to expense creation to prevent duplicate mutation writes.
+- Added high-cardinality DB indexes for users, attendance/student, and billing finance paths.
+- Added Redis + worker baseline for async processing:
+  - Docker compose now includes `redis` and `worker` services
+  - Celery bootstrap app added at `backend/config/celery.py`
+  - async dispatcher added (`core.async_jobs`) with safe `sync` fallback
+  - notification email/SMS delivery now dispatches via background tasks
+
 ## Roadmap and Planning Framework
 Use this structure for each release cycle:
 1. Objective and business outcome.

@@ -34,3 +34,9 @@ class UserAccount(AbstractUser):
     
     USERNAME_FIELD = 'email'
     REQUIRED_FIELDS = ['username', 'first_name', 'last_name']
+
+    class Meta(AbstractUser.Meta):
+        indexes = [
+            models.Index(fields=['tenant', 'role'], name='users_tenant_role_idx'),
+            models.Index(fields=['tenant', 'is_active'], name='users_tenant_active_idx'),
+        ]

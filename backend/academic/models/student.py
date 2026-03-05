@@ -32,5 +32,10 @@ class Student(models.Model):
     total_minutes_learned = models.IntegerField(default=0)
     focus_score = models.IntegerField(default=85, help_text="AI-calculated focus score 0-100")
 
+    class Meta:
+        indexes = [
+            models.Index(fields=['academic_class', 'section'], name='acad_stu_class_sec_idx'),
+        ]
+
     def __str__(self):
         return f"Student: {self.user.username}"

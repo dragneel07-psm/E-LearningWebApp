@@ -7,7 +7,7 @@ from rest_framework import status
 from rest_framework.test import APIClient, APIRequestFactory, force_authenticate
 
 from academic.models import AcademicClass, Student
-from billing.models import FeeStructure, Invoice, Payment, StudentFee, Subscription, SubscriptionPlan
+from billing.models import Expense, FeeStructure, Invoice, Payment, StudentFee, Subscription, SubscriptionPlan
 from billing.serializers import SubscriptionSerializer
 from billing.views import InvoiceViewSet, SubscriptionViewSet
 from core.models import AuditLog
@@ -375,6 +375,67 @@ class BillingBoundaryAndValidationTests(FastTenantTestCase):
         self.assertEqual(conflict.data.get("code"), "idempotency_key_conflict")
         with schema_context(self.tenant.schema_name):
             self.assertEqual(StudentFee.objects.filter(fee_structure=fee).count(), 2)
+
+    def test_expense_create_idempotency_replays_without_duplicates(self):
+        payload = {
+            "title": "School Generator Diesel",
+            "amount": "520.00",
+            "category": "utilities",
+            "date": "2026-05-11",
+            "description": "Monthly generator fuel",
+        }
+        self.tenant_client.force_authenticate(user=self.tenant_admin)
+        first = self.tenant_client.post(
+            "/api/billing/expenses/",
+            payload,
+            format="json",
+            HTTP_IDEMPOTENCY_KEY="idem-expense-001",
+        )
+        second = self.tenant_client.post(
+            "/api/billing/expenses/",
+            payload,
+            format="json",
+            HTTP_IDEMPOTENCY_KEY="idem-expense-001",
+        )
+
+        self.assertEqual(first.status_code, status.HTTP_201_CREATED, msg=getattr(first, "data", first.content))
+        self.assertEqual(second.status_code, status.HTTP_201_CREATED, msg=getattr(second, "data", second.content))
+        self.assertEqual(first.data.get("expense_id"), second.data.get("expense_id"))
+        self.assertEqual(second.headers.get("X-Idempotent-Replay"), "true")
+        with schema_context(self.tenant.schema_name):
+            self.assertEqual(Expense.objects.count(), 1)
+        self.assertEqual(AuditLog.objects.filter(action="billing.expense_created").count(), 1)
+
+    def test_expense_create_idempotency_conflict_on_payload_change(self):
+        self.tenant_client.force_authenticate(user=self.tenant_admin)
+        first = self.tenant_client.post(
+            "/api/billing/expenses/",
+            {
+                "title": "Printer Repair",
+                "amount": "200.00",
+                "category": "maintenance",
+                "date": "2026-06-01",
+            },
+            format="json",
+            HTTP_IDEMPOTENCY_KEY="idem-expense-002",
+        )
+        conflict = self.tenant_client.post(
+            "/api/billing/expenses/",
+            {
+                "title": "Printer Repair",
+                "amount": "250.00",
+                "category": "maintenance",
+                "date": "2026-06-01",
+            },
+            format="json",
+            HTTP_IDEMPOTENCY_KEY="idem-expense-002",
+        )
+
+        self.assertEqual(first.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(conflict.status_code, status.HTTP_409_CONFLICT)
+        self.assertEqual(conflict.data.get("code"), "idempotency_key_conflict")
+        with schema_context(self.tenant.schema_name):
+            self.assertEqual(Expense.objects.count(), 1)
 
     def test_fee_collection_export_writes_audit_log(self):
         with schema_context(self.tenant.schema_name):

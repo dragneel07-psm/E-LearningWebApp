@@ -1,6 +1,6 @@
 from django.contrib import admin
 from django.urls import path, include
-from core.views import HealthzView, ReadyzView
+from core.views import HealthzView, ReadyzView, MetricsView
 from users.views import CustomTokenObtainPairView, CustomTokenRefreshView
 from rest_framework.permissions import AllowAny
 from rest_framework.schemas import get_schema_view
@@ -17,6 +17,7 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     path('healthz', HealthzView.as_view(), name='healthz-root'),
     path('readyz', ReadyzView.as_view(), name='readyz-root'),
+    path('metrics', MetricsView.as_view(), name='metrics-root'),
     path('api/schema/', schema_view, name='api-schema'),
     path('api/v1/schema/', schema_view, name='api-schema-v1'),
     path('api/core/', include('core.urls')),

@@ -2,6 +2,7 @@ from .models import Notification
 from django.conf import settings
 from django.core.mail import send_mail
 import logging
+from core.async_jobs import enqueue
 
 logger = logging.getLogger(__name__)
 
@@ -66,7 +67,9 @@ class NotificationService:
 
         # 2. Email
         if 'email' in channels and recipient.email:
-            EmailService.send_email(recipient.email, title, message)
+            from notifications.tasks import send_email_notification_task
+
+            enqueue(send_email_notification_task, recipient.email, title, message)
 
         # 3. SMS
         # Assuming user profile has phone number. 
@@ -82,7 +85,9 @@ class NotificationService:
                  phone = recipient.parent_profile.phone_number
             
             if phone:
-                SMSService.send_sms(phone, message)
+                from notifications.tasks import send_sms_notification_task
+
+                enqueue(send_sms_notification_task, phone, message)
             else:
                 logger.warning(f"Could not send SMS to {recipient.email}: No phone number found.")
 

@@ -8,7 +8,7 @@ from rest_framework.views import APIView
 from django.db import connection
 import shutil
 import time
-from django.http import FileResponse, Http404
+from django.http import FileResponse, Http404, HttpResponse
 
 from .utils.tenant_db import provision_tenant_db, get_tenant_db_alias
 from .utils.tenant_users import create_tenant_admin
@@ -20,6 +20,8 @@ from datetime import datetime, timedelta
 from django.utils import timezone
 from core.utils.plan_enforcement import sync_tenant_with_plan, record_subscription_plan_history
 from core.utils.audit import record_audit_event
+from prometheus_client import CONTENT_TYPE_LATEST
+from core.metrics import prometheus_metrics_payload
 
 class TenantCheckView(APIView):
     permission_classes = [permissions.AllowAny]
@@ -101,6 +103,14 @@ class ReadyzView(APIView):
             "trace_id": getattr(request, "request_id", None),
         }
         return Response(payload, status=status.HTTP_200_OK if ready else status.HTTP_503_SERVICE_UNAVAILABLE)
+
+
+class MetricsView(APIView):
+    permission_classes = [permissions.AllowAny]
+    authentication_classes = []
+
+    def get(self, request):
+        return HttpResponse(prometheus_metrics_payload(), content_type=CONTENT_TYPE_LATEST)
 
 from .views_saas import IsSaaSAdmin
 

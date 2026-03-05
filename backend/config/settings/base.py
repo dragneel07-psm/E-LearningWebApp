@@ -98,6 +98,7 @@ MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
     "core.middleware.SecurityHeadersMiddleware",
     "core.middleware.RequestContextMiddleware",
+    "core.metrics.PrometheusMetricsMiddleware",
     "core.middleware.TenantFromHeaderMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
@@ -264,11 +265,13 @@ REST_FRAMEWORK = {
         'auth_password_reset': os.environ.get('THROTTLE_AUTH_PASSWORD_RESET', '5/hour'),
         'auth_password_reset_confirm': os.environ.get('THROTTLE_AUTH_PASSWORD_RESET_CONFIRM', '10/hour'),
     },
-    'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
+    'DEFAULT_PAGINATION_CLASS': 'core.pagination.StandardResultsSetPagination',
     'PAGE_SIZE': 20,
     'EXCEPTION_HANDLER': 'core.exceptions.api_exception_handler',
     'DEFAULT_SCHEMA_CLASS': 'core.schema.UniqueOperationIdAutoSchema',
 }
+
+MAX_PAGE_SIZE = int(os.environ.get("MAX_PAGE_SIZE", "100"))
 
 _jwt_default_access_minutes = int(os.environ.get("JWT_ACCESS_MINUTES_DEFAULT", "60"))
 _jwt_default_refresh_days = int(os.environ.get("JWT_REFRESH_DAYS_DEFAULT", "7"))
@@ -391,6 +394,18 @@ else:
             "LOCATION": "unique-snowflake",
         }
     }
+
+# Async task processing
+ASYNC_TASK_BACKEND = os.environ.get("ASYNC_TASK_BACKEND", "sync").strip().lower()
+REDIS_URL = os.environ.get("REDIS_URL", "redis://127.0.0.1:6379/1")
+CELERY_BROKER_URL = os.environ.get("CELERY_BROKER_URL", REDIS_URL)
+CELERY_RESULT_BACKEND = os.environ.get("CELERY_RESULT_BACKEND", REDIS_URL)
+CELERY_TASK_ALWAYS_EAGER = os.environ.get("CELERY_TASK_ALWAYS_EAGER", "false").lower() == "true"
+CELERY_TASK_EAGER_PROPAGATES = os.environ.get("CELERY_TASK_EAGER_PROPAGATES", "true").lower() == "true"
+CELERY_TASK_DEFAULT_QUEUE = os.environ.get("CELERY_TASK_DEFAULT_QUEUE", "default")
+CELERY_ACCEPT_CONTENT = ["json"]
+CELERY_TASK_SERIALIZER = "json"
+CELERY_RESULT_SERIALIZER = "json"
 
 # Audit Log Configuration
 AUDITLOG_LOGENTRY_MODEL = 'auditlog.LogEntry'
