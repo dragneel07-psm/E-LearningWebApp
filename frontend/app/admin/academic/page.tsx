@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import {
-    BookOpen, GraduationCap, ArrowLeft, Plus, Users, School
+    BookOpen, GraduationCap, ArrowLeft, Plus, Users, School, ShieldAlert
 } from 'lucide-react';
 import {
     BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar, Legend
@@ -220,6 +220,7 @@ export default function AcademicControlDashboard() {
                     <ManagementCard title="Subjects" desc="Manage subject definitions and curriculum." icon={BookOpen} link="/admin/academic/subjects" actionLink="/admin/academic/subjects" />
                     <ManagementCard title="Student Management" desc="Manage student profiles, enrollments, and progress." icon={Users} link="/admin/academic/students" actionLink="/admin/academic/students" />
                     <ManagementCard title="Teacher Management" desc="Manage faculty, assignments, and workload." icon={GraduationCap} link="/admin/academic/teachers" actionLink="/admin/academic/teachers" />
+                    <ManagementCard title="Promotion Exceptions" desc="Review and override promote/hold decisions before final publish." icon={ShieldAlert} link="/admin/academic/promotion-exceptions" actionLink="/admin/academic/promotion-exceptions" />
                     <ManagementCard title="Admissions" desc="Track enquiries and convert applicants into student accounts." icon={Users} link="/admin/admissions" actionLink="/admin/admissions" />
                 </div>
             </div>

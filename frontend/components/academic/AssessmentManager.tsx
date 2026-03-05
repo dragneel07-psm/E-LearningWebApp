@@ -13,8 +13,9 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { academicAPI, Assessment, AcademicClass, Subject } from '@/lib/api';
 import { toast } from 'sonner';
-import { Plus, Trash2, Edit, Calendar, Clock, FileText, CheckCircle2, Loader2, Search } from 'lucide-react';
+import { Plus, Trash2, Edit, Calendar, Clock, FileText, CheckCircle2, Loader2, Search, ShieldAlert } from 'lucide-react';
 import { format } from 'date-fns';
+import Link from 'next/link';
 
 export default function AssessmentManager() {
     const [assessments, setAssessments] = useState<Assessment[]>([]);
@@ -247,9 +248,16 @@ export default function AssessmentManager() {
                     </h1>
                     <p className="text-slate-500">Create and manage exams, quizzes, and assignments.</p>
                 </div>
-                <Button onClick={handleOpenCreate} className="bg-indigo-600 hover:bg-indigo-700 shadow-lg shadow-indigo-100 gap-2">
-                    <Plus className="h-4 w-4" /> Create Assessment
-                </Button>
+                <div className="flex flex-wrap items-center gap-2">
+                    <Link href="/admin/academic/promotion-exceptions">
+                        <Button variant="outline" className="gap-2">
+                            <ShieldAlert className="h-4 w-4" /> Promotion Exceptions
+                        </Button>
+                    </Link>
+                    <Button onClick={handleOpenCreate} className="bg-indigo-600 hover:bg-indigo-700 shadow-lg shadow-indigo-100 gap-2">
+                        <Plus className="h-4 w-4" /> Create Assessment
+                    </Button>
+                </div>
             </header>
 
             <Card className="border-0 shadow-sm overflow-hidden">

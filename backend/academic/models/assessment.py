@@ -70,3 +70,81 @@ class Result(models.Model):
     
     def __str__(self):
         return f"{self.student} - {self.assessment}: {self.score}"
+
+
+class StudentPromotionDecision(models.Model):
+    DECISIONS = [
+        ('promote', 'Promote'),
+        ('hold', 'Hold'),
+    ]
+
+    decision_id = models.UUIDField(default=uuid_lib.uuid4, editable=False, unique=True)
+    assessment = models.ForeignKey(
+        Assessment,
+        on_delete=models.CASCADE,
+        related_name='promotion_decisions',
+    )
+    student = models.ForeignKey(
+        Student,
+        on_delete=models.CASCADE,
+        related_name='promotion_decisions',
+    )
+    decision = models.CharField(max_length=16, choices=DECISIONS)
+    decision_reason = models.TextField()
+    decided_by = models.ForeignKey(
+        'users.UserAccount',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='student_promotion_decisions',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ('assessment', 'student')
+        ordering = ['-updated_at']
+
+    def __str__(self):
+        return f"{self.assessment_id} | {self.student_id} -> {self.decision}"
+
+
+class StudentPromotionDecisionHistory(models.Model):
+    ACTIONS = [
+        ('promote', 'Promote'),
+        ('hold', 'Hold'),
+        ('override', 'Override'),
+        ('clear', 'Clear'),
+    ]
+    DECISIONS = [
+        ('promote', 'Promote'),
+        ('hold', 'Hold'),
+    ]
+
+    history_id = models.UUIDField(default=uuid_lib.uuid4, editable=False, unique=True)
+    assessment = models.ForeignKey(
+        Assessment,
+        on_delete=models.CASCADE,
+        related_name='promotion_decision_history',
+    )
+    student = models.ForeignKey(
+        Student,
+        on_delete=models.CASCADE,
+        related_name='promotion_decision_history',
+    )
+    action = models.CharField(max_length=16, choices=ACTIONS)
+    previous_decision = models.CharField(max_length=16, choices=DECISIONS, null=True, blank=True)
+    new_decision = models.CharField(max_length=16, choices=DECISIONS, null=True, blank=True)
+    decision_reason = models.TextField()
+    decided_by = models.ForeignKey(
+        'users.UserAccount',
+        on_delete=models.PROTECT,
+        related_name='student_promotion_decision_history',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.assessment_id} | {self.student_id} | {self.action}"

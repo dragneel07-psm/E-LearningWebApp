@@ -7,7 +7,12 @@ from .parent import Parent
 from .notice import Notice
 from .lesson import Chapter, Lesson, LessonMaterial, LessonProgress
 from .attendance import Attendance
-from .assessment import Assessment, Result
+from .assessment import (
+    Assessment,
+    Result,
+    StudentPromotionDecision,
+    StudentPromotionDecisionHistory,
+)
 from .timetable import Timetable
 from .exam import Exam, ExamSeating
 from .admission import AdmissionEnquiry

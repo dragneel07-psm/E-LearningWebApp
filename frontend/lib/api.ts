@@ -107,6 +107,8 @@ export interface AcademicYearRolloverOptions {
 export interface AcademicYearRolloverRequest {
     source_year?: number;
     target_year?: number;
+    dry_run?: boolean;
+    confirm?: boolean;
     target?: {
         name?: string;
         start_date?: string;
@@ -119,21 +121,48 @@ export interface AcademicYearRolloverRequest {
 }
 
 export interface AcademicYearRolloverSummary {
-    subjects_migrated: number;
-    chapters_migrated: number;
-    lessons_migrated: number;
-    materials_migrated: number;
-    assessments_migrated: number;
-    questions_migrated: number;
-    timetable_entries_migrated: number;
-    students_promoted: number;
-    students_skipped: number;
+    subjects_to_migrate?: number;
+    chapters_to_migrate?: number;
+    lessons_to_migrate?: number;
+    materials_to_migrate?: number;
+    assessments_to_migrate?: number;
+    questions_to_migrate?: number;
+    timetable_entries_to_migrate?: number;
+    subjects_migrated?: number;
+    chapters_migrated?: number;
+    lessons_migrated?: number;
+    materials_migrated?: number;
+    assessments_migrated?: number;
+    questions_migrated?: number;
+    timetable_entries_migrated?: number;
+    students_promoted?: number;
+    students_skipped?: number;
+}
+
+export interface AcademicYearPromotionPreview {
+    promoted_students: number;
+    skipped_students: number;
+    failed_score?: number;
+    failed_attendance?: number;
+    manual_promoted?: number;
+    manual_held?: number;
+    insufficient_data?: number;
+    missing_next_section?: number;
+    final_class_students?: number;
+    unknown_class_students?: number;
 }
 
 export interface AcademicYearRolloverResponse {
+    dry_run?: boolean;
+    executed?: boolean;
+    can_execute?: boolean;
+    target_exists?: boolean;
+    blockers?: string[];
+    warnings?: string[];
     source_year: string;
     target_year: string;
     summary: AcademicYearRolloverSummary;
+    promotion_preview?: AcademicYearPromotionPreview;
 }
 
 
@@ -435,6 +464,82 @@ export interface PublishAssessmentResultsResponse {
         manual_held?: number;
         insufficient_data?: number;
     } | null;
+}
+
+export type PromotionExceptionAction = 'promote' | 'hold' | 'override' | 'clear';
+
+export interface PromotionExceptionStudent {
+    student_id: string;
+    student_name: string;
+    class_id: number | null;
+    class_name: string | null;
+    section_id: number | null;
+    section_name: string | null;
+    recommended_action: 'promote' | 'hold';
+    effective_action: 'promote' | 'hold';
+    is_override: boolean;
+    hold_reason: string | null;
+    hold_reason_label?: string;
+    warning_reasons?: string[];
+    average_score_percentage?: number | null;
+    attendance_percentage?: number | null;
+    decision?: {
+        decision: 'promote' | 'hold';
+        decision_reason?: string | null;
+        decided_by?: string | null;
+        decided_by_name?: string | null;
+        updated_at?: string | null;
+    } | null;
+    history?: Array<{
+        action: PromotionExceptionAction;
+        previous_decision?: 'promote' | 'hold' | null;
+        new_decision?: 'promote' | 'hold' | null;
+        decision_reason: string;
+        decided_by?: string | null;
+        decided_by_name?: string | null;
+        created_at: string;
+    }>;
+}
+
+export interface PromotionExceptionsResponse {
+    assessment_id: string;
+    assessment_title: string;
+    is_final_assessment: boolean;
+    rules: {
+        min_score_percentage?: number | null;
+        min_attendance_percentage?: number | null;
+    };
+    summary: {
+        total_students: number;
+        recommended_promote: number;
+        recommended_hold: number;
+        decided_promote: number;
+        decided_hold: number;
+        overrides: number;
+        pending_decisions: number;
+    };
+    students: PromotionExceptionStudent[];
+    available_filters: {
+        classes: Array<{ id: number; name: string; count: number }>;
+        sections: Array<{ id: number; class_id: number | null; name: string; count: number }>;
+        fail_reasons: Array<{ code: string; label: string; count: number }>;
+    };
+}
+
+export interface PromotionExceptionSingleDecisionResponse {
+    updated: boolean;
+    cleared?: boolean;
+    student_id: string;
+    decision?: 'promote' | 'hold';
+    student?: PromotionExceptionStudent | null;
+    summary: PromotionExceptionsResponse['summary'];
+}
+
+export interface PromotionExceptionBulkDecisionResponse {
+    updated: number;
+    matched_students: number;
+    action?: PromotionExceptionAction;
+    summary: PromotionExceptionsResponse['summary'];
 }
 
 export interface Result {
@@ -1478,6 +1583,16 @@ export const academicAPI = {
             method: 'POST',
             body: JSON.stringify(data),
         }),
+    previewAcademicYearRollover: (data: AcademicYearRolloverRequest) =>
+        apiRequest<AcademicYearRolloverResponse>('/academic/years/rollover/', {
+            method: 'POST',
+            body: JSON.stringify({ ...data, dry_run: true }),
+        }),
+    executeAcademicYearRollover: (data: AcademicYearRolloverRequest) =>
+        apiRequest<AcademicYearRolloverResponse>('/academic/years/rollover/', {
+            method: 'POST',
+            body: JSON.stringify({ ...data, confirm: true, dry_run: false }),
+        }),
 
     // Classes
     getClasses: async () => {
@@ -1563,6 +1678,95 @@ export const academicAPI = {
             method: 'POST',
             body: JSON.stringify(data || {}),
         }),
+    getPromotionExceptions: (
+        id: string,
+        params?: {
+            academic_year?: number | string;
+            min_score_percentage?: number;
+            min_attendance_percentage?: number;
+            class?: number | string;
+            section?: number | string;
+            fail_reason?: string;
+        }
+    ) => {
+        const query = new URLSearchParams();
+        if (params?.academic_year !== undefined && params?.academic_year !== '') {
+            query.set('academic_year', String(params.academic_year));
+        }
+        if (params?.min_score_percentage !== undefined) {
+            query.set('min_score_percentage', String(params.min_score_percentage));
+        }
+        if (params?.min_attendance_percentage !== undefined) {
+            query.set('min_attendance_percentage', String(params.min_attendance_percentage));
+        }
+        if (params?.class !== undefined && params?.class !== '') {
+            query.set('class', String(params.class));
+        }
+        if (params?.section !== undefined && params?.section !== '') {
+            query.set('section', String(params.section));
+        }
+        if (params?.fail_reason) {
+            query.set('fail_reason', params.fail_reason);
+        }
+        const suffix = query.toString() ? `?${query.toString()}` : '';
+        return apiRequest<PromotionExceptionsResponse>(
+            `/academic/assessments/${id}/promotion_exceptions/${suffix}`
+        );
+    },
+    decidePromotionException: (
+        id: string,
+        data: {
+            student_id: string;
+            action: PromotionExceptionAction;
+            decision_reason: string;
+            academic_year?: number | string;
+            min_score_percentage?: number;
+            min_attendance_percentage?: number;
+        }
+    ) => {
+        const query = new URLSearchParams();
+        if (data.academic_year !== undefined && data.academic_year !== '') {
+            query.set('academic_year', String(data.academic_year));
+        }
+        const payload = { ...data };
+        delete (payload as { academic_year?: number | string }).academic_year;
+        const suffix = query.toString() ? `?${query.toString()}` : '';
+        return apiRequest<PromotionExceptionSingleDecisionResponse>(
+            `/academic/assessments/${id}/promotion_exceptions/decide/${suffix}`,
+            {
+                method: 'POST',
+                body: JSON.stringify(payload),
+            }
+        );
+    },
+    bulkPromotionExceptions: (
+        id: string,
+        data: {
+            action: PromotionExceptionAction;
+            decision_reason: string;
+            academic_year?: number | string;
+            class?: number | string;
+            section?: number | string;
+            fail_reason?: string;
+            min_score_percentage?: number;
+            min_attendance_percentage?: number;
+        }
+    ) => {
+        const query = new URLSearchParams();
+        if (data.academic_year !== undefined && data.academic_year !== '') {
+            query.set('academic_year', String(data.academic_year));
+        }
+        const payload = { ...data };
+        delete (payload as { academic_year?: number | string }).academic_year;
+        const suffix = query.toString() ? `?${query.toString()}` : '';
+        return apiRequest<PromotionExceptionBulkDecisionResponse>(
+            `/academic/assessments/${id}/promotion_exceptions/bulk/${suffix}`,
+            {
+                method: 'POST',
+                body: JSON.stringify(payload),
+            }
+        );
+    },
     deleteAssessment: (id: string) => apiRequest<void>(`/academic/assessments/${id}/`, {
         method: 'DELETE'
     }),

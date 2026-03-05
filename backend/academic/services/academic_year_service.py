@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
-from typing import Dict, Optional
+from typing import Dict, List, Optional
 
 from django.db import connection, transaction
 from django.db.models import Q
@@ -146,8 +146,13 @@ def _default_cycle_for_day(today: date) -> tuple[date, date]:
     return start, end
 
 
-def create_next_academic_year(source_year: Optional[AcademicYear] = None, *, name: Optional[str] = None,
-                              start_date: Optional[date] = None, end_date: Optional[date] = None) -> AcademicYear:
+def plan_next_academic_year(
+    source_year: Optional[AcademicYear] = None,
+    *,
+    name: Optional[str] = None,
+    start_date: Optional[date] = None,
+    end_date: Optional[date] = None,
+) -> Dict[str, object]:
     if source_year is None:
         source_year = AcademicYear.objects.order_by("-end_date").first()
 
@@ -166,11 +171,32 @@ def create_next_academic_year(source_year: Optional[AcademicYear] = None, *, nam
         start, end = _default_cycle_for_day(today)
 
     year_name = name or f"{start.year}-{end.year}"
+    existing_year = AcademicYear.objects.filter(name=year_name).first()
+    return {
+        "name": year_name,
+        "start_date": start,
+        "end_date": end,
+        "existing_year": existing_year,
+    }
+
+
+def create_next_academic_year(source_year: Optional[AcademicYear] = None, *, name: Optional[str] = None,
+                              start_date: Optional[date] = None, end_date: Optional[date] = None) -> AcademicYear:
+    plan = plan_next_academic_year(
+        source_year,
+        name=name,
+        start_date=start_date,
+        end_date=end_date,
+    )
+    existing = plan.get("existing_year")
+    if isinstance(existing, AcademicYear):
+        return existing
+
     next_year, _ = AcademicYear.objects.get_or_create(
-        name=year_name,
+        name=str(plan["name"]),
         defaults={
-            "start_date": start,
-            "end_date": end,
+            "start_date": plan["start_date"],
+            "end_date": plan["end_date"],
             "is_current": False,
         },
     )
@@ -213,64 +239,65 @@ def get_current_academic_year() -> Optional[AcademicYear]:
     return ensure_current_academic_year()
 
 
-def promote_students_to_next_class(
+PROMOTION_HOLD_REASON_LABELS: Dict[str, str] = {
+    "manual_hold": "Manually marked as hold",
+    "score_below_threshold": "Final score below threshold",
+    "attendance_below_threshold": "Attendance below threshold",
+    "insufficient_data": "Insufficient score/attendance data",
+    "final_class": "Already in final class",
+    "unknown_class": "Student has missing or invalid class mapping",
+}
+
+
+def _student_display_name(student: Student) -> str:
+    if getattr(student, "user_id", None):
+        full_name = f"{student.user.first_name} {student.user.last_name}".strip()
+        if full_name:
+            return full_name
+        if student.user.username:
+            return student.user.username
+    return str(student.student_id)
+
+
+def _evaluate_single_student_promotion(
     *,
-    academic_class: Optional[AcademicClass] = None,
-    section: Optional[Section] = None,
-    academic_year: Optional[AcademicYear] = None,
-    rules: Optional[PromotionRules] = None,
-) -> Dict[str, int]:
-    classes = list(AcademicClass.objects.order_by("order", "id"))
-    if not classes:
-        return {
-            "promoted_students": 0,
-            "skipped_students": 0,
-            "failed_score": 0,
-            "failed_attendance": 0,
-            "manual_promoted": 0,
-            "manual_held": 0,
-            "insufficient_data": 0,
-        }
+    student: Student,
+    classes: List[AcademicClass],
+    class_index: Dict[int, int],
+    rules: PromotionRules,
+    manual_promote_ids: set[str],
+    manual_hold_ids: set[str],
+    academic_year: Optional[AcademicYear],
+    include_unpublished_results: bool = False,
+) -> Dict[str, object]:
+    student_id_text = str(student.student_id)
+    student_id_key = student_id_text.lower()
 
-    class_index = {cls.id: idx for idx, cls in enumerate(classes)}
-    promoted = 0
-    skipped = 0
-    failed_score = 0
-    failed_attendance = 0
-    manual_promoted = 0
-    manual_held = 0
-    insufficient_data = 0
+    hold_reason: Optional[str] = None
+    average_score_percentage: Optional[float] = None
+    attendance_percentage: Optional[float] = None
+    next_class: Optional[AcademicClass] = None
+    next_section: Optional[Section] = None
+    missing_next_section = False
 
-    rules = rules or PromotionRules()
-    manual_promote_ids = {value.lower() for value in rules.manual_promote_student_ids}
-    manual_hold_ids = {value.lower() for value in rules.manual_hold_student_ids}
+    manual_promote_applied = student_id_key in manual_promote_ids
+    manual_hold_applied = student_id_key in manual_hold_ids
 
-    students_qs = Student.objects.select_related("academic_class", "section")
-    if section is not None:
-        students_qs = students_qs.filter(section=section)
-    elif academic_class is not None:
-        students_qs = students_qs.filter(academic_class=academic_class)
-
-    for student in students_qs:
-        student_id_text = str(student.student_id).lower()
-
-        if student_id_text in manual_hold_ids:
-            manual_held += 1
-            skipped += 1
-            continue
-
-        if not student.academic_class_id or student.academic_class_id not in class_index:
-            skipped += 1
-            continue
-
-        if student_id_text not in manual_promote_ids:
+    if manual_hold_applied:
+        hold_reason = "manual_hold"
+    elif not student.academic_class_id or student.academic_class_id not in class_index:
+        hold_reason = "unknown_class"
+    else:
+        if not manual_promote_applied:
             if rules.min_score_percentage is not None:
-                result_qs = Result.objects.filter(
-                    student=student,
-                    assessment__is_final_assessment=True,
-                    assessment__results_published=True,
-                    assessment__subject__academic_class=student.academic_class,
-                ).select_related("assessment")
+                result_filter = {
+                    "student": student,
+                    "assessment__is_final_assessment": True,
+                    "assessment__subject__academic_class": student.academic_class,
+                }
+                if not include_unpublished_results:
+                    result_filter["assessment__results_published"] = True
+                result_qs = Result.objects.filter(**result_filter).select_related("assessment")
 
                 if academic_year is not None:
                     result_qs = result_qs.filter(assessment__academic_year=academic_year)
@@ -288,17 +315,13 @@ def promote_students_to_next_class(
                     percentages.append((float(result.score) / total_marks) * 100.0)
 
                 if not percentages:
-                    insufficient_data += 1
-                    skipped += 1
-                    continue
+                    hold_reason = "insufficient_data"
+                else:
+                    average_score_percentage = sum(percentages) / len(percentages)
+                    if average_score_percentage < rules.min_score_percentage:
+                        hold_reason = "score_below_threshold"
 
-                average_score = sum(percentages) / len(percentages)
-                if average_score < rules.min_score_percentage:
-                    failed_score += 1
-                    skipped += 1
-                    continue
-
-            if rules.min_attendance_percentage is not None:
+            if hold_reason is None and rules.min_attendance_percentage is not None:
                 attendance_qs = Attendance.objects.filter(
                     student=student,
                     subject__academic_class=student.academic_class,
@@ -311,35 +334,208 @@ def promote_students_to_next_class(
 
                 total_attendance = attendance_qs.count()
                 if total_attendance <= 0:
-                    insufficient_data += 1
-                    skipped += 1
-                    continue
+                    hold_reason = "insufficient_data"
+                else:
+                    attended_count = attendance_qs.filter(status__in=["present", "late", "excused"]).count()
+                    attendance_percentage = (attended_count / total_attendance) * 100.0
+                    if attendance_percentage < rules.min_attendance_percentage:
+                        hold_reason = "attendance_below_threshold"
 
-                attended_count = attendance_qs.filter(status__in=["present", "late", "excused"]).count()
-                attendance_percentage = (attended_count / total_attendance) * 100.0
-                if attendance_percentage < rules.min_attendance_percentage:
-                    failed_attendance += 1
-                    skipped += 1
-                    continue
+        if hold_reason is None:
+            idx = class_index[student.academic_class_id]
+            if idx >= len(classes) - 1:
+                hold_reason = "final_class"
+            else:
+                next_class = classes[idx + 1]
+                if student.section_id:
+                    next_section = Section.objects.filter(
+                        academic_class=next_class,
+                        name=student.section.name,
+                    ).first()
+                    if next_section is None:
+                        missing_next_section = True
 
-        idx = class_index[student.academic_class_id]
-        if idx >= len(classes) - 1:
+    recommended_action = "hold" if hold_reason else "promote"
+    warning_reasons = ["missing_next_section"] if missing_next_section else []
+
+    return {
+        "student_id": student_id_text,
+        "student_name": _student_display_name(student),
+        "class_id": student.academic_class_id,
+        "class_name": getattr(student.academic_class, "name", None),
+        "section_id": student.section_id,
+        "section_name": getattr(student.section, "name", None),
+        "recommended_action": recommended_action,
+        "hold_reason": hold_reason,
+        "hold_reason_label": PROMOTION_HOLD_REASON_LABELS.get(hold_reason, "") if hold_reason else "",
+        "warning_reasons": warning_reasons,
+        "average_score_percentage": round(average_score_percentage, 2) if average_score_percentage is not None else None,
+        "attendance_percentage": round(attendance_percentage, 2) if attendance_percentage is not None else None,
+        "manual_promote_applied": manual_promote_applied,
+        "manual_hold_applied": manual_hold_applied,
+        "failed_score": hold_reason == "score_below_threshold",
+        "failed_attendance": hold_reason == "attendance_below_threshold",
+        "insufficient_data": hold_reason == "insufficient_data",
+        "final_class": hold_reason == "final_class",
+        "unknown_class": hold_reason == "unknown_class",
+        "missing_next_section": missing_next_section,
+        "next_class_id": getattr(next_class, "id", None),
+        "next_class_name": getattr(next_class, "name", None),
+        "next_section_id": getattr(next_section, "id", None),
+        "next_section_name": getattr(next_section, "name", None),
+        "_student": student,
+        "_next_class": next_class,
+        "_next_section": next_section,
+    }
+
+
+def list_student_promotion_candidates(
+    *,
+    academic_class: Optional[AcademicClass] = None,
+    section: Optional[Section] = None,
+    academic_year: Optional[AcademicYear] = None,
+    rules: Optional[PromotionRules] = None,
+    include_unpublished_results: bool = False,
+) -> List[Dict[str, object]]:
+    classes = list(AcademicClass.objects.order_by("order", "id"))
+    if not classes:
+        return []
+
+    rules = rules or PromotionRules()
+    manual_promote_ids = {value.lower() for value in rules.manual_promote_student_ids}
+    manual_hold_ids = {value.lower() for value in rules.manual_hold_student_ids}
+    class_index = {cls.id: idx for idx, cls in enumerate(classes)}
+
+    students_qs = Student.objects.select_related("academic_class", "section", "user")
+    if section is not None:
+        students_qs = students_qs.filter(section=section)
+    elif academic_class is not None:
+        students_qs = students_qs.filter(academic_class=academic_class)
+
+    students_qs = students_qs.order_by(
+        "academic_class__order",
+        "academic_class__name",
+        "section__name",
+        "user__first_name",
+        "user__last_name",
+        "user__username",
+    )
+
+    rows: List[Dict[str, object]] = []
+    for student in students_qs:
+        evaluated = _evaluate_single_student_promotion(
+            student=student,
+            classes=classes,
+            class_index=class_index,
+            rules=rules,
+            manual_promote_ids=manual_promote_ids,
+            manual_hold_ids=manual_hold_ids,
+            academic_year=academic_year,
+            include_unpublished_results=include_unpublished_results,
+        )
+        evaluated.pop("_student", None)
+        evaluated.pop("_next_class", None)
+        evaluated.pop("_next_section", None)
+        rows.append(evaluated)
+    return rows
+
+
+def promote_students_to_next_class(
+    *,
+    academic_class: Optional[AcademicClass] = None,
+    section: Optional[Section] = None,
+    academic_year: Optional[AcademicYear] = None,
+    rules: Optional[PromotionRules] = None,
+    dry_run: bool = False,
+) -> Dict[str, int]:
+    classes = list(AcademicClass.objects.order_by("order", "id"))
+    if not classes:
+        return {
+            "promoted_students": 0,
+            "skipped_students": 0,
+            "failed_score": 0,
+            "failed_attendance": 0,
+            "manual_promoted": 0,
+            "manual_held": 0,
+            "insufficient_data": 0,
+            "missing_next_section": 0,
+            "final_class_students": 0,
+            "unknown_class_students": 0,
+        }
+
+    class_index = {cls.id: idx for idx, cls in enumerate(classes)}
+    promoted = 0
+    skipped = 0
+    failed_score = 0
+    failed_attendance = 0
+    manual_promoted = 0
+    manual_held = 0
+    insufficient_data = 0
+    missing_next_section = 0
+    final_class_students = 0
+    unknown_class_students = 0
+
+    rules = rules or PromotionRules()
+    manual_promote_ids = {value.lower() for value in rules.manual_promote_student_ids}
+    manual_hold_ids = {value.lower() for value in rules.manual_hold_student_ids}
+    class_index = {cls.id: idx for idx, cls in enumerate(classes)}
+
+    students_qs = Student.objects.select_related("academic_class", "section", "user")
+    if section is not None:
+        students_qs = students_qs.filter(section=section)
+    elif academic_class is not None:
+        students_qs = students_qs.filter(academic_class=academic_class)
+    students_qs = students_qs.order_by(
+        "academic_class__order",
+        "academic_class__name",
+        "section__name",
+        "user__first_name",
+        "user__last_name",
+        "user__username",
+    )
+
+    for student in students_qs:
+        evaluated = _evaluate_single_student_promotion(
+            student=student,
+            classes=classes,
+            class_index=class_index,
+            rules=rules,
+            manual_promote_ids=manual_promote_ids,
+            manual_hold_ids=manual_hold_ids,
+            academic_year=academic_year,
+            include_unpublished_results=False,
+        )
+
+        if evaluated["recommended_action"] != "promote":
             skipped += 1
+            if bool(evaluated["manual_hold_applied"]):
+                manual_held += 1
+            if bool(evaluated["failed_score"]):
+                failed_score += 1
+            if bool(evaluated["failed_attendance"]):
+                failed_attendance += 1
+            if bool(evaluated["insufficient_data"]):
+                insufficient_data += 1
+            if bool(evaluated["final_class"]):
+                final_class_students += 1
+            if bool(evaluated["unknown_class"]):
+                unknown_class_students += 1
             continue
 
-        next_class = classes[idx + 1]
-        next_section = None
-        if student.section_id:
-            next_section = Section.objects.filter(
-                academic_class=next_class,
-                name=student.section.name,
-            ).first()
+        if bool(evaluated["missing_next_section"]):
+            missing_next_section += 1
 
-        student.academic_class = next_class
-        student.section = next_section
-        student.save(update_fields=["academic_class", "section"])
+        if not dry_run:
+            next_class = evaluated["_next_class"]
+            next_section = evaluated["_next_section"]
+            if next_class is None:
+                skipped += 1
+                continue
+            student.academic_class = next_class
+            student.section = next_section
+            student.save(update_fields=["academic_class", "section"])
 
-        if student_id_text in manual_promote_ids:
+        if bool(evaluated["manual_promote_applied"]):
             manual_promoted += 1
         promoted += 1
 
@@ -351,6 +547,167 @@ def promote_students_to_next_class(
         "manual_promoted": manual_promoted,
         "manual_held": manual_held,
         "insufficient_data": insufficient_data,
+        "missing_next_section": missing_next_section,
+        "final_class_students": final_class_students,
+        "unknown_class_students": unknown_class_students,
+    }
+
+
+def build_rollover_preview(
+    *,
+    source_year: AcademicYear,
+    target_year: AcademicYear,
+    options: YearRolloverOptions,
+) -> Dict[str, object]:
+    summary = {
+        "subjects_to_migrate": 0,
+        "chapters_to_migrate": 0,
+        "lessons_to_migrate": 0,
+        "materials_to_migrate": 0,
+        "assessments_to_migrate": 0,
+        "questions_to_migrate": 0,
+        "timetable_entries_to_migrate": 0,
+    }
+    warnings = []
+
+    target_exists = bool(getattr(target_year, "pk", None))
+    target_year_id = getattr(target_year, "pk", None)
+
+    source_subjects = list(
+        Subject.objects.filter(academic_year=source_year).select_related("academic_class", "teacher")
+    )
+    source_subjects_by_id: Dict[int, Subject] = {subject.id: subject for subject in source_subjects}
+
+    target_subjects_by_key: Dict[tuple[str, int], Subject] = {}
+    if target_exists and target_year_id is not None:
+        for subject in Subject.objects.filter(academic_year_id=target_year_id).select_related("academic_class"):
+            target_subjects_by_key[(subject.name, subject.academic_class_id)] = subject
+
+    subject_map: Dict[int, Subject] = {}
+    if options.migrate_subjects:
+        for source_subject in source_subjects:
+            mapped = target_subjects_by_key.get((source_subject.name, source_subject.academic_class_id))
+            if mapped is None:
+                summary["subjects_to_migrate"] += 1
+                if target_exists:
+                    mapped = source_subject  # placeholder for downstream counts
+                else:
+                    mapped = source_subject
+            subject_map[source_subject.id] = mapped
+    else:
+        for source_subject in source_subjects:
+            mapped = target_subjects_by_key.get((source_subject.name, source_subject.academic_class_id))
+            if mapped:
+                subject_map[source_subject.id] = mapped
+
+    if not subject_map and (options.migrate_assessments or options.migrate_lessons):
+        warnings.append(
+            "No subject mapping found for target year. Assessments/lessons cannot be migrated unless subjects are migrated or pre-created."
+        )
+
+    if options.migrate_assessments and subject_map:
+        source_assessments = Assessment.objects.filter(
+            academic_year=source_year,
+            subject_id__in=subject_map.keys(),
+        ).select_related("section", "subject").prefetch_related("questions")
+
+        for source_assessment in source_assessments:
+            source_subject = source_subjects_by_id.get(source_assessment.subject_id)
+            if source_subject is None:
+                continue
+
+            target_subject = target_subjects_by_key.get((source_subject.name, source_subject.academic_class_id))
+            if target_subject is None and target_exists:
+                continue
+
+            target_section = None
+            if source_assessment.section_id:
+                target_section = Section.objects.filter(
+                    academic_class=source_assessment.section.academic_class,
+                    name=source_assessment.section.name,
+                ).first()
+
+            assessment_exists = False
+            if target_exists and target_subject is not None:
+                assessment_exists = Assessment.objects.filter(
+                    academic_year=target_year,
+                    subject=target_subject,
+                    section=target_section,
+                    title=source_assessment.title,
+                    type=source_assessment.type,
+                ).exists()
+
+            if not assessment_exists:
+                summary["assessments_to_migrate"] += 1
+                summary["questions_to_migrate"] += source_assessment.questions.count()
+
+    if options.migrate_lessons and subject_map:
+        source_chapters = Chapter.objects.filter(
+            subject_id__in=subject_map.keys()
+        ).select_related("subject").prefetch_related("lessons__materials")
+
+        for source_chapter in source_chapters:
+            source_subject = source_subjects_by_id.get(source_chapter.subject_id)
+            if source_subject is None:
+                continue
+            target_subject = target_subjects_by_key.get((source_subject.name, source_subject.academic_class_id))
+
+            chapter_exists = False
+            existing_chapter = None
+            if target_exists and target_subject is not None:
+                existing_chapter = Chapter.objects.filter(
+                    subject=target_subject,
+                    title=source_chapter.title,
+                    order=source_chapter.order,
+                ).first()
+                chapter_exists = existing_chapter is not None
+
+            if not chapter_exists:
+                summary["chapters_to_migrate"] += 1
+
+            for source_lesson in source_chapter.lessons.all():
+                lesson_exists = False
+                if chapter_exists and existing_chapter is not None:
+                    lesson_exists = Lesson.objects.filter(
+                        chapter=existing_chapter,
+                        title=source_lesson.title,
+                        order=source_lesson.order,
+                    ).exists()
+
+                if not lesson_exists:
+                    summary["lessons_to_migrate"] += 1
+                    summary["materials_to_migrate"] += source_lesson.materials.count()
+
+    if options.migrate_timetable:
+        source_slots = Timetable.objects.filter(academic_year=source_year)
+        for source_slot in source_slots:
+            slot_exists = False
+            if target_exists:
+                slot_exists = Timetable.objects.filter(
+                    academic_year=target_year,
+                    academic_class=source_slot.academic_class,
+                    day_of_week=source_slot.day_of_week,
+                    start_time=source_slot.start_time,
+                    end_time=source_slot.end_time,
+                    subject_name=source_slot.subject_name,
+                    entry_type=source_slot.entry_type,
+                ).exists()
+
+            if not slot_exists:
+                summary["timetable_entries_to_migrate"] += 1
+
+    promotion_preview: Dict[str, int] = {}
+    if options.auto_upgrade_students:
+        promotion_preview = promote_students_to_next_class(
+            academic_year=source_year,
+            rules=options.promotion_rules,
+            dry_run=True,
+        )
+
+    return {
+        "summary": summary,
+        "warnings": warnings,
+        "promotion_preview": promotion_preview,
     }
 
 
