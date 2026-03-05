@@ -17,3 +17,4 @@ from .assessment import (
 from .timetable import Timetable
 from .exam import Exam, ExamSeating
 from .admission import AdmissionEnquiry
+from .submission import Submission

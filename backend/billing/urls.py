@@ -1,10 +1,10 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from .views import (
+from .legacy_views import (
     SubscriptionViewSet, SubscriptionPlanViewSet, SubscriptionPlanHistoryViewSet, InvoiceViewSet,
     FeeStructureViewSet, StudentFeeViewSet, PaymentViewSet, ExpenseViewSet, FinanceDashboardViewSet
 )
-from .views_reports import BillingReportViewSet
+from .legacy_views import BillingReportViewSet
 
 router = DefaultRouter()
 router.register(r'subscriptions', SubscriptionViewSet)

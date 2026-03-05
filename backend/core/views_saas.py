@@ -5,7 +5,7 @@ from django.core.cache import cache
 from django.db import IntegrityError
 from django.db.models import Sum, Count, Max
 from core.models import Tenant
-from billing.models import Invoice, Subscription
+from billing.models_saas import Invoice, Subscription
 from datetime import datetime, timedelta
 from collections import defaultdict
 from decimal import Decimal

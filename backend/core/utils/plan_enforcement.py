@@ -127,7 +127,7 @@ def record_subscription_plan_history(
     previous_plan_snapshot: Optional[Dict[str, Any]] = None,
     new_plan_snapshot: Optional[Dict[str, Any]] = None,
 ):
-    from billing.models import SubscriptionPlanHistory
+    from billing.models_saas import SubscriptionPlanHistory
 
     new_plan = getattr(subscription, "plan", None)
     SubscriptionPlanHistory.objects.create(

@@ -70,7 +70,7 @@ class SchoolERPOverviewView(APIView):
             'net_balance': 0.0,
         }
         try:
-            from billing.models import Expense, Payment, StudentFee
+            from billing.models_school import Expense, Payment, StudentFee
 
             if tenant is not None:
                 payments_qs = Payment.objects.filter(tenant=tenant)

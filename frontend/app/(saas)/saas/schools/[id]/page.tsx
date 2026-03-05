@@ -510,7 +510,7 @@ export default function SchoolDetailsPage() {
     const handleDownloadInvoice = async (invoice: Invoice) => {
         try {
             const apiBase = getApiBaseUrl();
-            const url = `${apiBase}/billing/invoices/${invoice.invoice_id}/download/`;
+            const url = `${apiBase}/billing/saas/invoices/${invoice.invoice_id}/download/`;
             await toast.promise(
                 saasApi.helpers.downloadFile(url, `invoice_${invoice.invoice_id.slice(0, 8)}.pdf`),
                 {

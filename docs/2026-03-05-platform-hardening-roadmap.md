@@ -33,6 +33,12 @@ Upgrade the LMS into a safer, tenant-correct, school-ERP-ready platform without 
   - sensitive export audit events added for academic reports, billing reports/invoices/receipts, and backup downloads
   - high-risk admin mutation audit events added for admin password resets and subscription/tenant-user management changes
   - additional platform-admin workflow audits added for global settings updates, backup creation, and tenant deletion
+- [~] A4-A5 (final app split cutover): `billing` hybrid app decomposition is in transition.
+  - namespaced APIs are now active: `/api/billing/saas/*` and `/api/billing/school/*`
+  - legacy `/api/billing/*` routes now emit deprecation + sunset headers with successor links
+  - view ownership extracted into `billing_saas.views` and `billing_school.views` (legacy re-export shims retained for compatibility)
+  - runtime imports are being migrated to `billing.models_saas` / `billing.models_school`
+  - blocker for full removal of `billing` overlap: existing migration graph and model app-labels are still anchored to app label `billing`; final cutover needs explicit migration strategy to avoid schema drift/data loss
 
 ## Phase 3: Security and API Productization (Implemented)
 - [x] B9: Role-based token lifetimes and strict refresh rotation policies per role risk.

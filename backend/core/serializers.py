@@ -4,7 +4,7 @@ from .models import Tenant, AuditLog, GlobalSettings
 import re
 from django.db import connection
 from django.db.models import Sum
-from billing.models import SubscriptionPlan
+from billing.models_saas import SubscriptionPlan
 from core.utils.plan_enforcement import (
     build_plan_entitled_features,
     derive_tenant_type_from_plan,

@@ -1,6 +1,6 @@
 # Architecture Snapshot
 
-- Generated at: `2026-03-05 21:51:12 +0545`
+- Generated at: `2026-03-05 22:23:32 +0545`
 - Repo root: `/Users/pramodsinghmanyal/Desktop/E-LearningWebApp`
 - Tree depth: `4` (override with `ARCH_REPORT_TREE_DEPTH`)
 
@@ -225,8 +225,10 @@
 │   │   ├── tests_admin_assistant_api.py
 │   │   ├── tests_assisted_grading_api.py
 │   │   ├── tests_async_queue.py
+│   │   ├── tests_chunk_search_api.py
 │   │   ├── tests_contentchunk.py
 │   │   ├── tests_exam_generator_api.py
+│   │   ├── tests_indexing_command.py
 │   │   ├── tests_lesson_artifacts.py
 │   │   ├── tests_provider_config.py
 │   │   ├── tests_quiz_generator_api.py
@@ -317,12 +319,14 @@
 │   │   │   ├── 0005_globalsettings_ai_provider_fields.py
 │   │   │   ├── 0006_alter_tenant_logo.py
 │   │   │   ├── 0007_enable_pgvector_extension.py
+│   │   │   ├── 0008_job.py
 │   │   │   └── __init__.py
 │   │   ├── mixins.py
 │   │   ├── models
 │   │   │   ├── __init__.py
 │   │   │   ├── audit_log.py
 │   │   │   ├── base.py
+│   │   │   ├── job.py
 │   │   │   ├── settings.py
 │   │   │   └── tenant.py
 │   │   ├── pagination.py
@@ -552,7 +556,8 @@
 │   │   ├── 05-exam-generator.md
 │   │   ├── 06-ai-grading.md
 │   │   ├── 07-risk-analytics.md
-│   │   └── 08-admin-assistant.md
+│   │   ├── 08-admin-assistant.md
+│   │   └── pgvector-indexing.md
 │   ├── archive
 │   │   └── 2026-03-04-docs-consolidation
 │   │       ├── COMPLETE.md
@@ -616,7 +621,8 @@
 │   │       ├── mobile
 │   │       └── tests
 │   ├── infra
-│   │   └── 01-celery-redis.md
+│   │   ├── 01-celery-redis.md
+│   │   └── celery-redis.md
 │   ├── reports
 │   │   └── arch-report-2026-03-05.md
 │   └── security
@@ -1044,7 +1050,7 @@
 ├── verification_final.log
 └── verification_new.log
 
-237 directories, 799 files
+237 directories, 805 files
 ```
 
 ## Django Settings Highlights
@@ -1098,6 +1104,43 @@
 ### `path(...)` / `re_path(...)` entries
 
 ```text
+backend/gamification/urls.py:14:    path('', include(router.urls)),
+backend/billing/urls.py:24:    path('', include(router.urls)),
+backend/notifications/urls.py:10:    path('dispatch/', NotificationViewSet.as_view({'post': 'enqueue_notification'}), name='notification-dispatch'),
+backend/notifications/urls.py:11:    path('', include(router.urls)),
+backend/users/urls.py:15:    path('', include(router.urls)),
+backend/users/urls.py:16:    path('register/', register_user, name='register'),
+backend/users/urls.py:17:    path('login/', CustomTokenObtainPairView.as_view(), name='token_obtain_pair'),
+backend/users/urls.py:18:    path('refresh/', CustomTokenRefreshView.as_view(), name='token_refresh'),
+backend/users/urls.py:19:    path('admin/reset-password/', AdminPasswordResetView.as_view(), name='admin-password-reset'),
+backend/users/urls.py:20:    path('password-reset/', PasswordResetView.as_view(), name='password_reset'),
+backend/users/urls.py:21:    path('password-reset-confirm/', PasswordResetConfirmView.as_view(), name='password_reset_confirm'),
+backend/conversations/urls.py:10:    path('', include(router.urls)),
+backend/academic/urls.py:37:    path('stats/', AcademicStatsView.as_view(), name='academic-stats'),
+backend/academic/urls.py:38:    path('erp/overview/', SchoolERPOverviewView.as_view(), name='school-erp-overview'),
+backend/academic/urls.py:39:    path('', include(router.urls)),
+backend/library/urls.py:10:    path('', include(router.urls)),
+backend/ai_engine/urls.py:13:    path('', include(router.urls)),
+backend/ai_engine/urls.py:14:    path("artifacts/", views.ai_generated_artifacts, name="ai_generated_artifacts"),
+backend/ai_engine/urls.py:15:    path("grading/rubrics/", views.ai_grading_rubrics, name="ai_grading_rubrics"),
+backend/ai_engine/urls.py:16:    path("grading/drafts/", views.ai_grading_drafts, name="ai_grading_drafts"),
+backend/ai_engine/urls.py:17:    path("grading/grade_submission/", views.ai_grade_submission, name="ai_grade_submission"),
+backend/ai_engine/urls.py:18:    path("grading/approve_draft/", views.ai_approve_grading_draft, name="ai_approve_grading_draft"),
+backend/ai_engine/urls.py:19:    path("exams/generate/", views.ai_exam_generate, name="ai_exam_generate"),
+backend/ai_engine/urls.py:20:    path("quizzes/generate/", views.ai_quiz_generate, name="ai_quiz_generate"),
+backend/ai_engine/urls.py:21:    path("lessons/<int:lesson_id>/summarize/", views.ai_lesson_summarize, name="ai_lesson_summarize"),
+backend/ai_engine/urls.py:22:    path("lessons/<int:lesson_id>/exam_notes/", views.ai_lesson_exam_notes, name="ai_lesson_exam_notes"),
+backend/ai_engine/urls.py:23:    path('jobs/index-content/', views.enqueue_ai_index_content, name='ai_enqueue_index_content'),
+backend/ai_engine/urls.py:24:    path('jobs/summaries/', views.enqueue_ai_summary, name='ai_enqueue_summary'),
+backend/ai_engine/urls.py:25:    path('jobs/quizzes/', views.enqueue_ai_quiz, name='ai_enqueue_quiz'),
+backend/ai_engine/urls.py:26:    path('chunks/search/', views.ai_chunk_search, name='ai_chunk_search'),
+backend/ai_engine/urls.py:27:    path('admin_assistant/query/', views.admin_assistant_query, name='admin_assistant_query'),
+backend/ai_engine/urls.py:28:    path('tutor/chat/', views.ai_tutor_chat, name='ai_tutor_chat'),
+backend/ai_engine/urls.py:29:    path('analytics/teacher/', views.teacher_analytics, name='teacher_analytics'),
+backend/ai_engine/urls.py:30:    path('analytics/at_risk_students/', views.at_risk_students, name='at_risk_students'),
+backend/ai_engine/urls.py:31:    path('personalization/recommendations/', views.student_recommendations, name='student_recommendations'),
+backend/ai_engine/urls.py:32:    path('reports/student/<uuid:student_id>/', views.student_report, name='student_report_generate'),
+backend/ai_engine/urls.py:33:    path('reports/student/<uuid:student_id>/history/', views.student_past_reports, name='student_report_history'),
 backend/config/urls.py:17:    path('admin/', admin.site.urls),
 backend/config/urls.py:18:    path('healthz', HealthzView.as_view(), name='healthz-root'),
 backend/config/urls.py:19:    path('readyz', ReadyzView.as_view(), name='readyz-root'),
@@ -1126,20 +1169,6 @@ backend/config/urls.py:45:    path('api/token/', CustomTokenObtainPairView.as_vi
 backend/config/urls.py:46:    path('api/token/refresh/', CustomTokenRefreshView.as_view(), name='token_refresh'),
 backend/config/urls.py:47:    path('api/v1/token/', CustomTokenObtainPairView.as_view(), name='token_obtain_pair_v1'),
 backend/config/urls.py:48:    path('api/v1/token/refresh/', CustomTokenRefreshView.as_view(), name='token_refresh_v1'),
-backend/users/urls.py:15:    path('', include(router.urls)),
-backend/users/urls.py:16:    path('register/', register_user, name='register'),
-backend/users/urls.py:17:    path('login/', CustomTokenObtainPairView.as_view(), name='token_obtain_pair'),
-backend/users/urls.py:18:    path('refresh/', CustomTokenRefreshView.as_view(), name='token_refresh'),
-backend/users/urls.py:19:    path('admin/reset-password/', AdminPasswordResetView.as_view(), name='admin-password-reset'),
-backend/users/urls.py:20:    path('password-reset/', PasswordResetView.as_view(), name='password_reset'),
-backend/users/urls.py:21:    path('password-reset-confirm/', PasswordResetConfirmView.as_view(), name='password_reset_confirm'),
-backend/billing/urls.py:24:    path('', include(router.urls)),
-backend/notifications/urls.py:10:    path('dispatch/', NotificationViewSet.as_view({'post': 'enqueue_notification'}), name='notification-dispatch'),
-backend/notifications/urls.py:11:    path('', include(router.urls)),
-backend/conversations/urls.py:10:    path('', include(router.urls)),
-backend/academic/urls.py:37:    path('stats/', AcademicStatsView.as_view(), name='academic-stats'),
-backend/academic/urls.py:38:    path('erp/overview/', SchoolERPOverviewView.as_view(), name='school-erp-overview'),
-backend/academic/urls.py:39:    path('', include(router.urls)),
 backend/core/urls.py:32:    path('', include(router.urls)),
 backend/core/urls.py:33:    path('healthz/', HealthzView.as_view(), name='healthz'),
 backend/core/urls.py:34:    path('readyz/', ReadyzView.as_view(), name='readyz'),
@@ -1154,28 +1183,6 @@ backend/core/urls.py:42:    path('reset-admin-password/', TenantAdminPasswordRes
 backend/core/urls.py:43:    path('tenants/<str:tenant_id>/users/', TenantUsersView.as_view(), name='tenant-users'),
 backend/core/urls.py:44:    path('tenants/<str:tenant_id>/users/<str:user_id>/', TenantUserDetailView.as_view(), name='tenant-user-detail'),
 backend/core/urls.py:45:    path('tenants/<str:tenant_id>/users/<str:user_id>/reset-password/', TenantUserPasswordResetView.as_view(), name='tenant-user-password-reset'),
-backend/library/urls.py:10:    path('', include(router.urls)),
-backend/gamification/urls.py:14:    path('', include(router.urls)),
-backend/ai_engine/urls.py:13:    path('', include(router.urls)),
-backend/ai_engine/urls.py:14:    path("artifacts/", views.ai_generated_artifacts, name="ai_generated_artifacts"),
-backend/ai_engine/urls.py:15:    path("grading/rubrics/", views.ai_grading_rubrics, name="ai_grading_rubrics"),
-backend/ai_engine/urls.py:16:    path("grading/drafts/", views.ai_grading_drafts, name="ai_grading_drafts"),
-backend/ai_engine/urls.py:17:    path("grading/grade_submission/", views.ai_grade_submission, name="ai_grade_submission"),
-backend/ai_engine/urls.py:18:    path("grading/approve_draft/", views.ai_approve_grading_draft, name="ai_approve_grading_draft"),
-backend/ai_engine/urls.py:19:    path("exams/generate/", views.ai_exam_generate, name="ai_exam_generate"),
-backend/ai_engine/urls.py:20:    path("quizzes/generate/", views.ai_quiz_generate, name="ai_quiz_generate"),
-backend/ai_engine/urls.py:21:    path("lessons/<int:lesson_id>/summarize/", views.ai_lesson_summarize, name="ai_lesson_summarize"),
-backend/ai_engine/urls.py:22:    path("lessons/<int:lesson_id>/exam_notes/", views.ai_lesson_exam_notes, name="ai_lesson_exam_notes"),
-backend/ai_engine/urls.py:23:    path('jobs/index-content/', views.enqueue_ai_index_content, name='ai_enqueue_index_content'),
-backend/ai_engine/urls.py:24:    path('jobs/summaries/', views.enqueue_ai_summary, name='ai_enqueue_summary'),
-backend/ai_engine/urls.py:25:    path('jobs/quizzes/', views.enqueue_ai_quiz, name='ai_enqueue_quiz'),
-backend/ai_engine/urls.py:26:    path('admin_assistant/query/', views.admin_assistant_query, name='admin_assistant_query'),
-backend/ai_engine/urls.py:27:    path('tutor/chat/', views.ai_tutor_chat, name='ai_tutor_chat'),
-backend/ai_engine/urls.py:28:    path('analytics/teacher/', views.teacher_analytics, name='teacher_analytics'),
-backend/ai_engine/urls.py:29:    path('analytics/at_risk_students/', views.at_risk_students, name='at_risk_students'),
-backend/ai_engine/urls.py:30:    path('personalization/recommendations/', views.student_recommendations, name='student_recommendations'),
-backend/ai_engine/urls.py:31:    path('reports/student/<uuid:student_id>/', views.student_report, name='student_report_generate'),
-backend/ai_engine/urls.py:32:    path('reports/student/<uuid:student_id>/history/', views.student_past_reports, name='student_report_history'),
 ```
 
 ### DRF router registrations
@@ -1191,13 +1198,13 @@ backend/billing/urls.py:18:router.register(r'payments', PaymentViewSet)
 backend/billing/urls.py:19:router.register(r'expenses', ExpenseViewSet)
 backend/billing/urls.py:20:router.register(r'dashboard', FinanceDashboardViewSet, basename='finance-dashboard')
 backend/billing/urls.py:21:router.register(r'reports', BillingReportViewSet, basename='billing-reports')
-backend/conversations/urls.py:6:router.register(r'conversations', ConversationViewSet)
-backend/conversations/urls.py:7:router.register(r'messages', MessageViewSet)
 backend/notifications/urls.py:6:router.register(r'notifications', NotificationViewSet, basename='notification')
 backend/notifications/urls.py:7:router.register(r'templates', NotificationTemplateViewSet, basename='notification-template')
 backend/users/urls.py:10:router.register(r'accounts', UserAccountViewSet)
 backend/users/urls.py:11:router.register(r'groups', GroupViewSet)
 backend/users/urls.py:12:router.register(r'permissions', PermissionViewSet)
+backend/conversations/urls.py:6:router.register(r'conversations', ConversationViewSet)
+backend/conversations/urls.py:7:router.register(r'messages', MessageViewSet)
 backend/academic/urls.py:14:router.register(r'years', AcademicYearViewSet) # /api/academic/years/
 backend/academic/urls.py:15:router.register(r'classes', AcademicClassViewSet) # /api/academic/classes/
 backend/academic/urls.py:16:router.register(r'sections', SectionViewSet) # /api/academic/sections/
@@ -1221,15 +1228,15 @@ backend/academic/urls.py:33:router.register(r'reports', ReportViewSet, basename=
 backend/academic/urls.py:34:router.register(r'admissions', AdmissionEnquiryViewSet, basename='admissions')
 backend/library/urls.py:6:router.register(r'books', views.BookViewSet)
 backend/library/urls.py:7:router.register(r'issues', views.BookIssueViewSet)
-backend/gamification/urls.py:6:router.register(r'profile', GamificationProfileViewSet, basename='gamification-profile')
-backend/gamification/urls.py:9:router.register(r'student-badges', StudentBadgeViewSet, basename='student-badges')
-backend/gamification/urls.py:10:router.register(r'leaderboard', LeaderboardViewSet, basename='leaderboard')
-backend/gamification/urls.py:11:router.register(r'available-badges', BadgeViewSet, basename='available-badges')
 backend/ai_engine/urls.py:6:router.register(r'logs', views.AIInteractionLogViewSet)
 backend/ai_engine/urls.py:7:router.register(r'reports', views.StudentAIReportViewSet, basename='student-reports')
 backend/ai_engine/urls.py:8:router.register(r'learning-paths', views.LearningPathViewSet, basename='learning-paths')
 backend/ai_engine/urls.py:9:router.register(r'learning-nodes', views.LearningNodeViewSet, basename='learning-nodes')
 backend/ai_engine/urls.py:10:router.register(r'study-schedule', views.StudyEventViewSet, basename='study-schedule')
+backend/gamification/urls.py:6:router.register(r'profile', GamificationProfileViewSet, basename='gamification-profile')
+backend/gamification/urls.py:9:router.register(r'student-badges', StudentBadgeViewSet, basename='student-badges')
+backend/gamification/urls.py:10:router.register(r'leaderboard', LeaderboardViewSet, basename='leaderboard')
+backend/gamification/urls.py:11:router.register(r'available-badges', BadgeViewSet, basename='available-badges')
 backend/debug_check_urls.py:14:    # checking users/urls.py showed router.register(r'accounts', UserAccountViewSet)
 backend/core/urls.py:26:router.register(r'tenants', TenantViewSet)
 backend/core/urls.py:27:router.register(r'audit-logs', AuditLogViewSet)
@@ -1251,8 +1258,6 @@ backend/billing/tasks.py:5:def check_overdue_fees():
 backend/notifications/tasks.py:12:def send_email_notification_task(
 backend/notifications/tasks.py:27:def send_sms_notification_task(recipient_phone: str, message: str):
 backend/notifications/tasks.py:32:def send_notification_task(
-backend/academic/tasks.py:5:def check_daily_attendance():
-backend/academic/tasks.py:35:def check_upcoming_exams():
 backend/ai_engine/tasks.py:17:def _tenant_schema(value: str | None) -> str:
 backend/ai_engine/tasks.py:22:def _resolve_tenant(schema_name: str) -> Tenant | None:
 backend/ai_engine/tasks.py:27:def _resolve_user(user_id: str | None):
@@ -1262,6 +1267,8 @@ backend/ai_engine/tasks.py:56:def _fallback_quiz(content: str, question_count: i
 backend/ai_engine/tasks.py:73:def ai_index_content_task(
 backend/ai_engine/tasks.py:109:def generate_summary_task(
 backend/ai_engine/tasks.py:152:def generate_quiz_task(
+backend/academic/tasks.py:5:def check_daily_attendance():
+backend/academic/tasks.py:35:def check_upcoming_exams():
 ```
 
 ## Docker Compose Services Summary

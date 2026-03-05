@@ -9,7 +9,7 @@ from rest_framework import status
 from rest_framework.test import APIClient
 
 from academic.models import AcademicClass, Student
-from billing.models import FeeStructure, Payment, StudentFee
+from billing.models_school import FeeStructure, Payment, StudentFee
 from core.models.tenant import Tenant
 
 User = get_user_model()

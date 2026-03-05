@@ -285,7 +285,7 @@ export default function SaasBillingPage() {
                                                         size="icon"
                                                         className="h-10 w-10 rounded-full bg-slate-100 dark:bg-white/5 text-slate-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-white/10 transition-all"
                                                         onClick={() => {
-                                                            const url = `${getApiBaseUrl()}/billing/invoices/${inv.invoice_id}/download/`;
+                                                            const url = `${getApiBaseUrl()}/billing/saas/invoices/${inv.invoice_id}/download/`;
                                                             toast.promise(
                                                                 saasApi.helpers.downloadFile(url, `invoice_${inv.invoice_id.slice(0, 8)}.pdf`),
                                                                 {

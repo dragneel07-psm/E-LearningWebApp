@@ -25,6 +25,8 @@ export const getApiBaseUrl = () => {
 };
 
 const API_BASE_URL = getApiBaseUrl();
+const BILLING_SAAS_BASE = '/billing/saas';
+const BILLING_SCHOOL_BASE = '/billing/school';
 
 // Types for API Responses
 export interface Tenant {
@@ -2369,53 +2371,53 @@ export const academicAPI = {
 
 // Billing API
 export const billingAPI = {
-    getSubscriptions: () => apiRequest<Subscription[]>('/billing/subscriptions/'),
-    getSubscription: (id: string) => apiRequest<Subscription>(`/billing/subscriptions/${id}/`),
-    getSubscriptionHistory: (id: string) => apiRequest<SubscriptionPlanHistory[] | PaginatedResponse<SubscriptionPlanHistory>>(`/billing/subscriptions/${id}/history/`),
+    getSubscriptions: () => apiRequest<Subscription[]>(`${BILLING_SAAS_BASE}/subscriptions/`),
+    getSubscription: (id: string) => apiRequest<Subscription>(`${BILLING_SAAS_BASE}/subscriptions/${id}/`),
+    getSubscriptionHistory: (id: string) => apiRequest<SubscriptionPlanHistory[] | PaginatedResponse<SubscriptionPlanHistory>>(`${BILLING_SAAS_BASE}/subscriptions/${id}/history/`),
 
     // Finance Management
-    getFeeStructures: () => apiRequest<FeeStructure[]>('/billing/fee-structures/'),
-    createFeeStructure: (data: Partial<FeeStructure>) => apiRequest<FeeStructure>('/billing/fee-structures/', {
+    getFeeStructures: () => apiRequest<FeeStructure[]>(`${BILLING_SCHOOL_BASE}/fee-structures/`),
+    createFeeStructure: (data: Partial<FeeStructure>) => apiRequest<FeeStructure>(`${BILLING_SCHOOL_BASE}/fee-structures/`, {
         method: 'POST',
         body: JSON.stringify(data)
     }),
-    updateFeeStructure: (id: string, data: Partial<FeeStructure>) => apiRequest<FeeStructure>(`/billing/fee-structures/${id}/`, {
+    updateFeeStructure: (id: string, data: Partial<FeeStructure>) => apiRequest<FeeStructure>(`${BILLING_SCHOOL_BASE}/fee-structures/${id}/`, {
         method: 'PATCH',
         body: JSON.stringify(data)
     }),
-    deleteFeeStructure: (id: string) => apiRequest<void>(`/billing/fee-structures/${id}/`, {
+    deleteFeeStructure: (id: string) => apiRequest<void>(`${BILLING_SCHOOL_BASE}/fee-structures/${id}/`, {
         method: 'DELETE'
     }),
 
-    getStudentFees: () => apiRequest<StudentFee[]>('/billing/student-fees/'),
+    getStudentFees: () => apiRequest<StudentFee[]>(`${BILLING_SCHOOL_BASE}/student-fees/`),
     assignBulkFees: (data: { fee_structure_id: string; academic_class_id: string; due_date: string }) =>
-        apiRequest<{ message: string }>('/billing/student-fees/assign_bulk/', {
+        apiRequest<{ message: string }>(`${BILLING_SCHOOL_BASE}/student-fees/assign_bulk/`, {
             method: 'POST',
             body: JSON.stringify(data)
         }),
 
-    getPayments: () => apiRequest<Payment[]>('/billing/payments/'),
-    recordPayment: (data: Partial<Payment>) => apiRequest<Payment>('/billing/payments/', {
+    getPayments: () => apiRequest<Payment[]>(`${BILLING_SCHOOL_BASE}/payments/`),
+    recordPayment: (data: Partial<Payment>) => apiRequest<Payment>(`${BILLING_SCHOOL_BASE}/payments/`, {
         method: 'POST',
         body: JSON.stringify(data)
     }),
 
-    getExpenses: () => apiRequest<Expense[]>('/billing/expenses/'),
-    createExpense: (data: Partial<Expense>) => apiRequest<Expense>('/billing/expenses/', {
+    getExpenses: () => apiRequest<Expense[]>(`${BILLING_SCHOOL_BASE}/expenses/`),
+    createExpense: (data: Partial<Expense>) => apiRequest<Expense>(`${BILLING_SCHOOL_BASE}/expenses/`, {
         method: 'POST',
         body: JSON.stringify(data)
     }),
-    updateExpense: (id: string, data: Partial<Expense>) => apiRequest<Expense>(`/billing/expenses/${id}/`, {
+    updateExpense: (id: string, data: Partial<Expense>) => apiRequest<Expense>(`${BILLING_SCHOOL_BASE}/expenses/${id}/`, {
         method: 'PATCH',
         body: JSON.stringify(data)
     }),
-    deleteExpense: (id: string) => apiRequest<void>(`/billing/expenses/${id}/`, {
+    deleteExpense: (id: string) => apiRequest<void>(`${BILLING_SCHOOL_BASE}/expenses/${id}/`, {
         method: 'DELETE'
     }),
 
-    getFinanceDashboard: () => apiRequest<FinanceDashboard>('/billing/dashboard/'),
+    getFinanceDashboard: () => apiRequest<FinanceDashboard>(`${BILLING_SCHOOL_BASE}/dashboard/`),
 
-    downloadReceipt: (paymentId: string) => apiRequestBlob(`/billing/payments/${paymentId}/generate_receipt/`),
+    downloadReceipt: (paymentId: string) => apiRequestBlob(`${BILLING_SCHOOL_BASE}/payments/${paymentId}/generate_receipt/`),
 };
 
 
@@ -2821,7 +2823,7 @@ export const saasApi = {
     createTenant: (data: Partial<Tenant>) => coreAPI.createTenant(data),
     updateTenant: (id: string, data: Partial<Tenant>) => coreAPI.updateTenant(id, data),
     getInvoices: async () => {
-        const firstPage = await apiRequest<Invoice[] | PaginatedResponse<Invoice>>('/billing/invoices/');
+        const firstPage = await apiRequest<Invoice[] | PaginatedResponse<Invoice>>(`${BILLING_SAAS_BASE}/invoices/`);
         if (Array.isArray(firstPage)) return firstPage;
         if (!firstPage || !Array.isArray(firstPage.results)) return [];
 
@@ -2831,7 +2833,7 @@ export const saasApi = {
         let hasMore = Boolean(firstPage.next);
 
         while (hasMore && all.length < totalCount) {
-            const nextPage = await apiRequest<Invoice[] | PaginatedResponse<Invoice>>(`/billing/invoices/?page=${page}`);
+            const nextPage = await apiRequest<Invoice[] | PaginatedResponse<Invoice>>(`${BILLING_SAAS_BASE}/invoices/?page=${page}`);
             if (Array.isArray(nextPage)) {
                 all.push(...nextPage);
                 break;
@@ -2846,7 +2848,7 @@ export const saasApi = {
         return all;
     },
     getPlans: async () => {
-        const firstPage = await apiRequest<SubscriptionPlan[] | PaginatedResponse<SubscriptionPlan>>('/billing/plans/');
+        const firstPage = await apiRequest<SubscriptionPlan[] | PaginatedResponse<SubscriptionPlan>>(`${BILLING_SAAS_BASE}/plans/`);
         if (Array.isArray(firstPage)) return firstPage;
         if (!firstPage || !Array.isArray(firstPage.results)) return [];
 
@@ -2856,7 +2858,7 @@ export const saasApi = {
         let hasMore = Boolean(firstPage.next);
 
         while (hasMore && all.length < totalCount) {
-            const nextPage = await apiRequest<SubscriptionPlan[] | PaginatedResponse<SubscriptionPlan>>(`/billing/plans/?page=${page}`);
+            const nextPage = await apiRequest<SubscriptionPlan[] | PaginatedResponse<SubscriptionPlan>>(`${BILLING_SAAS_BASE}/plans/?page=${page}`);
             if (Array.isArray(nextPage)) {
                 all.push(...nextPage);
                 break;
@@ -2871,7 +2873,7 @@ export const saasApi = {
         return all;
     },
     getSubscriptions: async () => {
-        const firstPage = await apiRequest<Subscription[] | PaginatedResponse<Subscription>>('/billing/subscriptions/');
+        const firstPage = await apiRequest<Subscription[] | PaginatedResponse<Subscription>>(`${BILLING_SAAS_BASE}/subscriptions/`);
         if (Array.isArray(firstPage)) return firstPage;
         if (!firstPage || !Array.isArray(firstPage.results)) return [];
 
@@ -2881,7 +2883,7 @@ export const saasApi = {
         let hasMore = Boolean(firstPage.next);
 
         while (hasMore && all.length < totalCount) {
-            const nextPage = await apiRequest<Subscription[] | PaginatedResponse<Subscription>>(`/billing/subscriptions/?page=${page}`);
+            const nextPage = await apiRequest<Subscription[] | PaginatedResponse<Subscription>>(`${BILLING_SAAS_BASE}/subscriptions/?page=${page}`);
             if (Array.isArray(nextPage)) {
                 all.push(...nextPage);
                 break;
@@ -2896,17 +2898,17 @@ export const saasApi = {
         return all;
     },
     createSubscription: (data: Partial<Subscription>) =>
-        apiRequest<Subscription>('/billing/subscriptions/', {
+        apiRequest<Subscription>(`${BILLING_SAAS_BASE}/subscriptions/`, {
             method: 'POST',
             body: JSON.stringify(data),
         }),
     updateSubscription: (id: string, data: Partial<Subscription>) =>
-        apiRequest<Subscription>(`/billing/subscriptions/${id}/`, {
+        apiRequest<Subscription>(`${BILLING_SAAS_BASE}/subscriptions/${id}/`, {
             method: 'PATCH',
             body: JSON.stringify(data),
         }),
     getPublicPlans: async () => {
-        const response = await fetch(`${API_BASE_URL}/billing/plans/public/`, {
+        const response = await fetch(`${API_BASE_URL}${BILLING_SAAS_BASE}/plans/public/`, {
             headers: {
                 'Content-Type': 'application/json',
                 'x-tenant-id': 'public',
@@ -2924,7 +2926,7 @@ export const saasApi = {
     },
     getSubscriptionHistoryByTenant: async (tenantId: string | number) => {
         const firstPage = await apiRequest<SubscriptionPlanHistory[] | PaginatedResponse<SubscriptionPlanHistory>>(
-            `/billing/subscription-history/?tenant_id=${tenantId}`
+            `${BILLING_SAAS_BASE}/subscription-history/?tenant_id=${tenantId}`
         );
         if (Array.isArray(firstPage)) return firstPage;
         if (!firstPage || !Array.isArray(firstPage.results)) return [];
@@ -2936,7 +2938,7 @@ export const saasApi = {
 
         while (hasMore && all.length < totalCount) {
             const nextPage = await apiRequest<SubscriptionPlanHistory[] | PaginatedResponse<SubscriptionPlanHistory>>(
-                `/billing/subscription-history/?tenant_id=${tenantId}&page=${page}`
+                `${BILLING_SAAS_BASE}/subscription-history/?tenant_id=${tenantId}&page=${page}`
             );
             if (Array.isArray(nextPage)) {
                 all.push(...nextPage);
@@ -2951,22 +2953,22 @@ export const saasApi = {
 
         return all;
     },
-    getPlan: (id: string) => apiRequest<SubscriptionPlan>(`/billing/plans/${id}/`),
+    getPlan: (id: string) => apiRequest<SubscriptionPlan>(`${BILLING_SAAS_BASE}/plans/${id}/`),
     createPlan: (data: Partial<SubscriptionPlan>) =>
-        apiRequest<SubscriptionPlan>('/billing/plans/', {
+        apiRequest<SubscriptionPlan>(`${BILLING_SAAS_BASE}/plans/`, {
             method: 'POST',
             body: JSON.stringify(data),
         }),
     seedDefaultPlans: () =>
-        apiRequest<SeedDefaultPlansResponse>('/billing/plans/seed-defaults/', {
+        apiRequest<SeedDefaultPlansResponse>(`${BILLING_SAAS_BASE}/plans/seed-defaults/`, {
             method: 'POST',
         }),
     updatePlan: (id: string, data: Partial<SubscriptionPlan>) =>
-        apiRequest<SubscriptionPlan>(`/billing/plans/${id}/`, {
+        apiRequest<SubscriptionPlan>(`${BILLING_SAAS_BASE}/plans/${id}/`, {
             method: 'PATCH',
             body: JSON.stringify(data),
         }),
-    deletePlan: (id: string) => apiRequest<void>(`/billing/plans/${id}/`, { method: 'DELETE' }),
+    deletePlan: (id: string) => apiRequest<void>(`${BILLING_SAAS_BASE}/plans/${id}/`, { method: 'DELETE' }),
     getSettings: () => apiRequest<GlobalSettings>('/core/settings/'),
     updateSettings: (data: Partial<GlobalSettings>) =>
         apiRequest<GlobalSettings>('/core/settings/', {
@@ -3117,16 +3119,16 @@ export const api = {
             const query = new URLSearchParams();
             if (start) query.append('start_date', start);
             if (end) query.append('end_date', end);
-            return `${API_BASE_URL}/billing/reports/fee-collection/?${query.toString()}`;
+            return `${API_BASE_URL}${BILLING_SCHOOL_BASE}/reports/fee-collection/?${query.toString()}`;
         },
         getFeeCollectionExcel: (start?: string, end?: string) => {
             const query = new URLSearchParams();
             if (start) query.append('start_date', start);
             if (end) query.append('end_date', end);
-            return `${API_BASE_URL}/billing/reports/fee-collection-excel/?${query.toString()}`;
+            return `${API_BASE_URL}${BILLING_SCHOOL_BASE}/reports/fee-collection-excel/?${query.toString()}`;
         },
-        getPendingFeesPDF: () => `${API_BASE_URL}/billing/reports/pending-fees/`,
-        getPendingFeesExcel: () => `${API_BASE_URL}/billing/reports/pending-fees-excel/`,
+        getPendingFeesPDF: () => `${API_BASE_URL}${BILLING_SCHOOL_BASE}/reports/pending-fees/`,
+        getPendingFeesExcel: () => `${API_BASE_URL}${BILLING_SCHOOL_BASE}/reports/pending-fees-excel/`,
         getResultCardPDF: (studentId: string, resultId: string) => `${API_BASE_URL}/academic/reports/result-card/${studentId}/${resultId}/`,
         getHallTicketPDF: (seatingId: string) => `${API_BASE_URL}/academic/reports/hall-ticket/${seatingId}/`,
         getBulkHallTicketsZIP: (examId: string) => `${API_BASE_URL}/academic/reports/bulk-hall-tickets/${examId}/`,

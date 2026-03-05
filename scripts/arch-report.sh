@@ -54,30 +54,62 @@ print_repo_tree() {
 }
 
 print_api_routes() {
+  if command -v rg >/dev/null 2>&1; then
+    (
+      cd "${REPO_ROOT}" && \
+      rg -n --no-heading "^[[:space:]]*(path|re_path)\(" backend -g "*urls.py" || true
+    )
+    return
+  fi
+
   (
     cd "${REPO_ROOT}" && \
-    rg -n --no-heading "^[[:space:]]*(path|re_path)\(" backend -g "*urls.py" || true
+    find backend -name "*urls.py" -type f -print0 | xargs -0 grep -nE "^[[:space:]]*(path|re_path)\(" || true
   )
 }
 
 print_router_routes() {
+  if command -v rg >/dev/null 2>&1; then
+    (
+      cd "${REPO_ROOT}" && \
+      rg -n --no-heading "router\\.register\(" backend -g "*urls.py" || true
+    )
+    return
+  fi
+
   (
     cd "${REPO_ROOT}" && \
-    rg -n --no-heading "router\\.register\(" backend -g "*urls.py" || true
+    find backend -name "*urls.py" -type f -print0 | xargs -0 grep -nE "router\\.register\(" || true
   )
 }
 
 print_celery_tasks() {
+  if command -v rg >/dev/null 2>&1; then
+    (
+      cd "${REPO_ROOT}" && \
+      rg -n --no-heading "@(shared_task|app\\.task|celery_app\\.task)" backend || true
+    )
+    return
+  fi
+
   (
     cd "${REPO_ROOT}" && \
-    rg -n --no-heading "@(shared_task|app\\.task|celery_app\\.task)" backend || true
+    grep -RnsE "@(shared_task|app\\.task|celery_app\\.task)" backend || true
   )
 }
 
 print_task_functions() {
+  if command -v rg >/dev/null 2>&1; then
+    (
+      cd "${REPO_ROOT}" && \
+      rg -n --no-heading "^def [A-Za-z_][A-Za-z0-9_]*\\(" backend -g "*tasks.py" || true
+    )
+    return
+  fi
+
   (
     cd "${REPO_ROOT}" && \
-    rg -n --no-heading "^def [A-Za-z_][A-Za-z0-9_]*\\(" backend -g "*tasks.py" || true
+    find backend -name "*tasks.py" -type f -print0 | xargs -0 grep -nE "^def [A-Za-z_][A-Za-z0-9_]*\\(" || true
   )
 }
 

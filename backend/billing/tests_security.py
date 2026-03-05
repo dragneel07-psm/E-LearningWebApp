@@ -1,8 +1,9 @@
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
+from django.test import override_settings
 from django.utils import timezone
 from django_tenants.test.cases import FastTenantTestCase
-from django_tenants.utils import schema_context
+from django_tenants.utils import get_tenant_model, schema_context
 from rest_framework import status
 from rest_framework.test import APIClient, APIRequestFactory, force_authenticate
 
@@ -28,8 +29,28 @@ class BillingBoundaryAndValidationTests(FastTenantTestCase):
     def setUp(self):
         self.factory = APIRequestFactory()
         with schema_context("public"):
-            public_domain = Domain.objects.filter(tenant__schema_name="public").order_by("-is_primary").first()
-        public_host = public_domain.domain if public_domain else "localhost"
+            tenant_model = get_tenant_model()
+            public_tenant = tenant_model.objects.filter(schema_name="public").first()
+            if public_tenant is None:
+                public_tenant = tenant_model(
+                    schema_name="public",
+                    name="Public Tenant",
+                    subdomain="public",
+                )
+                public_tenant.auto_create_schema = False
+                public_tenant.save()
+            public_domain = (
+                Domain.objects.filter(tenant=public_tenant).order_by("-is_primary").first()
+                if public_tenant
+                else None
+            )
+            if public_tenant and public_domain is None:
+                public_domain = Domain.objects.create(
+                    tenant=public_tenant,
+                    domain="public.testserver",
+                    is_primary=True,
+                )
+        public_host = public_domain.domain if public_domain else "public.testserver"
 
         self.tenant_client = APIClient(
             HTTP_HOST=self.get_test_tenant_domain(),
@@ -86,6 +107,32 @@ class BillingBoundaryAndValidationTests(FastTenantTestCase):
         self.tenant_client.force_authenticate(user=self.saas_admin)
         response = self.tenant_client.get("/api/billing/subscriptions/")
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_legacy_billing_routes_include_deprecation_headers(self):
+        self.tenant_client.force_authenticate(user=self.tenant_admin)
+        response = self.tenant_client.get("/api/billing/fee-structures/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.headers.get("Deprecation"), "true")
+        self.assertIn("Sunset", response.headers)
+        self.assertIn("/api/billing/school/", response.headers.get("Link", ""))
+
+    @override_settings(DEBUG=True, TENANT_HEADER_TRUST_MODE="dev_only")
+    def test_namespaced_saas_endpoints_work_on_public_schema(self):
+        self.public_client.force_authenticate(user=self.saas_admin)
+        response = self.public_client.get("/api/billing/saas/plans/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIsNone(response.headers.get("Deprecation"))
+
+    @override_settings(DEBUG=True, TENANT_HEADER_TRUST_MODE="dev_only")
+    def test_namespaced_school_endpoints_require_tenant_schema(self):
+        self.public_client.force_authenticate(user=self.tenant_admin)
+        forbidden = self.public_client.get("/api/billing/school/fee-structures/")
+        self.assertIn(forbidden.status_code, {status.HTTP_403_FORBIDDEN, status.HTTP_404_NOT_FOUND})
+
+        self.tenant_client.force_authenticate(user=self.tenant_admin)
+        allowed = self.tenant_client.get("/api/billing/school/fee-structures/")
+        self.assertEqual(allowed.status_code, status.HTTP_200_OK)
+        self.assertIsNone(allowed.headers.get("Deprecation"))
 
     def test_tenant_fee_models_cannot_be_saved_in_public_schema(self):
         with schema_context("public"):

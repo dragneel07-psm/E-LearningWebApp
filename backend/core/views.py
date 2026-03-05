@@ -179,7 +179,7 @@ class TenantViewSet(viewsets.ModelViewSet):
 
             # 4. Create a default Trial Subscription for the new tenant
             try:
-                from billing.models import Subscription, SubscriptionPlan
+                from billing.models_saas import Subscription, SubscriptionPlan
                 # Required by serializer, but keep a safe fallback.
                 plan = selected_plan or SubscriptionPlan.objects.filter(is_active=True).order_by('name').first()
                 if not plan:

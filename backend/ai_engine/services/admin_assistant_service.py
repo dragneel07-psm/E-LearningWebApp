@@ -12,7 +12,7 @@ from django.db.models.functions import Coalesce
 from django.utils import timezone
 
 from academic.models import Attendance, Result, Student
-from billing.models import Expense, Payment, StudentFee
+from billing.models_school import Expense, Payment, StudentFee
 
 from .rag_tutor_service import RAGTutorService
 

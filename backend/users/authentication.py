@@ -51,6 +51,28 @@ class TenantAwareJWTAuthentication(JWTAuthentication):
             if request_tenant
             else "public"
         )
+
+        role = str(getattr(user, "role", "") or "").strip().lower()
+        is_saas_admin = role == "saas_admin"
+
+        if is_saas_admin:
+            if user_tenant is not None or token_tenant != "public" or request_tenant_schema != "public":
+                raise AuthenticationFailed(
+                    "SaaS admin token must be scoped to public schema only.",
+                    code="saas_admin_scope_invalid",
+                )
+        else:
+            if user_tenant is None:
+                raise AuthenticationFailed(
+                    "Tenant user is missing tenant assignment.",
+                    code="tenant_user_missing_tenant",
+                )
+            if token_tenant == "public" or request_tenant_schema == "public":
+                raise AuthenticationFailed(
+                    "Tenant user token cannot be used against public schema.",
+                    code="tenant_user_public_scope_invalid",
+                )
+
         if token_tenant != request_tenant_schema:
             raise AuthenticationFailed(
                 "Token tenant claim does not match request tenant.",
