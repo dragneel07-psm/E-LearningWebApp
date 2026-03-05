@@ -300,7 +300,7 @@ class ResultViewSet(viewsets.ModelViewSet):
         
         # Initialize AI Feedbacker
         try:
-            from ai_engine.services.tutor_service import tutor_service
+            from ai_engine.services.tutor_service import ai_tutor_service
             
             # Construct a prompt based on result data
             prompt = f"""
@@ -320,7 +320,7 @@ class ResultViewSet(viewsets.ModelViewSet):
             Keep it encouraging and professional.
             """
             
-            ai_response = tutor_service.generate_response(prompt)
+            ai_response = ai_tutor_service.get_chat_response([{"role": "user", "content": prompt}])
             result.ai_feedback = ai_response
             result.save()
             

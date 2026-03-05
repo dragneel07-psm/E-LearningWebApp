@@ -192,6 +192,14 @@ Let's work through this together!"""
         result = self.generate_tutor_response(current_message, context, history)
         return result['response']
 
+    def generate_response(self, prompt: str, context: Dict = None) -> str:
+        """
+        Backward-compatible adapter for legacy callers that pass a single prompt.
+        """
+        if not prompt:
+            return ""
+        return self.get_chat_response([{"role": "user", "content": prompt}], context=context)
+
     def generate_teacher_insights(self, data: Dict) -> List[str]:
         """
         Generate pedagogical insights for a teacher based on class performance data.
@@ -246,3 +254,4 @@ Let's work through this together!"""
 
 # Singleton instance
 ai_tutor_service = AITutorService()
+tutor_service = ai_tutor_service
