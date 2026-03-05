@@ -264,6 +264,7 @@ REST_FRAMEWORK = {
         'auth_register': os.environ.get('THROTTLE_AUTH_REGISTER', '5/hour'),
         'auth_password_reset': os.environ.get('THROTTLE_AUTH_PASSWORD_RESET', '5/hour'),
         'auth_password_reset_confirm': os.environ.get('THROTTLE_AUTH_PASSWORD_RESET_CONFIRM', '10/hour'),
+        'ai_tutor_chat': os.environ.get('THROTTLE_AI_TUTOR_CHAT', '30/min'),
     },
     'DEFAULT_PAGINATION_CLASS': 'core.pagination.StandardResultsSetPagination',
     'PAGE_SIZE': 20,
@@ -317,6 +318,14 @@ JWT_ROLE_TOKEN_LIFETIMES = {
 JWT_STRICT_REFRESH_ROTATION = os.environ.get("JWT_STRICT_REFRESH_ROTATION", "true").lower() == "true"
 
 DEFAULT_FROM_EMAIL = os.environ.get("DEFAULT_FROM_EMAIL", "support@elearning.dev")
+
+# AI Embeddings / RAG
+AI_EMBEDDING_DIMENSIONS = int(os.environ.get("AI_EMBEDDING_DIMENSIONS", "1536"))
+AI_EMBEDDING_MODEL = os.environ.get("AI_EMBEDDING_MODEL", "text-embedding-3-small").strip()
+AI_CONTENT_CHUNK_WORDS = int(os.environ.get("AI_CONTENT_CHUNK_WORDS", "180"))
+AI_CONTENT_CHUNK_OVERLAP_WORDS = int(os.environ.get("AI_CONTENT_CHUNK_OVERLAP_WORDS", "30"))
+AI_TUTOR_TOP_K = int(os.environ.get("AI_TUTOR_TOP_K", "5"))
+AI_TUTOR_MIN_SIMILARITY = float(os.environ.get("AI_TUTOR_MIN_SIMILARITY", "0.58"))
 
 # Tenant trust policy:
 # - dev_only (default): allow x-tenant-id only in DEBUG + local hostnames

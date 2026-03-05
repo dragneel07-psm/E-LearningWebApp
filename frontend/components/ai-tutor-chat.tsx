@@ -1,6 +1,6 @@
 'use client';
 
-import { aiAPI, ChatMessage } from '@/lib/api';
+import { aiAPI, ChatMessage, TutorChatSource, TutorChatUsage } from '@/lib/api';
 
 import { useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -12,6 +12,8 @@ import { toast } from 'sonner';
 interface Message {
     role: 'user' | 'assistant';
     content: string;
+    sources?: TutorChatSource[];
+    usage?: TutorChatUsage;
 }
 
 interface AITutorChatProps {
@@ -42,7 +44,9 @@ export function AITutorChat({ open, onOpenChange, studentId }: AITutorChatProps)
 
             const assistantMessage: Message = {
                 role: 'assistant',
-                content: data.response
+                content: data.answer,
+                sources: data.sources,
+                usage: data.usage,
             };
 
             setMessages(prev => [...prev, assistantMessage]);
@@ -99,6 +103,23 @@ export function AITutorChat({ open, onOpenChange, studentId }: AITutorChatProps)
                                     }`}
                             >
                                 <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+                                {message.role === 'assistant' && Array.isArray(message.sources) && message.sources.length > 0 && (
+                                    <div className="mt-3 border-t border-gray-300 pt-2 space-y-2">
+                                        {message.sources.map((source, sourceIndex) => (
+                                            <div key={`${source.source_type}-${source.source_id}-${sourceIndex}`} className="rounded border border-gray-300 bg-white px-2 py-1">
+                                                <p className="text-[11px] font-medium text-gray-700">
+                                                    {source.source_type} • {source.source_id}
+                                                </p>
+                                                <p className="text-[11px] text-gray-600">{source.snippet}</p>
+                                            </div>
+                                        ))}
+                                        {message.usage && (
+                                            <p className="text-[10px] text-gray-500">
+                                                Model: {message.usage.model} • Prompt: {message.usage.prompt_tokens} • Completion: {message.usage.completion_tokens}
+                                            </p>
+                                        )}
+                                    </div>
+                                )}
                             </div>
 
                             {message.role === 'user' && (

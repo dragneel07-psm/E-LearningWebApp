@@ -53,6 +53,7 @@ platformdirs==4.9.2
 prometheus_client==0.21.0
 psutil==6.1.0
 psycopg2-binary==2.9.11
+pgvector==0.3.6
 pycairo==1.29.0
 pycparser==3.0
 pydantic==2.12.5

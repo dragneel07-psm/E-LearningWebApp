@@ -4,6 +4,7 @@ from django.contrib.auth import get_user_model
 from django.test import override_settings
 from django_tenants.test.cases import FastTenantTestCase
 from django_tenants.utils import tenant_context
+from rest_framework.test import APIClient
 
 from notifications.models import Notification
 from notifications.services import NotificationService
@@ -31,6 +32,8 @@ class NotificationAsyncDeliveryTests(FastTenantTestCase):
                 tenant=self.tenant,
                 phone_number="+9779800000001",
             )
+        self.client = APIClient()
+        self.client.force_authenticate(user=self.user)
 
     @override_settings(ASYNC_TASK_BACKEND="sync")
     @patch("notifications.services.EmailService.send_email", return_value=True)
@@ -65,3 +68,28 @@ class NotificationAsyncDeliveryTests(FastTenantTestCase):
             recipient_phone="+9779800000001",
             message="Class starts at 9 AM.",
         )
+
+    @override_settings(ASYNC_TASK_BACKEND="sync")
+    def test_dispatch_endpoint_enqueues_job_and_status_is_queryable(self):
+        response = self.client.post(
+            "/api/notifications/dispatch/",
+            {
+                "recipient_id": str(self.user.pk),
+                "title": "Reminder",
+                "message": "Complete your assignment.",
+            },
+            format="json",
+            HTTP_HOST=self.get_test_tenant_domain(),
+            HTTP_X_TENANT_ID=self.tenant.schema_name,
+        )
+        self.assertEqual(response.status_code, 202)
+        job_id = response.data.get("job_id")
+        self.assertTrue(job_id)
+
+        status_response = self.client.get(
+            f"/api/core/jobs/{job_id}/",
+            HTTP_HOST=self.get_test_tenant_domain(),
+            HTTP_X_TENANT_ID=self.tenant.schema_name,
+        )
+        self.assertEqual(status_response.status_code, 200)
+        self.assertEqual(status_response.data.get("status"), "success")

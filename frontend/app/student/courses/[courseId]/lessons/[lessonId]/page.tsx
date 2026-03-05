@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useParams, useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, CheckCircle, ChevronRight, Menu, FileText, Video as VideoIcon } from 'lucide-react';
+import { ArrowLeft, CheckCircle, ChevronRight, Menu, FileText, Sparkles, Languages, Video as VideoIcon } from 'lucide-react';
 import { useGamification } from '@/components/providers/gamification-provider';
 
 // Additional Imports
@@ -13,7 +13,7 @@ import { VideoPlayer } from "@/components/lessons/video-player";
 import { InteractiveRenderer, LessonInteractiveRenderer, Interaction } from "@/components/lessons/interactive-renderer";
 import { SafeHTML } from "@/components/ui/safe-html";
 import { toast } from "sonner";
-import { academicAPI, Lesson, Chapter, LessonProgress } from "@/lib/api";
+import { academicAPI, aiAPI, Chapter, Lesson, LessonAiArtifact, LessonProgress } from "@/lib/api";
 
 function normalizeChapters(payload: unknown): Chapter[] {
     if (Array.isArray(payload)) return payload as Chapter[];
@@ -46,6 +46,10 @@ export default function LessonPlayerPage() {
     const [chapters, setChapters] = useState<Chapter[]>([]);
     const [loading, setLoading] = useState(true);
     const [completing, setCompleting] = useState(false);
+    const [artifactLang, setArtifactLang] = useState<'en' | 'ne'>('en');
+    const [artifactLoading, setArtifactLoading] = useState(false);
+    const [artifactType, setArtifactType] = useState<'summary' | 'exam_notes' | null>(null);
+    const [artifact, setArtifact] = useState<LessonAiArtifact | null>(null);
 
     // Video & Interactive State
     const [isVideoPlaying, setIsVideoPlaying] = useState(true);
@@ -228,6 +232,23 @@ export default function LessonPlayerPage() {
     const handleNavigate = async (newLessonId: number) => {
         await persistCurrentVideoProgress();
         router.push(`/student/courses/${courseId}/lessons/${newLessonId}`);
+    };
+
+    const handleGenerateArtifact = async (type: 'summary' | 'exam_notes') => {
+        if (!lesson) return;
+        setArtifactLoading(true);
+        setArtifactType(type);
+        try {
+            const payload = type === 'summary'
+                ? await aiAPI.summarizeLesson(lesson.id, artifactLang)
+                : await aiAPI.lessonExamNotes(lesson.id, artifactLang);
+            setArtifact(payload);
+        } catch (error) {
+            console.error('Failed to generate lesson artifact', error);
+            toast.error('Failed to generate AI notes.');
+        } finally {
+            setArtifactLoading(false);
+        }
     };
 
     const publishedLessons = chapters.flatMap((c) => (c.lessons || []).filter((l) => l.is_published));
@@ -567,6 +588,79 @@ export default function LessonPlayerPage() {
                                     </div>
                                 </div>
                             )}
+
+                            <div className="space-y-4 rounded-2xl border border-indigo-100 bg-indigo-50/40 p-5">
+                                <div className="flex flex-wrap items-center justify-between gap-3">
+                                    <div className="flex items-center gap-2">
+                                        <Sparkles className="h-4 w-4 text-indigo-600" />
+                                        <h3 className="text-sm font-bold text-indigo-900">AI Summary & Exam Notes</h3>
+                                    </div>
+                                    <label className="flex items-center gap-2 text-xs font-semibold text-slate-600">
+                                        <Languages className="h-3.5 w-3.5" />
+                                        <select
+                                            value={artifactLang}
+                                            onChange={(e) => setArtifactLang(e.target.value as 'en' | 'ne')}
+                                            className="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs"
+                                        >
+                                            <option value="en">English</option>
+                                            <option value="ne">Nepali</option>
+                                        </select>
+                                    </label>
+                                </div>
+
+                                <div className="flex flex-wrap gap-2">
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        disabled={artifactLoading}
+                                        onClick={() => handleGenerateArtifact('summary')}
+                                    >
+                                        {artifactLoading && artifactType === 'summary' ? 'Generating...' : 'Generate Summary'}
+                                    </Button>
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        disabled={artifactLoading}
+                                        onClick={() => handleGenerateArtifact('exam_notes')}
+                                    >
+                                        {artifactLoading && artifactType === 'exam_notes' ? 'Generating...' : 'Generate Exam Notes'}
+                                    </Button>
+                                </div>
+
+                                {artifact && (
+                                    <div className="space-y-3 rounded-xl border border-slate-200 bg-white p-4">
+                                        <p className="text-sm font-semibold text-slate-900">{artifact.summary}</p>
+                                        {artifact.bullets.length > 0 && (
+                                            <div>
+                                                <p className="mb-1 text-xs font-bold uppercase tracking-wide text-slate-500">Bullets</p>
+                                                <ul className="list-disc space-y-1 pl-5 text-sm text-slate-700">
+                                                    {artifact.bullets.map((item, idx) => <li key={`bullet-${idx}`}>{item}</li>)}
+                                                </ul>
+                                            </div>
+                                        )}
+                                        {artifact.key_terms.length > 0 && (
+                                            <div>
+                                                <p className="mb-1 text-xs font-bold uppercase tracking-wide text-slate-500">Key Terms</p>
+                                                <div className="flex flex-wrap gap-2">
+                                                    {artifact.key_terms.map((term, idx) => (
+                                                        <span key={`term-${idx}`} className="rounded-full border border-indigo-200 bg-indigo-50 px-2 py-0.5 text-xs font-semibold text-indigo-700">
+                                                            {term}
+                                                        </span>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
+                                        {artifact.practice_questions.length > 0 && (
+                                            <div>
+                                                <p className="mb-1 text-xs font-bold uppercase tracking-wide text-slate-500">Practice Questions</p>
+                                                <ol className="list-decimal space-y-1 pl-5 text-sm text-slate-700">
+                                                    {artifact.practice_questions.map((item, idx) => <li key={`question-${idx}`}>{item}</li>)}
+                                                </ol>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
 
                             {/* Navigation Footer */}
                             <div className="flex justify-between items-center pt-10 pb-20 border-t border-slate-100">

@@ -2,6 +2,10 @@ from __future__ import annotations
 
 from core.async_jobs import background_task
 from notifications.services import EmailService, SMSService
+from django.contrib.auth import get_user_model
+from django_tenants.utils import schema_context
+
+from core.models import Tenant
 
 
 @background_task(name="notifications.send_email")
@@ -23,3 +27,37 @@ def send_email_notification_task(
 def send_sms_notification_task(recipient_phone: str, message: str):
     return SMSService.send_sms(recipient_phone=recipient_phone, message=message)
 
+
+@background_task(name="notifications.send_notification")
+def send_notification_task(
+    *,
+    tenant_schema: str,
+    recipient_id: str,
+    title: str,
+    message: str,
+    link: str | None = None,
+    channels: list[str] | None = None,
+):
+    from notifications.services import NotificationService
+
+    schema_name = str(tenant_schema or "").strip().lower() or "public"
+    with schema_context(schema_name):
+        with schema_context("public"):
+            tenant = Tenant.objects.filter(schema_name=schema_name).first()
+        user_model = get_user_model()
+        recipient = user_model.objects.filter(pk=recipient_id).first()
+        if not recipient:
+            raise ValueError("Recipient not found")
+
+        notification = NotificationService.create_notification(
+            recipient=recipient,
+            title=title,
+            message=message,
+            tenant=tenant,
+            link=link,
+            channels=channels or [],
+        )
+        return {
+            "notification_id": notification.id,
+            "recipient_id": str(recipient.pk),
+        }

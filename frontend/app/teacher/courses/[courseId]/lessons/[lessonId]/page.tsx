@@ -38,6 +38,7 @@ export default function LessonEditorPage() {
     const [isPublished, setIsPublished] = useState(false);
     const [duration, setDuration] = useState(15);
     const [isGenerating, setIsGenerating] = useState(false);
+    const [isGeneratingQuiz, setIsGeneratingQuiz] = useState(false);
 
     useEffect(() => {
         if (lessonId === 'new') {
@@ -145,6 +146,36 @@ export default function LessonEditorPage() {
             toast.error("Failed to save lesson");
         } finally {
             setSaving(false);
+        }
+    };
+
+    const handleGenerateLessonQuiz = async () => {
+        if (lessonId === 'new' || !lesson) {
+            toast.error('Save lesson first before generating quiz.');
+            return;
+        }
+
+        const rawDifficulty = (window.prompt('Quiz difficulty? (easy | medium | hard)', 'medium') || 'medium').trim().toLowerCase();
+        const difficulty = rawDifficulty === 'easy' || rawDifficulty === 'hard' ? rawDifficulty : 'medium';
+
+        const rawCount = window.prompt('Number of questions (1-30)', '10') || '10';
+        const parsedCount = Number.parseInt(rawCount, 10);
+        const count = Number.isFinite(parsedCount) ? Math.max(1, Math.min(30, parsedCount)) : 10;
+
+        setIsGeneratingQuiz(true);
+        try {
+            const result = await aiAPI.generateQuiz({
+                source_type: 'lesson',
+                source_id: lesson.id,
+                difficulty: difficulty as 'easy' | 'medium' | 'hard',
+                count,
+            });
+            toast.success(`Quiz created (${result.questions.length} questions). Quiz ID: ${result.quiz_id}`);
+        } catch (error: any) {
+            console.error('AI quiz generation failed', error);
+            toast.error(error?.message || 'Failed to generate quiz');
+        } finally {
+            setIsGeneratingQuiz(false);
         }
     };
 
@@ -275,6 +306,15 @@ export default function LessonEditorPage() {
                             >
                                 <ListChecks className="h-4 w-4 mr-2 text-indigo-500" />
                                 Create Quiz Questions
+                            </Button>
+                            <Button
+                                variant="outline"
+                                className="w-full justify-start text-slate-700"
+                                onClick={handleGenerateLessonQuiz}
+                                disabled={isGeneratingQuiz}
+                            >
+                                <ListChecks className="h-4 w-4 mr-2 text-indigo-500" />
+                                {isGeneratingQuiz ? 'Generating Quiz...' : 'Generate Quiz Assessment'}
                             </Button>
                         </CardContent>
                     </Card>

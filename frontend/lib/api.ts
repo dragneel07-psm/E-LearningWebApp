@@ -977,6 +977,86 @@ export interface ChatMessage {
     content: string;
 }
 
+export interface TutorChatSource {
+    source_type: 'lesson' | 'chapter' | 'material' | string;
+    source_id: string;
+    snippet: string;
+}
+
+export interface TutorChatUsage {
+    model: string;
+    prompt_tokens: number;
+    completion_tokens: number;
+}
+
+export interface TutorChatResponse {
+    answer: string;
+    sources: TutorChatSource[];
+    usage: TutorChatUsage;
+    // Backward-compatible aliases for existing UI calls.
+    response: string;
+    tokens_used: number;
+    is_demo: boolean;
+    error?: string;
+    fallback_reason?: string;
+}
+
+export interface LessonAiArtifact {
+    summary: string;
+    bullets: string[];
+    key_terms: string[];
+    practice_questions: string[];
+}
+
+export interface GeneratedQuizQuestion {
+    question_id?: string;
+    type: 'mcq';
+    prompt: string;
+    options: string[];
+    correct_index: number;
+    explanation?: string;
+}
+
+export interface GeneratedQuizResponse {
+    quiz_id: string;
+    questions: GeneratedQuizQuestion[];
+}
+
+export interface GeneratedExamQuestion {
+    type: string;
+    prompt: string;
+    marks: number;
+    options?: string[];
+}
+
+export interface GeneratedExamSection {
+    title: string;
+    instructions?: string;
+    marks: number;
+    questions: GeneratedExamQuestion[];
+}
+
+export interface GeneratedExamPaperResponse {
+    paper: {
+        title: string;
+        total_marks: number;
+        sections: GeneratedExamSection[];
+    };
+    answer_key: Record<string, any>;
+    marking_scheme: Record<string, any>;
+}
+
+export interface AiGeneratedArtifactRecord {
+    id: string;
+    artifact_type: string;
+    source_type: string;
+    source_id: string;
+    lang: string;
+    content: Record<string, any>;
+    created_by?: string | null;
+    created_at: string;
+}
+
 export interface Timetable {
     timetable_id: number;
     academic_class: number | string;
@@ -2338,11 +2418,19 @@ export const libraryAPI = {
 
 // AI Engine API
 export const aiAPI = {
-    chat: (message: string, studentId: string, conversationHistory: ChatMessage[]) =>
-        apiRequest<{
-            response: string;
-            tokens_used: number;
-            is_demo: boolean;
+    chat: async (
+        message: string,
+        studentId: string,
+        conversationHistory: ChatMessage[],
+        context?: { lesson_id?: string | number; chapter_id?: string | number }
+    ) => {
+        const payload = await apiRequest<{
+            answer?: string;
+            response?: string;
+            sources?: TutorChatSource[];
+            usage?: Partial<TutorChatUsage>;
+            tokens_used?: number;
+            is_demo?: boolean;
             error?: string;
             fallback_reason?: string;
         }>('/ai/tutor/chat/', {
@@ -2350,9 +2438,82 @@ export const aiAPI = {
             body: JSON.stringify({
                 message,
                 student_id: studentId,
-                conversation_history: conversationHistory
+                conversation_history: conversationHistory,
+                context: context || undefined,
             })
+        });
+
+        const answer = String(payload.answer ?? payload.response ?? '');
+        const sources = Array.isArray(payload.sources) ? payload.sources : [];
+        const promptTokens = Number(payload.usage?.prompt_tokens ?? 0);
+        const completionTokens = Number(payload.usage?.completion_tokens ?? 0);
+        const model = String(payload.usage?.model ?? 'fallback');
+        const totalTokens = Number(payload.tokens_used ?? (promptTokens + completionTokens));
+        const isDemo = Boolean(payload.is_demo ?? model.startsWith('fallback'));
+
+        return {
+            answer,
+            sources,
+            usage: {
+                model,
+                prompt_tokens: promptTokens,
+                completion_tokens: completionTokens,
+            },
+            // Backward-compatible fields:
+            response: answer,
+            tokens_used: totalTokens,
+            is_demo: isDemo,
+            error: payload.error,
+            fallback_reason: payload.fallback_reason,
+        } as TutorChatResponse;
+    },
+    summarizeLesson: (lessonId: number, lang: 'en' | 'ne' = 'en') =>
+        apiRequest<LessonAiArtifact>(`/ai/lessons/${lessonId}/summarize/?lang=${lang}`, {
+            method: 'POST',
         }),
+    lessonExamNotes: (lessonId: number, lang: 'en' | 'ne' = 'en') =>
+        apiRequest<LessonAiArtifact>(`/ai/lessons/${lessonId}/exam_notes/?lang=${lang}`, {
+            method: 'POST',
+        }),
+    generateQuiz: (data: {
+        source_type: 'lesson' | 'chapter';
+        source_id: string | number;
+        difficulty: 'easy' | 'medium' | 'hard';
+        count: number;
+    }) =>
+        apiRequest<GeneratedQuizResponse>('/ai/quizzes/generate/', {
+            method: 'POST',
+            body: JSON.stringify(data),
+        }),
+    generateExamPaper: (data: {
+        class_id: string | number;
+        subject_id: string | number;
+        units: Array<string | number>;
+        marks: number;
+        difficulty_mix: {
+            easy: number;
+            medium: number;
+            hard: number;
+        };
+    }) =>
+        apiRequest<GeneratedExamPaperResponse>('/ai/exams/generate/', {
+            method: 'POST',
+            body: JSON.stringify(data),
+        }),
+    getArtifacts: (params?: {
+        artifact_type?: string;
+        source_type?: string;
+        source_id?: string | number;
+        limit?: number;
+    }) => {
+        const query = new URLSearchParams();
+        if (params?.artifact_type) query.set('artifact_type', params.artifact_type);
+        if (params?.source_type) query.set('source_type', params.source_type);
+        if (params?.source_id !== undefined && params.source_id !== null) query.set('source_id', String(params.source_id));
+        if (params?.limit !== undefined) query.set('limit', String(params.limit));
+        const suffix = query.toString() ? `?${query.toString()}` : '';
+        return apiRequest<AiGeneratedArtifactRecord[]>(`/ai/artifacts/${suffix}`);
+    },
     getAILogs: async () => {
         const firstPage = await apiRequest<any[] | PaginatedResponse<any>>('/ai/logs/');
         if (Array.isArray(firstPage)) return firstPage;
@@ -2796,11 +2957,33 @@ export const api = {
     library: libraryAPI,
     ai: {
         getTeacherAnalytics: () => apiRequest<any>('/ai/analytics/teacher/'),
-        tutorChat: (data: { message: string; history: any[] }) =>
-            apiRequest<any>('/ai/tutor/chat/', {
-                method: 'POST',
-                body: JSON.stringify(data)
-            }),
+        tutorChat: (data: { message: string; history: any[]; context?: { lesson_id?: string | number; chapter_id?: string | number } }) =>
+            aiAPI.chat(data.message, '', (data.history || []) as ChatMessage[], data.context),
+        summarizeLesson: (lessonId: number, lang: 'en' | 'ne' = 'en') => aiAPI.summarizeLesson(lessonId, lang),
+        lessonExamNotes: (lessonId: number, lang: 'en' | 'ne' = 'en') => aiAPI.lessonExamNotes(lessonId, lang),
+        generateQuiz: (data: {
+            source_type: 'lesson' | 'chapter';
+            source_id: string | number;
+            difficulty: 'easy' | 'medium' | 'hard';
+            count: number;
+        }) => aiAPI.generateQuiz(data),
+        generateExamPaper: (data: {
+            class_id: string | number;
+            subject_id: string | number;
+            units: Array<string | number>;
+            marks: number;
+            difficulty_mix: {
+                easy: number;
+                medium: number;
+                hard: number;
+            };
+        }) => aiAPI.generateExamPaper(data),
+        getArtifacts: (params?: {
+            artifact_type?: string;
+            source_type?: string;
+            source_id?: string | number;
+            limit?: number;
+        }) => aiAPI.getArtifacts(params),
         getStudySchedule: () => apiRequest<any[]>('/ai/study-schedule/'),
         generateStudySchedule: () => apiRequest<any[]>('/ai/study-schedule/generate/', { method: 'POST' }),
         updateStudyEvent: (id: string, updates: any) =>

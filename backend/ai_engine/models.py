@@ -2,6 +2,7 @@ from django.db import models
 import uuid as uuid_lib
 from django.conf import settings
 from core.models.tenant import Tenant
+from core.vector import VectorField
 
 class AIInteractionLog(models.Model):
     log_id = models.UUIDField(primary_key=True, default=uuid_lib.uuid4, editable=False)
@@ -94,3 +95,68 @@ class StudyEvent(models.Model):
 
     def __str__(self):
         return f"{self.title} ({self.start_time})"
+
+
+class ContentChunk(models.Model):
+    SOURCE_TYPE_CHOICES = [
+        ("lesson", "Lesson"),
+        ("chapter", "Chapter"),
+        ("material", "Material"),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid_lib.uuid4, editable=False)
+    tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE, db_constraint=False, related_name="content_chunks")
+    source_type = models.CharField(max_length=20, choices=SOURCE_TYPE_CHOICES)
+    source_id = models.CharField(max_length=64, db_index=True)
+    text = models.TextField()
+    metadata = models.JSONField(default=dict, blank=True)
+    embedding = VectorField(dimensions=getattr(settings, "AI_EMBEDDING_DIMENSIONS", 1536))
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["tenant", "source_type"], name="ai_chunk_tenant_type_idx"),
+            models.Index(fields=["tenant", "source_id"], name="ai_chunk_tenant_source_idx"),
+        ]
+
+    def __str__(self):
+        return f"{self.source_type}:{self.source_id}"
+
+
+class AiGeneratedArtifact(models.Model):
+    ARTIFACT_TYPE_CHOICES = [
+        ("summary", "Summary"),
+        ("exam_notes", "Exam Notes"),
+        ("exam_paper", "Exam Paper"),
+    ]
+    SOURCE_TYPE_CHOICES = [
+        ("lesson", "Lesson"),
+        ("chapter", "Chapter"),
+        ("material", "Material"),
+        ("subject", "Subject"),
+        ("class", "Class"),
+    ]
+    LANG_CHOICES = [
+        ("en", "English"),
+        ("ne", "Nepali"),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid_lib.uuid4, editable=False)
+    tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE, db_constraint=False, related_name="ai_generated_artifacts")
+    artifact_type = models.CharField(max_length=32, choices=ARTIFACT_TYPE_CHOICES)
+    source_type = models.CharField(max_length=20, choices=SOURCE_TYPE_CHOICES, default="lesson")
+    source_id = models.CharField(max_length=64, db_index=True)
+    lang = models.CharField(max_length=2, choices=LANG_CHOICES, default="en")
+    content = models.JSONField(default=dict, blank=True)
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["tenant", "artifact_type", "source_type"], name="ai_artifact_tenant_type_idx"),
+            models.Index(fields=["tenant", "source_type", "source_id"], name="ai_artifact_source_idx"),
+            models.Index(fields=["tenant", "lang", "created_at"], name="ai_artifact_lang_created_idx"),
+        ]
+
+    def __str__(self):
+        return f"{self.artifact_type}:{self.source_type}:{self.source_id}:{self.lang}"

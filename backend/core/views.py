@@ -20,6 +20,7 @@ from datetime import datetime, timedelta
 from django.utils import timezone
 from core.utils.plan_enforcement import sync_tenant_with_plan, record_subscription_plan_history
 from core.utils.audit import record_audit_event
+from core.async_jobs import get_job_status
 from prometheus_client import CONTENT_TYPE_LATEST
 from core.metrics import prometheus_metrics_payload
 
@@ -111,6 +112,27 @@ class MetricsView(APIView):
 
     def get(self, request):
         return HttpResponse(prometheus_metrics_payload(), content_type=CONTENT_TYPE_LATEST)
+
+
+class JobStatusView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, job_id: str):
+        payload = get_job_status(job_id)
+        if payload is None:
+            return Response({"detail": "Job not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        request_tenant_schema = str(getattr(getattr(request, "tenant", None), "schema_name", "public")).strip().lower()
+        payload_tenant_schema = str(payload.get("tenant_schema") or "public").strip().lower()
+        is_saas_admin = (
+            bool(getattr(request.user, "is_staff", False) or getattr(request.user, "is_superuser", False))
+            and not getattr(request.user, "tenant", None)
+        )
+
+        if not is_saas_admin and payload_tenant_schema and payload_tenant_schema != request_tenant_schema:
+            return Response({"detail": "Job not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        return Response(payload)
 
 from .views_saas import IsSaaSAdmin
 

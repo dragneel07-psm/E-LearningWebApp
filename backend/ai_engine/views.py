@@ -1,23 +1,39 @@
 # Forced reload - V2
 from rest_framework import viewsets, status, permissions
-from rest_framework.decorators import action, api_view, permission_classes
+from rest_framework.decorators import action, api_view, permission_classes, throttle_classes
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
-from django.shortcuts import get_object_or_404
 from .models import AIInteractionLog, StudentAIReport, LearningPath, LearningNode
-from .serializers import AIInteractionLogSerializer, StudentAIReportSerializer, LearningPathSerializer, LearningNodeSerializer
+from .serializers import (
+    AIInteractionLogSerializer,
+    StudentAIReportSerializer,
+    LearningPathSerializer,
+    LearningNodeSerializer,
+    AiGeneratedArtifactSerializer,
+    ExamPaperGenerateRequestSerializer,
+    ExamPaperGenerateResponseSerializer,
+    LessonArtifactResponseSerializer,
+    QuizGenerationRequestSerializer,
+    QuizGenerationResponseSerializer,
+)
 from users.models import UserAccount
-from academic.models import Student, Subject, Teacher, Result
+from academic.models import Lesson
+from academic.models import Student, Subject, Teacher
 from django.utils import timezone
 from core.mixins import TenantScopedQuerysetMixin
-from .services.tutor_service import AITutorService
+from core.async_jobs import enqueue_job
+from .services.rag_tutor_service import RAGTutorService
+from .services.exam_generator_service import ExamPaperGenerationError, ExamPaperGeneratorService
+from .services.lesson_summary_service import LessonSummaryService
+from .services.quiz_generator_service import QuizGeneratorService, QuizGenerationError
 from .services.personalization_service import PersonalizationService
 from .services.learning_path_service import LearningPathService
 from .services.predictive_service import PredictiveAnalyticsService
-from .services.predictive_service import PredictiveAnalyticsService
 from .services.reporting_service import ReportingService
 from .services.schedule_service import ScheduleService
-from .models import StudyEvent
+from .throttling import TutorChatRateThrottle
+from .tasks import ai_index_content_task, generate_summary_task, generate_quiz_task
+from .models import AiGeneratedArtifact, StudyEvent
 from .serializers import StudyEventSerializer
 
 class StudyEventViewSet(TenantScopedQuerysetMixin, viewsets.ModelViewSet):
@@ -268,98 +284,303 @@ def student_recommendations(request):
     except Exception as e:
         return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def enqueue_ai_index_content(request):
+    content = str(request.data.get("content") or "").strip()
+    if not content:
+        return Response({"detail": "content is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+    metadata = request.data.get("metadata") or {}
+    if not isinstance(metadata, dict):
+        return Response({"detail": "metadata must be an object"}, status=status.HTTP_400_BAD_REQUEST)
+
+    tenant_schema = str(getattr(getattr(request, "tenant", None), "schema_name", "public"))
+    job = enqueue_job(
+        ai_index_content_task,
+        tenant_schema=tenant_schema,
+        content=content,
+        metadata=metadata,
+        user_id=str(getattr(request.user, "pk", "")),
+        job_name="ai.index_content",
+        job_tenant_schema=tenant_schema,
+    )
+    return Response(job, status=status.HTTP_202_ACCEPTED)
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def enqueue_ai_summary(request):
+    content = str(request.data.get("content") or "").strip()
+    if not content:
+        return Response({"detail": "content is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        max_points = int(request.data.get("max_points", 5))
+    except (TypeError, ValueError):
+        return Response({"detail": "max_points must be an integer"}, status=status.HTTP_400_BAD_REQUEST)
+
+    tenant_schema = str(getattr(getattr(request, "tenant", None), "schema_name", "public"))
+    job = enqueue_job(
+        generate_summary_task,
+        tenant_schema=tenant_schema,
+        content=content,
+        max_points=max_points,
+        user_id=str(getattr(request.user, "pk", "")),
+        job_name="ai.generate_summary",
+        job_tenant_schema=tenant_schema,
+    )
+    return Response(job, status=status.HTTP_202_ACCEPTED)
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def enqueue_ai_quiz(request):
+    content = str(request.data.get("content") or "").strip()
+    if not content:
+        return Response({"detail": "content is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        question_count = int(request.data.get("question_count", 5))
+    except (TypeError, ValueError):
+        return Response({"detail": "question_count must be an integer"}, status=status.HTTP_400_BAD_REQUEST)
+
+    tenant_schema = str(getattr(getattr(request, "tenant", None), "schema_name", "public"))
+    job = enqueue_job(
+        generate_quiz_task,
+        tenant_schema=tenant_schema,
+        content=content,
+        question_count=question_count,
+        user_id=str(getattr(request.user, "pk", "")),
+        job_name="ai.generate_quiz",
+        job_tenant_schema=tenant_schema,
+    )
+    return Response(job, status=status.HTTP_202_ACCEPTED)
+
+
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
+@throttle_classes([TutorChatRateThrottle])
 def ai_tutor_chat(request):
     """
-    Handle AI tutor chat messages with context awareness.
+    Tenant-aware AI tutor endpoint with RAG grounding.
     """
-    message = request.data.get('message')
-    # Frontend sends `conversation_history`; keep `history` as backward-compatible fallback.
-    history = request.data.get('conversation_history')
-    if history is None:
-        history = request.data.get('history', [])
-    if not isinstance(history, list):
-        history = []
-    
+    message = str(request.data.get('message') or '').strip()
     if not message:
-        return Response({'error': 'Message is required'}, status=status.HTTP_400_BAD_REQUEST)
-        
+        return Response({'error': 'message is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+    context_payload = request.data.get('context') or {}
+    if context_payload and not isinstance(context_payload, dict):
+        return Response({'error': 'context must be an object'}, status=status.HTTP_400_BAD_REQUEST)
+
+    tenant = getattr(request, 'tenant', None) or getattr(request.user, 'tenant', None)
+    if tenant is None:
+        return Response({'error': 'tenant context is required'}, status=status.HTTP_400_BAD_REQUEST)
+
     try:
-        # Get tenant and DB alias from request (Middleware sets these)
-        tenant = getattr(request, 'tenant', None)
         db_alias = getattr(request, 'db_alias', 'default')
-        
-        # Fallback to user's tenant if request.tenant is missing (some contexts)
-        if not tenant and hasattr(request.user, 'tenant'):
-            tenant = request.user.tenant
+        service = RAGTutorService(tenant=tenant)
+        response_data = service.answer_question(message, context=context_payload)
 
-        context = {}
+        answer = str(response_data.get('answer') or '')
+        sources = response_data.get('sources') if isinstance(response_data.get('sources'), list) else []
+        usage = response_data.get('usage') if isinstance(response_data.get('usage'), dict) else {}
+        prompt_tokens = int(usage.get('prompt_tokens') or 0)
+        completion_tokens = int(usage.get('completion_tokens') or 0)
+
         try:
-            # Explicitly use db_alias for all queries
-            student = Student.objects.using(db_alias).get(user=request.user)
-            
-            # Identify weak topics from results - Explicit DB
-            results = Result.objects.using(db_alias).filter(student=student).select_related('assessment', 'assessment__subject')
-            weak_topics = []
-            for res in results:
-                try:
-                    # Calculate percentage safely
-                    if res.assessment.total_marks > 0:
-                        if (res.score / res.assessment.total_marks) < 0.6:
-                            weak_topics.append(res.assessment.subject.name)
-                except:
-                    continue
-            
-            # Deduplicate and limit
-            weak_topics = list(set(weak_topics))[:3]
-            
-            # Get enrolled courses - Explicit DB on related manager
-            courses = []
-            if student.academic_class:
-                courses = [s.name for s in student.academic_class.subjects.using(db_alias).all()]
-            
-            context = {
-                'learning_style': student.learning_style,
-                'ai_explanation_level': student.ai_explanation_level,
-                'courses': courses,
-                'weak_topics': weak_topics
-            }
-        except Exception as context_err:
-            print(f"⚠️ Context gathering warning: {context_err}")
-            # Non-fatal, proceed with empty context
+            AIInteractionLog.objects.using(db_alias).create(
+                tenant=tenant,
+                user=request.user,
+                feature_used='tutor_rag',
+                prompt_tokens=prompt_tokens,
+                completion_tokens=completion_tokens,
+                total_tokens=prompt_tokens + completion_tokens,
+            )
+        except Exception as log_err:
+            print(f"⚠️ Tutor interaction logging failed: {log_err}")
 
-        service = AITutorService()
-        response_data = service.generate_tutor_response(
-            message, 
-            student_context=context, 
-            conversation_history=history
+        return Response(
+            {
+                'answer': answer,
+                'sources': sources,
+                'usage': {
+                    'model': str(usage.get('model') or 'fallback'),
+                    'prompt_tokens': prompt_tokens,
+                    'completion_tokens': completion_tokens,
+                },
+            },
+            status=status.HTTP_200_OK,
         )
-        response_text = response_data.get('response', '')
-        tokens_used = int(response_data.get('tokens_used') or 0)
-        is_demo = bool(response_data.get('is_demo', False))
-        
-        # Log interaction (simplified)
-        if tenant:
-            try:
-                AIInteractionLog.objects.using(db_alias).create(
-                    tenant=tenant,
-                    user=request.user,
-                    feature_used='tutor',
-                    total_tokens=tokens_used
-                )
-            except Exception as log_err:
-                print(f"⚠️ Interaction logging failed: {log_err}")
-        
-        return Response({
-            'response': response_text,
-            'tokens_used': tokens_used,
-            'is_demo': is_demo,
-            'error': response_data.get('error'),
-            'fallback_reason': response_data.get('reason'),
-        })
-        
     except Exception as e:
         import traceback
         traceback.print_exc()
         return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+def _validate_lesson_artifact_lang(request):
+    lang = LessonSummaryService.normalize_lang(request.query_params.get("lang", "en"))
+    requested = str(request.query_params.get("lang", "en")).strip().lower()
+    if requested not in {"", "en", "ne"}:
+        return None, Response({"error": "lang must be 'en' or 'ne'."}, status=status.HTTP_400_BAD_REQUEST)
+    return lang, None
+
+
+def _lesson_artifact_response(request, lesson_id: int, artifact_type: str):
+    lang, lang_error = _validate_lesson_artifact_lang(request)
+    if lang_error:
+        return lang_error
+
+    tenant = getattr(request, "tenant", None) or getattr(request.user, "tenant", None)
+    if tenant is None:
+        return Response({"error": "tenant context is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+    if not Lesson.objects.filter(pk=lesson_id).exists():
+        return Response({"error": "lesson not found"}, status=status.HTTP_404_NOT_FOUND)
+
+    try:
+        service = LessonSummaryService(tenant=tenant, user=request.user)
+        payload = service.generate(
+            lesson_id=int(lesson_id),
+            artifact_type=artifact_type,
+            lang=lang,
+        )
+        serializer = LessonArtifactResponseSerializer(data=payload)
+        serializer.is_valid(raise_exception=True)
+        return Response(serializer.validated_data, status=status.HTTP_200_OK)
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+@throttle_classes([TutorChatRateThrottle])
+def ai_lesson_summarize(request, lesson_id: int):
+    return _lesson_artifact_response(request, lesson_id=lesson_id, artifact_type="summary")
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+@throttle_classes([TutorChatRateThrottle])
+def ai_lesson_exam_notes(request, lesson_id: int):
+    return _lesson_artifact_response(request, lesson_id=lesson_id, artifact_type="exam_notes")
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+@throttle_classes([TutorChatRateThrottle])
+def ai_quiz_generate(request):
+    role = str(getattr(request.user, "role", "") or "").strip().lower()
+    if role not in {"teacher", "admin"}:
+        return Response(
+            {"detail": "Only Teacher/Admin can generate quizzes."},
+            status=status.HTTP_403_FORBIDDEN,
+        )
+
+    tenant = getattr(request, "tenant", None) or getattr(request.user, "tenant", None)
+    if tenant is None:
+        return Response({"error": "tenant context is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+    serializer = QuizGenerationRequestSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+    payload = serializer.validated_data
+
+    try:
+        service = QuizGeneratorService(tenant=tenant, user=request.user)
+        result = service.generate(
+            source_type=payload["source_type"],
+            source_id=str(payload["source_id"]),
+            difficulty=payload["difficulty"],
+            count=int(payload["count"]),
+        )
+        output = QuizGenerationResponseSerializer(data=result)
+        output.is_valid(raise_exception=True)
+        return Response(output.validated_data, status=status.HTTP_200_OK)
+    except QuizGenerationError as exc:
+        return Response({"error": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+    except Exception as exc:
+        import traceback
+        traceback.print_exc()
+        return Response({"error": str(exc)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+def _is_teacher_or_admin(user) -> bool:
+    role = str(getattr(user, "role", "") or "").strip().lower()
+    return role in {"teacher", "admin"}
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+@throttle_classes([TutorChatRateThrottle])
+def ai_exam_generate(request):
+    if not _is_teacher_or_admin(request.user):
+        return Response(
+            {"detail": "Only Teacher/Admin can generate exam papers."},
+            status=status.HTTP_403_FORBIDDEN,
+        )
+
+    tenant = getattr(request, "tenant", None) or getattr(request.user, "tenant", None)
+    if tenant is None:
+        return Response({"error": "tenant context is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+    serializer = ExamPaperGenerateRequestSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+    payload = serializer.validated_data
+
+    try:
+        service = ExamPaperGeneratorService(tenant=tenant, user=request.user)
+        result = service.generate(
+            class_id=payload["class_id"],
+            subject_id=payload["subject_id"],
+            units=payload.get("units") or [],
+            marks=int(payload["marks"]),
+            difficulty_mix=payload["difficulty_mix"],
+        )
+        output = ExamPaperGenerateResponseSerializer(data=result)
+        output.is_valid(raise_exception=True)
+        return Response(output.validated_data, status=status.HTTP_200_OK)
+    except ExamPaperGenerationError as exc:
+        return Response({"error": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+    except Exception as exc:
+        import traceback
+        traceback.print_exc()
+        return Response({"error": str(exc)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def ai_generated_artifacts(request):
+    if not _is_teacher_or_admin(request.user):
+        return Response(
+            {"detail": "Only Teacher/Admin can access generated artifacts."},
+            status=status.HTTP_403_FORBIDDEN,
+        )
+
+    tenant = getattr(request, "tenant", None) or getattr(request.user, "tenant", None)
+    if tenant is None:
+        return Response({"error": "tenant context is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+    queryset = AiGeneratedArtifact.objects.filter(tenant=tenant).order_by("-created_at")
+
+    artifact_type = str(request.query_params.get("artifact_type") or "").strip()
+    source_type = str(request.query_params.get("source_type") or "").strip()
+    source_id = str(request.query_params.get("source_id") or "").strip()
+
+    if artifact_type:
+        queryset = queryset.filter(artifact_type=artifact_type)
+    if source_type:
+        queryset = queryset.filter(source_type=source_type)
+    if source_id:
+        queryset = queryset.filter(source_id=source_id)
+
+    try:
+        limit = int(request.query_params.get("limit", 20))
+    except (TypeError, ValueError):
+        return Response({"error": "limit must be an integer."}, status=status.HTTP_400_BAD_REQUEST)
+    limit = max(1, min(100, limit))
+
+    serializer = AiGeneratedArtifactSerializer(queryset[:limit], many=True)
+    return Response(serializer.data, status=status.HTTP_200_OK)

@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Send, Sparkles, Trash2, Loader2 } from 'lucide-react';
-import { aiAPI, ChatMessage, usersAPI } from '@/lib/api';
+import { aiAPI, ChatMessage, TutorChatSource, TutorChatUsage, usersAPI } from '@/lib/api';
 import { toast } from 'sonner';
 import ReactMarkdown from 'react-markdown';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
@@ -15,6 +15,8 @@ import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 interface Message {
     role: 'user' | 'assistant';
     content: string;
+    sources?: TutorChatSource[];
+    usage?: TutorChatUsage;
 }
 
 export default function AITutorPage() {
@@ -78,7 +80,9 @@ export default function AITutorPage() {
 
             const assistantMessage: Message = {
                 role: 'assistant',
-                content: response.response
+                content: response.answer,
+                sources: response.sources,
+                usage: response.usage,
             };
 
             const updatedMessages = [...newMessages, assistantMessage];
@@ -205,6 +209,26 @@ export default function AITutorPage() {
                                                 >
                                                     {message.content}
                                                 </ReactMarkdown>
+                                                {Array.isArray(message.sources) && message.sources.length > 0 && (
+                                                    <div className="mt-3 border-t border-slate-200 pt-2">
+                                                        <p className="text-[11px] font-semibold text-slate-600 mb-2">Sources</p>
+                                                        <div className="space-y-2">
+                                                            {message.sources.map((source, sourceIndex) => (
+                                                                <div key={`${source.source_type}-${source.source_id}-${sourceIndex}`} className="rounded border border-slate-200 bg-white px-2 py-1">
+                                                                    <p className="text-[11px] font-medium text-slate-700">
+                                                                        {source.source_type} • {source.source_id}
+                                                                    </p>
+                                                                    <p className="text-[11px] text-slate-600">{source.snippet}</p>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                        {message.usage && (
+                                                            <p className="mt-2 text-[10px] text-slate-500">
+                                                                Model: {message.usage.model} • Prompt: {message.usage.prompt_tokens} • Completion: {message.usage.completion_tokens}
+                                                            </p>
+                                                        )}
+                                                    </div>
+                                                )}
                                             </div>
                                         ) : (
                                             <p className="whitespace-pre-wrap">{message.content}</p>

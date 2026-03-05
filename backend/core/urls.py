@@ -11,6 +11,7 @@ from .views import (
     HealthzView,
     ReadyzView,
     MetricsView,
+    JobStatusView,
 )
 from .views_saas import (
     SaasKPIView,
@@ -32,6 +33,7 @@ urlpatterns = [
     path('healthz/', HealthzView.as_view(), name='healthz'),
     path('readyz/', ReadyzView.as_view(), name='readyz'),
     path('metrics/', MetricsView.as_view(), name='metrics'),
+    path('jobs/<str:job_id>/', JobStatusView.as_view(), name='job-status'),
     path('system-status/', SystemStatusView.as_view(), name='system-status'),
     path('tenant-check/', TenantCheckView.as_view(), name='tenant-check'),
     path('capabilities/', TenantCapabilitiesView.as_view(), name='tenant-capabilities'),
