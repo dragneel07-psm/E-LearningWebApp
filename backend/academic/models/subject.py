@@ -5,6 +5,7 @@ class Subject(models.Model):
     name = models.CharField(max_length=100)
     code = models.CharField(max_length=20, blank=True, null=True)
     academic_class = models.ForeignKey(AcademicClass, on_delete=models.CASCADE, related_name='subjects')
+    academic_year = models.ForeignKey('academic.AcademicYear', on_delete=models.PROTECT, null=True, blank=True, related_name='subjects')
     description = models.TextField(blank=True, null=True)
     credits = models.DecimalField(max_digits=4, decimal_places=1, default=1.0)
     
@@ -19,8 +20,9 @@ class Subject(models.Model):
     )
 
     class Meta:
-        unique_together = ('name', 'academic_class')
+        unique_together = ('name', 'academic_class', 'academic_year')
         ordering = ['name']
 
     def __str__(self):
-        return f"{self.name} ({self.academic_class.name})"
+        year_label = self.academic_year.name if self.academic_year else 'No Year'
+        return f"{self.name} ({self.academic_class.name}, {year_label})"

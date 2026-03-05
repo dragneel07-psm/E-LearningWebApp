@@ -4,6 +4,7 @@ from ..models.timetable import Timetable
 class TimetableSerializer(serializers.ModelSerializer):
     teacher_name = serializers.CharField(source='teacher.user.get_full_name', read_only=True)
     academic_class_name = serializers.CharField(source='academic_class.name', read_only=True)
+    academic_year_name = serializers.CharField(source='academic_year.name', read_only=True)
     created_by_name = serializers.CharField(source='created_by.get_full_name', read_only=True)
     approved_by_name = serializers.CharField(source='approved_by.get_full_name', read_only=True)
     
@@ -14,6 +15,8 @@ class TimetableSerializer(serializers.ModelSerializer):
         fields = [
             'id',
             'timetable_id',
+            'academic_year',
+            'academic_year_name',
             'academic_class',
             'academic_class_name',
             'day_of_week',

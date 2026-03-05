@@ -14,13 +14,15 @@ class AssessmentSerializer(serializers.ModelSerializer):
     id = serializers.UUIDField(source='assessment_id', read_only=True)
     
     subject_name = serializers.CharField(source='subject.name', read_only=True)
+    academic_year_name = serializers.CharField(source='academic_year.name', read_only=True)
     
     class Meta:
         model = Assessment
         fields = [
-            'id', 'assessment_id', 'subject', 'subject_name', 'section', 'title', 'description', 'type', 
+            'id', 'assessment_id', 'academic_year', 'academic_year_name', 'subject', 'subject_name', 'section', 'title', 'description', 'type', 
             'total_marks', 'passing_marks', 'scheduled_at', 'due_date', 
-            'duration_minutes', 'blooms_level', 'questions'
+            'duration_minutes', 'blooms_level', 'is_final_assessment', 'results_published',
+            'results_published_at', 'questions'
         ]
 
 class SubmissionSerializer(serializers.ModelSerializer):

@@ -5,6 +5,7 @@ from rest_framework.permissions import IsAuthenticated
 from django.utils import timezone
 from academic.models.lesson import Chapter, Lesson, LessonMaterial, LessonProgress
 from academic.models.student import Student
+from academic.services.academic_year_service import ensure_current_academic_year
 from academic.serializers.lesson import (
     ChapterSerializer, 
     LessonDetailSerializer, 
@@ -20,6 +21,17 @@ class ChapterViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         queryset = super().get_queryset()
+
+        academic_year_param = self.request.query_params.get('academic_year')
+        if academic_year_param:
+            if str(academic_year_param).isdigit():
+                queryset = queryset.filter(subject__academic_year_id=academic_year_param)
+            else:
+                queryset = queryset.filter(subject__academic_year__name=academic_year_param)
+        else:
+            current_year = ensure_current_academic_year()
+            if current_year:
+                queryset = queryset.filter(subject__academic_year=current_year)
         
         # Filter by published only for students
         if getattr(self.request.user, 'role', None) == 'student':
@@ -57,6 +69,17 @@ class LessonViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         queryset = super().get_queryset()
+
+        academic_year_param = self.request.query_params.get('academic_year')
+        if academic_year_param:
+            if str(academic_year_param).isdigit():
+                queryset = queryset.filter(chapter__subject__academic_year_id=academic_year_param)
+            else:
+                queryset = queryset.filter(chapter__subject__academic_year__name=academic_year_param)
+        else:
+            current_year = ensure_current_academic_year()
+            if current_year:
+                queryset = queryset.filter(chapter__subject__academic_year=current_year)
 
         # Filter by published only for students
         if getattr(self.request.user, 'role', None) == 'student':

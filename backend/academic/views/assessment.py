@@ -3,6 +3,8 @@ from rest_framework import viewsets, status, permissions
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from django.db import models
+from django.utils import timezone
+from academic.models import AcademicYear
 from academic.models.assessment import Assessment, Result
 from academic.models.question import Question
 from academic.models.submission import Submission
@@ -12,14 +14,55 @@ from academic.serializers.assessment import (
     SubmissionSerializer, ResultSerializer
 )
 from academic.services.grading_service import GradingService
+from academic.services.academic_year_service import ensure_current_academic_year, promote_students_to_next_class
+
+
+def _to_bool(value, default=False):
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        return value.strip().lower() in {'1', 'true', 'yes', 'on'}
+    return bool(value)
+
+
+def _find_academic_year(raw_year):
+    if raw_year is None or raw_year == '':
+        return None
+    if isinstance(raw_year, AcademicYear):
+        return raw_year
+    if str(raw_year).isdigit():
+        return AcademicYear.objects.filter(pk=int(raw_year)).first()
+    return AcademicYear.objects.filter(name=str(raw_year)).first()
+
+
+def _resolve_request_year(request):
+    raw_year = request.query_params.get('academic_year')
+    if raw_year:
+        return _find_academic_year(raw_year), True
+    return ensure_current_academic_year(), False
 
 class AssessmentViewSet(viewsets.ModelViewSet):
     queryset = Assessment.objects.all()
     serializer_class = AssessmentSerializer
     permission_classes = [permissions.IsAuthenticated]
 
+    def _can_publish_results(self, user):
+        return bool(
+            user
+            and user.is_authenticated
+            and getattr(user, 'role', None) in ['teacher', 'admin', 'staff', 'management', 'saas_admin']
+        )
+
     def get_queryset(self):
-        queryset = Assessment.objects.all()
+        queryset = Assessment.objects.select_related('academic_year', 'subject', 'subject__academic_class', 'section').all()
+        requested_year, has_year_filter = _resolve_request_year(self.request)
+        if has_year_filter and not requested_year:
+            return queryset.none()
+        if requested_year:
+            queryset = queryset.filter(academic_year=requested_year)
+
         subject_id = self.request.query_params.get('subject')
         section_id = self.request.query_params.get('section')
         if subject_id:
@@ -37,6 +80,62 @@ class AssessmentViewSet(viewsets.ModelViewSet):
             
         return queryset
 
+    def perform_create(self, serializer):
+        academic_year = serializer.validated_data.get('academic_year') or ensure_current_academic_year()
+        serializer.save(academic_year=academic_year)
+
+    def perform_update(self, serializer):
+        instance = self.get_object()
+        was_published = bool(instance.results_published)
+        serializer.save()
+
+        if (
+            not was_published
+            and instance.results_published
+            and instance.is_final_assessment
+            and _to_bool(self.request.data.get('auto_upgrade_students'), True)
+        ):
+            promote_students_to_next_class()
+
+    @action(detail=True, methods=['post'])
+    def publish_results(self, request, pk=None):
+        if not self._can_publish_results(request.user):
+            return Response(
+                {'detail': 'You do not have permission to publish results.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        assessment = self.get_object()
+        publish = _to_bool(request.data.get('publish'), True)
+        was_published = bool(assessment.results_published)
+
+        if publish:
+            assessment.results_published = True
+            assessment.results_published_at = timezone.now()
+        else:
+            assessment.results_published = False
+            assessment.results_published_at = None
+        assessment.save(update_fields=['results_published', 'results_published_at'])
+
+        promotion_summary = None
+        if (
+            publish
+            and not was_published
+            and assessment.is_final_assessment
+            and _to_bool(request.data.get('auto_upgrade_students'), True)
+        ):
+            promotion_summary = promote_students_to_next_class()
+
+        return Response(
+            {
+                'assessment_id': str(assessment.assessment_id),
+                'results_published': assessment.results_published,
+                'results_published_at': assessment.results_published_at,
+                'is_final_assessment': assessment.is_final_assessment,
+                'student_promotion': promotion_summary,
+            }
+        )
+
     @action(detail=False, methods=['get'])
     def gradebook(self, request):
         """
@@ -47,7 +146,7 @@ class AssessmentViewSet(viewsets.ModelViewSet):
             return Response({'error': 'subject_id is required'}, status=status.HTTP_400_BAD_REQUEST)
 
         # 1. Get all assessments for this subject
-        assessments = Assessment.objects.filter(subject_id=subject_id).order_by('scheduled_at', 'created_at')
+        assessments = self.get_queryset().filter(subject_id=subject_id).order_by('scheduled_at', 'created_at')
         if not assessments.exists():
             # Still get students even if no assessments? 
             # Better to get students from the subject relation. 
@@ -57,7 +156,13 @@ class AssessmentViewSet(viewsets.ModelViewSet):
         # Assuming subjects belong to a class and class has students
         from academic.models.subject import Subject
         try:
-            subject = Subject.objects.get(id=subject_id)
+            subject_qs = Subject.objects.filter(id=subject_id)
+            requested_year, has_year_filter = _resolve_request_year(request)
+            if has_year_filter and not requested_year:
+                return Response({'error': 'Academic year not found'}, status=404)
+            if requested_year:
+                subject_qs = subject_qs.filter(academic_year=requested_year)
+            subject = subject_qs.get()
             academic_class = subject.academic_class
             students = Student.objects.filter(academic_class=academic_class)
         except Subject.DoesNotExist:
@@ -107,7 +212,13 @@ class QuestionViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
-        queryset = Question.objects.all()
+        queryset = Question.objects.select_related('assessment', 'assessment__academic_year').all()
+        requested_year, has_year_filter = _resolve_request_year(self.request)
+        if has_year_filter and not requested_year:
+            return queryset.none()
+        if requested_year:
+            queryset = queryset.filter(assessment__academic_year=requested_year)
+
         assessment_id = self.request.query_params.get('assessment')
         if assessment_id:
             queryset = queryset.filter(assessment_id=assessment_id)
@@ -119,7 +230,13 @@ class SubmissionViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
-        queryset = Submission.objects.all()
+        queryset = Submission.objects.select_related('assessment', 'assessment__academic_year', 'student').all()
+        requested_year, has_year_filter = _resolve_request_year(self.request)
+        if has_year_filter and not requested_year:
+            return queryset.none()
+        if requested_year:
+            queryset = queryset.filter(assessment__academic_year=requested_year)
+
         assessment_id = self.request.query_params.get('assessment')
         if assessment_id:
             queryset = queryset.filter(assessment_id=assessment_id)
@@ -143,7 +260,13 @@ class SubmissionViewSet(viewsets.ModelViewSet):
         time_taken = request.data.get('time_taken', 0)
 
         try:
-            assessment = Assessment.objects.get(assessment_id=assessment_id)
+            assessment_qs = Assessment.objects.filter(assessment_id=assessment_id)
+            requested_year, has_year_filter = _resolve_request_year(request)
+            if has_year_filter and not requested_year:
+                return Response({'error': 'Academic year not found'}, status=status.HTTP_400_BAD_REQUEST)
+            if requested_year:
+                assessment_qs = assessment_qs.filter(academic_year=requested_year)
+            assessment = assessment_qs.get()
             student = Student.objects.get(user=request.user)
         except (Assessment.DoesNotExist, Student.DoesNotExist):
             return Response({'error': 'Invalid assessment or student'}, status=status.HTTP_400_BAD_REQUEST)
@@ -273,7 +396,13 @@ class ResultViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
-        queryset = Result.objects.all()
+        queryset = Result.objects.select_related('assessment', 'assessment__academic_year', 'student', 'student__user').all()
+        requested_year, has_year_filter = _resolve_request_year(self.request)
+        if has_year_filter and not requested_year:
+            return queryset.none()
+        if requested_year:
+            queryset = queryset.filter(assessment__academic_year=requested_year)
+
         assessment_id = self.request.query_params.get('assessment')
         if assessment_id:
             queryset = queryset.filter(assessment_id=assessment_id)

@@ -2,6 +2,7 @@ from rest_framework import serializers
 from django.contrib.auth import get_user_model
 from django.db import transaction
 from ..models import Teacher, Student, Parent, AcademicClass, Section, Subject
+from ..services.academic_year_service import ensure_current_academic_year
 
 User = get_user_model()
 
@@ -121,7 +122,11 @@ class StudentListSerializer(serializers.ModelSerializer):
 
     def get_recent_grades(self, obj):
         from academic.models import Result
-        results = Result.objects.filter(student=obj).select_related('assessment', 'assessment__subject').order_by('-submitted_at')[:3]
+        results_qs = Result.objects.filter(student=obj).select_related('assessment', 'assessment__subject')
+        current_year = ensure_current_academic_year()
+        if current_year:
+            results_qs = results_qs.filter(assessment__academic_year=current_year)
+        results = results_qs.order_by('-submitted_at')[:3]
         return [{
             'assessment_title': r.assessment.title,
             'subject': r.assessment.subject.name,
@@ -137,7 +142,11 @@ class StudentListSerializer(serializers.ModelSerializer):
         upcoming = Assessment.objects.filter(
             subject__academic_class=obj.academic_class,
             scheduled_at__gte=timezone.now()
-        ).order_by('scheduled_at')[:2]
+        )
+        current_year = ensure_current_academic_year()
+        if current_year:
+            upcoming = upcoming.filter(academic_year=current_year)
+        upcoming = upcoming.order_by('scheduled_at')[:2]
         return [{
             'title': a.title,
             'subject': a.subject.name,

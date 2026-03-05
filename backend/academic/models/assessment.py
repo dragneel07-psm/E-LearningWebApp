@@ -21,6 +21,7 @@ class Assessment(models.Model):
     ]
 
     assessment_id = models.UUIDField(primary_key=True, default=uuid_lib.uuid4, editable=False)
+    academic_year = models.ForeignKey('academic.AcademicYear', on_delete=models.PROTECT, null=True, blank=True, related_name='assessments')
     subject = models.ForeignKey(Subject, on_delete=models.CASCADE, related_name='assessments')
     section = models.ForeignKey(Section, on_delete=models.SET_NULL, null=True, blank=True, related_name='assessments')
     title = models.CharField(max_length=255, default="Assessment")
@@ -36,11 +37,15 @@ class Assessment(models.Model):
     
     # Analytics
     blooms_level = models.CharField(max_length=20, choices=BLOOMS_LEVELS, default='remember')
+    is_final_assessment = models.BooleanField(default=False)
+    results_published = models.BooleanField(default=False)
+    results_published_at = models.DateTimeField(null=True, blank=True)
     
     def __str__(self):
+        year_label = self.academic_year.name if self.academic_year else 'No Year'
         if self.section:
-            return f"{self.title} ({self.section})"
-        return f"{self.title} ({self.subject.academic_class})"
+            return f"{self.title} ({self.section}, {year_label})"
+        return f"{self.title} ({self.subject.academic_class}, {year_label})"
 
 class Result(models.Model):
     result_id = models.UUIDField(primary_key=True, default=uuid_lib.uuid4, editable=False)

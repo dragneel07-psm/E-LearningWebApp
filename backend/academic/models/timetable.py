@@ -25,6 +25,7 @@ class Timetable(models.Model):
     ]
 
     timetable_id = models.AutoField(primary_key=True)
+    academic_year = models.ForeignKey('academic.AcademicYear', on_delete=models.PROTECT, null=True, blank=True, related_name='timetable_entries')
     academic_class = models.ForeignKey(AcademicClass, on_delete=models.CASCADE, related_name='timetable_entries')
     day_of_week = models.CharField(max_length=20, choices=DAYS_OF_WEEK)
     start_time = models.TimeField()
@@ -54,6 +55,7 @@ class Timetable(models.Model):
     class Meta:
         ordering = ['day_of_week', 'start_time']
         indexes = [
+            models.Index(fields=['academic_year', 'academic_class', 'day_of_week', 'start_time'], name='tt_year_class_day_idx'),
             models.Index(fields=['academic_class', 'day_of_week', 'start_time'], name='tt_class_day_idx'),
             models.Index(fields=['academic_class', 'status', 'entry_type'], name='tt_class_status_idx'),
             models.Index(fields=['teacher', 'day_of_week', 'start_time'], name='tt_teacher_day_idx'),
@@ -67,4 +69,5 @@ class Timetable(models.Model):
         ]
 
     def __str__(self):
-        return f"{self.academic_class} - {self.day_of_week} ({self.start_time} - {self.end_time}) [{self.entry_type}/{self.status}]"
+        year_label = self.academic_year.name if self.academic_year else 'No Year'
+        return f"{year_label} | {self.academic_class} - {self.day_of_week} ({self.start_time} - {self.end_time}) [{self.entry_type}/{self.status}]"

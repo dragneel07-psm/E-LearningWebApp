@@ -9,7 +9,7 @@ from django.utils import timezone
 from django.contrib.auth import get_user_model
 from django.shortcuts import get_object_or_404
 
-from ..models import Student, Teacher, Parent, AcademicClass, Section, Subject
+from ..models import Student, Teacher, Parent, AcademicClass, AcademicYear, Section, Subject
 from ..serializers import (
     TeacherSerializer,
     StudentListSerializer,
@@ -21,7 +21,25 @@ from ..serializers import (
 from core.mixins import TenantScopedQuerysetMixin
 
 from users.permissions import IsAdminOrSaaSAdmin
+from ..services.academic_year_service import ensure_current_academic_year
 User = get_user_model()
+
+
+def _find_academic_year(raw_year):
+    if raw_year is None or raw_year == '':
+        return None
+    if isinstance(raw_year, AcademicYear):
+        return raw_year
+    if str(raw_year).isdigit():
+        return AcademicYear.objects.filter(pk=int(raw_year)).first()
+    return AcademicYear.objects.filter(name=str(raw_year)).first()
+
+
+def _resolve_requested_year(request):
+    raw_year = request.query_params.get('academic_year')
+    if raw_year:
+        return _find_academic_year(raw_year), True
+    return ensure_current_academic_year(), False
 
 
 class TeacherViewSet(TenantScopedQuerysetMixin, viewsets.ModelViewSet):
@@ -45,9 +63,16 @@ class TeacherViewSet(TenantScopedQuerysetMixin, viewsets.ModelViewSet):
 
         subject_rows = []
         class_rows_map = {}
+        requested_year, has_year_filter = _resolve_requested_year(request)
+        if has_year_filter and not requested_year:
+            return Response({'detail': 'Academic year not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+        subjects_qs = Subject.objects.filter(Q(teacher=teacher) | Q(additional_teachers=teacher))
+        if requested_year:
+            subjects_qs = subjects_qs.filter(academic_year=requested_year)
 
         subjects = (
-            Subject.objects.filter(Q(teacher=teacher) | Q(additional_teachers=teacher))
+            subjects_qs
             .select_related('academic_class')
             .prefetch_related('academic_class__sections')
             .annotate(
@@ -263,11 +288,18 @@ class StudentViewSet(TenantScopedQuerysetMixin, viewsets.ModelViewSet):
         from ..models.lesson import Lesson, LessonProgress
         from ..models.assessment import Assessment, Result
         from ..models.submission import Submission
+        requested_year, has_year_filter = _resolve_requested_year(request)
+        if has_year_filter and not requested_year:
+            return Response({'detail': 'Academic year not found.'}, status=status.HTTP_404_NOT_FOUND)
 
         subjects = []
         if student.academic_class_id:
+            subjects_qs = Subject.objects.filter(academic_class_id=student.academic_class_id)
+            if requested_year:
+                subjects_qs = subjects_qs.filter(academic_year=requested_year)
+
             subjects = list(
-                Subject.objects.filter(academic_class_id=student.academic_class_id)
+                subjects_qs
                 .select_related('academic_class')
                 .order_by('name')
             )
@@ -298,6 +330,8 @@ class StudentViewSet(TenantScopedQuerysetMixin, viewsets.ModelViewSet):
         assessments = []
         if subject_ids:
             assessments_qs = Assessment.objects.filter(subject_id__in=subject_ids).select_related('subject')
+            if requested_year:
+                assessments_qs = assessments_qs.filter(academic_year=requested_year)
             if student.section_id:
                 assessments_qs = assessments_qs.filter(Q(section_id=student.section_id) | Q(section__isnull=True))
             else:

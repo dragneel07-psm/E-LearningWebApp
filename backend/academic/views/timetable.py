@@ -7,8 +7,9 @@ from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
-from ..models import AcademicClass, Parent, Student, Teacher, Timetable
+from ..models import AcademicClass, AcademicYear, Parent, Student, Teacher, Timetable
 from ..serializers.timetable import TimetableSerializer
+from ..services.academic_year_service import ensure_current_academic_year
 
 
 class TimetableViewSet(viewsets.ModelViewSet):
@@ -26,13 +27,37 @@ class TimetableViewSet(viewsets.ModelViewSet):
         "Sunday",
     ]
 
-    def _base_queryset(self):
-        return Timetable.objects.select_related(
+    def _base_queryset(self, *, apply_year_scope=True):
+        queryset = Timetable.objects.select_related(
+            "academic_year",
             "academic_class",
             "teacher__user",
             "created_by",
             "approved_by",
         )
+        if not apply_year_scope:
+            return queryset
+
+        requested_year = self.request.query_params.get("academic_year")
+        if requested_year:
+            academic_year = self._find_academic_year(requested_year)
+            if not academic_year:
+                return queryset.none()
+            return queryset.filter(academic_year=academic_year)
+
+        current_year = ensure_current_academic_year()
+        if current_year:
+            return queryset.filter(academic_year=current_year)
+        return queryset
+
+    def _find_academic_year(self, raw_year):
+        if raw_year is None or raw_year == "":
+            return None
+        if isinstance(raw_year, AcademicYear):
+            return raw_year
+        if str(raw_year).isdigit():
+            return AcademicYear.objects.filter(pk=int(raw_year)).first()
+        return AcademicYear.objects.filter(name=str(raw_year)).first()
 
     def _ordered_queryset(self, queryset):
         return queryset.annotate(
@@ -90,6 +115,7 @@ class TimetableViewSet(viewsets.ModelViewSet):
     def _validate_no_overlap(
         self,
         *,
+        academic_year_id,
         academic_class_id,
         day_of_week,
         start_time,
@@ -97,7 +123,8 @@ class TimetableViewSet(viewsets.ModelViewSet):
         exclude_timetable_id=None,
         only_approved=True,
     ):
-        conflicts = self._base_queryset().filter(
+        conflicts = self._base_queryset(apply_year_scope=False).filter(
+            academic_year_id=academic_year_id,
             academic_class_id=academic_class_id,
             day_of_week=day_of_week,
             start_time__lt=end_time,
@@ -136,10 +163,11 @@ class TimetableViewSet(viewsets.ModelViewSet):
         if overlap_errors:
             raise ValidationError({"slots": overlap_errors})
 
-    def _build_main_slot_objects(self, *, academic_class_id, validated_slots, actor):
+    def _build_main_slot_objects(self, *, academic_year, academic_class_id, validated_slots, actor):
         approved_time = timezone.now()
         return [
             Timetable(
+                academic_year=academic_year,
                 academic_class_id=academic_class_id,
                 day_of_week=slot["day_of_week"],
                 start_time=slot["start_time"],
@@ -184,6 +212,8 @@ class TimetableViewSet(viewsets.ModelViewSet):
             )
 
         return {
+            "academic_year": serialized_slots[0]["academic_year"] if serialized_slots else None,
+            "academic_year_name": serialized_slots[0].get("academic_year_name") if serialized_slots else None,
             "academic_class": academic_class.id,
             "academic_class_name": academic_class.name,
             "total_slots": total_slots,
@@ -249,6 +279,9 @@ class TimetableViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         user = self.request.user
+        academic_year = serializer.validated_data.get("academic_year") or ensure_current_academic_year()
+        if not academic_year:
+            raise ValidationError({"academic_year": "No active academic year found."})
 
         if user.role == "teacher":
             teacher_profile = self._teacher_profile(user)
@@ -269,6 +302,7 @@ class TimetableViewSet(viewsets.ModelViewSet):
                 raise ValidationError({"teacher": "Teachers can only assign themselves for extra class requests."})
 
             self._validate_no_overlap(
+                academic_year_id=academic_year.id,
                 academic_class_id=requested_class.id,
                 day_of_week=serializer.validated_data.get("day_of_week"),
                 start_time=serializer.validated_data.get("start_time"),
@@ -277,6 +311,7 @@ class TimetableViewSet(viewsets.ModelViewSet):
             )
 
             serializer.save(
+                academic_year=academic_year,
                 entry_type="extra",
                 status="pending",
                 teacher=requested_teacher or teacher_profile,
@@ -294,6 +329,7 @@ class TimetableViewSet(viewsets.ModelViewSet):
             if requested_status == "approved":
                 requested_class = serializer.validated_data.get("academic_class")
                 self._validate_no_overlap(
+                    academic_year_id=academic_year.id,
                     academic_class_id=requested_class.id,
                     day_of_week=serializer.validated_data.get("day_of_week"),
                     start_time=serializer.validated_data.get("start_time"),
@@ -305,6 +341,7 @@ class TimetableViewSet(viewsets.ModelViewSet):
             approved_at = timezone.now() if requested_status in {"approved", "rejected"} else None
 
             serializer.save(
+                academic_year=academic_year,
                 created_by=user,
                 approved_by=approved_by,
                 approved_at=approved_at,
@@ -319,6 +356,9 @@ class TimetableViewSet(viewsets.ModelViewSet):
 
         if self._is_timetable_manager(user):
             new_status = serializer.validated_data.get("status", instance.status)
+            target_year = serializer.validated_data.get("academic_year", instance.academic_year) or ensure_current_academic_year()
+            if not target_year:
+                raise ValidationError({"academic_year": "No active academic year found."})
             target_class = serializer.validated_data.get("academic_class", instance.academic_class)
             target_day = serializer.validated_data.get("day_of_week", instance.day_of_week)
             target_start = serializer.validated_data.get("start_time", instance.start_time)
@@ -326,6 +366,7 @@ class TimetableViewSet(viewsets.ModelViewSet):
 
             if new_status == "approved":
                 self._validate_no_overlap(
+                    academic_year_id=target_year.id,
                     academic_class_id=target_class.id,
                     day_of_week=target_day,
                     start_time=target_start,
@@ -357,7 +398,11 @@ class TimetableViewSet(viewsets.ModelViewSet):
                 raise PermissionDenied("Teachers can only edit their own extra class requests.")
             if instance.status == "approved":
                 raise PermissionDenied("Approved extra classes can only be edited by admin/management.")
-            if "entry_type" in serializer.validated_data or "status" in serializer.validated_data:
+            if (
+                "entry_type" in serializer.validated_data
+                or "status" in serializer.validated_data
+                or "academic_year" in serializer.validated_data
+            ):
                 raise PermissionDenied("Teachers cannot change entry type or approval status.")
 
             target_class = serializer.validated_data.get("academic_class", instance.academic_class)
@@ -368,6 +413,7 @@ class TimetableViewSet(viewsets.ModelViewSet):
             target_start = serializer.validated_data.get("start_time", instance.start_time)
             target_end = serializer.validated_data.get("end_time", instance.end_time)
             self._validate_no_overlap(
+                academic_year_id=instance.academic_year_id,
                 academic_class_id=target_class.id,
                 day_of_week=target_day,
                 start_time=target_start,
@@ -475,6 +521,7 @@ class TimetableViewSet(viewsets.ModelViewSet):
 
         class_id_raw = request.data.get("academic_class") or request.data.get("class")
         slots_payload = request.data.get("slots")
+        academic_year_raw = request.data.get("academic_year")
         overwrite_existing = self._to_bool(request.data.get("overwrite_existing"), default=True)
 
         if not class_id_raw:
@@ -492,6 +539,10 @@ class TimetableViewSet(viewsets.ModelViewSet):
         academic_class = AcademicClass.objects.filter(id=class_id).first()
         if not academic_class:
             return Response({"detail": "Class not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        academic_year = self._find_academic_year(academic_year_raw) if academic_year_raw else ensure_current_academic_year()
+        if not academic_year:
+            return Response({"detail": "Academic year not found."}, status=status.HTTP_400_BAD_REQUEST)
 
         normalized_payload = []
         for slot in slots_payload:
@@ -512,7 +563,11 @@ class TimetableViewSet(viewsets.ModelViewSet):
         self._validate_internal_overlaps(validated_slots)
 
         with transaction.atomic():
-            existing_main_qs = self._base_queryset().filter(academic_class_id=class_id, entry_type="main")
+            existing_main_qs = self._base_queryset(apply_year_scope=False).filter(
+                academic_year=academic_year,
+                academic_class_id=class_id,
+                entry_type="main",
+            )
             if overwrite_existing:
                 existing_main_qs.delete()
             elif existing_main_qs.exists():
@@ -523,6 +578,7 @@ class TimetableViewSet(viewsets.ModelViewSet):
 
             for slot in validated_slots:
                 self._validate_no_overlap(
+                    academic_year_id=academic_year.id,
                     academic_class_id=class_id,
                     day_of_week=slot["day_of_week"],
                     start_time=slot["start_time"],
@@ -532,6 +588,7 @@ class TimetableViewSet(viewsets.ModelViewSet):
 
             Timetable.objects.bulk_create(
                 self._build_main_slot_objects(
+                    academic_year=academic_year,
                     academic_class_id=class_id,
                     validated_slots=validated_slots,
                     actor=request.user,
@@ -539,7 +596,14 @@ class TimetableViewSet(viewsets.ModelViewSet):
                 batch_size=200,
             )
 
-        class_slots = list(self.get_queryset().filter(academic_class_id=class_id))
+        class_slots = list(
+            self._ordered_queryset(
+                self._base_queryset(apply_year_scope=False).filter(
+                    academic_year=academic_year,
+                    academic_class_id=class_id,
+                )
+            )
+        )
         payload = self._build_overview_payload(academic_class=academic_class, slots=class_slots)
         payload["created_count"] = len(validated_slots)
         return Response(payload, status=status.HTTP_201_CREATED)
@@ -554,6 +618,7 @@ class TimetableViewSet(viewsets.ModelViewSet):
 
         source_class_raw = request.data.get("source_class")
         target_class_raw = request.data.get("target_class")
+        academic_year_raw = request.data.get("academic_year")
         overwrite_existing = self._to_bool(request.data.get("overwrite_existing"), default=True)
 
         try:
@@ -576,9 +641,14 @@ class TimetableViewSet(viewsets.ModelViewSet):
         if not source_class or not target_class:
             return Response({"detail": "Source or target class not found."}, status=status.HTTP_404_NOT_FOUND)
 
+        academic_year = self._find_academic_year(academic_year_raw) if academic_year_raw else ensure_current_academic_year()
+        if not academic_year:
+            return Response({"detail": "Academic year not found."}, status=status.HTTP_400_BAD_REQUEST)
+
         source_slots = list(
             self._ordered_queryset(
-                self._base_queryset().filter(
+                self._base_queryset(apply_year_scope=False).filter(
+                    academic_year=academic_year,
                     academic_class_id=source_class_id,
                     entry_type="main",
                     status="approved",
@@ -605,7 +675,11 @@ class TimetableViewSet(viewsets.ModelViewSet):
         self._validate_internal_overlaps(template_slots)
 
         with transaction.atomic():
-            target_main_qs = self._base_queryset().filter(academic_class_id=target_class_id, entry_type="main")
+            target_main_qs = self._base_queryset(apply_year_scope=False).filter(
+                academic_year=academic_year,
+                academic_class_id=target_class_id,
+                entry_type="main",
+            )
             if overwrite_existing:
                 target_main_qs.delete()
             elif target_main_qs.exists():
@@ -616,6 +690,7 @@ class TimetableViewSet(viewsets.ModelViewSet):
 
             for slot in template_slots:
                 self._validate_no_overlap(
+                    academic_year_id=academic_year.id,
                     academic_class_id=target_class_id,
                     day_of_week=slot["day_of_week"],
                     start_time=slot["start_time"],
@@ -625,6 +700,7 @@ class TimetableViewSet(viewsets.ModelViewSet):
 
             Timetable.objects.bulk_create(
                 self._build_main_slot_objects(
+                    academic_year=academic_year,
                     academic_class_id=target_class_id,
                     validated_slots=template_slots,
                     actor=request.user,
@@ -632,7 +708,14 @@ class TimetableViewSet(viewsets.ModelViewSet):
                 batch_size=200,
             )
 
-        target_slots = list(self.get_queryset().filter(academic_class_id=target_class_id))
+        target_slots = list(
+            self._ordered_queryset(
+                self._base_queryset(apply_year_scope=False).filter(
+                    academic_year=academic_year,
+                    academic_class_id=target_class_id,
+                )
+            )
+        )
         payload = self._build_overview_payload(academic_class=target_class, slots=target_slots)
         payload["created_count"] = len(template_slots)
         payload["source_class"] = source_class_id
@@ -668,6 +751,7 @@ class TimetableViewSet(viewsets.ModelViewSet):
 
         if new_status == "approved":
             self._validate_no_overlap(
+                academic_year_id=timetable_entry.academic_year_id,
                 academic_class_id=timetable_entry.academic_class_id,
                 day_of_week=timetable_entry.day_of_week,
                 start_time=timetable_entry.start_time,
