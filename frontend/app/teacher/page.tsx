@@ -10,7 +10,7 @@ import {
     ChevronRight, ClipboardList, CheckCircle, TrendingUp
 } from 'lucide-react';
 import { CreateLessonDialog } from '@/components/create-lesson-dialog';
-import { academicAPI, User, usersAPI, coreAPI, aiAPI } from '@/lib/api';
+import { academicAPI, User, usersAPI, aiAPI } from '@/lib/api';
 import { AITeachingAssistant } from '@/components/ai-teaching-assistant';
 import { MyProfileDialog } from '@/components/my-profile-dialog';
 import { AttendanceTrends } from '@/components/attendance-trends';
@@ -25,6 +25,17 @@ type ScheduleSlot = {
     room: string;
     status: 'completed' | 'ongoing' | 'upcoming';
 };
+
+function formatTenantLabel(raw: string | null | undefined): string {
+    const value = String(raw || '').trim();
+    if (!value) return 'School';
+    if (/^\d+$/.test(value)) return 'School';
+    return value
+        .split(/[-_\s]+/)
+        .filter(Boolean)
+        .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+        .join(' ');
+}
 
 export default function TeacherDashboard() {
     const [loading, setLoading] = useState(true);
@@ -71,15 +82,10 @@ export default function TeacherDashboard() {
             try {
                 const me = await usersAPI.getMe();
                 setUser(me);
-
-                if (me.tenant) {
-                    try {
-                        const tenant = await coreAPI.getTenant(me.tenant);
-                        setSchoolName(tenant.name);
-                    } catch (e) {
-                        console.error('Failed to load tenant name', e);
-                    }
-                }
+                const tenantFromStorage = typeof window !== 'undefined'
+                    ? localStorage.getItem('tenant_id')
+                    : null;
+                setSchoolName(formatTenantLabel(tenantFromStorage || me.tenant));
 
                 const [
                     studentsRaw,
