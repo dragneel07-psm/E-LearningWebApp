@@ -651,3 +651,15 @@ class AcademicYearRolloverAndPromotionTests(FastTenantTestCase):
         self.assertEqual(summary.get("manual_promoted"), 1)
         self.assertEqual(summary.get("manual_held"), 1)
         self.assertEqual(summary.get("failed_attendance"), 1)
+
+        locked_decide = self.client.post(
+            f"/api/academic/assessments/{assessment.assessment_id}/promotion_exceptions/decide/?academic_year={year.id}",
+            {
+                "student_id": str(low_attendance_student.student_id),
+                "action": "promote",
+                "decision_reason": "Late correction attempt",
+            },
+            format="json",
+        )
+        self.assertEqual(locked_decide.status_code, status.HTTP_409_CONFLICT)
+        self.assertIn("locked", str(locked_decide.data.get("detail", "")).lower())

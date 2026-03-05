@@ -505,6 +505,8 @@ export interface PromotionExceptionsResponse {
     assessment_id: string;
     assessment_title: string;
     is_final_assessment: boolean;
+    locked: boolean;
+    lock_reason?: string | null;
     rules: {
         min_score_percentage?: number | null;
         min_attendance_percentage?: number | null;

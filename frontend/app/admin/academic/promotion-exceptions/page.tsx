@@ -187,6 +187,7 @@ export default function PromotionExceptionsPage() {
     }
 
     const summary = payload?.summary;
+    const isLocked = Boolean(payload?.locked);
 
     if (loadingAssessments) {
         return (
@@ -222,6 +223,11 @@ export default function PromotionExceptionsPage() {
                     <CardDescription>Choose final assessment, threshold rules, and exception filters.</CardDescription>
                 </CardHeader>
                 <CardContent className="grid gap-4 md:grid-cols-6">
+                    {isLocked ? (
+                        <div className="md:col-span-6 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                            {payload?.lock_reason || 'Decisions are locked for this assessment.'}
+                        </div>
+                    ) : null}
                     <div className="grid gap-2 md:col-span-2">
                         <Label>Final Assessment</Label>
                         <Select value={selectedAssessmentId} onValueChange={setSelectedAssessmentId}>
@@ -310,7 +316,7 @@ export default function PromotionExceptionsPage() {
                         <Button onClick={applyThresholds} variant="outline">Apply Rules</Button>
                         <Button
                             onClick={() => handleBulkAction('promote')}
-                            disabled={loadingRows || bulkActionLoading !== null}
+                            disabled={loadingRows || bulkActionLoading !== null || isLocked}
                             className="bg-emerald-600 hover:bg-emerald-700"
                         >
                             {bulkActionLoading === 'promote' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
@@ -318,7 +324,7 @@ export default function PromotionExceptionsPage() {
                         </Button>
                         <Button
                             onClick={() => handleBulkAction('hold')}
-                            disabled={loadingRows || bulkActionLoading !== null}
+                            disabled={loadingRows || bulkActionLoading !== null || isLocked}
                             variant="secondary"
                         >
                             {bulkActionLoading === 'hold' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
@@ -326,7 +332,7 @@ export default function PromotionExceptionsPage() {
                         </Button>
                         <Button
                             onClick={() => handleBulkAction('override')}
-                            disabled={loadingRows || bulkActionLoading !== null}
+                            disabled={loadingRows || bulkActionLoading !== null || isLocked}
                             variant="outline"
                         >
                             {bulkActionLoading === 'override' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
@@ -459,7 +465,7 @@ export default function PromotionExceptionsPage() {
                                                     size="sm"
                                                     variant="outline"
                                                     onClick={() => handleStudentAction(row.student_id, 'promote')}
-                                                    disabled={actionStudentId === row.student_id}
+                                                    disabled={actionStudentId === row.student_id || isLocked}
                                                 >
                                                     {actionStudentId === row.student_id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Promote'}
                                                 </Button>
@@ -467,14 +473,14 @@ export default function PromotionExceptionsPage() {
                                                     size="sm"
                                                     variant="outline"
                                                     onClick={() => handleStudentAction(row.student_id, 'hold')}
-                                                    disabled={actionStudentId === row.student_id}
+                                                    disabled={actionStudentId === row.student_id || isLocked}
                                                 >
                                                     {actionStudentId === row.student_id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Hold'}
                                                 </Button>
                                                 <Button
                                                     size="sm"
                                                     onClick={() => handleStudentAction(row.student_id, 'override')}
-                                                    disabled={actionStudentId === row.student_id}
+                                                    disabled={actionStudentId === row.student_id || isLocked}
                                                 >
                                                     {actionStudentId === row.student_id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Override'}
                                                 </Button>

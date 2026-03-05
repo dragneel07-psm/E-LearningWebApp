@@ -230,6 +230,7 @@ class AssessmentViewSet(viewsets.ModelViewSet):
     def _promotion_exception_response(self, assessment: Assessment, request):
         rules = self._promotion_rules_from_request(request)
         rows = self._promotion_exception_rows(assessment, request, rules)
+        locked = bool(assessment.results_published)
 
         recommended_promote = sum(1 for row in rows if row.get('recommended_action') == 'promote')
         recommended_hold = sum(1 for row in rows if row.get('recommended_action') == 'hold')
@@ -289,6 +290,12 @@ class AssessmentViewSet(viewsets.ModelViewSet):
             'assessment_id': str(assessment.assessment_id),
             'assessment_title': assessment.title,
             'is_final_assessment': bool(assessment.is_final_assessment),
+            'locked': locked,
+            'lock_reason': (
+                'Promotion decisions are locked because final results are published. '
+                'Unpublish/reopen results before editing exceptions.'
+                if locked else ''
+            ),
             'rules': {
                 'min_score_percentage': rules.min_score_percentage,
                 'min_attendance_percentage': rules.min_attendance_percentage,
@@ -423,6 +430,16 @@ class AssessmentViewSet(viewsets.ModelViewSet):
                 {'detail': 'Promotion exceptions are only available for final assessments.'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+        if assessment.results_published:
+            return Response(
+                {
+                    'detail': (
+                        'Promotion decisions are locked because final results are published. '
+                        'Unpublish/reopen results before editing exceptions.'
+                    ),
+                },
+                status=status.HTTP_409_CONFLICT,
+            )
 
         student_id = str(request.data.get('student_id') or '').strip()
         action_name = str(request.data.get('action') or '').strip().lower()
@@ -542,6 +559,16 @@ class AssessmentViewSet(viewsets.ModelViewSet):
             return Response(
                 {'detail': 'Promotion exceptions are only available for final assessments.'},
                 status=status.HTTP_400_BAD_REQUEST,
+            )
+        if assessment.results_published:
+            return Response(
+                {
+                    'detail': (
+                        'Promotion decisions are locked because final results are published. '
+                        'Unpublish/reopen results before editing exceptions.'
+                    ),
+                },
+                status=status.HTTP_409_CONFLICT,
             )
 
         action_name = str(request.data.get('action') or '').strip().lower()
