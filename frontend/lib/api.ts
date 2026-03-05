@@ -88,6 +88,50 @@ export interface AcademicYear {
     is_current: boolean;
 }
 
+export interface AcademicYearRolloverOptions {
+    migrate_timetable?: boolean;
+    migrate_courses?: boolean;
+    migrate_subjects?: boolean;
+    migrate_lessons?: boolean;
+    migrate_chapters?: boolean;
+    migrate_quizzes?: boolean;
+    migrate_exercises?: boolean;
+    migrate_assessments?: boolean;
+    auto_upgrade_students?: boolean;
+}
+
+export interface AcademicYearRolloverRequest {
+    source_year?: number;
+    target_year?: number;
+    target?: {
+        name?: string;
+        start_date?: string;
+        end_date?: string;
+    };
+    name?: string;
+    start_date?: string;
+    end_date?: string;
+    options?: AcademicYearRolloverOptions;
+}
+
+export interface AcademicYearRolloverSummary {
+    subjects_migrated: number;
+    chapters_migrated: number;
+    lessons_migrated: number;
+    materials_migrated: number;
+    assessments_migrated: number;
+    questions_migrated: number;
+    timetable_entries_migrated: number;
+    students_promoted: number;
+    students_skipped: number;
+}
+
+export interface AcademicYearRolloverResponse {
+    source_year: string;
+    target_year: string;
+    summary: AcademicYearRolloverSummary;
+}
+
 
 export interface Subject {
     id: number;
@@ -353,8 +397,11 @@ export interface Parent {
 export interface Assessment {
     id: string;
     assessment_id: string;
+    academic_year?: number | null;
+    academic_year_name?: string;
     subject: number | string;
     subject_name?: string;
+    section?: number | null;
     title: string;
     description: string;
     type: 'quiz' | 'exam' | 'assignment';
@@ -364,7 +411,21 @@ export interface Assessment {
     blooms_level: string;
     due_date: string;
     scheduled_at?: string;
+    is_final_assessment?: boolean;
+    results_published?: boolean;
+    results_published_at?: string | null;
     questions?: Question[];
+}
+
+export interface PublishAssessmentResultsResponse {
+    assessment_id: string;
+    results_published: boolean;
+    results_published_at: string | null;
+    is_final_assessment: boolean;
+    student_promotion?: {
+        promoted_students: number;
+        skipped_students: number;
+    } | null;
 }
 
 export interface Result {
@@ -1390,6 +1451,7 @@ export const academicAPI = {
         const payload = await apiRequest<AcademicYear[] | PaginatedResponse<AcademicYear>>('/academic/years/');
         return normalizeArrayPayload(payload);
     },
+    getCurrentAcademicYear: () => apiRequest<AcademicYear>('/academic/years/current/'),
     getAcademicYear: (id: number) => apiRequest<AcademicYear>(`/academic/years/${id}/`),
     createAcademicYear: (data: Partial<AcademicYear>) => apiRequest<AcademicYear>('/academic/years/', {
         method: 'POST',
@@ -1402,6 +1464,11 @@ export const academicAPI = {
     deleteAcademicYear: (id: number) => apiRequest<void>(`/academic/years/${id}/`, {
         method: 'DELETE'
     }),
+    rolloverAcademicYear: (data: AcademicYearRolloverRequest) =>
+        apiRequest<AcademicYearRolloverResponse>('/academic/years/rollover/', {
+            method: 'POST',
+            body: JSON.stringify(data),
+        }),
 
     // Classes
     getClasses: async () => {
@@ -1470,6 +1537,14 @@ export const academicAPI = {
         method: 'PATCH',
         body: JSON.stringify(data)
     }),
+    publishAssessmentResults: (
+        id: string,
+        data?: { publish?: boolean; auto_upgrade_students?: boolean }
+    ) =>
+        apiRequest<PublishAssessmentResultsResponse>(`/academic/assessments/${id}/publish_results/`, {
+            method: 'POST',
+            body: JSON.stringify(data || {}),
+        }),
     deleteAssessment: (id: string) => apiRequest<void>(`/academic/assessments/${id}/`, {
         method: 'DELETE'
     }),

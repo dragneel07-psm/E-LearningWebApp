@@ -55,6 +55,13 @@ class AssessmentViewSet(viewsets.ModelViewSet):
             and getattr(user, 'role', None) in ['teacher', 'admin', 'staff', 'management', 'saas_admin']
         )
 
+    def _promotion_scope_for_assessment(self, assessment):
+        if getattr(assessment, 'section_id', None):
+            return {'section': assessment.section}
+        if getattr(assessment, 'subject_id', None) and getattr(assessment.subject, 'academic_class_id', None):
+            return {'academic_class': assessment.subject.academic_class}
+        return {}
+
     def get_queryset(self):
         queryset = Assessment.objects.select_related('academic_year', 'subject', 'subject__academic_class', 'section').all()
         requested_year, has_year_filter = _resolve_request_year(self.request)
@@ -88,14 +95,15 @@ class AssessmentViewSet(viewsets.ModelViewSet):
         instance = self.get_object()
         was_published = bool(instance.results_published)
         serializer.save()
+        updated = serializer.instance
 
         if (
             not was_published
-            and instance.results_published
-            and instance.is_final_assessment
+            and updated.results_published
+            and updated.is_final_assessment
             and _to_bool(self.request.data.get('auto_upgrade_students'), True)
         ):
-            promote_students_to_next_class()
+            promote_students_to_next_class(**self._promotion_scope_for_assessment(updated))
 
     @action(detail=True, methods=['post'])
     def publish_results(self, request, pk=None):
@@ -124,7 +132,9 @@ class AssessmentViewSet(viewsets.ModelViewSet):
             and assessment.is_final_assessment
             and _to_bool(request.data.get('auto_upgrade_students'), True)
         ):
-            promotion_summary = promote_students_to_next_class()
+            promotion_summary = promote_students_to_next_class(
+                **self._promotion_scope_for_assessment(assessment)
+            )
 
         return Response(
             {

@@ -138,16 +138,26 @@ def get_current_academic_year() -> Optional[AcademicYear]:
     return ensure_current_academic_year()
 
 
-def promote_students_to_next_class() -> Dict[str, int]:
+def promote_students_to_next_class(
+    *,
+    academic_class: Optional[AcademicClass] = None,
+    section: Optional[Section] = None,
+) -> Dict[str, int]:
     classes = list(AcademicClass.objects.order_by("order", "id"))
     if not classes:
         return {"promoted_students": 0, "skipped_students": 0}
 
-    class_index = {academic_class.id: idx for idx, academic_class in enumerate(classes)}
+    class_index = {cls.id: idx for idx, cls in enumerate(classes)}
     promoted = 0
     skipped = 0
 
-    for student in Student.objects.select_related("academic_class", "section"):
+    students_qs = Student.objects.select_related("academic_class", "section")
+    if section is not None:
+        students_qs = students_qs.filter(section=section)
+    elif academic_class is not None:
+        students_qs = students_qs.filter(academic_class=academic_class)
+
+    for student in students_qs:
         if not student.academic_class_id or student.academic_class_id not in class_index:
             skipped += 1
             continue

@@ -1,18 +1,19 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
 import { academicAPI, Assessment, AcademicClass, Subject } from '@/lib/api';
 import { toast } from 'sonner';
-import { Plus, Trash2, Edit, Calendar, Clock, BookOpen, FileText, CheckCircle2, Loader2, Search } from 'lucide-react';
+import { Plus, Trash2, Edit, Calendar, Clock, FileText, CheckCircle2, Loader2, Search } from 'lucide-react';
 import { format } from 'date-fns';
 
 export default function AssessmentManager() {
@@ -22,6 +23,11 @@ export default function AssessmentManager() {
     const [loading, setLoading] = useState(true);
     const [isDialogOpen, setIsDialogOpen] = useState(false);
     const [editingAssessment, setEditingAssessment] = useState<Assessment | null>(null);
+    const [isPublishDialogOpen, setIsPublishDialogOpen] = useState(false);
+    const [publishTarget, setPublishTarget] = useState<Assessment | null>(null);
+    const [publishRequestedState, setPublishRequestedState] = useState<boolean>(true);
+    const [publishAutoUpgrade, setPublishAutoUpgrade] = useState<boolean>(true);
+    const [publishing, setPublishing] = useState(false);
 
     // Form State
     const [formData, setFormData] = useState<Partial<Assessment>>({
@@ -34,6 +40,7 @@ export default function AssessmentManager() {
         blooms_level: 'remember',
         scheduled_at: '',
         subject: '',
+        is_final_assessment: false,
     });
 
     const [selectedClassId, setSelectedClassId] = useState<string>('');
@@ -85,6 +92,7 @@ export default function AssessmentManager() {
             blooms_level: 'remember',
             scheduled_at: '',
             subject: '',
+            is_final_assessment: false,
         });
         setIsDialogOpen(true);
     };
@@ -114,7 +122,8 @@ export default function AssessmentManager() {
         try {
             const payload = {
                 ...formData,
-                due_date: formData.scheduled_at // Ideally specific due date
+                due_date: formData.scheduled_at, // Ideally specific due date
+                is_final_assessment: Boolean(formData.is_final_assessment),
             };
 
             if (editingAssessment?.id) {
@@ -129,6 +138,42 @@ export default function AssessmentManager() {
         } catch (error) {
             console.error(error);
             toast.error('Failed to save assessment');
+        }
+    };
+
+    const openPublishDialog = (assessment: Assessment, publish: boolean) => {
+        setPublishTarget(assessment);
+        setPublishRequestedState(publish);
+        setPublishAutoUpgrade(publish && Boolean(assessment.is_final_assessment));
+        setIsPublishDialogOpen(true);
+    };
+
+    const handlePublishSubmit = async () => {
+        if (!publishTarget?.id) return;
+        try {
+            setPublishing(true);
+            const response = await academicAPI.publishAssessmentResults(publishTarget.id, {
+                publish: publishRequestedState,
+                auto_upgrade_students: publishAutoUpgrade,
+            });
+            if (publishRequestedState) {
+                const promoted = response.student_promotion?.promoted_students ?? 0;
+                if (response.is_final_assessment && publishAutoUpgrade) {
+                    toast.success(`Results published. Students promoted: ${promoted}`);
+                } else {
+                    toast.success('Results published successfully');
+                }
+            } else {
+                toast.success('Results marked as unpublished');
+            }
+            setIsPublishDialogOpen(false);
+            setPublishTarget(null);
+            await loadData();
+        } catch (error) {
+            console.error(error);
+            toast.error('Failed to update result publish status');
+        } finally {
+            setPublishing(false);
         }
     };
 
@@ -188,7 +233,9 @@ export default function AssessmentManager() {
                                 <TableHead>Subject & Class</TableHead>
                                 <TableHead>Marks</TableHead>
                                 <TableHead>Schedule</TableHead>
-                                <TableHead>Bloom's Level</TableHead>
+                                <TableHead>Final</TableHead>
+                                <TableHead>Results</TableHead>
+                                <TableHead>Blooms Level</TableHead>
                                 <TableHead className="text-right">Actions</TableHead>
                             </TableRow>
                         </TableHeader>
@@ -224,12 +271,34 @@ export default function AssessmentManager() {
                                             </div>
                                         </TableCell>
                                         <TableCell>
+                                            {assessment.is_final_assessment ? (
+                                                <Badge className="bg-amber-100 text-amber-700 hover:bg-amber-100">Final</Badge>
+                                            ) : (
+                                                <Badge variant="outline" className="text-slate-500">No</Badge>
+                                            )}
+                                        </TableCell>
+                                        <TableCell>
+                                            {assessment.results_published ? (
+                                                <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100">Published</Badge>
+                                            ) : (
+                                                <Badge variant="outline" className="text-slate-500">Draft</Badge>
+                                            )}
+                                        </TableCell>
+                                        <TableCell>
                                             <Badge variant="secondary" className="capitalize bg-slate-100 text-slate-600 hover:bg-slate-200">
                                                 {assessment.blooms_level}
                                             </Badge>
                                         </TableCell>
                                         <TableCell className="text-right">
                                             <div className="flex justify-end gap-1">
+                                                <Button
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    className="h-8 px-2 text-xs text-slate-500 hover:text-indigo-600"
+                                                    onClick={() => openPublishDialog(assessment, !Boolean(assessment.results_published))}
+                                                >
+                                                    {assessment.results_published ? 'Unpublish' : 'Publish'}
+                                                </Button>
                                                 <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50" onClick={() => handleOpenEdit(assessment)}>
                                                     <Edit className="h-4 w-4" />
                                                 </Button>
@@ -243,7 +312,7 @@ export default function AssessmentManager() {
                             })}
                             {assessments.length === 0 && (
                                 <TableRow>
-                                    <TableCell colSpan={6} className="h-32 text-center text-slate-400 font-medium">
+                                    <TableCell colSpan={8} className="h-32 text-center text-slate-400 font-medium">
                                         No assessments found. Create one to get started!
                                     </TableCell>
                                 </TableRow>
@@ -306,7 +375,10 @@ export default function AssessmentManager() {
                         <div className="grid grid-cols-3 gap-4">
                             <div className="space-y-2">
                                 <Label className="text-sm font-semibold text-slate-700">Type</Label>
-                                <Select value={formData.type} onValueChange={v => setFormData({ ...formData, type: v as any })}>
+                                <Select
+                                    value={formData.type}
+                                    onValueChange={(value: Assessment['type']) => setFormData({ ...formData, type: value })}
+                                >
                                     <SelectTrigger>
                                         <SelectValue />
                                     </SelectTrigger>
@@ -353,7 +425,7 @@ export default function AssessmentManager() {
                                 />
                             </div>
                             <div className="space-y-2">
-                                <Label className="text-sm font-semibold text-slate-700">Bloom's Level</Label>
+                                <Label className="text-sm font-semibold text-slate-700">Blooms Level</Label>
                                 <Select value={formData.blooms_level} onValueChange={v => setFormData({ ...formData, blooms_level: v })}>
                                     <SelectTrigger>
                                         <SelectValue />
@@ -370,6 +442,17 @@ export default function AssessmentManager() {
                             </div>
                         </div>
 
+                        <div className="flex items-center justify-between rounded-md border border-slate-200 p-3">
+                            <div>
+                                <p className="text-sm font-semibold text-slate-700">Final Assessment</p>
+                                <p className="text-xs text-slate-500">Final assessments can auto-upgrade students when results are published.</p>
+                            </div>
+                            <Switch
+                                checked={Boolean(formData.is_final_assessment)}
+                                onCheckedChange={(checked) => setFormData({ ...formData, is_final_assessment: checked })}
+                            />
+                        </div>
+
                         <div className="space-y-2">
                             <Label className="text-sm font-semibold text-slate-700">Description</Label>
                             <Textarea
@@ -384,6 +467,47 @@ export default function AssessmentManager() {
                         <Button variant="outline" onClick={() => setIsDialogOpen(false)}>Cancel</Button>
                         <Button onClick={handleSubmit} className="bg-indigo-600 hover:bg-indigo-700 gap-2">
                             <CheckCircle2 className="h-4 w-4" /> {editingAssessment ? 'Update Assessment' : 'Create Assessment'}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            <Dialog open={isPublishDialogOpen} onOpenChange={setIsPublishDialogOpen}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>
+                            {publishRequestedState ? 'Publish Results' : 'Unpublish Results'}
+                        </DialogTitle>
+                        <DialogDescription>
+                            {publishRequestedState
+                                ? 'Publishing results makes assessment outcomes visible and can trigger class upgrades for final assessments.'
+                                : 'Unpublishing will hide the published result status for this assessment.'}
+                        </DialogDescription>
+                    </DialogHeader>
+                    {publishRequestedState && publishTarget?.is_final_assessment ? (
+                        <div className="flex items-center justify-between rounded-md border border-slate-200 p-3">
+                            <div>
+                                <p className="text-sm font-semibold text-slate-700">Auto-upgrade students</p>
+                                <p className="text-xs text-slate-500">
+                                    Promote students of this assessment scope to the next class after publish.
+                                </p>
+                            </div>
+                            <Switch checked={publishAutoUpgrade} onCheckedChange={setPublishAutoUpgrade} />
+                        </div>
+                    ) : null}
+                    <DialogFooter>
+                        <Button
+                            variant="outline"
+                            onClick={() => {
+                                setIsPublishDialogOpen(false);
+                                setPublishTarget(null);
+                            }}
+                        >
+                            Cancel
+                        </Button>
+                        <Button onClick={handlePublishSubmit} disabled={publishing}>
+                            {publishing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                            {publishRequestedState ? 'Publish Results' : 'Unpublish Results'}
                         </Button>
                     </DialogFooter>
                 </DialogContent>
