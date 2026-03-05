@@ -42,6 +42,9 @@ export default function PromotionExceptionsPage() {
     const [sectionFilter, setSectionFilter] = useState<FilterValue>('all');
     const [reasonFilter, setReasonFilter] = useState<FilterValue>('all');
     const [decisionReason, setDecisionReason] = useState('');
+    const [searchTerm, setSearchTerm] = useState('');
+    const [pageSize, setPageSize] = useState(25);
+    const [page, setPage] = useState(1);
 
     const [actionStudentId, setActionStudentId] = useState<string | null>(null);
     const [bulkActionLoading, setBulkActionLoading] = useState<PromotionExceptionAction | null>(null);
@@ -217,6 +220,36 @@ export default function PromotionExceptionsPage() {
 
     const summary = payload?.summary;
     const isLocked = Boolean(payload?.locked);
+    const filteredStudents = useMemo(() => {
+        const rows = payload?.students || [];
+        const term = searchTerm.trim().toLowerCase();
+        if (!term) return rows;
+        return rows.filter((row) => {
+            const haystack = [
+                row.student_name,
+                row.student_id,
+                row.class_name || '',
+                row.section_name || '',
+                row.hold_reason_label || '',
+                row.recommended_action,
+                row.effective_action,
+                row.decision?.decision_reason || '',
+            ]
+                .join(' ')
+                .toLowerCase();
+            return haystack.includes(term);
+        });
+    }, [payload?.students, searchTerm]);
+    const totalPages = Math.max(1, Math.ceil(filteredStudents.length / pageSize));
+    const currentPage = Math.min(page, totalPages);
+    const pagedStudents = useMemo(() => {
+        const start = (currentPage - 1) * pageSize;
+        return filteredStudents.slice(start, start + pageSize);
+    }, [filteredStudents, currentPage, pageSize]);
+
+    useEffect(() => {
+        setPage(1);
+    }, [searchTerm, pageSize, selectedAssessmentId, classFilter, sectionFilter, reasonFilter]);
 
     if (loadingAssessments) {
         return (
@@ -435,6 +468,28 @@ export default function PromotionExceptionsPage() {
                     </CardDescription>
                 </CardHeader>
                 <CardContent>
+                    <div className="mb-3 flex flex-wrap items-center gap-2">
+                        <Input
+                            value={searchTerm}
+                            onChange={(event) => setSearchTerm(event.target.value)}
+                            placeholder="Search student, class, section, reason..."
+                            className="w-full md:max-w-sm"
+                        />
+                        <Select value={String(pageSize)} onValueChange={(value) => setPageSize(Number(value))}>
+                            <SelectTrigger className="w-[140px]">
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="10">10 / page</SelectItem>
+                                <SelectItem value="25">25 / page</SelectItem>
+                                <SelectItem value="50">50 / page</SelectItem>
+                                <SelectItem value="100">100 / page</SelectItem>
+                            </SelectContent>
+                        </Select>
+                        <div className="text-xs text-slate-500">
+                            Showing {pagedStudents.length} of {filteredStudents.length} matched students
+                        </div>
+                    </div>
                     <div className="overflow-x-auto">
                         <Table>
                             <TableHeader>
@@ -457,7 +512,7 @@ export default function PromotionExceptionsPage() {
                                             <Loader2 className="mx-auto h-5 w-5 animate-spin text-indigo-600" />
                                         </TableCell>
                                     </TableRow>
-                                ) : payload?.students?.length ? payload.students.map((row) => (
+                                ) : pagedStudents.length ? pagedStudents.map((row) => (
                                     <TableRow key={row.student_id}>
                                         <TableCell>
                                             <p className="font-semibold text-slate-900">{row.student_name}</p>
@@ -545,12 +600,35 @@ export default function PromotionExceptionsPage() {
                                 )) : (
                                     <TableRow>
                                         <TableCell colSpan={9} className="h-24 text-center text-slate-500">
-                                            No students match the selected filters.
+                                            No students match the current filters/search.
                                         </TableCell>
                                     </TableRow>
                                 )}
                             </TableBody>
                         </Table>
+                    </div>
+                    <div className="mt-3 flex items-center justify-between">
+                        <div className="text-xs text-slate-500">
+                            Page {currentPage} of {totalPages}
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                disabled={currentPage <= 1}
+                                onClick={() => setPage((prev) => Math.max(1, prev - 1))}
+                            >
+                                Previous
+                            </Button>
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                disabled={currentPage >= totalPages}
+                                onClick={() => setPage((prev) => Math.min(totalPages, prev + 1))}
+                            >
+                                Next
+                            </Button>
+                        </div>
                     </div>
                 </CardContent>
             </Card>
