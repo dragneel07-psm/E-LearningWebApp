@@ -18,6 +18,30 @@ import { toast } from 'sonner';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { StudentProfileOverviewDialog } from '@/components/student/student-profile-overview-dialog';
 
+type StudentFormData = {
+    first_name: string;
+    last_name: string;
+    email: string;
+    username: string;
+    password: string;
+    academic_class: string;
+    section: string;
+    learning_style: NonNullable<Student['learning_style']>;
+    daily_study_goal: number;
+};
+
+const defaultFormData: StudentFormData = {
+    first_name: '',
+    last_name: '',
+    email: '',
+    username: '',
+    password: '',
+    academic_class: '',
+    section: '',
+    learning_style: 'visual',
+    daily_study_goal: 30,
+};
+
 export default function StudentsPage() {
     const [students, setStudents] = useState<Student[]>([]);
     const [classes, setClasses] = useState<AcademicClass[]>([]);
@@ -31,17 +55,7 @@ export default function StudentsPage() {
     const [profileStudent, setProfileStudent] = useState<Student | null>(null);
     const [submitting, setSubmitting] = useState(false);
 
-    const [formData, setFormData] = useState({
-        first_name: '',
-        last_name: '',
-        email: '',
-        username: '',
-        password: '',
-        academic_class: '', // string ID
-        section: '', // string ID
-        learning_style: 'visual',
-        daily_study_goal: 30
-    });
+    const [formData, setFormData] = useState<StudentFormData>(defaultFormData);
 
     useEffect(() => {
         loadData();
@@ -64,17 +78,7 @@ export default function StudentsPage() {
     }
 
     const resetForm = () => {
-        setFormData({
-            first_name: '',
-            last_name: '',
-            email: '',
-            username: '',
-            password: '',
-            academic_class: '',
-            section: '',
-            learning_style: 'visual',
-            daily_study_goal: 30
-        });
+        setFormData(defaultFormData);
         setIsEditMode(false);
         setCurrentStudentId(null);
     };
