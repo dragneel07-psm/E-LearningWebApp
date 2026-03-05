@@ -371,6 +371,9 @@ Startup sequence runs:
 4. `init_prod` command.
 5. Gunicorn startup.
 
+Detailed step-by-step guide:
+- `docs/infra/02-railway-vercel-deployment.md`
+
 ### Frontend deployment
 - Next.js app typically deployed to Vercel.
 - Ensure `NEXT_PUBLIC_API_URL` points to backend base URL.
@@ -383,7 +386,7 @@ Startup sequence runs:
 
 ### Post-deployment checklist
 - Health checks and login flow for admin/teacher/student.
-- Tenant routing verified (`x-tenant-id` + domain).
+- Tenant routing verified by domain/hostname in production (`x-tenant-id` is dev-only).
 - Core module smoke checks: courses, timetable, assessments, library.
 
 ## Operations and Incident Management

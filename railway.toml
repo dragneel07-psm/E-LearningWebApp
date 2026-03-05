@@ -1,6 +1,6 @@
 [build]
 builder = "NIXPACKS"
-buildCommand = "/opt/venv/bin/pip install setuptools && /opt/venv/bin/pip install -r requirements.txt"
+buildCommand = "/opt/venv/bin/pip install setuptools && /opt/venv/bin/pip install -r backend/requirements.txt"
 
 [deploy]
-startCommand = "cd backend && /opt/venv/bin/python manage.py migrate_schemas --shared --noinput && /opt/venv/bin/python manage.py migrate_schemas --schema=public --noinput && /opt/venv/bin/python manage.py migrate_schemas --tenant --noinput && /opt/venv/bin/python manage.py init_prod && /opt/venv/bin/gunicorn config.wsgi --bind 0.0.0.0:$PORT"
+startCommand = "bash scripts/railway-start-web.sh"
