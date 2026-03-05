@@ -12,6 +12,7 @@ https://docs.djangoproject.com/en/5.1/ref/settings/
 
 from pathlib import Path
 import os
+from datetime import timedelta
 from dotenv import load_dotenv
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -19,6 +20,13 @@ BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
 # Load environment variables from .env file
 load_dotenv(BASE_DIR.parent / '.env')
+
+
+def _csv_env_list(key: str, default: list[str] | None = None) -> list[str]:
+    value = os.environ.get(key, "")
+    if not value:
+        return list(default or [])
+    return [item.strip() for item in value.split(",") if item.strip()]
 
 
 # Quick-start development settings - unsuitable for production
@@ -88,6 +96,7 @@ AUTH_USER_MODEL = 'users.UserAccount'
 MIDDLEWARE = [
     "corsheaders.middleware.CorsMiddleware",  # Must be as high as possible
     "django.middleware.security.SecurityMiddleware",
+    "core.middleware.SecurityHeadersMiddleware",
     "core.middleware.RequestContextMiddleware",
     "core.middleware.TenantFromHeaderMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
@@ -199,29 +208,34 @@ MEDIA_ROOT = BASE_DIR / "media"
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 # CORS Configuration
-CORS_ALLOWED_ORIGINS = [
-    "http://localhost:3000",
-    "http://127.0.0.1:3000",
-]
-if os.environ.get("FRONTEND_URL"):
-    CORS_ALLOWED_ORIGINS.append(os.environ.get("FRONTEND_URL").rstrip('/'))
+_frontend_url_env = (os.environ.get("FRONTEND_URL", "") or "").strip().rstrip("/")
+FRONTEND_URL = _frontend_url_env or "http://localhost:3000"
 
-# CORS regex origins can be set explicitly in production.
-_cors_origin_regexes = os.environ.get("CORS_ALLOWED_ORIGIN_REGEXES", "").strip()
+if DEBUG:
+    CORS_ALLOWED_ORIGINS = _csv_env_list(
+        "CORS_ALLOWED_ORIGINS",
+        ["http://localhost:3000", "http://127.0.0.1:3000"],
+    )
+else:
+    # In production, CORS must be explicit.
+    CORS_ALLOWED_ORIGINS = _csv_env_list("CORS_ALLOWED_ORIGINS", [])
+
+if _frontend_url_env and _frontend_url_env not in CORS_ALLOWED_ORIGINS:
+    CORS_ALLOWED_ORIGINS.append(_frontend_url_env)
+
+_cors_origin_regexes = _csv_env_list("CORS_ALLOWED_ORIGIN_REGEXES", [])
 if _cors_origin_regexes:
-    CORS_ALLOWED_ORIGIN_REGEXES = [item.strip() for item in _cors_origin_regexes.split(",") if item.strip()]
+    CORS_ALLOWED_ORIGIN_REGEXES = _cors_origin_regexes
 elif DEBUG:
-    # Keep Vercel preview convenience in non-production.
     CORS_ALLOWED_ORIGIN_REGEXES = [r"^https:\/\/.*\.vercel\.app$"]
 else:
     CORS_ALLOWED_ORIGIN_REGEXES = []
 
-CORS_ALLOW_ALL_ORIGINS = os.environ.get("CORS_ALLOW_ALL_ORIGINS", "False").lower() == "true"
+CORS_ALLOW_ALL_ORIGINS = os.environ.get("CORS_ALLOW_ALL_ORIGINS", "false").lower() == "true"
 CORS_ALLOW_CREDENTIALS = True
 
-CSRF_TRUSTED_ORIGINS = list(CORS_ALLOWED_ORIGINS)
-# regex based trusted origins aren't directly supported in CSRF_TRUSTED_ORIGINS list, 
-# so we add the common vercel pattern if needed, or rely on specific env var.
+_csrf_trusted_from_env = _csv_env_list("CSRF_TRUSTED_ORIGINS", [])
+CSRF_TRUSTED_ORIGINS = _csrf_trusted_from_env or list(CORS_ALLOWED_ORIGINS)
 
 from corsheaders.defaults import default_headers
 CORS_ALLOW_HEADERS = list(default_headers) + [
@@ -253,21 +267,52 @@ REST_FRAMEWORK = {
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
     'PAGE_SIZE': 20,
     'EXCEPTION_HANDLER': 'core.exceptions.api_exception_handler',
+    'DEFAULT_SCHEMA_CLASS': 'core.schema.UniqueOperationIdAutoSchema',
 }
 
-from datetime import timedelta
+_jwt_default_access_minutes = int(os.environ.get("JWT_ACCESS_MINUTES_DEFAULT", "60"))
+_jwt_default_refresh_days = int(os.environ.get("JWT_REFRESH_DAYS_DEFAULT", "7"))
 
 SIMPLE_JWT = {
     'USER_ID_FIELD': 'user_id',
     'USER_ID_CLAIM': 'user_id',
-    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=60),
-    'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
+    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=_jwt_default_access_minutes),
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=_jwt_default_refresh_days),
     'ROTATE_REFRESH_TOKENS': True,
     'BLACKLIST_AFTER_ROTATION': True,
     'AUTH_HEADER_TYPES': ('Bearer',),
 }
 
-FRONTEND_URL = os.environ.get("FRONTEND_URL", "http://localhost:3000")
+JWT_ROLE_TOKEN_LIFETIMES = {
+    # High-risk roles get shorter lifetimes.
+    "saas_admin": {
+        "access": timedelta(minutes=int(os.environ.get("JWT_ACCESS_MINUTES_SAAS_ADMIN", "15"))),
+        "refresh": timedelta(days=int(os.environ.get("JWT_REFRESH_DAYS_SAAS_ADMIN", "1"))),
+    },
+    "admin": {
+        "access": timedelta(minutes=int(os.environ.get("JWT_ACCESS_MINUTES_ADMIN", "20"))),
+        "refresh": timedelta(days=int(os.environ.get("JWT_REFRESH_DAYS_ADMIN", "2"))),
+    },
+    "staff": {
+        "access": timedelta(minutes=int(os.environ.get("JWT_ACCESS_MINUTES_STAFF", "30"))),
+        "refresh": timedelta(days=int(os.environ.get("JWT_REFRESH_DAYS_STAFF", "3"))),
+    },
+    "teacher": {
+        "access": timedelta(minutes=int(os.environ.get("JWT_ACCESS_MINUTES_TEACHER", "45"))),
+        "refresh": timedelta(days=int(os.environ.get("JWT_REFRESH_DAYS_TEACHER", "5"))),
+    },
+    "parent": {
+        "access": timedelta(minutes=int(os.environ.get("JWT_ACCESS_MINUTES_PARENT", "60"))),
+        "refresh": timedelta(days=int(os.environ.get("JWT_REFRESH_DAYS_PARENT", "7"))),
+    },
+    "student": {
+        "access": timedelta(minutes=int(os.environ.get("JWT_ACCESS_MINUTES_STUDENT", "60"))),
+        "refresh": timedelta(days=int(os.environ.get("JWT_REFRESH_DAYS_STUDENT", "7"))),
+    },
+}
+
+JWT_STRICT_REFRESH_ROTATION = os.environ.get("JWT_STRICT_REFRESH_ROTATION", "true").lower() == "true"
+
 DEFAULT_FROM_EMAIL = os.environ.get("DEFAULT_FROM_EMAIL", "support@elearning.dev")
 
 # Tenant trust policy:
@@ -281,6 +326,33 @@ SECURE_CONTENT_TYPE_NOSNIFF = True
 X_FRAME_OPTIONS = "DENY"
 SECURE_REFERRER_POLICY = "same-origin"
 SECURE_CROSS_ORIGIN_OPENER_POLICY = "same-origin"
+
+_csp_connect_src = ["'self'"]
+for _origin in CORS_ALLOWED_ORIGINS:
+    if _origin and _origin not in _csp_connect_src:
+        _csp_connect_src.append(_origin)
+for _origin in _csv_env_list("CSP_CONNECT_SRC_EXTRA", []):
+    if _origin and _origin not in _csp_connect_src:
+        _csp_connect_src.append(_origin)
+
+SECURITY_CSP_REPORT_ONLY = os.environ.get("CSP_REPORT_ONLY", "false").lower() == "true"
+SECURITY_CSP_POLICY = {
+    "default-src": ("'self'",),
+    "base-uri": ("'self'",),
+    "frame-ancestors": ("'none'",),
+    "form-action": ("'self'",),
+    "object-src": ("'none'",),
+    # Keep Django admin and app shells functional while still setting a baseline.
+    "script-src": ("'self'", "'unsafe-inline'"),
+    "style-src": ("'self'", "'unsafe-inline'"),
+    "img-src": ("'self'", "data:", "blob:", "https:"),
+    "font-src": ("'self'", "data:"),
+    "connect-src": tuple(_csp_connect_src),
+}
+SECURITY_PERMISSIONS_POLICY = os.environ.get(
+    "SECURITY_PERMISSIONS_POLICY",
+    "camera=(), microphone=(), geolocation=()",
+)
 
 if DEBUG:
     SESSION_COOKIE_SECURE = False
@@ -325,3 +397,52 @@ AUDITLOG_LOGENTRY_MODEL = 'auditlog.LogEntry'
 AUDITLOG_DISABLE_REMOTE_ADDR = False
 AUDITLOG_CID_GETTER = None
 AUDITLOG_CID_HEADER = None
+
+# Structured logging with request and tenant correlation
+LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO").upper()
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "filters": {
+        "request_context": {
+            "()": "core.logging_context.RequestContextLogFilter",
+        },
+    },
+    "formatters": {
+        "structured": {
+            "format": (
+                "%(asctime)s level=%(levelname)s logger=%(name)s "
+                "trace_id=%(request_id)s tenant_schema=%(tenant_schema)s tenant_id=%(tenant_id)s "
+                "message=%(message)s"
+            ),
+        },
+    },
+    "handlers": {
+        "console": {
+            "class": "logging.StreamHandler",
+            "formatter": "structured",
+            "filters": ["request_context"],
+        },
+    },
+    "root": {
+        "handlers": ["console"],
+        "level": LOG_LEVEL,
+    },
+}
+
+# Sentry integration (optional; enabled only when package + DSN are available)
+SENTRY_DSN = (os.environ.get("SENTRY_DSN", "") or "").strip()
+if SENTRY_DSN:
+    try:
+        import sentry_sdk
+        from sentry_sdk.integrations.django import DjangoIntegration
+
+        sentry_sdk.init(
+            dsn=SENTRY_DSN,
+            environment=os.environ.get("SENTRY_ENVIRONMENT", "production"),
+            traces_sample_rate=float(os.environ.get("SENTRY_TRACES_SAMPLE_RATE", "0.05")),
+            send_default_pii=False,
+            integrations=[DjangoIntegration()],
+        )
+    except Exception as sentry_error:
+        print(f"Sentry initialization skipped: {sentry_error}", file=sys.stderr)

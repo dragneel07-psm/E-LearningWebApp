@@ -1,8 +1,15 @@
 # users/serializers.py
 from rest_framework import serializers
+from django.contrib.auth import get_user_model
+from django.conf import settings
 from .models import UserAccount
 from core.utils.plan_enforcement import build_plan_entitled_features, get_tenant_plan
 from core.utils.audit import record_audit_event
+from rest_framework_simplejwt.exceptions import InvalidToken
+from rest_framework_simplejwt.serializers import TokenObtainPairSerializer, TokenRefreshSerializer
+from rest_framework_simplejwt.settings import api_settings
+from rest_framework_simplejwt.tokens import AccessToken, RefreshToken as _RefreshToken
+from .token_policy import role_token_lifetimes
 
 def _safe_tenant_features(user) -> dict:
     try:
@@ -63,8 +70,23 @@ class GroupSerializer(serializers.ModelSerializer):
         model = Group
         fields = '__all__'
 
-from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
-from rest_framework_simplejwt.tokens import RefreshToken as _RefreshToken
+def _apply_role_token_lifetimes(data: dict, *, user) -> dict:
+    role_lifetimes = role_token_lifetimes(getattr(user, "role", None))
+
+    access_token = data.get("access")
+    if access_token:
+        access = AccessToken(access_token)
+        access.set_exp(lifetime=role_lifetimes.access)
+        data["access"] = str(access)
+
+    refresh_token = data.get("refresh")
+    if refresh_token:
+        refresh = _RefreshToken(refresh_token)
+        refresh.set_exp(lifetime=role_lifetimes.refresh)
+        data["refresh"] = str(refresh)
+
+    return data
+
 
 class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
     # Tell SimpleJWT to use 'email' as the login field
@@ -74,6 +96,9 @@ class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
     @classmethod
     def get_token(cls, user):
         token = super().get_token(user)
+        role_lifetimes = role_token_lifetimes(getattr(user, "role", None))
+        token.set_exp(lifetime=role_lifetimes.refresh)
+
         # Embed useful claims so the frontend can read role without a second API call
         token['role'] = user.role
         token['email'] = user.email
@@ -89,6 +114,8 @@ class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
         except Exception as e:
             # Login failure (401) is handled by super()
             raise e
+
+        data = _apply_role_token_lifetimes(data, user=self.user)
 
         # Attach the user profile to every login response
         try:
@@ -115,11 +142,44 @@ class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
         return data
 
 
+class RoleAwareTokenRefreshSerializer(TokenRefreshSerializer):
+    def _ensure_rotation_policy(self) -> None:
+        if not bool(getattr(settings, "JWT_STRICT_REFRESH_ROTATION", True)):
+            return
+
+        if not api_settings.ROTATE_REFRESH_TOKENS or not api_settings.BLACKLIST_AFTER_ROTATION:
+            raise InvalidToken("Strict refresh token rotation policy is required.")
+
+    def _user_for_refresh(self, token: _RefreshToken):
+        user_model = get_user_model()
+        user_id_field = api_settings.USER_ID_FIELD
+        user_id_claim = api_settings.USER_ID_CLAIM
+        user_id = token.get(user_id_claim)
+        if not user_id:
+            raise InvalidToken("Refresh token is missing user identity.")
+
+        try:
+            user = user_model.objects.select_related("tenant").get(**{user_id_field: user_id})
+        except user_model.DoesNotExist as exc:
+            raise InvalidToken("User not found for refresh token.") from exc
+
+        if not user.is_active:
+            raise InvalidToken("User account is inactive.")
+
+        return user
+
+    def validate(self, attrs):
+        self._ensure_rotation_policy()
+        original_refresh = _RefreshToken(attrs["refresh"])
+        user = self._user_for_refresh(original_refresh)
+        data = super().validate(attrs)
+        return _apply_role_token_lifetimes(data, user=user)
+
+
 
 
 # User Registration Serializer
 from django.contrib.auth.password_validation import validate_password
-from rest_framework_simplejwt.tokens import RefreshToken
 import re
 
 class UserRegistrationSerializer(serializers.ModelSerializer):
@@ -172,13 +232,17 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
     
     def get_tokens(self, obj):
         """Generate JWT tokens for the user"""
-        refresh = RefreshToken.for_user(obj)
+        refresh = _RefreshToken.for_user(obj)
+        role_lifetimes = role_token_lifetimes(getattr(obj, "role", None))
+        refresh.set_exp(lifetime=role_lifetimes.refresh)
         claims = _tenant_claims(obj)
         refresh["tenant_schema"] = claims["tenant_schema"]
         refresh["tenant_id"] = claims["tenant_id"]
+        access = refresh.access_token
+        access.set_exp(lifetime=role_lifetimes.access)
         return {
             'refresh': str(refresh),
-            'access': str(refresh.access_token),
+            'access': str(access),
         }
     
     def create(self, validated_data):

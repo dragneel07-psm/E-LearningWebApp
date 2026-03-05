@@ -2,11 +2,23 @@ from django.contrib import admin
 from django.urls import path, include
 from core.views import HealthzView, ReadyzView
 from users.views import CustomTokenObtainPairView, CustomTokenRefreshView
+from rest_framework.permissions import AllowAny
+from rest_framework.schemas import get_schema_view
+
+
+schema_view = get_schema_view(
+    title="E-Learning WebApp API",
+    description="Tenant-aware LMS + school ERP APIs",
+    version="v1",
+    permission_classes=[AllowAny],
+)
 
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('healthz', HealthzView.as_view(), name='healthz-root'),
     path('readyz', ReadyzView.as_view(), name='readyz-root'),
+    path('api/schema/', schema_view, name='api-schema'),
+    path('api/v1/schema/', schema_view, name='api-schema-v1'),
     path('api/core/', include('core.urls')),
     path('api/users/', include('users.urls')),
     path('api/academic/', include('academic.urls')),

@@ -34,11 +34,23 @@ Upgrade the LMS into a safer, tenant-correct, school-ERP-ready platform without 
   - high-risk admin mutation audit events added for admin password resets and subscription/tenant-user management changes
   - additional platform-admin workflow audits added for global settings updates, backup creation, and tenant deletion
 
-## Phase 3: Security and API Productization (Next)
-- [ ] B9: Role-based token lifetimes and strict refresh rotation policies per role risk.
-- [ ] B12: CSP baseline and stricter environment-specific CORS allowlists.
-- [ ] E26: OpenAPI generation + typed client pipeline for web/mobile consistency.
-- [ ] D20-D21: Structured logging with request/tenant correlation + Sentry integration.
+## Phase 3: Security and API Productization (Implemented)
+- [x] B9: Role-based token lifetimes and strict refresh rotation policies per role risk.
+  - role-aware JWT access/refresh lifetimes by risk profile
+  - strict refresh rotation policy enforced in refresh serializer
+  - refresh reuse regression coverage added
+- [x] B12: CSP baseline and stricter environment-specific CORS allowlists.
+  - CSP + Permissions-Policy middleware baseline added
+  - production CORS now defaults to explicit allowlist only
+  - CORS/CSP regression tests added
+- [x] E26: OpenAPI generation + typed client pipeline for web/mobile consistency.
+  - schema endpoints added: `/api/schema/` and `/api/v1/schema/`
+  - root script added: `npm run api:types` (generates schema + frontend/mobile types)
+  - local offline schema generation fallback included for missing `inflection`/`uritemplate` packages
+- [x] D20-D21: Structured logging with request/tenant correlation + Sentry integration.
+  - structured log formatter adds `trace_id`, `tenant_schema`, `tenant_id`
+  - request context logging filter + middleware wiring added
+  - env-driven Sentry init added (safe no-op when SDK is unavailable)
 
 ## Phase 4: Scale and Throughput (Next)
 - [ ] C14: Redis + async workers (Celery/RQ/Dramatiq) for notifications, report/PDF generation, imports, AI tasks.

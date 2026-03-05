@@ -514,6 +514,21 @@ Fix:
   - publish final results
   - reopen results and re-decide
 
+### Phase 3 Platform Hardening
+- Added role-aware JWT token lifetimes and strict refresh-rotation enforcement in auth serializers.
+- Added CSP and `Permissions-Policy` response headers with environment-driven policy controls.
+- Tightened CORS defaults so production requires explicit allowlists (`CORS_ALLOWED_ORIGINS` / regex envs).
+- Added structured log correlation fields (`trace_id`, `tenant_schema`, `tenant_id`) via logging filter + middleware context.
+- Added optional Sentry initialization using `SENTRY_DSN` and environment sampling settings.
+- Added OpenAPI schema endpoints:
+  - `GET /api/schema/?format=openapi-json`
+  - `GET /api/v1/schema/?format=openapi-json`
+- Added typed-client generation pipeline from backend schema:
+  - `npm run api:types`
+  - defaults to live schema fetch from `http://127.0.0.1:8000/api/schema/?format=openapi-json`
+  - requires backend API running and npm network access for `npx openapi-typescript`
+  - outputs schema + generated TS types for `frontend/` and `mobile/`
+
 ## Roadmap and Planning Framework
 Use this structure for each release cycle:
 1. Objective and business outcome.

@@ -5,7 +5,7 @@ from django.contrib.auth.models import Group, Permission
 from .models import UserAccount
 from .serializers import (
     UserAccountSerializer, UserManagementSerializer, GroupSerializer, PermissionSerializer,
-    PasswordResetSerializer, PasswordResetConfirmSerializer
+    PasswordResetSerializer, PasswordResetConfirmSerializer, RoleAwareTokenRefreshSerializer
 )
 from .permissions import IsAdminOrSaaSAdmin
 from core.mixins import TenantScopedQuerysetMixin
@@ -198,6 +198,7 @@ class CustomTokenObtainPairView(TokenObtainPairView):
 
 class CustomTokenRefreshView(TokenRefreshView):
     throttle_classes = [RefreshRateThrottle]
+    serializer_class = RoleAwareTokenRefreshSerializer
 
 # Password Reset via Email (Views)
 class PasswordResetView(views.APIView):
