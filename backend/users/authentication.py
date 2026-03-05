@@ -19,7 +19,18 @@ class TenantAwareJWTAuthentication(JWTAuthentication):
             return None
 
         user, validated_token = authenticated
-        token_tenant = str(validated_token.get("tenant_schema") or "public").strip().lower()
+        token_tenant_claim = validated_token.get("tenant_schema")
+        if token_tenant_claim in (None, ""):
+            raise AuthenticationFailed(
+                "Token is missing tenant claim.",
+                code="token_tenant_missing",
+            )
+        token_tenant = str(token_tenant_claim).strip().lower()
+        if not token_tenant:
+            raise AuthenticationFailed(
+                "Token tenant claim is invalid.",
+                code="token_tenant_invalid",
+            )
 
         user_tenant = getattr(user, "tenant", None)
         user_tenant_schema = (

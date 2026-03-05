@@ -1,9 +1,13 @@
 from django.contrib.auth import get_user_model
+from django.db import connection
 from django_tenants.test.cases import FastTenantTestCase
-from django_tenants.utils import tenant_context
+from django_tenants.utils import tenant_context, schema_context
 from rest_framework import status
 from rest_framework.test import APIClient
 from rest_framework_simplejwt.tokens import AccessToken
+from uuid import uuid4
+
+from core.models.tenant import Tenant, Domain
 
 User = get_user_model()
 
@@ -18,6 +22,7 @@ class TenantJwtIsolationTests(FastTenantTestCase):
         domain.is_primary = True
 
     def setUp(self):
+        connection.set_schema_to_public()
         self.tenant.status = "active"
         self.tenant.save(update_fields=["status"])
 
@@ -48,6 +53,20 @@ class TenantJwtIsolationTests(FastTenantTestCase):
         )
         self.access_token = login_response.data["access"]
 
+        with schema_context("public"):
+            suffix = uuid4().hex[:8]
+            self.other_tenant = Tenant.objects.create(
+                name=f"Other JWT School {suffix}",
+                schema_name=f"other_{suffix}",
+                subdomain=f"other-{suffix}",
+            )
+            self.other_domain = Domain.objects.create(
+                domain=f"other-{suffix}.localhost",
+                tenant=self.other_tenant,
+                is_primary=True,
+            )
+        connection.set_schema_to_public()
+
     def test_valid_tenant_claim_can_access_profile(self):
         self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.access_token}")
         response = self.client.get("/api/users/accounts/me/")
@@ -64,6 +83,21 @@ class TenantJwtIsolationTests(FastTenantTestCase):
 
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
         self.assertEqual(response.data.get("code"), "token_tenant_user_mismatch")
+
+    def test_missing_tenant_claim_is_rejected(self):
+        token_without_tenant_claim = AccessToken.for_user(self.user)
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {str(token_without_tenant_claim)}")
+        response = self.client.get("/api/users/accounts/me/")
+
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+        self.assertEqual(response.data.get("code"), "token_tenant_missing")
+
+    def test_token_from_tenant_a_is_rejected_on_tenant_b_domain(self):
+        cross_tenant_client = APIClient(HTTP_HOST=self.other_domain.domain)
+        cross_tenant_client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.access_token}")
+        response = cross_tenant_client.get("/api/users/accounts/me/")
+
+        self.assertIn(response.status_code, {status.HTTP_401_UNAUTHORIZED, status.HTTP_403_FORBIDDEN})
 
     def test_tenant_status_blocks_authenticated_requests(self):
         self.tenant.status = "expired"

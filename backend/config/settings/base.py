@@ -319,8 +319,8 @@ JWT_STRICT_REFRESH_ROTATION = os.environ.get("JWT_STRICT_REFRESH_ROTATION", "tru
 DEFAULT_FROM_EMAIL = os.environ.get("DEFAULT_FROM_EMAIL", "support@elearning.dev")
 
 # Tenant trust policy:
-# - dev_only (default): allow x-tenant-id only when DEBUG=True
-# - always: trust x-tenant-id in all envs (not recommended)
+# - dev_only (default): allow x-tenant-id only in DEBUG + local hostnames
+# - always: allow x-tenant-id in DEBUG + local hostnames
 # - never: ignore x-tenant-id in all envs
 TENANT_HEADER_TRUST_MODE = os.environ.get("TENANT_HEADER_TRUST_MODE", "dev_only").lower()
 
@@ -402,10 +402,12 @@ CELERY_BROKER_URL = os.environ.get("CELERY_BROKER_URL", REDIS_URL)
 CELERY_RESULT_BACKEND = os.environ.get("CELERY_RESULT_BACKEND", REDIS_URL)
 CELERY_TASK_ALWAYS_EAGER = os.environ.get("CELERY_TASK_ALWAYS_EAGER", "false").lower() == "true"
 CELERY_TASK_EAGER_PROPAGATES = os.environ.get("CELERY_TASK_EAGER_PROPAGATES", "true").lower() == "true"
+CELERY_TASK_STORE_EAGER_RESULT = os.environ.get("CELERY_TASK_STORE_EAGER_RESULT", "true").lower() == "true"
 CELERY_TASK_DEFAULT_QUEUE = os.environ.get("CELERY_TASK_DEFAULT_QUEUE", "default")
 CELERY_ACCEPT_CONTENT = ["json"]
 CELERY_TASK_SERIALIZER = "json"
 CELERY_RESULT_SERIALIZER = "json"
+ASYNC_JOB_STATUS_TTL_SECONDS = int(os.environ.get("ASYNC_JOB_STATUS_TTL_SECONDS", str(60 * 60 * 24)))
 
 # Audit Log Configuration
 AUDITLOG_LOGENTRY_MODEL = 'auditlog.LogEntry'

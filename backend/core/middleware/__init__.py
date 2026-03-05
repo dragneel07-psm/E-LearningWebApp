@@ -4,9 +4,8 @@ core/middleware/__init__.py
 Custom middleware for request context and tenant resolution.
 
 Priority order:
-  1. Domain-based lookup (standard django-tenants)
-  2. x-tenant-id header (dev/local only by default)
-  3. Falls through to no_tenant_found() as usual
+  1. Domain-based lookup (mandatory in production)
+  2. x-tenant-id header (debug + local development only)
 """
 
 import re
@@ -105,25 +104,58 @@ class TenantFromHeaderMiddleware(TenantMainMiddleware):
     Extends django-tenants middleware with a strict tenant-header trust mode.
 
     Trust modes:
-      - dev_only (default): trust x-tenant-id only when DEBUG=True
-      - always: trust x-tenant-id in all environments (not recommended)
+      - dev_only (default): trust x-tenant-id only in DEBUG + local hostnames
+      - always: trust x-tenant-id in DEBUG + local hostnames
       - never: ignore x-tenant-id in all environments
     """
 
     @staticmethod
-    def _should_trust_tenant_header() -> bool:
-        mode = str(getattr(settings, "TENANT_HEADER_TRUST_MODE", "dev_only")).strip().lower()
-        if mode == "always":
+    def _is_local_hostname(hostname: str) -> bool:
+        host = str(hostname or "").strip().lower()
+        if not host:
+            return False
+        host = host.split(":", 1)[0]
+        if host in {"localhost", "127.0.0.1", "::1", "[::1]"}:
             return True
+        return host.endswith(".localhost") or host.endswith(".localtest.me") or host.endswith(".lvh.me")
+
+    @classmethod
+    def _should_trust_tenant_header(cls, hostname: str) -> bool:
+        mode = str(getattr(settings, "TENANT_HEADER_TRUST_MODE", "dev_only")).strip().lower()
         if mode == "never":
             return False
-        # dev_only (default)
+        if not bool(getattr(settings, "DEBUG", False)):
+            return False
+        if not cls._is_local_hostname(hostname):
+            return False
+        if mode == "always":
+            return True
+        # dev_only (default) while DEBUG/local only.
         return bool(getattr(settings, "DEBUG", False))
 
     @staticmethod
     def _is_tenant_active(tenant) -> bool:
         tenant_status = str(getattr(tenant, "status", "active") or "active").strip().lower()
         return tenant_status in ACTIVE_TENANT_STATUSES
+
+    @staticmethod
+    def _tenant_identifier_matches(domain_model, tenant, tenant_identifier: str) -> bool:
+        candidate = str(tenant_identifier or "").strip().lower()
+        if not candidate:
+            return True
+
+        if candidate == str(getattr(tenant, "schema_name", "") or "").strip().lower():
+            return True
+        subdomain = str(getattr(tenant, "subdomain", "") or "").strip().lower()
+        if subdomain and candidate == subdomain:
+            return True
+
+        try:
+            return domain_model.objects.filter(tenant=tenant).filter(
+                Q(domain__iexact=candidate) | Q(domain__istartswith=f"{candidate}.")
+            ).exists()
+        except Exception:
+            return False
 
     def process_request(self, request):
         connection.set_schema_to_public()
@@ -146,7 +178,8 @@ class TenantFromHeaderMiddleware(TenantMainMiddleware):
             or request.headers.get('x-tenant-id', '')
         ).strip().lower()
 
-        if tenant is None and tenant_id and self._should_trust_tenant_header():
+        trust_header = self._should_trust_tenant_header(hostname)
+        if tenant is None and tenant_id and trust_header:
             # Accept school code as schema_name OR subdomain OR domain.
             try:
                 # Keep this migration-safe: resolve by schema/domain first.
@@ -172,15 +205,37 @@ class TenantFromHeaderMiddleware(TenantMainMiddleware):
                     schema_name__iexact=tenant_id
                 ).first()
 
-        # 3. Fall back to public tenant for SaaS/public routes
+        # 3. In production, domain is mandatory and header fallback is disabled.
+        if tenant is None and not bool(getattr(settings, "DEBUG", False)):
+            return JsonResponse(
+                {
+                    "code": "tenant_domain_required",
+                    "message": "Unable to resolve tenant from domain.",
+                    "trace_id": getattr(request, "request_id", None),
+                },
+                status=400,
+            )
+
+        # 4. In debug, keep public fallback for local developer workflows.
         if tenant is None:
             tenant = tenant_model.objects.filter(schema_name__iexact="public").first()
 
-        # 4. Nothing resolved
+        # 5. Nothing resolved
         if tenant is None:
             return self.no_tenant_found(request, hostname)
 
-        # 5. Tenant status gate
+        # 6. Reject spoofed x-tenant-id on non-trusted environments.
+        if tenant_id and not trust_header and not self._tenant_identifier_matches(domain_model, tenant, tenant_id):
+            return JsonResponse(
+                {
+                    "code": "tenant_header_rejected",
+                    "message": "x-tenant-id header is not accepted for this environment.",
+                    "trace_id": getattr(request, "request_id", None),
+                },
+                status=400,
+            )
+
+        # 7. Tenant status gate
         set_request_context(
             tenant_schema=getattr(tenant, "schema_name", "public"),
             tenant_id=str(getattr(tenant, "id", "") or "-"),
