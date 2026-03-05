@@ -13,6 +13,7 @@ from django_tenants.utils import schema_context
 from django.db.models.functions import TruncDate
 from django.utils import timezone
 from ai_engine.services.provider_config import get_ai_provider_config
+from core.utils.audit import record_audit_event
 
 KPI_CACHE_KEY = "saas:kpi:v2"
 AI_USAGE_CACHE_KEY = "saas:ai-usage:v2"
@@ -418,6 +419,17 @@ class TenantAdminPasswordResetView(APIView):
                 
                 admin_user.set_password(new_password)
                 admin_user.save(update_fields=['password'])
+                record_audit_event(
+                    action="core.tenant_admin_password_reset",
+                    user=request.user,
+                    request=request,
+                    details={
+                        "tenant_id": str(tenant.id),
+                        "tenant_schema": tenant.schema_name,
+                        "target_user_id": str(admin_user.user_id),
+                        "target_email": admin_user.email,
+                    },
+                )
                 
             return Response({
                 "message": f"Password reset successfully for admin of {tenant.name}",
@@ -511,6 +523,18 @@ class TenantUsersView(APIView):
                     is_staff=role in ["admin", "staff"],
                 )
                 _ensure_role_profile(role, user)
+                record_audit_event(
+                    action="core.tenant_user_created",
+                    user=request.user,
+                    request=request,
+                    details={
+                        "tenant_id": str(tenant.id),
+                        "tenant_schema": tenant.schema_name,
+                        "target_user_id": str(user.user_id),
+                        "target_email": user.email,
+                        "target_role": user.role,
+                    },
+                )
                 return Response(_serialize_tenant_user(user), status=201)
         except IntegrityError as e:
             return Response({"error": str(e)}, status=400)
@@ -550,6 +574,25 @@ class TenantUserDetailView(APIView):
                 user.save()
                 if user.role != previous_role or user.role in {"student", "teacher", "parent"}:
                     _ensure_role_profile(user.role, user)
+                record_audit_event(
+                    action="core.tenant_user_updated",
+                    user=request.user,
+                    request=request,
+                    details={
+                        "tenant_id": str(tenant.id),
+                        "tenant_schema": tenant.schema_name,
+                        "target_user_id": str(user.user_id),
+                        "before": {
+                            "role": previous_role,
+                        },
+                        "after": {
+                            "role": user.role,
+                            "is_active": user.is_active,
+                            "email": user.email,
+                            "username": user.username,
+                        },
+                    },
+                )
                 return Response(_serialize_tenant_user(user))
         except IntegrityError as e:
             return Response({"error": str(e)}, status=400)
@@ -576,6 +619,17 @@ class TenantUserPasswordResetView(APIView):
                 user = UserAccount.objects.get(pk=user_id)
                 user.set_password(new_password)
                 user.save()
+                record_audit_event(
+                    action="core.tenant_user_password_reset",
+                    user=request.user,
+                    request=request,
+                    details={
+                        "tenant_id": str(tenant.id),
+                        "tenant_schema": tenant.schema_name,
+                        "target_user_id": str(user.user_id),
+                        "target_email": user.email,
+                    },
+                )
                 return Response({"message": "Password reset successfully"})
         except Exception as e:
             return Response({"error": str(e)}, status=500)

@@ -1,6 +1,7 @@
 from rest_framework import viewsets, permissions, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
+from rest_framework.exceptions import PermissionDenied
 from django.db.models import Sum, Q
 from datetime import date
 from .models import Subscription, SubscriptionPlan, SubscriptionPlanHistory, Invoice, FeeStructure, StudentFee, Payment, Expense
@@ -11,6 +12,7 @@ from .serializers import (
 from .plan_defaults import upsert_default_plans
 from core.mixins import TenantScopedQuerysetMixin
 from core.reports import generate_pdf_response
+from .permissions import IsSaaSAdminUser, IsSchoolFinanceManager
 from django.utils import timezone
 from django.utils.decorators import method_decorator
 from django.views.decorators.cache import cache_page
@@ -25,11 +27,51 @@ from core.utils.plan_enforcement import (
     build_plan_snapshot,
     record_subscription_plan_history,
 )
+from core.utils.audit import record_audit_event
 
-class SubscriptionPlanViewSet(viewsets.ModelViewSet):
+
+class BillingSchemaGuardMixin:
+    require_public_schema = False
+    require_tenant_schema = False
+
+    def _schema_name(self, request):
+        tenant = getattr(request, "tenant", None)
+        return getattr(tenant, "schema_name", "public") if tenant else "public"
+
+    def _request_tenant(self, request):
+        tenant = getattr(request, "tenant", None)
+        if tenant and getattr(tenant, "schema_name", "public") != "public":
+            return tenant
+        return None
+
+    def initial(self, request, *args, **kwargs):
+        super().initial(request, *args, **kwargs)
+        schema_name = self._schema_name(request)
+        user_tenant = getattr(request.user, "tenant", None)
+        request_tenant = self._request_tenant(request)
+
+        if self.require_public_schema and schema_name != "public":
+            raise PermissionDenied("This endpoint is available only on the public schema.")
+
+        if self.require_tenant_schema:
+            if schema_name == "public":
+                raise PermissionDenied("This endpoint requires a school tenant schema.")
+            if not user_tenant:
+                raise PermissionDenied("Authenticated user is not associated with a tenant.")
+            if request_tenant and user_tenant != request_tenant:
+                raise PermissionDenied("Cross-tenant access denied.")
+
+
+class SubscriptionPlanViewSet(BillingSchemaGuardMixin, viewsets.ModelViewSet):
+    require_public_schema = True
     queryset = SubscriptionPlan.objects.all()
     serializer_class = SubscriptionPlanSerializer
-    permission_classes = [permissions.IsAuthenticated] # Adjust as needed
+    permission_classes = [IsSaaSAdminUser]
+
+    def get_permissions(self):
+        if self.action == "public":
+            return [permissions.AllowAny()]
+        return super().get_permissions()
 
     def perform_update(self, serializer):
         previous_plan_state = SubscriptionPlan.objects.get(pk=serializer.instance.pk)
@@ -50,6 +92,17 @@ class SubscriptionPlanViewSet(viewsets.ModelViewSet):
                 previous_plan_snapshot=previous_plan_snapshot,
                 new_plan_snapshot=new_plan_snapshot,
             )
+        record_audit_event(
+            action="billing.subscription_plan_definition_updated",
+            user=self.request.user,
+            request=self.request,
+            details={
+                "plan_id": str(plan.plan_id),
+                "plan_name": plan.name,
+                "before": previous_plan_snapshot,
+                "after": new_plan_snapshot,
+            },
+        )
 
     @action(detail=False, methods=['post'], url_path='seed-defaults')
     def seed_defaults(self, request):
@@ -77,10 +130,11 @@ class SubscriptionPlanViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(queryset, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
-class SubscriptionViewSet(viewsets.ModelViewSet):
+class SubscriptionViewSet(BillingSchemaGuardMixin, viewsets.ModelViewSet):
+    require_public_schema = True
     queryset = Subscription.objects.select_related('tenant', 'plan').all()
     serializer_class = SubscriptionSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [IsSaaSAdminUser]
 
     @action(detail=True, methods=['get'], url_path='history')
     def history(self, request, pk=None):
@@ -94,25 +148,16 @@ class SubscriptionViewSet(viewsets.ModelViewSet):
         return Response(serializer.data)
 
 
-class SubscriptionPlanHistoryViewSet(viewsets.ReadOnlyModelViewSet):
+class SubscriptionPlanHistoryViewSet(BillingSchemaGuardMixin, viewsets.ReadOnlyModelViewSet):
+    require_public_schema = True
     queryset = SubscriptionPlanHistory.objects.select_related(
         'tenant', 'subscription', 'previous_plan', 'new_plan', 'changed_by'
     ).all()
     serializer_class = SubscriptionPlanHistorySerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [IsSaaSAdminUser]
 
     def get_queryset(self):
         queryset = super().get_queryset()
-        user = self.request.user
-
-        role = (getattr(user, 'role', '') or '').lower()
-        if not (user.is_superuser or role == 'saas_admin'):
-            tenant = getattr(user, 'tenant', None)
-            if tenant:
-                queryset = queryset.filter(tenant=tenant)
-            else:
-                queryset = queryset.none()
-
         tenant_id = self.request.query_params.get('tenant_id')
         subscription_id = self.request.query_params.get('subscription_id')
 
@@ -122,10 +167,11 @@ class SubscriptionPlanHistoryViewSet(viewsets.ReadOnlyModelViewSet):
             queryset = queryset.filter(subscription_id=subscription_id)
         return queryset
 
-class InvoiceViewSet(viewsets.ModelViewSet):
+class InvoiceViewSet(BillingSchemaGuardMixin, viewsets.ModelViewSet):
+    require_public_schema = True
     queryset = Invoice.objects.all().order_by('-issued_date')
     serializer_class = InvoiceSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [IsSaaSAdminUser]
 
     @action(detail=True, methods=['get'])
     def download(self, request, pk=None):
@@ -141,10 +187,21 @@ class InvoiceViewSet(viewsets.ModelViewSet):
                 'current_year': timezone.now().year,
             }
             
-            filename = f"invoice_{invoice.invoice_id[:12]}_{timezone.now().strftime('%Y%m%d')}.pdf"
+            filename = f"invoice_{str(invoice.invoice_id)[:12]}_{timezone.now().strftime('%Y%m%d')}.pdf"
             response = generate_pdf_response('reports/invoice.html', context, filename)
             
             if response:
+                record_audit_event(
+                    action="billing.invoice_downloaded",
+                    user=request.user,
+                    request=request,
+                    details={
+                        "invoice_id": str(invoice.invoice_id),
+                        "tenant_id": str(invoice.tenant_id),
+                        "status": invoice.status,
+                        "amount": str(invoice.amount),
+                    },
+                )
                 return response
             return Response({"error": "PDF engine failure"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         except Exception as e:
@@ -154,19 +211,139 @@ class InvoiceViewSet(viewsets.ModelViewSet):
 # SCHOOL FINANCE VIEWSETS
 # ==========================================
 
-class FeeStructureViewSet(TenantScopedQuerysetMixin, viewsets.ModelViewSet):
+class FeeStructureViewSet(BillingSchemaGuardMixin, TenantScopedQuerysetMixin, viewsets.ModelViewSet):
+    require_tenant_schema = True
+    allow_unscoped_for_saas = False
     queryset = FeeStructure.objects.all()
     serializer_class = FeeStructureSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [IsSchoolFinanceManager]
 
-class StudentFeeViewSet(TenantScopedQuerysetMixin, viewsets.ModelViewSet):
+    def perform_create(self, serializer):
+        item = serializer.save(tenant=self.request.user.tenant)
+        record_audit_event(
+            action="billing.fee_structure_created",
+            user=self.request.user,
+            request=self.request,
+            details={
+                "fee_id": str(item.fee_id),
+                "name": item.name,
+                "amount": str(item.amount),
+                "frequency": item.frequency,
+                "academic_class_id": item.academic_class_id,
+            },
+        )
+
+    def perform_update(self, serializer):
+        before = serializer.instance
+        before_snapshot = {
+            "name": before.name,
+            "amount": str(before.amount),
+            "frequency": before.frequency,
+            "academic_class_id": before.academic_class_id,
+        }
+        item = serializer.save()
+        record_audit_event(
+            action="billing.fee_structure_updated",
+            user=self.request.user,
+            request=self.request,
+            details={
+                "fee_id": str(item.fee_id),
+                "before": before_snapshot,
+                "after": {
+                    "name": item.name,
+                    "amount": str(item.amount),
+                    "frequency": item.frequency,
+                    "academic_class_id": item.academic_class_id,
+                },
+            },
+        )
+
+    def perform_destroy(self, instance):
+        payload = {
+            "fee_id": str(instance.fee_id),
+            "name": instance.name,
+            "amount": str(instance.amount),
+            "frequency": instance.frequency,
+            "academic_class_id": instance.academic_class_id,
+        }
+        super().perform_destroy(instance)
+        record_audit_event(
+            action="billing.fee_structure_deleted",
+            user=self.request.user,
+            request=self.request,
+            details=payload,
+        )
+
+class StudentFeeViewSet(BillingSchemaGuardMixin, TenantScopedQuerysetMixin, viewsets.ModelViewSet):
+    require_tenant_schema = True
+    allow_unscoped_for_saas = False
     queryset = StudentFee.objects.all()
     serializer_class = StudentFeeSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [IsSchoolFinanceManager]
 
     def get_queryset(self):
         queryset = super().get_queryset()
         return queryset.select_related('student', 'fee_structure')
+
+    def perform_create(self, serializer):
+        item = serializer.save(tenant=self.request.user.tenant)
+        record_audit_event(
+            action="billing.student_fee_created",
+            user=self.request.user,
+            request=self.request,
+            details={
+                "student_fee_id": str(item.student_fee_id),
+                "student_id": str(item.student_id),
+                "fee_id": str(item.fee_structure_id),
+                "amount_due": str(item.amount_due),
+                "due_date": item.due_date,
+                "status": item.status,
+            },
+        )
+
+    def perform_update(self, serializer):
+        before = serializer.instance
+        before_snapshot = {
+            "amount_due": str(before.amount_due),
+            "amount_paid": str(before.amount_paid),
+            "due_date": before.due_date,
+            "status": before.status,
+        }
+        item = serializer.save()
+        record_audit_event(
+            action="billing.student_fee_updated",
+            user=self.request.user,
+            request=self.request,
+            details={
+                "student_fee_id": str(item.student_fee_id),
+                "student_id": str(item.student_id),
+                "fee_id": str(item.fee_structure_id),
+                "before": before_snapshot,
+                "after": {
+                    "amount_due": str(item.amount_due),
+                    "amount_paid": str(item.amount_paid),
+                    "due_date": item.due_date,
+                    "status": item.status,
+                },
+            },
+        )
+
+    def perform_destroy(self, instance):
+        payload = {
+            "student_fee_id": str(instance.student_fee_id),
+            "student_id": str(instance.student_id),
+            "fee_id": str(instance.fee_structure_id),
+            "amount_due": str(instance.amount_due),
+            "amount_paid": str(instance.amount_paid),
+            "status": instance.status,
+        }
+        super().perform_destroy(instance)
+        record_audit_event(
+            action="billing.student_fee_deleted",
+            user=self.request.user,
+            request=self.request,
+            details=payload,
+        )
     
     @action(detail=False, methods=['post'])
     def assign_bulk(self, request):
@@ -209,6 +386,17 @@ class StudentFeeViewSet(TenantScopedQuerysetMixin, viewsets.ModelViewSet):
                         status='pending'
                     )
                     created_count += 1
+            record_audit_event(
+                action="billing.student_fee_bulk_assigned",
+                user=request.user,
+                request=request,
+                details={
+                    "fee_structure_id": str(fee_structure_id),
+                    "academic_class_id": str(academic_class_id),
+                    "created_count": created_count,
+                    "due_date": due_date,
+                },
+            )
             
             return Response({'message': f'Successfully assigned fee to {created_count} students'}, status=status.HTTP_201_CREATED)
         except FeeStructure.DoesNotExist:
@@ -216,21 +404,32 @@ class StudentFeeViewSet(TenantScopedQuerysetMixin, viewsets.ModelViewSet):
         except Exception as e:
             return Response({'error': f'Assignment failed: {str(e)}'}, status=status.HTTP_400_BAD_REQUEST)
 
-class PaymentViewSet(TenantScopedQuerysetMixin, viewsets.ModelViewSet):
+class PaymentViewSet(BillingSchemaGuardMixin, TenantScopedQuerysetMixin, viewsets.ModelViewSet):
+    require_tenant_schema = True
+    allow_unscoped_for_saas = False
     queryset = Payment.objects.all()
     serializer_class = PaymentSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [IsSchoolFinanceManager]
 
     def get_queryset(self):
         queryset = super().get_queryset()
         return queryset.select_related('student', 'recorded_by')
     
     def perform_create(self, serializer):
+        if not getattr(self.request.user, "tenant", None):
+            raise PermissionDenied("Authenticated user is not associated with a tenant.")
         # Auto-set recorded_by and tenant
         payment = serializer.save(
             tenant=self.request.user.tenant,
             recorded_by=self.request.user
         )
+        fee_before = None
+        if payment.student_fee:
+            fee_before = {
+                "student_fee_id": str(payment.student_fee.student_fee_id),
+                "amount_paid": str(payment.student_fee.amount_paid),
+                "status": payment.student_fee.status,
+            }
         
         # Update StudentFee if linked
         if payment.student_fee:
@@ -244,6 +443,74 @@ class PaymentViewSet(TenantScopedQuerysetMixin, viewsets.ModelViewSet):
                 student_fee.status = 'partial'
             
             student_fee.save()
+
+        record_audit_event(
+            action="billing.payment_created",
+            user=self.request.user,
+            request=self.request,
+            details={
+                "payment_id": str(payment.payment_id),
+                "student_id": str(payment.student_id),
+                "student_fee_id": str(payment.student_fee_id) if payment.student_fee_id else None,
+                "amount": str(payment.amount),
+                "method": payment.method,
+                "transaction_id": payment.transaction_id,
+                "student_fee_before": fee_before,
+                "student_fee_after": (
+                    {
+                        "student_fee_id": str(payment.student_fee.student_fee_id),
+                        "amount_paid": str(payment.student_fee.amount_paid),
+                        "status": payment.student_fee.status,
+                    }
+                    if payment.student_fee
+                    else None
+                ),
+            },
+        )
+
+    def perform_update(self, serializer):
+        before = serializer.instance
+        before_snapshot = {
+            "amount": str(before.amount),
+            "method": before.method,
+            "transaction_id": before.transaction_id,
+            "remarks": before.remarks,
+        }
+        payment = serializer.save()
+        record_audit_event(
+            action="billing.payment_updated",
+            user=self.request.user,
+            request=self.request,
+            details={
+                "payment_id": str(payment.payment_id),
+                "student_id": str(payment.student_id),
+                "student_fee_id": str(payment.student_fee_id) if payment.student_fee_id else None,
+                "before": before_snapshot,
+                "after": {
+                    "amount": str(payment.amount),
+                    "method": payment.method,
+                    "transaction_id": payment.transaction_id,
+                    "remarks": payment.remarks,
+                },
+            },
+        )
+
+    def perform_destroy(self, instance):
+        payload = {
+            "payment_id": str(instance.payment_id),
+            "student_id": str(instance.student_id),
+            "student_fee_id": str(instance.student_fee_id) if instance.student_fee_id else None,
+            "amount": str(instance.amount),
+            "method": instance.method,
+            "transaction_id": instance.transaction_id,
+        }
+        super().perform_destroy(instance)
+        record_audit_event(
+            action="billing.payment_deleted",
+            user=self.request.user,
+            request=self.request,
+            details=payload,
+        )
 
     @action(detail=True, methods=['get'])
     def generate_receipt(self, request, pk=None):
@@ -293,30 +560,97 @@ class PaymentViewSet(TenantScopedQuerysetMixin, viewsets.ModelViewSet):
         buffer.seek(0)
         response = HttpResponse(buffer, content_type='application/pdf')
         response['Content-Disposition'] = f'attachment; filename="receipt_{payment.payment_id}.pdf"'
+        record_audit_event(
+            action="billing.payment_receipt_downloaded",
+            user=request.user,
+            request=request,
+            details={
+                "payment_id": str(payment.payment_id),
+                "student_id": str(payment.student_id),
+                "amount": str(payment.amount),
+                "method": payment.method,
+            },
+        )
         return response
 
-class ExpenseViewSet(TenantScopedQuerysetMixin, viewsets.ModelViewSet):
+class ExpenseViewSet(BillingSchemaGuardMixin, TenantScopedQuerysetMixin, viewsets.ModelViewSet):
+    require_tenant_schema = True
+    allow_unscoped_for_saas = False
     queryset = Expense.objects.all()
     serializer_class = ExpenseSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [IsSchoolFinanceManager]
 
     def get_queryset(self):
         queryset = super().get_queryset()
         return queryset.order_by('-date')
     
     def perform_create(self, serializer):
-        serializer.save(
+        expense = serializer.save(
             tenant=self.request.user.tenant,
             recorded_by=self.request.user
         )
+        record_audit_event(
+            action="billing.expense_created",
+            user=self.request.user,
+            request=self.request,
+            details={
+                "expense_id": str(expense.expense_id),
+                "title": expense.title,
+                "amount": str(expense.amount),
+                "category": expense.category,
+                "date": expense.date,
+            },
+        )
 
-class FinanceDashboardViewSet(viewsets.ViewSet):
+    def perform_update(self, serializer):
+        before = serializer.instance
+        before_snapshot = {
+            "title": before.title,
+            "amount": str(before.amount),
+            "category": before.category,
+            "date": before.date,
+            "description": before.description,
+        }
+        expense = serializer.save()
+        record_audit_event(
+            action="billing.expense_updated",
+            user=self.request.user,
+            request=self.request,
+            details={
+                "expense_id": str(expense.expense_id),
+                "before": before_snapshot,
+                "after": {
+                    "title": expense.title,
+                    "amount": str(expense.amount),
+                    "category": expense.category,
+                    "date": expense.date,
+                    "description": expense.description,
+                },
+            },
+        )
+
+    def perform_destroy(self, instance):
+        payload = {
+            "expense_id": str(instance.expense_id),
+            "title": instance.title,
+            "amount": str(instance.amount),
+            "category": instance.category,
+            "date": instance.date,
+        }
+        super().perform_destroy(instance)
+        record_audit_event(
+            action="billing.expense_deleted",
+            user=self.request.user,
+            request=self.request,
+            details=payload,
+        )
+
+class FinanceDashboardViewSet(BillingSchemaGuardMixin, viewsets.ViewSet):
     """
     Provides aggregate financial statistics
     """
-    permission_classes = [permissions.IsAuthenticated]
-    
-    permission_classes = [permissions.IsAuthenticated]
+    require_tenant_schema = True
+    permission_classes = [IsSchoolFinanceManager]
     
     @method_decorator(cache_page(60 * 5)) # Cache for 5 minutes
     def list(self, request):

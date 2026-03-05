@@ -5,6 +5,7 @@ from rest_framework.test import APIClient
 
 from academic.models import AcademicClass, Section, Student, Subject
 from academic.models.assessment import Assessment, Result
+from core.models import AuditLog
 
 User = get_user_model()
 
@@ -71,3 +72,9 @@ class ResultCardReportTests(FastTenantTestCase):
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertIn(response["Content-Type"].split(";")[0], ["application/pdf", "text/html"])
+        audit_row = AuditLog.objects.filter(
+            action="academic.report_exported",
+            details__report_type="result_card",
+            details__result_id=str(self.result.result_id),
+        ).first()
+        self.assertIsNotNone(audit_row)

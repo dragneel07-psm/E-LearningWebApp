@@ -6,6 +6,18 @@ from core.utils.plan_enforcement import (
     sync_tenant_with_plan,
     record_subscription_plan_history,
 )
+from core.utils.audit import record_audit_event
+
+
+def _resolve_tenant(value, fallback=None):
+    return value if value is not None else fallback
+
+
+def _student_tenant(student):
+    if not student:
+        return None
+    user = getattr(student, "user", None)
+    return getattr(user, "tenant", None) if user else None
 
 class SubscriptionPlanSerializer(serializers.ModelSerializer):
     def validate(self, attrs):
@@ -59,6 +71,18 @@ class SubscriptionSerializer(serializers.ModelSerializer):
             reason='Subscription created',
             changed_by=getattr(request, 'user', None),
         )
+        record_audit_event(
+            action="billing.subscription_created",
+            user=getattr(request, "user", None),
+            request=request,
+            details={
+                "subscription_id": str(subscription.subscription_id),
+                "tenant_id": str(subscription.tenant_id),
+                "plan_id": str(subscription.plan_id) if subscription.plan_id else None,
+                "status": subscription.status,
+                "billing_cycle": subscription.billing_cycle,
+            },
+        )
         return subscription
 
     def update(self, instance, validated_data):
@@ -86,6 +110,26 @@ class SubscriptionSerializer(serializers.ModelSerializer):
                 previous_billing_cycle=previous_billing_cycle,
                 reason=reason or 'Subscription updated',
                 changed_by=getattr(request, 'user', None),
+            )
+            record_audit_event(
+                action="billing.subscription_changed",
+                user=getattr(request, "user", None),
+                request=request,
+                details={
+                    "subscription_id": str(subscription.subscription_id),
+                    "tenant_id": str(subscription.tenant_id),
+                    "before": {
+                        "plan_id": str(previous_plan.plan_id) if previous_plan else None,
+                        "status": previous_status,
+                        "billing_cycle": previous_billing_cycle,
+                    },
+                    "after": {
+                        "plan_id": str(subscription.plan_id) if subscription.plan_id else None,
+                        "status": subscription.status,
+                        "billing_cycle": subscription.billing_cycle,
+                    },
+                    "reason": reason or 'Subscription updated',
+                },
             )
         return subscription
 
@@ -122,6 +166,7 @@ class FeeStructureSerializer(serializers.ModelSerializer):
     class Meta:
         model = FeeStructure
         fields = '__all__'
+        read_only_fields = ['tenant']
 
 class StudentFeeSerializer(serializers.ModelSerializer):
     student_name = serializers.CharField(source='student.user.get_full_name', read_only=True)
@@ -131,9 +176,30 @@ class StudentFeeSerializer(serializers.ModelSerializer):
     class Meta:
         model = StudentFee
         fields = '__all__'
+        read_only_fields = ['tenant']
     
     def get_balance(self, obj):
         return float(obj.amount_due - obj.amount_paid)
+
+    def validate(self, attrs):
+        instance = getattr(self, "instance", None)
+        tenant = _resolve_tenant(attrs.get("tenant"), getattr(instance, "tenant", None))
+        student = _resolve_tenant(attrs.get("student"), getattr(instance, "student", None))
+        fee_structure = _resolve_tenant(attrs.get("fee_structure"), getattr(instance, "fee_structure", None))
+
+        if tenant and student:
+            student_tenant = _student_tenant(student)
+            if student_tenant and student_tenant != tenant:
+                raise serializers.ValidationError(
+                    {"student": "Student does not belong to the selected tenant."}
+                )
+
+        if tenant and fee_structure and getattr(fee_structure, "tenant", None) != tenant:
+            raise serializers.ValidationError(
+                {"fee_structure": "Fee structure does not belong to the selected tenant."}
+            )
+
+        return attrs
 
 class PaymentSerializer(serializers.ModelSerializer):
     student_name = serializers.CharField(source='student.user.get_full_name', read_only=True)
@@ -142,6 +208,33 @@ class PaymentSerializer(serializers.ModelSerializer):
     class Meta:
         model = Payment
         fields = '__all__'
+        read_only_fields = ['tenant', 'recorded_by', 'payment_date']
+
+    def validate(self, attrs):
+        instance = getattr(self, "instance", None)
+        tenant = _resolve_tenant(attrs.get("tenant"), getattr(instance, "tenant", None))
+        student = _resolve_tenant(attrs.get("student"), getattr(instance, "student", None))
+        student_fee = _resolve_tenant(attrs.get("student_fee"), getattr(instance, "student_fee", None))
+
+        if tenant and student:
+            student_tenant = _student_tenant(student)
+            if student_tenant and student_tenant != tenant:
+                raise serializers.ValidationError(
+                    {"student": "Student does not belong to the authenticated tenant."}
+                )
+
+        if student_fee:
+            fee_tenant = getattr(student_fee, "tenant", None)
+            if tenant and fee_tenant and fee_tenant != tenant:
+                raise serializers.ValidationError(
+                    {"student_fee": "Student fee does not belong to the authenticated tenant."}
+                )
+            if student and getattr(student_fee, "student", None) and student_fee.student != student:
+                raise serializers.ValidationError(
+                    {"student_fee": "Student fee record does not belong to the selected student."}
+                )
+
+        return attrs
 
 class ExpenseSerializer(serializers.ModelSerializer):
     recorded_by_name = serializers.CharField(source='recorded_by.get_full_name', read_only=True)
@@ -149,3 +242,4 @@ class ExpenseSerializer(serializers.ModelSerializer):
     class Meta:
         model = Expense
         fields = '__all__'
+        read_only_fields = ['tenant', 'recorded_by']

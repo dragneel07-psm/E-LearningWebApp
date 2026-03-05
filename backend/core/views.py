@@ -19,6 +19,7 @@ import glob
 from datetime import datetime, timedelta
 from django.utils import timezone
 from core.utils.plan_enforcement import sync_tenant_with_plan, record_subscription_plan_history
+from core.utils.audit import record_audit_event
 
 class TenantCheckView(APIView):
     permission_classes = [permissions.AllowAny]
@@ -33,6 +34,73 @@ class TenantCheckView(APIView):
                 "id": str(request.tenant.id)
             })
         return Response({"exists": False}, status=status.HTTP_404_NOT_FOUND)
+
+
+class TenantCapabilitiesView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        tenant = getattr(request.user, "tenant", None) or getattr(request, "tenant", None)
+        if tenant is None:
+            return Response(
+                {
+                    "tenant": "public",
+                    "tenant_id": None,
+                    "status": "active",
+                    "features": {},
+                }
+            )
+
+        return Response(
+            {
+                "tenant": tenant.schema_name,
+                "tenant_id": str(getattr(tenant, "id", "")),
+                "status": getattr(tenant, "status", "active"),
+                "features": getattr(tenant, "features", {}) or {},
+            }
+        )
+
+
+class HealthzView(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request):
+        return Response(
+            {
+                "status": "ok",
+                "timestamp": timezone.now().isoformat(),
+                "trace_id": getattr(request, "request_id", None),
+            }
+        )
+
+
+class ReadyzView(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request):
+        checks = {
+            "database": False,
+            "public_tenant": False,
+        }
+        try:
+            with connection.cursor() as cursor:
+                cursor.execute("SELECT 1")
+            checks["database"] = True
+        except Exception:
+            checks["database"] = False
+
+        try:
+            checks["public_tenant"] = Tenant.objects.filter(schema_name="public").exists()
+        except Exception:
+            checks["public_tenant"] = False
+
+        ready = all(checks.values())
+        payload = {
+            "status": "ready" if ready else "not_ready",
+            "checks": checks,
+            "trace_id": getattr(request, "request_id", None),
+        }
+        return Response(payload, status=status.HTTP_200_OK if ready else status.HTTP_503_SERVICE_UNAVAILABLE)
 
 from .views_saas import IsSaaSAdmin
 
@@ -117,6 +185,18 @@ class TenantViewSet(viewsets.ModelViewSet):
                 print(f"URL: http://{domain_url}:3000")
                 print(f"Admin: {admin_email}")
                 print(f"----------------------------------------")
+                record_audit_event(
+                    action="core.tenant_created",
+                    user=getattr(self.request, "user", None),
+                    request=self.request,
+                    details={
+                        "tenant_id": str(tenant.id),
+                        "tenant_schema": tenant.schema_name,
+                        "tenant_name": tenant.name,
+                        "domain": domain_url,
+                        "plan": selected_plan.name if selected_plan else None,
+                    },
+                )
                 
         except Exception as e:
             print(f"Provisioning failed for {subdomain}: {e}")
@@ -126,6 +206,32 @@ class TenantViewSet(viewsets.ModelViewSet):
             except Exception as delete_error:
                 print(f"Failed to cleanup tenant record: {delete_error}")
             raise e
+
+    def perform_update(self, serializer):
+        before = serializer.instance
+        before_state = {
+            "status": before.status,
+            "type": before.type,
+            "features": dict(before.features or {}),
+            "contact_email": before.contact_email,
+        }
+        tenant = serializer.save()
+        record_audit_event(
+            action="core.tenant_updated",
+            user=getattr(self.request, "user", None),
+            request=self.request,
+            details={
+                "tenant_id": str(tenant.id),
+                "tenant_schema": tenant.schema_name,
+                "before": before_state,
+                "after": {
+                    "status": tenant.status,
+                    "type": tenant.type,
+                    "features": tenant.features,
+                    "contact_email": tenant.contact_email,
+                },
+            },
+        )
 
 class AuditLogViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = AuditLog.objects.all()
@@ -256,4 +362,13 @@ class BackupViewSet(viewsets.ViewSet):
         if not os.path.isfile(file_path):
             raise Http404("Backup file not found")
 
+        record_audit_event(
+            action="core.backup_downloaded",
+            user=request.user,
+            request=request,
+            details={
+                "filename": safe_filename,
+                "size_bytes": os.path.getsize(file_path),
+            },
+        )
         return FileResponse(open(file_path, 'rb'), as_attachment=True, filename=safe_filename)

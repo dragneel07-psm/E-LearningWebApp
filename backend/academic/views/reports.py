@@ -9,6 +9,7 @@ from academic.models.assessment import Result
 from academic.models.attendance import Attendance
 from academic.models.class_section import Section
 from core.reports import generate_pdf_response, generate_excel_response
+from core.utils.audit import record_audit_event
 from django.shortcuts import get_object_or_404
 
 
@@ -28,6 +29,18 @@ class ReportViewSet(viewsets.ViewSet):
     ViewSet for generating various reports.
     """
     
+    def _log_export(self, request, *, report_type: str, fmt: str, details: dict | None = None):
+        record_audit_event(
+            action="academic.report_exported",
+            user=getattr(request, "user", None),
+            request=request,
+            details={
+                "report_type": report_type,
+                "format": fmt,
+                **(details or {}),
+            },
+        )
+
     @action(detail=False, methods=['get'], url_path='student-performance/(?P<student_id>[^/.]+)')
     def student_performance_pdf(self, request, student_id=None):
         using_db = getattr(request, 'db_alias', 'default')
@@ -79,6 +92,12 @@ class ReportViewSet(viewsets.ViewSet):
         response = generate_pdf_response('reports/student_performance.html', context, filename)
         
         if response:
+            self._log_export(
+                request,
+                report_type="student_performance",
+                fmt="pdf",
+                details={"student_id": str(student.student_id), "rows": len(results_data)},
+            )
             return response
         return Response({"error": "Failed to generate report"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
@@ -102,7 +121,12 @@ class ReportViewSet(viewsets.ViewSet):
             
         columns = ['Subject', 'Assessment', 'Type', 'Score', 'Total Marks', 'Percentage', 'Date']
         filename = f"performance_report_{_student_last_name_for_filename(student)}_{student_id[:8]}.xlsx"
-        
+        self._log_export(
+            request,
+            report_type="student_performance",
+            fmt="xlsx",
+            details={"student_id": str(student.student_id), "rows": len(data)},
+        )
         return generate_excel_response(data, columns, filename)
 
     @action(detail=False, methods=['get'], url_path='attendance-summary/(?P<section_id>[^/.]+)')
@@ -166,6 +190,12 @@ class ReportViewSet(viewsets.ViewSet):
         response = generate_pdf_response('reports/attendance_summary.html', context, filename)
         
         if response:
+            self._log_export(
+                request,
+                report_type="attendance_summary",
+                fmt="pdf",
+                details={"section_id": str(section.id), "rows": len(data)},
+            )
             return response
         return Response({"error": "Failed to generate report"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
@@ -217,7 +247,12 @@ class ReportViewSet(viewsets.ViewSet):
             
         columns = ['Student Name', 'Present', 'Absent', 'Late', 'Excused', 'Attendance %']
         filename = f"attendance_summary_{section.name}.xlsx"
-        
+        self._log_export(
+            request,
+            report_type="attendance_summary",
+            fmt="xlsx",
+            details={"section_id": str(section.id), "rows": len(rows)},
+        )
         return generate_excel_response(rows, columns, filename)
 
     @action(detail=False, methods=['get'], url_path='result-card/(?P<student_id>[^/.]+)/(?P<result_id>[^/.]+)')
@@ -247,6 +282,16 @@ class ReportViewSet(viewsets.ViewSet):
         response = generate_pdf_response('reports/result_card.html', context, filename)
         
         if response:
+            self._log_export(
+                request,
+                report_type="result_card",
+                fmt="pdf",
+                details={
+                    "student_id": str(student.student_id),
+                    "result_id": str(result.result_id),
+                    "assessment_id": str(result.assessment_id),
+                },
+            )
             return response
         return Response({"error": "Failed to generate result card"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
@@ -282,6 +327,12 @@ class ReportViewSet(viewsets.ViewSet):
         response = generate_pdf_response('reports/hall_ticket.html', context, filename)
         
         if response:
+            self._log_export(
+                request,
+                report_type="hall_ticket",
+                fmt="pdf",
+                details={"seating_id": str(seating.seating_id), "exam_id": str(seating.exam_id)},
+            )
             return response
         return Response({"error": "Failed to generate hall ticket"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
@@ -334,4 +385,10 @@ class ReportViewSet(viewsets.ViewSet):
         # Return ZIP file
         response = HttpResponse(zip_buffer.getvalue(), content_type='application/zip')
         response['Content-Disposition'] = f'attachment; filename="hall_tickets_{exam.assessment.title.replace(" ", "_")}.zip"'
+        self._log_export(
+            request,
+            report_type="bulk_hall_tickets",
+            fmt="zip",
+            details={"exam_id": str(exam.exam_id), "rows": seatings.count()},
+        )
         return response

@@ -1,5 +1,5 @@
 from rest_framework import viewsets, permissions, status, views
-from rest_framework.decorators import action
+from rest_framework.decorators import action, throttle_classes
 from rest_framework.response import Response
 from django.contrib.auth.models import Group, Permission
 from .models import UserAccount
@@ -9,6 +9,13 @@ from .serializers import (
 )
 from .permissions import IsAdminOrSaaSAdmin
 from core.mixins import TenantScopedQuerysetMixin
+from .throttling import (
+    LoginRateThrottle,
+    PasswordResetConfirmRateThrottle,
+    PasswordResetRateThrottle,
+    RefreshRateThrottle,
+    RegisterRateThrottle,
+)
 import traceback
 from django.conf import settings
 from django.core.mail import send_mail
@@ -16,6 +23,7 @@ from django.contrib.auth.tokens import default_token_generator
 from django.utils.http import urlsafe_base64_encode
 from django.utils.encoding import force_bytes
 from django.shortcuts import get_object_or_404
+from core.utils.audit import record_audit_event
 
 class UserAccountViewSet(TenantScopedQuerysetMixin, viewsets.ModelViewSet):
     queryset = UserAccount.objects.all()
@@ -123,6 +131,17 @@ class AdminPasswordResetView(APIView):
             # 4. Set Password
             target_user.set_password(new_password)
             target_user.save()
+            record_audit_event(
+                action="users.admin_password_reset",
+                user=request.user,
+                request=request,
+                details={
+                    "target_user_id": str(target_user.user_id),
+                    "target_email": target_user.email,
+                    "target_tenant_id": str(getattr(target_user, "tenant_id", "") or ""),
+                    "initiator_role": getattr(request.user, "role", None),
+                },
+            )
             print("DEBUG: Password reset successful.")
             return Response({'message': 'Password reset successfully.'})
         except Exception as e:
@@ -136,6 +155,7 @@ from .serializers import UserRegistrationSerializer
 
 @api_view(['POST'])
 @permission_classes([permissions.AllowAny])
+@throttle_classes([RegisterRateThrottle])
 def register_user(request):
     """
     Register a new user
@@ -164,6 +184,7 @@ def register_user(request):
 
 # Custom Login View
 from rest_framework_simplejwt.views import TokenObtainPairView
+from rest_framework_simplejwt.views import TokenRefreshView
 from .serializers import MyTokenObtainPairSerializer
 
 class CustomTokenObtainPairView(TokenObtainPairView):
@@ -172,10 +193,16 @@ class CustomTokenObtainPairView(TokenObtainPairView):
     POST /api/auth/login/
     """
     serializer_class = MyTokenObtainPairSerializer
+    throttle_classes = [LoginRateThrottle]
+
+
+class CustomTokenRefreshView(TokenRefreshView):
+    throttle_classes = [RefreshRateThrottle]
 
 # Password Reset via Email (Views)
 class PasswordResetView(views.APIView):
     permission_classes = [permissions.AllowAny]
+    throttle_classes = [PasswordResetRateThrottle]
 
     def post(self, request):
         serializer = PasswordResetSerializer(data=request.data)
@@ -206,6 +233,7 @@ class PasswordResetView(views.APIView):
 
 class PasswordResetConfirmView(views.APIView):
     permission_classes = [permissions.AllowAny]
+    throttle_classes = [PasswordResetConfirmRateThrottle]
 
     def post(self, request):
         serializer = PasswordResetConfirmSerializer(data=request.data)
