@@ -8,6 +8,7 @@ class GradingService:
         self.client = None
         self.model = os.getenv('OPENAI_MODEL', 'gpt-3.5-turbo')
         self._client_signature = None
+        self._client_init_error = None
         self._refresh_client(force=True)
 
     def _refresh_client(self, force: bool = False):
@@ -24,12 +25,19 @@ class GradingService:
 
         self._client_signature = signature
         self.model = config.get('model') or self.model
+        self._client_init_error = None
 
         if config.get('configured') and config.get('enabled'):
-            self.client = OpenAI(
-                api_key=config.get('api_key'),
-                base_url=config.get('base_url'),
-            )
+            try:
+                self.client = OpenAI(
+                    api_key=config.get('api_key'),
+                    base_url=config.get('base_url'),
+                    default_headers=config.get('request_headers') or None,
+                    timeout=float(os.getenv('OPENAI_TIMEOUT_SECONDS', '30')),
+                )
+            except Exception as exc:
+                self.client = None
+                self._client_init_error = str(exc)
         else:
             self.client = None
 
@@ -41,7 +49,7 @@ class GradingService:
         self._refresh_client()
 
         if not self.client:
-            return self._get_demo_grade(student_answer, total_points)
+            return self._get_demo_grade(student_answer, total_points, error=self._client_init_error)
 
         try:
             prompt = f"""

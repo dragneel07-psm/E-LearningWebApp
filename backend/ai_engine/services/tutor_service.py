@@ -12,6 +12,7 @@ class AITutorService:
         self.client = None
         self.model = os.getenv('OPENAI_MODEL', 'gpt-3.5-turbo')
         self._client_signature = None
+        self._client_init_error = None
         self._refresh_client(force=True)
 
     def _refresh_client(self, force: bool = False):
@@ -28,12 +29,19 @@ class AITutorService:
 
         self._client_signature = signature
         self.model = config.get('model') or self.model
+        self._client_init_error = None
 
         if config.get('configured') and config.get('enabled'):
-            self.client = OpenAI(
-                api_key=config.get('api_key'),
-                base_url=config.get('base_url'),
-            )
+            try:
+                self.client = OpenAI(
+                    api_key=config.get('api_key'),
+                    base_url=config.get('base_url'),
+                    default_headers=config.get('request_headers') or None,
+                    timeout=float(os.getenv('OPENAI_TIMEOUT_SECONDS', '30')),
+                )
+            except Exception as exc:
+                self.client = None
+                self._client_init_error = str(exc)
         else:
             self.client = None
         
@@ -57,6 +65,13 @@ class AITutorService:
 
         # Fallback mode if provider is not configured
         if not self.client:
+            if self._client_init_error:
+                return {
+                    'response': f"I'm having trouble connecting right now. Here is a fallback explanation: {self._get_demo_response(message)}",
+                    'tokens_used': 0,
+                    'is_demo': True,
+                    'error': self._client_init_error,
+                }
             return {
                 'response': self._get_demo_response(message),
                 'tokens_used': 0,
@@ -72,7 +87,18 @@ class AITutorService:
             
             # Add conversation history
             if conversation_history:
-                messages.extend(conversation_history)
+                for item in conversation_history:
+                    if not isinstance(item, dict):
+                        continue
+                    role = (item.get("role") or "").strip().lower()
+                    content = item.get("content")
+                    if role == "ai":
+                        role = "assistant"
+                    if role not in {"user", "assistant", "system"}:
+                        continue
+                    if not isinstance(content, str) or not content.strip():
+                        continue
+                    messages.append({"role": role, "content": content})
             
             # Add current message
             messages.append({"role": "user", "content": message})

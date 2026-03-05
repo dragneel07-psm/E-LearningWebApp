@@ -2,6 +2,7 @@ from typing import Dict, List
 
 from openai import OpenAI
 
+from .provider_config import build_provider_headers, resolve_provider_and_base_url
 
 OPENAI_BASE_URL = "https://api.openai.com/v1"
 OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
@@ -9,26 +10,29 @@ OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 
 def _infer_provider(api_key: str, base_url: str) -> Dict[str, str]:
     key = (api_key or "").strip()
-    url = (base_url or "").strip().rstrip("/")
-    lowered_url = url.lower()
+    provider_name, resolved_url = resolve_provider_and_base_url(
+        provider_name="",
+        base_url=base_url,
+        api_key=key,
+    )
 
-    if "openrouter.ai" in lowered_url or key.startswith("sk-or-"):
+    if provider_name == "OpenRouter":
         return {
             "provider_name": "OpenRouter",
-            "base_url": url or OPENROUTER_BASE_URL,
+            "base_url": resolved_url or OPENROUTER_BASE_URL,
             "fallback_model": "openai/gpt-4o-mini",
         }
 
-    if "openai.com" in lowered_url or key.startswith("sk-"):
+    if provider_name == "OpenAI":
         return {
             "provider_name": "OpenAI",
-            "base_url": url or OPENAI_BASE_URL,
+            "base_url": resolved_url or OPENAI_BASE_URL,
             "fallback_model": "gpt-4o-mini",
         }
 
     return {
         "provider_name": "Custom OpenAI-Compatible",
-        "base_url": url or OPENAI_BASE_URL,
+        "base_url": resolved_url or OPENAI_BASE_URL,
         "fallback_model": "gpt-4o-mini",
     }
 
@@ -84,7 +88,11 @@ def detect_provider_and_model(api_key: str, base_url: str = "", max_models: int 
     detection_error = None
 
     try:
-        client = OpenAI(api_key=key, base_url=normalized_base_url)
+        client = OpenAI(
+            api_key=key,
+            base_url=normalized_base_url,
+            default_headers=build_provider_headers(provider_name) or None,
+        )
         listed = client.models.list()
         for item in getattr(listed, "data", []):
             model_id = (getattr(item, "id", "") or "").strip()
