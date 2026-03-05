@@ -12,17 +12,12 @@ import { academicAPI, Chapter, Lesson } from '../lib/api';
 import { useOffline, saveOfflineLesson, removeOfflineLesson, isLessonDownloaded } from '../hooks/use-offline';
 import { Colors, Shadows } from '../constants/theme';
 
-interface LessonsScreenProps {
-    navigation: any;
-    route: { params: { subject: { id: number; name: string } } };
-}
-
 interface LessonItem extends Lesson {
     isDownloaded: boolean;
     isDownloading: boolean;
 }
 
-export default function LessonsScreen({ navigation, route }: LessonsScreenProps) {
+export default function LessonsScreen({ navigation, route }: any) {
     const { subject } = route.params;
     const { isOnline } = useOffline();
     const [chapters, setChapters] = useState<Chapter[]>([]);

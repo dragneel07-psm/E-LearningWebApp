@@ -14,14 +14,20 @@ import { Colors, Shadows } from '../constants/theme';
 
 interface OfflineScreenProps {
     navigation: any;
+    route?: {
+        params?: {
+            browseRoute?: string;
+        };
+    };
 }
 
-export default function OfflineScreen({ navigation }: OfflineScreenProps) {
+export default function OfflineScreen({ navigation, route }: OfflineScreenProps) {
     const { isOnline, connectionQuality } = useOffline();
     const [lessons, setLessons] = useState<OfflineLesson[]>([]);
     const [totalSize, setTotalSize] = useState('0 KB');
     const [selectedLesson, setSelectedLesson] = useState<OfflineLesson | null>(null);
     const [loading, setLoading] = useState(true);
+    const browseRoute = route?.params?.browseRoute;
 
     const refresh = async () => {
         const data = await getOfflineLessons();
@@ -180,10 +186,10 @@ export default function OfflineScreen({ navigation }: OfflineScreenProps) {
                                 ? 'Go to My Subjects and tap ⬇️ on any lesson to save it for offline study.'
                                 : 'Connect to internet to download lessons.'}
                         </Text>
-                        {isOnline && (
+                        {isOnline && browseRoute && (
                             <TouchableOpacity
                                 style={styles.browseBtn}
-                                onPress={() => navigation.navigate('Courses')}
+                                onPress={() => navigation.navigate(browseRoute)}
                             >
                                 <Text style={styles.browseBtnText}>Browse Subjects →</Text>
                             </TouchableOpacity>

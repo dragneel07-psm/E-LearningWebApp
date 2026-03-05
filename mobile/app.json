@@ -48,7 +48,8 @@
           "color": "#4f46e5",
           "sounds": []
         }
-      ]
+      ],
+      "expo-sharing"
     ],
     "extra": {
       "apiUrl": "http://192.168.1.100:8000/api",

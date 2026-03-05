@@ -13,11 +13,11 @@ import {
     StatusBar,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { authAPI, saveTokens, saveTenantId } from '../lib/api';
+import { authAPI, saveCurrentUser, saveTokens, saveTenantId, User } from '../lib/api';
 import { Colors, Typography, Spacing, Radius } from '../constants/theme';
 
 interface LoginScreenProps {
-    onLoginSuccess: () => void;
+    onLoginSuccess: (user: User) => void;
 }
 
 export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
@@ -44,7 +44,8 @@ export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
             const response = await authAPI.login(username.trim(), password.trim(), subdomain.trim());
             await saveTokens(response.access, response.refresh);
             await saveTenantId(subdomain.trim());
-            onLoginSuccess();
+            await saveCurrentUser(response.user);
+            onLoginSuccess(response.user);
         } catch (err: any) {
             setError(err.message || 'Login failed. Please check your credentials.');
         } finally {

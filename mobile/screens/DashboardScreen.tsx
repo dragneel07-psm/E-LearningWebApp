@@ -44,7 +44,7 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
             setStudent(studentData);
 
             const [subjectsData, assessmentsData, noticesData] = await Promise.all([
-                academicAPI.getSubjects(studentData.id),
+                academicAPI.getSubjects(studentData.id, studentData.academic_class),
                 academicAPI.getAssessments().catch(() => []),
                 academicAPI.getNotices().catch(() => []),
             ]);
@@ -230,9 +230,7 @@ export default function DashboardScreen({ navigation }: DashboardScreenProps) {
                         <View style={styles.section}>
                             <View style={styles.sectionHeader}>
                                 <Text style={styles.sectionTitle}>📢 Notice Board</Text>
-                                <TouchableOpacity onPress={() => navigation.navigate('Notices')}>
-                                    <Text style={styles.seeAll}>See all →</Text>
-                                </TouchableOpacity>
+                                <Text style={styles.seeAll}>Recent</Text>
                             </View>
                             {notices.map((notice, idx) => (
                                 <View

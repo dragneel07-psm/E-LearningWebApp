@@ -24,7 +24,7 @@ export default function CoursesScreen({ navigation, route }: CoursesScreenProps)
     const loadSubjects = useCallback(async () => {
         try {
             const student = await academicAPI.getMyStudent();
-            const data = await academicAPI.getSubjects(student.id);
+            const data = await academicAPI.getSubjects(student.id, student.academic_class);
             setSubjects(data);
         } catch (err) {
             console.warn('Failed to load subjects', err);
