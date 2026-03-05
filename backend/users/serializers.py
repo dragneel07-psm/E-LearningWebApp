@@ -2,6 +2,7 @@
 from rest_framework import serializers
 from .models import UserAccount
 from core.utils.plan_enforcement import build_plan_entitled_features, get_tenant_plan
+from core.utils.audit import record_audit_event
 
 def _safe_tenant_features(user) -> dict:
     try:
@@ -16,6 +17,19 @@ def _safe_tenant_features(user) -> dict:
         return build_plan_entitled_features(get_tenant_plan(tenant))
     except Exception:
         return build_plan_entitled_features(None)
+
+
+def _tenant_claims(user) -> dict:
+    tenant = getattr(user, "tenant", None)
+    if not tenant:
+        return {
+            "tenant_schema": "public",
+            "tenant_id": None,
+        }
+    return {
+        "tenant_schema": getattr(tenant, "schema_name", "public"),
+        "tenant_id": str(getattr(tenant, "id", "")) or None,
+    }
 
 class UserAccountSerializer(serializers.ModelSerializer):
     tenant_features = serializers.SerializerMethodField()
@@ -65,6 +79,8 @@ class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
         token['email'] = user.email
         token['first_name'] = user.first_name
         token['last_name'] = user.last_name
+        token['tenant_schema'] = _tenant_claims(user).get('tenant_schema')
+        token['tenant_id'] = _tenant_claims(user).get('tenant_id')
         return token
 
     def validate(self, attrs):
@@ -85,6 +101,8 @@ class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
                 'first_name': getattr(user, 'first_name', ''),
                 'last_name':  getattr(user, 'last_name', ''),
                 'role':       getattr(user, 'role', 'student'),
+                'tenant': str(getattr(getattr(user, 'tenant', None), 'id', '') or ""),
+                'tenant_schema': _tenant_claims(user).get('tenant_schema'),
                 'tenant_features': _safe_tenant_features(user),
             }
         except Exception as e:
@@ -155,6 +173,9 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
     def get_tokens(self, obj):
         """Generate JWT tokens for the user"""
         refresh = RefreshToken.for_user(obj)
+        claims = _tenant_claims(obj)
+        refresh["tenant_schema"] = claims["tenant_schema"]
+        refresh["tenant_id"] = claims["tenant_id"]
         return {
             'refresh': str(refresh),
             'access': str(refresh.access_token),
@@ -219,6 +240,7 @@ class UserManagementSerializer(serializers.ModelSerializer):
         return user
 
     def update(self, instance, validated_data):
+        previous_role = instance.role
         password = validated_data.pop('password', None)
         if password:
             instance.set_password(password)
@@ -239,7 +261,21 @@ class UserManagementSerializer(serializers.ModelSerializer):
             elif new_role == 'parent':
                 from academic.models import Parent
                 Parent.objects.get_or_create(user=instance)
-                
+
+        if role_changed:
+            request = self.context.get("request")
+            record_audit_event(
+                action="users.role_changed",
+                user=getattr(request, "user", None),
+                request=request,
+                details={
+                    "target_user_id": str(instance.user_id),
+                    "target_email": instance.email,
+                    "previous_role": previous_role,
+                    "new_role": new_role,
+                },
+            )
+
         return instance
 
 # Password Reset Serializers

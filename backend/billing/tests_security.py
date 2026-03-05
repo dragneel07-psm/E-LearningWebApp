@@ -177,6 +177,180 @@ class BillingBoundaryAndValidationTests(FastTenantTestCase):
         self.assertEqual(str(audit_row.details.get("student_id")), str(self.student_1.student_id))
         self.assertEqual(str(audit_row.details.get("payment_id")), response.data.get("payment_id"))
 
+    def test_payment_create_idempotency_replays_and_prevents_duplicate_charge(self):
+        with schema_context(self.tenant.schema_name):
+            fee = FeeStructure.objects.create(
+                tenant=self.tenant,
+                name="Monthly Fee",
+                amount="700.00",
+                frequency="monthly",
+            )
+            student_fee = StudentFee.objects.create(
+                tenant=self.tenant,
+                student=self.student_1,
+                fee_structure=fee,
+                amount_due="700.00",
+                due_date=timezone.now().date(),
+            )
+
+        payload = {
+            "student": str(self.student_1.student_id),
+            "student_fee": str(student_fee.student_fee_id),
+            "amount": "250.00",
+            "method": "cash",
+            "transaction_id": "TXN-IDEMP-1",
+        }
+        self.tenant_client.force_authenticate(user=self.tenant_admin)
+        first = self.tenant_client.post(
+            "/api/billing/payments/",
+            payload,
+            format="json",
+            HTTP_IDEMPOTENCY_KEY="idem-pay-001",
+        )
+        second = self.tenant_client.post(
+            "/api/billing/payments/",
+            payload,
+            format="json",
+            HTTP_IDEMPOTENCY_KEY="idem-pay-001",
+        )
+
+        self.assertEqual(first.status_code, status.HTTP_201_CREATED, msg=getattr(first, "data", first.content))
+        self.assertEqual(second.status_code, status.HTTP_201_CREATED, msg=getattr(second, "data", second.content))
+        self.assertEqual(first.data.get("payment_id"), second.data.get("payment_id"))
+        self.assertEqual(second.headers.get("X-Idempotent-Replay"), "true")
+
+        with schema_context(self.tenant.schema_name):
+            self.assertEqual(Payment.objects.count(), 1)
+        self.assertEqual(AuditLog.objects.filter(action="billing.payment_created").count(), 1)
+
+    def test_payment_create_idempotency_conflict_on_payload_change(self):
+        with schema_context(self.tenant.schema_name):
+            fee = FeeStructure.objects.create(
+                tenant=self.tenant,
+                name="Transport Fee",
+                amount="300.00",
+                frequency="monthly",
+            )
+            student_fee = StudentFee.objects.create(
+                tenant=self.tenant,
+                student=self.student_1,
+                fee_structure=fee,
+                amount_due="300.00",
+                due_date=timezone.now().date(),
+            )
+
+        self.tenant_client.force_authenticate(user=self.tenant_admin)
+        first = self.tenant_client.post(
+            "/api/billing/payments/",
+            {
+                "student": str(self.student_1.student_id),
+                "student_fee": str(student_fee.student_fee_id),
+                "amount": "100.00",
+                "method": "cash",
+            },
+            format="json",
+            HTTP_IDEMPOTENCY_KEY="idem-pay-002",
+        )
+        second = self.tenant_client.post(
+            "/api/billing/payments/",
+            {
+                "student": str(self.student_1.student_id),
+                "student_fee": str(student_fee.student_fee_id),
+                "amount": "120.00",
+                "method": "cash",
+            },
+            format="json",
+            HTTP_IDEMPOTENCY_KEY="idem-pay-002",
+        )
+
+        self.assertEqual(first.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(second.status_code, status.HTTP_409_CONFLICT)
+        self.assertEqual(second.data.get("code"), "idempotency_key_conflict")
+        with schema_context(self.tenant.schema_name):
+            self.assertEqual(Payment.objects.count(), 1)
+
+    def test_student_fee_create_idempotency_replays_without_duplicates(self):
+        with schema_context(self.tenant.schema_name):
+            fee = FeeStructure.objects.create(
+                tenant=self.tenant,
+                name="Lab Fee",
+                amount="350.00",
+                frequency="one_time",
+            )
+
+        payload = {
+            "student": str(self.student_1.student_id),
+            "fee_structure": str(fee.fee_id),
+            "amount_due": "350.00",
+            "due_date": "2026-04-10",
+        }
+        self.tenant_client.force_authenticate(user=self.tenant_admin)
+        first = self.tenant_client.post(
+            "/api/billing/student-fees/",
+            payload,
+            format="json",
+            HTTP_IDEMPOTENCY_KEY="idem-student-fee-001",
+        )
+        second = self.tenant_client.post(
+            "/api/billing/student-fees/",
+            payload,
+            format="json",
+            HTTP_IDEMPOTENCY_KEY="idem-student-fee-001",
+        )
+
+        self.assertEqual(first.status_code, status.HTTP_201_CREATED, msg=getattr(first, "data", first.content))
+        self.assertEqual(second.status_code, status.HTTP_201_CREATED, msg=getattr(second, "data", second.content))
+        self.assertEqual(first.data.get("student_fee_id"), second.data.get("student_fee_id"))
+        self.assertEqual(second.headers.get("X-Idempotent-Replay"), "true")
+        with schema_context(self.tenant.schema_name):
+            self.assertEqual(StudentFee.objects.filter(fee_structure=fee, student=self.student_1).count(), 1)
+
+    def test_student_fee_bulk_assign_idempotency_replays_and_conflict_protects(self):
+        with schema_context(self.tenant.schema_name):
+            fee = FeeStructure.objects.create(
+                tenant=self.tenant,
+                name="Annual Activity Fee",
+                amount="450.00",
+                frequency="annual",
+            )
+
+        self.tenant_client.force_authenticate(user=self.tenant_admin)
+        first_payload = {
+            "fee_structure_id": str(fee.fee_id),
+            "academic_class_id": str(self.grade_8.id),
+            "due_date": "2026-05-01",
+        }
+        first = self.tenant_client.post(
+            "/api/billing/student-fees/assign_bulk/",
+            first_payload,
+            format="json",
+            HTTP_IDEMPOTENCY_KEY="idem-student-fee-bulk-001",
+        )
+        replay = self.tenant_client.post(
+            "/api/billing/student-fees/assign_bulk/",
+            first_payload,
+            format="json",
+            HTTP_IDEMPOTENCY_KEY="idem-student-fee-bulk-001",
+        )
+        conflict = self.tenant_client.post(
+            "/api/billing/student-fees/assign_bulk/",
+            {
+                "fee_structure_id": str(fee.fee_id),
+                "academic_class_id": str(self.grade_8.id),
+                "due_date": "2026-05-15",
+            },
+            format="json",
+            HTTP_IDEMPOTENCY_KEY="idem-student-fee-bulk-001",
+        )
+
+        self.assertEqual(first.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(replay.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(replay.headers.get("X-Idempotent-Replay"), "true")
+        self.assertEqual(conflict.status_code, status.HTTP_409_CONFLICT)
+        self.assertEqual(conflict.data.get("code"), "idempotency_key_conflict")
+        with schema_context(self.tenant.schema_name):
+            self.assertEqual(StudentFee.objects.filter(fee_structure=fee).count(), 2)
+
     def test_fee_collection_export_writes_audit_log(self):
         with schema_context(self.tenant.schema_name):
             Payment.objects.create(

@@ -20,7 +20,7 @@ Upgrade the LMS into a safer, tenant-correct, school-ERP-ready platform without 
   - school finance APIs now tenant-schema only
   - tenant-bound object validation added for fee/payment mutations
 - [x] A6: Tenant-aware upload paths implemented for tenant logos, notice attachments, and lesson material files (`tenant/<schema>/...`).
-- [ ] A7: Tenant-aware cache key strategy for Redis rollout.
+- [x] A7: Tenant-aware cache key strategy implemented for tenant-facing analytics/report caches.
 - [~] B10-B11: Role + object-level authorization hardening in progress:
   - billing object validations + schema guards completed
   - attendance and library role/object restrictions implemented
@@ -42,7 +42,10 @@ Upgrade the LMS into a safer, tenant-correct, school-ERP-ready platform without 
 ## Phase 4: Scale and Throughput (Next)
 - [ ] C14: Redis + async workers (Celery/RQ/Dramatiq) for notifications, report/PDF generation, imports, AI tasks.
 - [ ] C16-C18: Query optimization policy, indexing pass, and pagination/max-page standardization.
-- [ ] C19: Idempotency keys for billing/payment mutations.
+- [~] C19: Idempotency keys for billing/payment mutations.
+  - payment create endpoint now supports `Idempotency-Key`/`X-Idempotency-Key` replay and payload-hash conflict protection
+  - student-fee create and bulk assignment endpoints now support the same replay/conflict protection
+  - remaining: extend same pattern to other billing writes (for example expense create if needed)
 - [ ] C15: Read-replica strategy for reporting workloads.
 - [ ] D22: Prometheus/metrics baseline (latency, error rate, DB time, queue depth).
 

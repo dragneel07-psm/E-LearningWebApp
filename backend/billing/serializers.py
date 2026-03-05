@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from .models import Subscription, SubscriptionPlan, SubscriptionPlanHistory, Invoice, FeeStructure, StudentFee, Payment, Expense
 from core.utils.plan_enforcement import (
     sync_subscription_limits_with_plan,
@@ -179,7 +179,12 @@ class StudentFeeSerializer(serializers.ModelSerializer):
         read_only_fields = ['tenant']
     
     def get_balance(self, obj):
-        return float(obj.amount_due - obj.amount_paid)
+        try:
+            amount_due = Decimal(str(obj.amount_due or "0"))
+            amount_paid = Decimal(str(obj.amount_paid or "0"))
+            return float(amount_due - amount_paid)
+        except (InvalidOperation, TypeError, ValueError):
+            return 0.0
 
     def validate(self, attrs):
         instance = getattr(self, "instance", None)

@@ -1,23 +1,35 @@
-from django.test import TestCase
 from django.contrib.auth import get_user_model
+from django_tenants.test.cases import FastTenantTestCase
+from django_tenants.utils import tenant_context
 from rest_framework.test import APIClient
 from rest_framework import status
-from datetime import timedelta
-import time
 
 User = get_user_model()
 
-class JWTAuthenticationTests(TestCase):
+class JWTAuthenticationTests(FastTenantTestCase):
+    @classmethod
+    def setup_tenant(cls, tenant):
+        tenant.name = "JWT Auth Test School"
+
+    @classmethod
+    def setup_domain(cls, domain):
+        domain.is_primary = True
+
     def setUp(self):
-        self.client = APIClient()
-        self.user = User.objects.create_user(
-            username='testuser',
-            email='test@example.com',
-            password='TestPass123!',
-            first_name='Test',
-            last_name='User',
-            role='student'
+        self.client = APIClient(
+            HTTP_HOST=self.get_test_tenant_domain(),
+            HTTP_X_TENANT_ID=self.tenant.schema_name,
         )
+        with tenant_context(self.tenant):
+            self.user = User.objects.create_user(
+                username='testuser',
+                email='test@example.com',
+                password='TestPass123!',
+                first_name='Test',
+                last_name='User',
+                role='student',
+                tenant=self.tenant,
+            )
         self.login_url = '/api/users/login/'
         self.refresh_url = '/api/users/refresh/'
 

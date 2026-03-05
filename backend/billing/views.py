@@ -2,14 +2,31 @@ from rest_framework import viewsets, permissions, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.exceptions import PermissionDenied
+from django.db import IntegrityError, transaction
 from django.db.models import Sum, Q
 from datetime import date
-from .models import Subscription, SubscriptionPlan, SubscriptionPlanHistory, Invoice, FeeStructure, StudentFee, Payment, Expense
+from .models import (
+    Subscription,
+    SubscriptionPlan,
+    SubscriptionPlanHistory,
+    Invoice,
+    FeeStructure,
+    StudentFee,
+    Payment,
+    Expense,
+    BillingIdempotencyKey,
+)
 from .serializers import (
     SubscriptionSerializer, SubscriptionPlanSerializer, SubscriptionPlanHistorySerializer, InvoiceSerializer,
     FeeStructureSerializer, StudentFeeSerializer, PaymentSerializer, ExpenseSerializer
 )
 from .plan_defaults import upsert_default_plans
+from .idempotency import (
+    is_valid_idempotency_key,
+    json_safe as idempotency_json_safe,
+    payload_fingerprint,
+    request_idempotency_key,
+)
 from core.mixins import TenantScopedQuerysetMixin
 from core.reports import generate_pdf_response
 from .permissions import IsSaaSAdminUser, IsSchoolFinanceManager
@@ -60,6 +77,123 @@ class BillingSchemaGuardMixin:
                 raise PermissionDenied("Authenticated user is not associated with a tenant.")
             if request_tenant and user_tenant != request_tenant:
                 raise PermissionDenied("Cross-tenant access denied.")
+
+
+class BillingIdempotencyMixin:
+    def _idempotency_error(self, request, *, code: str, message: str, http_status: int):
+        return Response(
+            {
+                "code": code,
+                "message": message,
+                "field_errors": {},
+                "trace_id": getattr(request, "request_id", None),
+            },
+            status=http_status,
+        )
+
+    def _load_or_create_idempotency_record(self, request, *, endpoint: str, idempotency_key: str, fingerprint: str):
+        tenant = getattr(request.user, "tenant", None)
+        try:
+            with transaction.atomic():
+                try:
+                    record = BillingIdempotencyKey.objects.select_for_update().get(
+                        user=request.user,
+                        endpoint=endpoint,
+                        idempotency_key=idempotency_key,
+                    )
+                    return record, False
+                except BillingIdempotencyKey.DoesNotExist:
+                    record = BillingIdempotencyKey.objects.create(
+                        tenant=tenant,
+                        user=request.user,
+                        endpoint=endpoint,
+                        idempotency_key=idempotency_key,
+                        request_fingerprint=fingerprint,
+                    )
+                    return record, True
+        except IntegrityError:
+            with transaction.atomic():
+                record = BillingIdempotencyKey.objects.select_for_update().get(
+                    user=request.user,
+                    endpoint=endpoint,
+                    idempotency_key=idempotency_key,
+                )
+                return record, False
+
+    def _idempotent_execute(
+        self,
+        request,
+        *,
+        endpoint: str,
+        resource_type: str,
+        resource_id_field: str,
+        execute,
+    ):
+        idempotency_key = request_idempotency_key(request)
+        if not idempotency_key:
+            return execute()
+
+        if not is_valid_idempotency_key(idempotency_key):
+            return self._idempotency_error(
+                request,
+                code="idempotency_key_invalid",
+                message="Idempotency key is required and must be at most 255 characters.",
+                http_status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        fingerprint = payload_fingerprint(idempotency_json_safe(request.data))
+        record, created = self._load_or_create_idempotency_record(
+            request,
+            endpoint=endpoint,
+            idempotency_key=idempotency_key,
+            fingerprint=fingerprint,
+        )
+
+        if not created:
+            if record.request_fingerprint != fingerprint:
+                return self._idempotency_error(
+                    request,
+                    code="idempotency_key_conflict",
+                    message="This idempotency key was already used with a different payload.",
+                    http_status=status.HTTP_409_CONFLICT,
+                )
+
+            if record.response_status is not None and record.response_payload is not None:
+                replay_response = Response(record.response_payload, status=record.response_status)
+                replay_response["X-Idempotent-Replay"] = "true"
+                replay_response["Idempotency-Key"] = idempotency_key
+                return replay_response
+
+            return self._idempotency_error(
+                request,
+                code="idempotency_key_in_progress",
+                message="A request with this idempotency key is currently being processed.",
+                http_status=status.HTTP_409_CONFLICT,
+            )
+
+        try:
+            response = execute()
+        except Exception:
+            BillingIdempotencyKey.objects.filter(
+                pk=record.pk, response_status__isnull=True
+            ).delete()
+            raise
+
+        if not (200 <= int(getattr(response, "status_code", 500)) < 300):
+            BillingIdempotencyKey.objects.filter(
+                pk=record.pk, response_status__isnull=True
+            ).delete()
+            return response
+
+        payload = idempotency_json_safe(getattr(response, "data", {}))
+        BillingIdempotencyKey.objects.filter(pk=record.pk).update(
+            response_status=response.status_code,
+            response_payload=payload,
+            resource_type=resource_type,
+            resource_id=str(payload.get(resource_id_field, "")),
+        )
+        response["Idempotency-Key"] = idempotency_key
+        return response
 
 
 class SubscriptionPlanViewSet(BillingSchemaGuardMixin, viewsets.ModelViewSet):
@@ -274,7 +408,7 @@ class FeeStructureViewSet(BillingSchemaGuardMixin, TenantScopedQuerysetMixin, vi
             details=payload,
         )
 
-class StudentFeeViewSet(BillingSchemaGuardMixin, TenantScopedQuerysetMixin, viewsets.ModelViewSet):
+class StudentFeeViewSet(BillingIdempotencyMixin, BillingSchemaGuardMixin, TenantScopedQuerysetMixin, viewsets.ModelViewSet):
     require_tenant_schema = True
     allow_unscoped_for_saas = False
     queryset = StudentFee.objects.all()
@@ -284,6 +418,18 @@ class StudentFeeViewSet(BillingSchemaGuardMixin, TenantScopedQuerysetMixin, view
     def get_queryset(self):
         queryset = super().get_queryset()
         return queryset.select_related('student', 'fee_structure')
+
+    def create(self, request, *args, **kwargs):
+        def _execute():
+            return super(StudentFeeViewSet, self).create(request, *args, **kwargs)
+
+        return self._idempotent_execute(
+            request,
+            endpoint="billing.student_fees.create",
+            resource_type="student_fee",
+            resource_id_field="student_fee_id",
+            execute=_execute,
+        )
 
     def perform_create(self, serializer):
         item = serializer.save(tenant=self.request.user.tenant)
@@ -351,60 +497,66 @@ class StudentFeeViewSet(BillingSchemaGuardMixin, TenantScopedQuerysetMixin, view
         Assign a fee structure to all students in a class.
         Expects: fee_structure_id, academic_class_id, due_date
         """
-        fee_structure_id = request.data.get('fee_structure_id')
-        academic_class_id = request.data.get('academic_class_id')
-        due_date = request.data.get('due_date')
-        
-        if not all([fee_structure_id, academic_class_id, due_date]):
-            return Response({'error': 'Missing required fields: fee_structure_id, academic_class_id, and due_date are required.'}, status=status.HTTP_400_BAD_REQUEST)
-        
-        try:
-            from academic.models import Student
-            from django.db import transaction
-            
-            tenant = getattr(request.user, 'tenant', None)
-            if not tenant:
-                return Response({'error': 'User has no associated tenant'}, status=status.HTTP_400_BAD_REQUEST)
+        def _execute():
+            fee_structure_id = request.data.get('fee_structure_id')
+            academic_class_id = request.data.get('academic_class_id')
+            due_date = request.data.get('due_date')
 
-            fee_structure = FeeStructure.objects.get(fee_id=fee_structure_id, tenant=tenant)
-            students = Student.objects.filter(academic_class_id=academic_class_id, user__tenant=tenant)
-            
-            if not students.exists():
-                return Response({'error': 'No students found in the selected class'}, status=status.HTTP_404_NOT_FOUND)
+            if not all([fee_structure_id, academic_class_id, due_date]):
+                return Response({'error': 'Missing required fields: fee_structure_id, academic_class_id, and due_date are required.'}, status=status.HTTP_400_BAD_REQUEST)
 
-            with transaction.atomic():
-                created_count = 0
-                for student in students:
-                    # Avoid duplicate assignment for same structure and student if pending?
-                    # For now, just create as requested.
-                    StudentFee.objects.create(
-                        tenant=tenant,
-                        student=student,
-                        fee_structure=fee_structure,
-                        amount_due=fee_structure.amount,
-                        due_date=due_date,
-                        status='pending'
-                    )
-                    created_count += 1
-            record_audit_event(
-                action="billing.student_fee_bulk_assigned",
-                user=request.user,
-                request=request,
-                details={
-                    "fee_structure_id": str(fee_structure_id),
-                    "academic_class_id": str(academic_class_id),
-                    "created_count": created_count,
-                    "due_date": due_date,
-                },
-            )
-            
-            return Response({'message': f'Successfully assigned fee to {created_count} students'}, status=status.HTTP_201_CREATED)
-        except FeeStructure.DoesNotExist:
-            return Response({'error': 'Fee structure not found'}, status=status.HTTP_404_NOT_FOUND)
-        except Exception as e:
-            return Response({'error': f'Assignment failed: {str(e)}'}, status=status.HTTP_400_BAD_REQUEST)
+            try:
+                from academic.models import Student
 
-class PaymentViewSet(BillingSchemaGuardMixin, TenantScopedQuerysetMixin, viewsets.ModelViewSet):
+                tenant = getattr(request.user, 'tenant', None)
+                if not tenant:
+                    return Response({'error': 'User has no associated tenant'}, status=status.HTTP_400_BAD_REQUEST)
+
+                fee_structure = FeeStructure.objects.get(fee_id=fee_structure_id, tenant=tenant)
+                students = Student.objects.filter(academic_class_id=academic_class_id, user__tenant=tenant)
+
+                if not students.exists():
+                    return Response({'error': 'No students found in the selected class'}, status=status.HTTP_404_NOT_FOUND)
+
+                with transaction.atomic():
+                    created_count = 0
+                    for student in students:
+                        StudentFee.objects.create(
+                            tenant=tenant,
+                            student=student,
+                            fee_structure=fee_structure,
+                            amount_due=fee_structure.amount,
+                            due_date=due_date,
+                            status='pending'
+                        )
+                        created_count += 1
+                record_audit_event(
+                    action="billing.student_fee_bulk_assigned",
+                    user=request.user,
+                    request=request,
+                    details={
+                        "fee_structure_id": str(fee_structure_id),
+                        "academic_class_id": str(academic_class_id),
+                        "created_count": created_count,
+                        "due_date": due_date,
+                    },
+                )
+
+                return Response({'message': f'Successfully assigned fee to {created_count} students'}, status=status.HTTP_201_CREATED)
+            except FeeStructure.DoesNotExist:
+                return Response({'error': 'Fee structure not found'}, status=status.HTTP_404_NOT_FOUND)
+            except Exception as e:
+                return Response({'error': f'Assignment failed: {str(e)}'}, status=status.HTTP_400_BAD_REQUEST)
+
+        return self._idempotent_execute(
+            request,
+            endpoint="billing.student_fees.assign_bulk",
+            resource_type="student_fee_bulk",
+            resource_id_field="message",
+            execute=_execute,
+        )
+
+class PaymentViewSet(BillingIdempotencyMixin, BillingSchemaGuardMixin, TenantScopedQuerysetMixin, viewsets.ModelViewSet):
     require_tenant_schema = True
     allow_unscoped_for_saas = False
     queryset = Payment.objects.all()
@@ -414,6 +566,18 @@ class PaymentViewSet(BillingSchemaGuardMixin, TenantScopedQuerysetMixin, viewset
     def get_queryset(self):
         queryset = super().get_queryset()
         return queryset.select_related('student', 'recorded_by')
+
+    def create(self, request, *args, **kwargs):
+        def _execute():
+            return super(PaymentViewSet, self).create(request, *args, **kwargs)
+
+        return self._idempotent_execute(
+            request,
+            endpoint="billing.payments.create",
+            resource_type="payment",
+            resource_id_field="payment_id",
+            execute=_execute,
+        )
     
     def perform_create(self, serializer):
         if not getattr(self.request.user, "tenant", None):

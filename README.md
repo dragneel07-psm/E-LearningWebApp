@@ -1,7 +1,7 @@
 # E-Learning WebApp
 ## Professional Project Manual (Single Source of Truth)
 
-**Last updated:** March 4, 2026  
+**Last updated:** March 5, 2026  
 **Document owner:** Engineering Team  
 **Status:** Active
 
@@ -26,8 +26,9 @@ This file is the canonical documentation for the entire repository. Historical n
 16. [Maintenance Plan (Long-Run)](#maintenance-plan-long-run)
 17. [Contribution Workflow](#contribution-workflow)
 18. [Troubleshooting Guide](#troubleshooting-guide)
-19. [Roadmap and Planning Framework](#roadmap-and-planning-framework)
-20. [Definition of Done](#definition-of-done)
+19. [Latest Improvements (March 2026)](#latest-improvements-march-2026)
+20. [Roadmap and Planning Framework](#roadmap-and-planning-framework)
+21. [Definition of Done](#definition-of-done)
 
 ## Executive Summary
 E-Learning WebApp is a multi-tenant school management and LMS platform serving school operations for SaaS admin, school admin, staff, teachers, students, and parents.
@@ -487,6 +488,31 @@ Cause:
 
 Fix:
 - Use fixed viewport containers with explicit `overflow-y: auto`.
+
+## Latest Improvements (March 2026)
+### Promotion Exception Center
+- Added admin workflow to review each student promotion decision (Promote, Hold, Override).
+- Added bulk decision actions with class/section/fail-reason filters.
+- Added search and pagination in the exception review table.
+
+### Decision Audit and Reason Tracking
+- Promotion decisions now require `decision_reason` in single and bulk actions.
+- Every decision change stores user, timestamp, action, reason, and previous/new values.
+- UI now shows history so admins can see who changed what and when.
+
+### Publish Lock and Reopen Control
+- Promotion decisions are locked after final results are published.
+- Added admin reopen endpoint: `POST /api/academic/assessments/{id}/reopen_results/`.
+- Publish/unpublish/reopen actions are audit logged with actor, timestamp, reason, and state transition.
+
+### Deployment and Smoke Test Baseline
+- Apply migrations in all environments: `python manage.py migrate`.
+- Smoke-test this flow after deploy:
+  - list exceptions
+  - single decide
+  - bulk decide
+  - publish final results
+  - reopen results and re-decide
 
 ## Roadmap and Planning Framework
 Use this structure for each release cycle:

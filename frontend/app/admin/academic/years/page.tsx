@@ -18,6 +18,7 @@ import {
     academicAPI,
     AcademicYear,
     AcademicYearRolloverRequest,
+    AcademicYearRolloverResponse,
 } from '@/lib/api';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -121,6 +122,8 @@ export default function AcademicYearsPage() {
 
     const [isRolloverDialogOpen, setIsRolloverDialogOpen] = useState(false);
     const [rolloverSubmitting, setRolloverSubmitting] = useState(false);
+    const [rolloverPreview, setRolloverPreview] = useState<AcademicYearRolloverResponse | null>(null);
+    const [rolloverPreviewSignature, setRolloverPreviewSignature] = useState<string | null>(null);
     const [rolloverForm, setRolloverForm] = useState<RolloverFormState>({
         source_year: '',
         target_mode: 'create',
@@ -200,6 +203,8 @@ export default function AcademicYearsPage() {
             manual_promote_student_ids: '',
             manual_hold_student_ids: '',
         });
+        setRolloverPreview(null);
+        setRolloverPreviewSignature(null);
         setIsRolloverDialogOpen(true);
     }
 
@@ -276,20 +281,20 @@ export default function AcademicYearsPage() {
         }
     }
 
-    async function handleRolloverSubmit() {
+    function buildRolloverPayload(): AcademicYearRolloverRequest | null {
         if (!rolloverForm.source_year) {
             toast.error('Please select source academic year');
-            return;
+            return null;
         }
 
         if (rolloverForm.target_mode === 'existing') {
             if (!rolloverForm.target_year) {
                 toast.error('Please select target academic year');
-                return;
+                return null;
             }
             if (rolloverForm.target_year === rolloverForm.source_year) {
                 toast.error('Source and target years must be different');
-                return;
+                return null;
             }
         } else if (
             rolloverForm.target_start_date
@@ -297,7 +302,7 @@ export default function AcademicYearsPage() {
             && new Date(rolloverForm.target_start_date) >= new Date(rolloverForm.target_end_date)
         ) {
             toast.error('Target end date must be after target start date');
-            return;
+            return null;
         }
 
         const scoreThreshold = rolloverForm.min_score_percentage.trim() === ''
@@ -309,11 +314,11 @@ export default function AcademicYearsPage() {
 
         if (scoreThreshold !== undefined && (Number.isNaN(scoreThreshold) || scoreThreshold < 0 || scoreThreshold > 100)) {
             toast.error('Min score percentage must be between 0 and 100');
-            return;
+            return null;
         }
         if (attendanceThreshold !== undefined && (Number.isNaN(attendanceThreshold) || attendanceThreshold < 0 || attendanceThreshold > 100)) {
             toast.error('Min attendance percentage must be between 0 and 100');
-            return;
+            return null;
         }
 
         const payload: AcademicYearRolloverRequest = {
@@ -341,18 +346,57 @@ export default function AcademicYearsPage() {
             };
         }
 
+        return payload;
+    }
+
+    async function handleRolloverPreview() {
+        const payload = buildRolloverPayload();
+        if (!payload) return;
         try {
             setRolloverSubmitting(true);
-            const response = await academicAPI.rolloverAcademicYear(payload);
-            const summary = response.summary;
+            const response = await academicAPI.previewAcademicYearRollover(payload);
+            setRolloverPreview(response);
+            setRolloverPreviewSignature(JSON.stringify(payload));
+            if (response.can_execute) {
+                toast.success('Dry-run complete. Review preview and confirm to execute.');
+            } else {
+                toast.error('Dry-run found blockers. Resolve them before execution.');
+            }
+        } catch (error) {
+            console.error('Failed to preview academic year rollover', error);
+            toast.error('Failed to preview academic year rollover');
+        } finally {
+            setRolloverSubmitting(false);
+        }
+    }
+
+    async function handleRolloverConfirm() {
+        const payload = buildRolloverPayload();
+        if (!payload) return;
+        const payloadSignature = JSON.stringify(payload);
+        if (!rolloverPreview || rolloverPreviewSignature !== payloadSignature) {
+            toast.error('Please run dry-run preview again before confirming.');
+            return;
+        }
+        if (!rolloverPreview.can_execute) {
+            toast.error('Cannot execute rollover while blockers exist.');
+            return;
+        }
+
+        try {
+            setRolloverSubmitting(true);
+            const response = await academicAPI.executeAcademicYearRollover(payload);
+            const summary = response.summary || {};
             toast.success(
-                `Rollover complete: ${response.target_year} | Subjects ${summary.subjects_migrated}, Lessons ${summary.lessons_migrated}, Quizzes ${summary.assessments_migrated}, Timetable ${summary.timetable_entries_migrated}, Promoted ${summary.students_promoted}`,
+                `Rollover complete: ${response.target_year} | Subjects ${summary.subjects_migrated ?? 0}, Lessons ${summary.lessons_migrated ?? 0}, Quizzes ${summary.assessments_migrated ?? 0}, Timetable ${summary.timetable_entries_migrated ?? 0}, Promoted ${summary.students_promoted ?? 0}`,
             );
             setIsRolloverDialogOpen(false);
+            setRolloverPreview(null);
+            setRolloverPreviewSignature(null);
             await loadYears();
         } catch (error) {
-            console.error('Failed to rollover academic year', error);
-            toast.error('Failed to rollover academic year');
+            console.error('Failed to execute academic year rollover', error);
+            toast.error('Failed to execute academic year rollover');
         } finally {
             setRolloverSubmitting(false);
         }
@@ -747,12 +791,72 @@ export default function AcademicYearsPage() {
                                 ) : null}
                             </div>
                         </div>
+
+                        {rolloverPreview ? (
+                            <div className="grid gap-3 rounded-lg border bg-slate-50 p-4">
+                                <div className="flex items-center justify-between">
+                                    <p className="text-sm font-semibold text-slate-900">Dry-Run Preview</p>
+                                    <Badge variant={rolloverPreview.can_execute ? 'default' : 'destructive'}>
+                                        {rolloverPreview.can_execute ? 'Ready to Execute' : 'Blocked'}
+                                    </Badge>
+                                </div>
+                                <p className="text-xs text-slate-500">
+                                    Source: {rolloverPreview.source_year} | Target: {rolloverPreview.target_year}
+                                </p>
+
+                                {Array.isArray(rolloverPreview.blockers) && rolloverPreview.blockers.length > 0 ? (
+                                    <div className="grid gap-1 rounded-md border border-red-200 bg-red-50 p-3">
+                                        <p className="text-xs font-semibold uppercase tracking-wide text-red-700">Blockers</p>
+                                        {rolloverPreview.blockers.map((item, index) => (
+                                            <p key={`blocker_${index}`} className="text-sm text-red-700">• {item}</p>
+                                        ))}
+                                    </div>
+                                ) : null}
+
+                                {Array.isArray(rolloverPreview.warnings) && rolloverPreview.warnings.length > 0 ? (
+                                    <div className="grid gap-1 rounded-md border border-amber-200 bg-amber-50 p-3">
+                                        <p className="text-xs font-semibold uppercase tracking-wide text-amber-700">Warnings</p>
+                                        {rolloverPreview.warnings.map((item, index) => (
+                                            <p key={`warning_${index}`} className="text-sm text-amber-700">• {item}</p>
+                                        ))}
+                                    </div>
+                                ) : null}
+
+                                <div className="grid grid-cols-2 gap-3 text-sm">
+                                    <div className="rounded-md border bg-white p-2">
+                                        Subjects: {rolloverPreview.summary?.subjects_to_migrate ?? rolloverPreview.summary?.subjects_migrated ?? 0}
+                                    </div>
+                                    <div className="rounded-md border bg-white p-2">
+                                        Lessons: {rolloverPreview.summary?.lessons_to_migrate ?? rolloverPreview.summary?.lessons_migrated ?? 0}
+                                    </div>
+                                    <div className="rounded-md border bg-white p-2">
+                                        Assessments: {rolloverPreview.summary?.assessments_to_migrate ?? rolloverPreview.summary?.assessments_migrated ?? 0}
+                                    </div>
+                                    <div className="rounded-md border bg-white p-2">
+                                        Timetable: {rolloverPreview.summary?.timetable_entries_to_migrate ?? rolloverPreview.summary?.timetable_entries_migrated ?? 0}
+                                    </div>
+                                    <div className="rounded-md border bg-white p-2">
+                                        Promotion candidates: {rolloverPreview.promotion_preview?.promoted_students ?? rolloverPreview.summary?.students_promoted ?? 0}
+                                    </div>
+                                    <div className="rounded-md border bg-white p-2">
+                                        Promotion skipped: {rolloverPreview.promotion_preview?.skipped_students ?? rolloverPreview.summary?.students_skipped ?? 0}
+                                    </div>
+                                </div>
+                            </div>
+                        ) : null}
                     </div>
                     <DialogFooter>
                         <Button variant="outline" onClick={() => setIsRolloverDialogOpen(false)}>Cancel</Button>
-                        <Button onClick={handleRolloverSubmit} disabled={rolloverSubmitting}>
+                        <Button variant="outline" onClick={handleRolloverPreview} disabled={rolloverSubmitting}>
                             {rolloverSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCcw className="mr-2 h-4 w-4" />}
-                            Run Rollover
+                            Preview Impact
+                        </Button>
+                        <Button
+                            onClick={handleRolloverConfirm}
+                            disabled={rolloverSubmitting || !rolloverPreview || !rolloverPreview.can_execute}
+                        >
+                            {rolloverSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle2 className="mr-2 h-4 w-4" />}
+                            Confirm and Run
                         </Button>
                     </DialogFooter>
                 </DialogContent>

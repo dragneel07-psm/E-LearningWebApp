@@ -7,10 +7,12 @@ from rest_framework.response import Response
 from ..models import AcademicYear, AcademicClass, Section, Subject
 from ..serializers import AcademicYearSerializer, AcademicClassSerializer, SectionSerializer, SubjectSerializer
 from ..services.academic_year_service import (
+    build_rollover_preview,
     PromotionRules,
     YearRolloverOptions,
     create_next_academic_year,
     ensure_current_academic_year,
+    plan_next_academic_year,
     rollover_academic_year,
 )
 
@@ -54,6 +56,9 @@ class AcademicYearViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_403_FORBIDDEN,
             )
 
+        dry_run = self._to_bool(request.data.get('dry_run'), False)
+        confirm = self._to_bool(request.data.get('confirm'), False)
+
         source_year_id = request.data.get('source_year')
         target_year_id = request.data.get('target_year')
 
@@ -66,10 +71,14 @@ class AcademicYearViewSet(viewsets.ModelViewSet):
             return Response({'detail': 'Source academic year not found.'}, status=status.HTTP_400_BAD_REQUEST)
 
         target_year = None
+        target_exists = False
+        target_from_create_payload = False
+        target_plan = None
         if target_year_id:
             target_year = AcademicYear.objects.filter(pk=target_year_id).first()
             if not target_year:
                 return Response({'detail': 'Target academic year not found.'}, status=status.HTTP_400_BAD_REQUEST)
+            target_exists = True
         else:
             target_payload = request.data.get('target') if isinstance(request.data.get('target'), dict) else {}
             target_name = request.data.get('name') or target_payload.get('name')
@@ -83,18 +92,27 @@ class AcademicYearViewSet(viewsets.ModelViewSet):
             if target_end_date and parsed_end is None:
                 return Response({'detail': 'end_date must be in YYYY-MM-DD format.'}, status=status.HTTP_400_BAD_REQUEST)
 
-            target_year = create_next_academic_year(
+            target_plan = plan_next_academic_year(
                 source_year,
                 name=target_name,
                 start_date=parsed_start,
                 end_date=parsed_end,
             )
+            planned_existing = target_plan.get('existing_year')
+            if planned_existing:
+                target_year = planned_existing
+                target_exists = True
+            else:
+                target_year = AcademicYear(
+                    name=target_plan['name'],
+                    start_date=target_plan['start_date'],
+                    end_date=target_plan['end_date'],
+                    is_current=False,
+                )
+            target_from_create_payload = True
 
-        if source_year.pk == target_year.pk:
-            return Response(
-                {'detail': 'Source year and target year must be different.'},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+        if target_year is None:
+            return Response({'detail': 'Target academic year not found.'}, status=status.HTTP_400_BAD_REQUEST)
 
         options_payload = request.data.get('options') if isinstance(request.data.get('options'), dict) else {}
         options = YearRolloverOptions(
@@ -118,6 +136,79 @@ class AcademicYearViewSet(viewsets.ModelViewSet):
             promotion_rules=PromotionRules.from_payload(options_payload),
         )
 
+        preview = build_rollover_preview(
+            source_year=source_year,
+            target_year=target_year,
+            options=options,
+        )
+        blockers = []
+        warnings = list(preview.get('warnings', []))
+
+        if source_year.pk == getattr(target_year, 'pk', None):
+            blockers.append('Source year and target year must be different.')
+
+        if target_from_create_payload and target_exists:
+            blockers.append(
+                'Target academic year already exists with this name. Choose existing target year mode or change target year name.'
+            )
+
+        if options.auto_upgrade_students:
+            promotion_preview = preview.get('promotion_preview') or {}
+            if AcademicClass.objects.count() < 2:
+                blockers.append('No next class configured for auto-upgrade. Add higher classes before promotion.')
+            if int(promotion_preview.get('unknown_class_students', 0)) > 0:
+                blockers.append('Some students have missing/invalid class mapping and cannot be promoted.')
+            if int(promotion_preview.get('missing_next_section', 0)) > 0:
+                blockers.append(
+                    'Section mapping missing for some students in next class. Create matching section names before promotion.'
+                )
+
+            if int(promotion_preview.get('final_class_students', 0)) > 0:
+                warnings.append('Students in the highest class will remain in place (no next class).')
+            if int(promotion_preview.get('insufficient_data', 0)) > 0:
+                warnings.append('Some students lack enough score/attendance data for rule-based promotion.')
+
+        preview_payload = {
+            'dry_run': True,
+            'can_execute': len(blockers) == 0,
+            'source_year': source_year.name,
+            'target_year': target_year.name,
+            'target_exists': target_exists,
+            'blockers': blockers,
+            'warnings': warnings,
+            'summary': preview.get('summary', {}),
+            'promotion_preview': preview.get('promotion_preview') or {},
+        }
+
+        if dry_run:
+            return Response(preview_payload, status=status.HTTP_200_OK)
+
+        if blockers:
+            return Response(
+                {
+                    'detail': 'Rollover blocked by precheck. Run dry_run and resolve blockers.',
+                    **preview_payload,
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if not confirm:
+            return Response(
+                {
+                    'detail': 'Rollover confirmation required. Re-submit with confirm=true after dry_run preview.',
+                    **preview_payload,
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if getattr(target_year, 'pk', None) is None:
+            target_year = create_next_academic_year(
+                source_year,
+                name=target_plan.get('name') if target_plan else target_year.name,
+                start_date=target_plan.get('start_date') if target_plan else target_year.start_date,
+                end_date=target_plan.get('end_date') if target_plan else target_year.end_date,
+            )
+
         summary = rollover_academic_year(
             source_year=source_year,
             target_year=target_year,
@@ -126,8 +217,11 @@ class AcademicYearViewSet(viewsets.ModelViewSet):
 
         return Response(
             {
+                'dry_run': False,
+                'executed': True,
                 'source_year': source_year.name,
                 'target_year': target_year.name,
+                'warnings': warnings,
                 'summary': summary,
             }
         )

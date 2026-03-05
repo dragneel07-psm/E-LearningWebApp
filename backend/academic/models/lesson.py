@@ -1,5 +1,10 @@
 from django.db import models
 from .subject import Subject
+from core.utils.storage_paths import schema_from_current_connection, tenant_scoped_upload_path
+
+
+def lesson_material_upload_to(instance, filename):
+    return tenant_scoped_upload_path(schema_from_current_connection(), "lesson_materials", filename)
 
 class Chapter(models.Model):
     """
@@ -67,7 +72,7 @@ class LessonMaterial(models.Model):
 
     lesson = models.ForeignKey(Lesson, on_delete=models.CASCADE, related_name='materials')
     title = models.CharField(max_length=200)
-    file = models.FileField(upload_to='lesson_materials/', blank=True, null=True)
+    file = models.FileField(upload_to=lesson_material_upload_to, blank=True, null=True)
     link = models.URLField(blank=True, null=True)
     material_type = models.CharField(max_length=20, choices=TYPE_CHOICES, default='other')
     

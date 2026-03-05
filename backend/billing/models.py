@@ -235,3 +235,49 @@ class Expense(models.Model):
 
     def __str__(self):
         return f"{self.title} - {self.amount}"
+
+
+class BillingIdempotencyKey(models.Model):
+    """
+    Stores idempotency state for billing write endpoints.
+    """
+
+    idempotency_id = models.UUIDField(primary_key=True, default=uuid_lib.uuid4, editable=False)
+    tenant = models.ForeignKey(
+        Tenant,
+        on_delete=models.CASCADE,
+        related_name="billing_idempotency_keys",
+        null=True,
+        blank=True,
+        db_constraint=False,
+    )
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="billing_idempotency_keys",
+        db_constraint=False,
+    )
+    endpoint = models.CharField(max_length=100)
+    idempotency_key = models.CharField(max_length=255)
+    request_fingerprint = models.CharField(max_length=64)
+    response_status = models.PositiveSmallIntegerField(null=True, blank=True)
+    response_payload = models.JSONField(null=True, blank=True)
+    resource_type = models.CharField(max_length=50, blank=True, default="")
+    resource_id = models.CharField(max_length=64, blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["user", "endpoint", "idempotency_key"],
+                name="billing_idempotency_user_endpoint_key_uniq",
+            )
+        ]
+        indexes = [
+            models.Index(fields=["tenant", "created_at"], name="bill_idem_tenant_c_idx"),
+            models.Index(fields=["endpoint", "created_at"], name="bill_idem_ep_c_idx"),
+        ]
+
+    def __str__(self):
+        return f"{self.endpoint}:{self.idempotency_key}"

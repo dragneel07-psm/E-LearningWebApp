@@ -2,6 +2,7 @@ import json
 from rest_framework import viewsets, status, permissions
 from rest_framework.decorators import action
 from rest_framework.response import Response
+from rest_framework.exceptions import PermissionDenied
 from django.db import models, transaction
 from django.utils import timezone
 from academic.models import AcademicYear
@@ -15,6 +16,8 @@ from academic.models.assessment import (
 from academic.models.question import Question
 from academic.models.submission import Submission
 from academic.models.student import Student
+from academic.models.parent import Parent
+from academic.models.teacher import Teacher
 from academic.serializers.assessment import (
     AssessmentSerializer, QuestionSerializer, 
     SubmissionSerializer, ResultSerializer
@@ -27,6 +30,7 @@ from academic.services.academic_year_service import (
     list_student_promotion_candidates,
     promote_students_to_next_class,
 )
+from core.utils.audit import record_audit_event
 
 
 def _to_bool(value, default=False):
@@ -55,24 +59,79 @@ def _resolve_request_year(request):
         return _find_academic_year(raw_year), True
     return ensure_current_academic_year(), False
 
+
+def _role(user) -> str:
+    return (getattr(user, "role", "") or "").lower()
+
+
+def _is_admin_manager(user) -> bool:
+    return _role(user) in {"admin", "staff", "saas_admin", "management", "school_admin"}
+
+
+def _is_content_manager(user) -> bool:
+    return _role(user) == "teacher" or _is_admin_manager(user)
+
+
+def _teacher_profile(user):
+    return Teacher.objects.prefetch_related("assigned_classes").filter(user=user).first()
+
+
+def _teacher_assessment_visibility_q(user, prefix: str = ""):
+    teacher = _teacher_profile(user)
+    if not teacher:
+        return models.Q(pk__in=[])
+
+    class_ids = [cid for cid in teacher.assigned_classes.values_list("id", flat=True) if cid]
+    pre = f"{prefix}__" if prefix else ""
+    return (
+        models.Q(**{f"{pre}subject__teacher": teacher})
+        | models.Q(**{f"{pre}subject__additional_teachers": teacher})
+        | models.Q(**{f"{pre}subject__academic_class_id__in": class_ids})
+    )
+
+
+def _teacher_can_manage_subject(user, subject) -> bool:
+    teacher = _teacher_profile(user)
+    if not teacher or subject is None:
+        return False
+
+    if teacher.teacher_id == getattr(subject, "teacher_id", None):
+        return True
+    if subject.additional_teachers.filter(teacher_id=teacher.teacher_id).exists():
+        return True
+    class_id = getattr(subject, "academic_class_id", None)
+    return bool(class_id and teacher.assigned_classes.filter(id=class_id).exists())
+
+
+def _teacher_can_manage_assessment(user, assessment: Assessment) -> bool:
+    if assessment is None or not getattr(assessment, "subject_id", None):
+        return False
+    return _teacher_can_manage_subject(user, assessment.subject)
+
 class AssessmentViewSet(viewsets.ModelViewSet):
     queryset = Assessment.objects.all()
     serializer_class = AssessmentSerializer
     permission_classes = [permissions.IsAuthenticated]
 
+    def initial(self, request, *args, **kwargs):
+        super().initial(request, *args, **kwargs)
+        if self.action in {"create", "update", "partial_update", "destroy"} and not _is_content_manager(request.user):
+            raise PermissionDenied("Only teachers/admin/staff can manage assessments.")
+        if self.action == "gradebook" and not _is_content_manager(request.user):
+            raise PermissionDenied("Only teachers/admin/staff can access gradebook.")
+
+    def _can_manage_assessment(self, user, assessment: Assessment) -> bool:
+        if _is_admin_manager(user):
+            return True
+        if _role(user) == "teacher":
+            return _teacher_can_manage_assessment(user, assessment)
+        return False
+
     def _can_publish_results(self, user):
-        return bool(
-            user
-            and user.is_authenticated
-            and getattr(user, 'role', None) in ['teacher', 'admin', 'staff', 'management', 'saas_admin']
-        )
+        return bool(user and user.is_authenticated and _is_content_manager(user))
 
     def _can_reopen_results(self, user):
-        return bool(
-            user
-            and user.is_authenticated
-            and getattr(user, 'role', None) in ['admin', 'staff', 'management', 'saas_admin']
-        )
+        return bool(user and user.is_authenticated and _is_admin_manager(user))
 
     def _promotion_scope_for_assessment(self, assessment):
         if getattr(assessment, 'section_id', None):
@@ -154,6 +213,20 @@ class AssessmentViewSet(viewsets.ModelViewSet):
             published_at_after=published_at_after,
             reason=reason,
             performed_by=user,
+        )
+        record_audit_event(
+            action="academic.results_publish_state_changed",
+            user=user,
+            request=getattr(self, "request", None),
+            details={
+                "assessment_id": str(assessment.assessment_id),
+                "action": action,
+                "was_published": was_published,
+                "is_published": is_published,
+                "published_at_before": published_at_before,
+                "published_at_after": published_at_after,
+                "reason": reason,
+            },
         )
 
     def _record_promotion_history(
@@ -381,23 +454,50 @@ class AssessmentViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(subject_id=subject_id)
         if section_id:
             queryset = queryset.filter(section_id=section_id)
-            
-        # If student, filter by their section or section-less assessments
-        try:
-            student = Student.objects.get(user=self.request.user)
-            if student.section:
-                queryset = queryset.filter(models.Q(section=student.section) | models.Q(section__isnull=True))
-        except Student.DoesNotExist:
-            pass
-            
+        
+        role = _role(self.request.user)
+        if role == "student":
+            student = Student.objects.select_related("section").filter(user=self.request.user).first()
+            if not student or not student.academic_class_id:
+                return queryset.none()
+            queryset = queryset.filter(subject__academic_class_id=student.academic_class_id)
+            if student.section_id:
+                queryset = queryset.filter(models.Q(section_id=student.section_id) | models.Q(section__isnull=True))
+            else:
+                queryset = queryset.filter(section__isnull=True)
+        elif role == "parent":
+            parent = Parent.objects.prefetch_related("students").filter(user=self.request.user).first()
+            if not parent:
+                return queryset.none()
+            class_ids = [cid for cid in parent.students.values_list("academic_class_id", flat=True) if cid]
+            if not class_ids:
+                return queryset.none()
+            section_ids = [sid for sid in parent.students.values_list("section_id", flat=True) if sid]
+            queryset = queryset.filter(subject__academic_class_id__in=class_ids)
+            if section_ids:
+                queryset = queryset.filter(models.Q(section_id__in=section_ids) | models.Q(section__isnull=True))
+            else:
+                queryset = queryset.filter(section__isnull=True)
+        elif role == "teacher":
+            queryset = queryset.filter(_teacher_assessment_visibility_q(self.request.user)).distinct()
+
         return queryset
 
     def perform_create(self, serializer):
         academic_year = serializer.validated_data.get('academic_year') or ensure_current_academic_year()
+        if _role(self.request.user) == "teacher":
+            subject = serializer.validated_data.get("subject")
+            if not _teacher_can_manage_subject(self.request.user, subject):
+                raise PermissionDenied("You can only create assessments for your assigned classes/subjects.")
         serializer.save(academic_year=academic_year)
 
     def perform_update(self, serializer):
         instance = self.get_object()
+        if _role(self.request.user) == "teacher" and not self._can_manage_assessment(self.request.user, instance):
+            raise PermissionDenied("You can only edit assessments for your assigned classes/subjects.")
+        subject = serializer.validated_data.get("subject", instance.subject)
+        if _role(self.request.user) == "teacher" and not _teacher_can_manage_subject(self.request.user, subject):
+            raise PermissionDenied("You can only move assessments to your assigned classes/subjects.")
         was_published = bool(instance.results_published)
         serializer.save()
         updated = serializer.instance
@@ -423,6 +523,11 @@ class AssessmentViewSet(viewsets.ModelViewSet):
             )
 
         assessment = self.get_object()
+        if not self._can_manage_assessment(request.user, assessment):
+            return Response(
+                {'detail': 'You do not have permission to publish results for this assessment.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
         publish = _to_bool(request.data.get('publish'), True)
         was_published = bool(assessment.results_published)
         published_at_before = assessment.results_published_at
@@ -478,6 +583,11 @@ class AssessmentViewSet(viewsets.ModelViewSet):
             )
 
         assessment = self.get_object()
+        if not self._can_manage_assessment(request.user, assessment):
+            return Response(
+                {'detail': 'You do not have permission to reopen results for this assessment.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
         if not assessment.is_final_assessment:
             return Response(
                 {'detail': 'Reopen is only available for final assessments.'},
@@ -531,6 +641,11 @@ class AssessmentViewSet(viewsets.ModelViewSet):
             )
 
         assessment = self.get_object()
+        if not self._can_manage_assessment(request.user, assessment):
+            return Response(
+                {'detail': 'You do not have permission to review promotion exceptions for this assessment.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
         if not assessment.is_final_assessment:
             return Response(
                 {'detail': 'Promotion exceptions are only available for final assessments.'},
@@ -548,6 +663,11 @@ class AssessmentViewSet(viewsets.ModelViewSet):
             )
 
         assessment = self.get_object()
+        if not self._can_manage_assessment(request.user, assessment):
+            return Response(
+                {'detail': 'You do not have permission to update promotion exceptions for this assessment.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
         if not assessment.is_final_assessment:
             return Response(
                 {'detail': 'Promotion exceptions are only available for final assessments.'},
@@ -678,6 +798,11 @@ class AssessmentViewSet(viewsets.ModelViewSet):
             )
 
         assessment = self.get_object()
+        if not self._can_manage_assessment(request.user, assessment):
+            return Response(
+                {'detail': 'You do not have permission to update promotion exceptions for this assessment.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
         if not assessment.is_final_assessment:
             return Response(
                 {'detail': 'Promotion exceptions are only available for final assessments.'},
@@ -813,6 +938,11 @@ class AssessmentViewSet(viewsets.ModelViewSet):
             if requested_year:
                 subject_qs = subject_qs.filter(academic_year=requested_year)
             subject = subject_qs.get()
+            if _role(request.user) == "teacher" and not _teacher_can_manage_subject(request.user, subject):
+                return Response(
+                    {"detail": "You can only view gradebook for your assigned classes/subjects."},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
             academic_class = subject.academic_class
             students = Student.objects.filter(academic_class=academic_class)
         except Subject.DoesNotExist:
@@ -861,6 +991,11 @@ class QuestionViewSet(viewsets.ModelViewSet):
     serializer_class = QuestionSerializer
     permission_classes = [permissions.IsAuthenticated]
 
+    def initial(self, request, *args, **kwargs):
+        super().initial(request, *args, **kwargs)
+        if self.action in {"create", "update", "partial_update", "destroy"} and not _is_content_manager(request.user):
+            raise PermissionDenied("Only teachers/admin/staff can manage questions.")
+
     def get_queryset(self):
         queryset = Question.objects.select_related('assessment', 'assessment__academic_year').all()
         requested_year, has_year_filter = _resolve_request_year(self.request)
@@ -872,12 +1007,61 @@ class QuestionViewSet(viewsets.ModelViewSet):
         assessment_id = self.request.query_params.get('assessment')
         if assessment_id:
             queryset = queryset.filter(assessment_id=assessment_id)
+
+        role = _role(self.request.user)
+        if role == "student":
+            student = Student.objects.select_related("section").filter(user=self.request.user).first()
+            if not student or not student.academic_class_id:
+                return queryset.none()
+            queryset = queryset.filter(assessment__subject__academic_class_id=student.academic_class_id)
+            if student.section_id:
+                queryset = queryset.filter(
+                    models.Q(assessment__section_id=student.section_id) | models.Q(assessment__section__isnull=True)
+                )
+            else:
+                queryset = queryset.filter(assessment__section__isnull=True)
+        elif role == "parent":
+            parent = Parent.objects.prefetch_related("students").filter(user=self.request.user).first()
+            if not parent:
+                return queryset.none()
+            class_ids = [cid for cid in parent.students.values_list("academic_class_id", flat=True) if cid]
+            if not class_ids:
+                return queryset.none()
+            section_ids = [sid for sid in parent.students.values_list("section_id", flat=True) if sid]
+            queryset = queryset.filter(assessment__subject__academic_class_id__in=class_ids)
+            if section_ids:
+                queryset = queryset.filter(
+                    models.Q(assessment__section_id__in=section_ids) | models.Q(assessment__section__isnull=True)
+                )
+            else:
+                queryset = queryset.filter(assessment__section__isnull=True)
+        elif role == "teacher":
+            queryset = queryset.filter(_teacher_assessment_visibility_q(self.request.user, prefix="assessment")).distinct()
+
         return queryset.order_by('order')
+
+    def perform_create(self, serializer):
+        assessment = serializer.validated_data.get("assessment")
+        if _role(self.request.user) == "teacher" and not _teacher_can_manage_assessment(self.request.user, assessment):
+            raise PermissionDenied("You can only add questions to your assigned classes/subjects.")
+        serializer.save()
+
+    def perform_update(self, serializer):
+        instance = self.get_object()
+        assessment = serializer.validated_data.get("assessment", instance.assessment)
+        if _role(self.request.user) == "teacher" and not _teacher_can_manage_assessment(self.request.user, assessment):
+            raise PermissionDenied("You can only edit questions in your assigned classes/subjects.")
+        serializer.save()
 
 class SubmissionViewSet(viewsets.ModelViewSet):
     queryset = Submission.objects.all()
     serializer_class = SubmissionSerializer
     permission_classes = [permissions.IsAuthenticated]
+
+    def initial(self, request, *args, **kwargs):
+        super().initial(request, *args, **kwargs)
+        if self.action in {"create", "update", "partial_update", "destroy"} and not _is_content_manager(request.user):
+            raise PermissionDenied("Only teachers/admin/staff can manage submissions.")
 
     def get_queryset(self):
         queryset = Submission.objects.select_related('assessment', 'assessment__academic_year', 'student').all()
@@ -890,14 +1074,17 @@ class SubmissionViewSet(viewsets.ModelViewSet):
         assessment_id = self.request.query_params.get('assessment')
         if assessment_id:
             queryset = queryset.filter(assessment_id=assessment_id)
-        
-        # If student, only show their own submissions
-        try:
-            student = Student.objects.get(user=self.request.user)
-            queryset = queryset.filter(student=student)
-        except Student.DoesNotExist:
-            pass
-            
+
+        role = _role(self.request.user)
+        if role == "student":
+            student = Student.objects.filter(user=self.request.user).first()
+            queryset = queryset.filter(student=student) if student else queryset.none()
+        elif role == "parent":
+            parent = Parent.objects.prefetch_related("students").filter(user=self.request.user).first()
+            queryset = queryset.filter(student__in=parent.students.all()) if parent else queryset.none()
+        elif role == "teacher":
+            queryset = queryset.filter(_teacher_assessment_visibility_q(self.request.user, prefix="assessment")).distinct()
+
         return queryset
 
     @action(detail=False, methods=['post'])
@@ -905,6 +1092,12 @@ class SubmissionViewSet(viewsets.ModelViewSet):
         """
         Submit a quiz/exam. Handles automatic grading for MCQs.
         """
+        if _role(request.user) != "student":
+            return Response(
+                {"detail": "Only students can submit assessments."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
         assessment_id = request.data.get('assessment')
         answers = request.data.get('answers', {}) # { question_id: answer }
         time_taken = request.data.get('time_taken', 0)
@@ -916,10 +1109,15 @@ class SubmissionViewSet(viewsets.ModelViewSet):
                 return Response({'error': 'Academic year not found'}, status=status.HTTP_400_BAD_REQUEST)
             if requested_year:
                 assessment_qs = assessment_qs.filter(academic_year=requested_year)
-            assessment = assessment_qs.get()
+            assessment = assessment_qs.select_related("subject").get()
             student = Student.objects.get(user=request.user)
         except (Assessment.DoesNotExist, Student.DoesNotExist):
             return Response({'error': 'Invalid assessment or student'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if not student.academic_class_id or student.academic_class_id != assessment.subject.academic_class_id:
+            return Response({'detail': 'Assessment is outside your class scope.'}, status=status.HTTP_403_FORBIDDEN)
+        if assessment.section_id and assessment.section_id != student.section_id:
+            return Response({'detail': 'Assessment is outside your section scope.'}, status=status.HTTP_403_FORBIDDEN)
 
         # 1. Create Submission
         submission, created = Submission.objects.update_or_create(
@@ -961,6 +1159,14 @@ class SubmissionViewSet(viewsets.ModelViewSet):
         Manually grade a submission (Teacher only).
         """
         submission = self.get_object()
+        role = _role(request.user)
+        if role not in {"teacher", "admin", "staff", "saas_admin", "management", "school_admin"}:
+            return Response({'detail': 'You do not have permission to grade submissions.'}, status=status.HTTP_403_FORBIDDEN)
+        if role == "teacher" and not _teacher_can_manage_assessment(request.user, submission.assessment):
+            return Response(
+                {'detail': 'You can only grade submissions in your assigned classes/subjects.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
         score = request.data.get('score')
         feedback = request.data.get('feedback')
         status_val = request.data.get('status', 'graded')
@@ -992,6 +1198,19 @@ class SubmissionViewSet(viewsets.ModelViewSet):
             GamificationService.on_assessment_complete(submission.student, result)
         except ImportError:
             pass
+
+        record_audit_event(
+            action="academic.result_graded",
+            user=request.user,
+            request=request,
+            details={
+                "result_id": str(result.result_id),
+                "assessment_id": str(submission.assessment_id),
+                "student_id": str(submission.student_id),
+                "score": result.score,
+                "status": status_val,
+            },
+        )
             
         return Response({'status': 'graded', 'score': result.score})
 
@@ -1001,6 +1220,14 @@ class SubmissionViewSet(viewsets.ModelViewSet):
         Trigger AI grading for a submission.
         """
         submission = self.get_object()
+        role = _role(request.user)
+        if role not in {"teacher", "admin", "staff", "saas_admin", "management", "school_admin"}:
+            return Response({'detail': 'You do not have permission to AI-grade submissions.'}, status=status.HTTP_403_FORBIDDEN)
+        if role == "teacher" and not _teacher_can_manage_assessment(request.user, submission.assessment):
+            return Response(
+                {'detail': 'You can only grade submissions in your assigned classes/subjects.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
         assessment = submission.assessment
         
         # Get answers from Result if available, or request data
@@ -1033,6 +1260,18 @@ class SubmissionViewSet(viewsets.ModelViewSet):
             GamificationService.on_assessment_complete(submission.student, result)
         except ImportError:
             pass
+
+        record_audit_event(
+            action="academic.result_ai_graded",
+            user=request.user,
+            request=request,
+            details={
+                "result_id": str(result.result_id),
+                "assessment_id": str(submission.assessment_id),
+                "student_id": str(submission.student_id),
+                "score": result.score,
+            },
+        )
             
         return Response({
             'score': total_score,
@@ -1045,6 +1284,11 @@ class ResultViewSet(viewsets.ModelViewSet):
     serializer_class = ResultSerializer
     permission_classes = [permissions.IsAuthenticated]
 
+    def initial(self, request, *args, **kwargs):
+        super().initial(request, *args, **kwargs)
+        if self.action in {"create", "update", "partial_update", "destroy"} and not _is_content_manager(request.user):
+            raise PermissionDenied("Only teachers/admin/staff can manage results.")
+
     def get_queryset(self):
         queryset = Result.objects.select_related('assessment', 'assessment__academic_year', 'student', 'student__user').all()
         requested_year, has_year_filter = _resolve_request_year(self.request)
@@ -1056,18 +1300,18 @@ class ResultViewSet(viewsets.ModelViewSet):
         assessment_id = self.request.query_params.get('assessment')
         if assessment_id:
             queryset = queryset.filter(assessment_id=assessment_id)
-            
-        # Teacher/Admin can see everything
-        if getattr(self.request.user, 'role', None) in ['teacher', 'admin', 'saas_admin']:
-            return queryset
 
-        # Students only see their own
-        try:
-            student = Student.objects.get(user=self.request.user)
-            queryset = queryset.filter(student=student)
-        except Student.DoesNotExist:
-            queryset = queryset.none()
-            
+        role = _role(self.request.user)
+        if _is_admin_manager(self.request.user):
+            return queryset
+        if role == "teacher":
+            return queryset.filter(_teacher_assessment_visibility_q(self.request.user, prefix="assessment")).distinct()
+        if role == "parent":
+            parent = Parent.objects.prefetch_related("students").filter(user=self.request.user).first()
+            return queryset.filter(student__in=parent.students.all()) if parent else queryset.none()
+
+        student = Student.objects.filter(user=self.request.user).first()
+        queryset = queryset.filter(student=student) if student else queryset.none()
         return queryset
 
     @action(detail=True, methods=['post'])
@@ -1123,8 +1367,54 @@ class ResultViewSet(viewsets.ModelViewSet):
             return Response({'ai_feedback': result.ai_feedback, 'error': str(e)})
 
     def perform_update(self, serializer):
+        assessment = serializer.validated_data.get("assessment", serializer.instance.assessment)
+        if _role(self.request.user) == "teacher" and not _teacher_can_manage_assessment(self.request.user, assessment):
+            raise PermissionDenied("You can only edit results in your assigned classes/subjects.")
+        before = serializer.instance
+        previous_score = before.score
+        previous_feedback = before.teacher_feedback
+
         # Track who graded it if the user is a teacher/admin
-        if getattr(self.request.user, 'role', None) in ['teacher', 'admin', 'saas_admin']:
-            serializer.save(graded_by=self.request.user)
+        if _role(self.request.user) in {'teacher', 'admin', 'staff', 'saas_admin', 'management', 'school_admin'}:
+            updated = serializer.save(graded_by=self.request.user)
         else:
-            serializer.save()
+            updated = serializer.save()
+
+        record_audit_event(
+            action="academic.result_updated",
+            user=self.request.user,
+            request=self.request,
+            details={
+                "result_id": str(updated.result_id),
+                "assessment_id": str(updated.assessment_id),
+                "student_id": str(updated.student_id),
+                "before": {
+                    "score": previous_score,
+                    "teacher_feedback": previous_feedback,
+                },
+                "after": {
+                    "score": updated.score,
+                    "teacher_feedback": updated.teacher_feedback,
+                },
+            },
+        )
+
+    def perform_create(self, serializer):
+        assessment = serializer.validated_data.get("assessment")
+        if _role(self.request.user) == "teacher" and not _teacher_can_manage_assessment(self.request.user, assessment):
+            raise PermissionDenied("You can only create results in your assigned classes/subjects.")
+        if _role(self.request.user) in {'teacher', 'admin', 'staff', 'saas_admin', 'management', 'school_admin'}:
+            result = serializer.save(graded_by=self.request.user)
+        else:
+            result = serializer.save()
+        record_audit_event(
+            action="academic.result_created",
+            user=self.request.user,
+            request=self.request,
+            details={
+                "result_id": str(result.result_id),
+                "assessment_id": str(result.assessment_id),
+                "student_id": str(result.student_id),
+                "score": result.score,
+            },
+        )

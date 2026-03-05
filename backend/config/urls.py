@@ -1,18 +1,12 @@
 from django.contrib import admin
 from django.urls import path, include
-from rest_framework_simplejwt.views import (
-    TokenObtainPairView,
-    TokenRefreshView,
-)
-
-from rest_framework_simplejwt.views import TokenObtainPairView
-from users.serializers import MyTokenObtainPairSerializer
-
-class MyTokenObtainPairView(TokenObtainPairView):
-    serializer_class = MyTokenObtainPairSerializer
+from core.views import HealthzView, ReadyzView
+from users.views import CustomTokenObtainPairView, CustomTokenRefreshView
 
 urlpatterns = [
     path('admin/', admin.site.urls),
+    path('healthz', HealthzView.as_view(), name='healthz-root'),
+    path('readyz', ReadyzView.as_view(), name='readyz-root'),
     path('api/core/', include('core.urls')),
     path('api/users/', include('users.urls')),
     path('api/academic/', include('academic.urls')),
@@ -22,10 +16,23 @@ urlpatterns = [
     path('api/library/', include('library.urls')),
     path('api/gamification/', include('gamification.urls')),
     path('api/conversations/', include('conversations.urls')),
+
+    # Versioned aliases (v1)
+    path('api/v1/core/', include('core.urls')),
+    path('api/v1/users/', include('users.urls')),
+    path('api/v1/academic/', include('academic.urls')),
+    path('api/v1/billing/', include('billing.urls')),
+    path('api/v1/ai/', include('ai_engine.urls')),
+    path('api/v1/notifications/', include('notifications.urls')),
+    path('api/v1/library/', include('library.urls')),
+    path('api/v1/gamification/', include('gamification.urls')),
+    path('api/v1/conversations/', include('conversations.urls')),
     
     # JWT Auth
-    path('api/token/', MyTokenObtainPairView.as_view(), name='token_obtain_pair'),
-    path('api/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
+    path('api/token/', CustomTokenObtainPairView.as_view(), name='token_obtain_pair'),
+    path('api/token/refresh/', CustomTokenRefreshView.as_view(), name='token_refresh'),
+    path('api/v1/token/', CustomTokenObtainPairView.as_view(), name='token_obtain_pair_v1'),
+    path('api/v1/token/refresh/', CustomTokenRefreshView.as_view(), name='token_refresh_v1'),
 ]
 
 from django.conf import settings

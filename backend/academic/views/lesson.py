@@ -2,9 +2,13 @@ from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.exceptions import PermissionDenied
+from django.db import models
 from django.utils import timezone
 from academic.models.lesson import Chapter, Lesson, LessonMaterial, LessonProgress
 from academic.models.student import Student
+from academic.models.parent import Parent
+from academic.models.teacher import Teacher
 from academic.services.academic_year_service import ensure_current_academic_year
 from academic.serializers.lesson import (
     ChapterSerializer, 
@@ -14,13 +18,49 @@ from academic.serializers.lesson import (
     LessonProgressSerializer,
 )
 
+
+def _role(user) -> str:
+    return (getattr(user, "role", "") or "").lower()
+
+
+def _is_content_manager(user) -> bool:
+    return _role(user) in {"teacher", "admin", "staff", "saas_admin"}
+
+
+def _parent_class_ids(user):
+    parent_profile = Parent.objects.prefetch_related("students").filter(user=user).first()
+    if not parent_profile:
+        return []
+    return [cid for cid in parent_profile.students.values_list("academic_class_id", flat=True) if cid]
+
+
+def _teacher_visibility_q(user, prefix: str = ""):
+    teacher_profile = Teacher.objects.prefetch_related("assigned_classes").filter(user=user).first()
+    if not teacher_profile:
+        return models.Q(pk__in=[])
+
+    class_ids = [cid for cid in teacher_profile.assigned_classes.values_list("id", flat=True) if cid]
+    pre = f"{prefix}__" if prefix else ""
+    return (
+        models.Q(**{f"{pre}chapter__subject__teacher": teacher_profile})
+        | models.Q(**{f"{pre}chapter__subject__additional_teachers": teacher_profile})
+        | models.Q(**{f"{pre}chapter__subject__academic_class_id__in": class_ids})
+    )
+
+
 class ChapterViewSet(viewsets.ModelViewSet):
     queryset = Chapter.objects.all()
     serializer_class = ChapterSerializer
     permission_classes = [IsAuthenticated]
 
+    def initial(self, request, *args, **kwargs):
+        super().initial(request, *args, **kwargs)
+        if self.action in {'create', 'update', 'partial_update', 'destroy', 'reorder'} and not _is_content_manager(request.user):
+            raise PermissionDenied('Only teachers/admin/staff can manage chapters.')
+
     def get_queryset(self):
         queryset = super().get_queryset()
+        role = _role(self.request.user)
 
         academic_year_param = self.request.query_params.get('academic_year')
         if academic_year_param:
@@ -33,9 +73,28 @@ class ChapterViewSet(viewsets.ModelViewSet):
             if current_year:
                 queryset = queryset.filter(subject__academic_year=current_year)
         
-        # Filter by published only for students
-        if getattr(self.request.user, 'role', None) == 'student':
+        # Role-based visibility
+        if role == 'student':
             queryset = queryset.filter(is_published=True)
+            student_profile = getattr(self.request.user, 'student_profile', None)
+            if student_profile and student_profile.academic_class_id:
+                queryset = queryset.filter(subject__academic_class_id=student_profile.academic_class_id)
+            else:
+                queryset = queryset.none()
+        elif role == 'parent':
+            class_ids = _parent_class_ids(self.request.user)
+            queryset = queryset.filter(is_published=True, subject__academic_class_id__in=class_ids) if class_ids else queryset.none()
+        elif role == 'teacher':
+            teacher_profile = Teacher.objects.prefetch_related("assigned_classes").filter(user=self.request.user).first()
+            if not teacher_profile:
+                queryset = queryset.none()
+            else:
+                class_ids = [cid for cid in teacher_profile.assigned_classes.values_list("id", flat=True) if cid]
+                queryset = queryset.filter(
+                    models.Q(subject__teacher=teacher_profile)
+                    | models.Q(subject__additional_teachers=teacher_profile)
+                    | models.Q(subject__academic_class_id__in=class_ids)
+                ).distinct()
 
         subject_id = self.request.query_params.get('subject')
         if subject_id:
@@ -50,7 +109,7 @@ class ChapterViewSet(viewsets.ModelViewSet):
         orders = request.data.get('orders', [])
         for item in orders:
             try:
-                chapter = Chapter.objects.get(id=item['id'])
+                chapter = self.get_queryset().get(id=item['id'])
                 chapter.order = item['order']
                 chapter.save()
             except Chapter.DoesNotExist:
@@ -67,8 +126,16 @@ class LessonViewSet(viewsets.ModelViewSet):
             return LessonSummarySerializer
         return LessonDetailSerializer
 
+    def initial(self, request, *args, **kwargs):
+        super().initial(request, *args, **kwargs)
+        if self.action in {'create', 'update', 'partial_update', 'destroy', 'reorder'} and not _is_content_manager(request.user):
+            raise PermissionDenied('Only teachers/admin/staff can manage lessons.')
+        if self.action in {'toggle_progress', 'update_progress'} and _role(request.user) != 'student':
+            raise PermissionDenied('Only students can update lesson progress.')
+
     def get_queryset(self):
         queryset = super().get_queryset()
+        role = _role(self.request.user)
 
         academic_year_param = self.request.query_params.get('academic_year')
         if academic_year_param:
@@ -81,9 +148,22 @@ class LessonViewSet(viewsets.ModelViewSet):
             if current_year:
                 queryset = queryset.filter(chapter__subject__academic_year=current_year)
 
-        # Filter by published only for students
-        if getattr(self.request.user, 'role', None) == 'student':
+        # Role-based visibility
+        if role == 'student':
             queryset = queryset.filter(is_published=True, chapter__is_published=True)
+            student_profile = getattr(self.request.user, 'student_profile', None)
+            if student_profile and student_profile.academic_class_id:
+                queryset = queryset.filter(chapter__subject__academic_class_id=student_profile.academic_class_id)
+            else:
+                queryset = queryset.none()
+        elif role == 'parent':
+            class_ids = _parent_class_ids(self.request.user)
+            queryset = (
+                queryset.filter(is_published=True, chapter__is_published=True, chapter__subject__academic_class_id__in=class_ids)
+                if class_ids else queryset.none()
+            )
+        elif role == 'teacher':
+            queryset = queryset.filter(_teacher_visibility_q(self.request.user)).distinct()
 
         chapter_id = self.request.query_params.get('chapter')
         if chapter_id:
@@ -115,8 +195,7 @@ class LessonViewSet(viewsets.ModelViewSet):
         orders = request.data.get('orders', [])
         for item in orders:
             try:
-                from academic.models.lesson import Lesson
-                lesson = Lesson.objects.get(id=item['id'])
+                lesson = self.get_queryset().get(id=item['id'])
                 lesson.order = item['order']
                 lesson.save()
             except Lesson.DoesNotExist:
@@ -240,8 +319,37 @@ class LessonMaterialViewSet(viewsets.ModelViewSet):
     serializer_class = LessonMaterialSerializer
     permission_classes = [IsAuthenticated]
 
+    def initial(self, request, *args, **kwargs):
+        super().initial(request, *args, **kwargs)
+        if self.action in {'create', 'update', 'partial_update', 'destroy'} and not _is_content_manager(request.user):
+            raise PermissionDenied('Only teachers/admin/staff can manage lesson materials.')
+
     def get_queryset(self):
-        queryset = super().get_queryset()
+        queryset = super().get_queryset().select_related("lesson__chapter__subject")
+        role = _role(self.request.user)
+
+        if role == 'student':
+            student_profile = getattr(self.request.user, 'student_profile', None)
+            if student_profile and student_profile.academic_class_id:
+                queryset = queryset.filter(
+                    lesson__is_published=True,
+                    lesson__chapter__is_published=True,
+                    lesson__chapter__subject__academic_class_id=student_profile.academic_class_id,
+                )
+            else:
+                queryset = queryset.none()
+        elif role == 'parent':
+            class_ids = _parent_class_ids(self.request.user)
+            queryset = (
+                queryset.filter(
+                    lesson__is_published=True,
+                    lesson__chapter__is_published=True,
+                    lesson__chapter__subject__academic_class_id__in=class_ids,
+                ) if class_ids else queryset.none()
+            )
+        elif role == 'teacher':
+            queryset = queryset.filter(_teacher_visibility_q(self.request.user, prefix="lesson")).distinct()
+
         lesson_id = self.request.query_params.get('lesson')
         if lesson_id:
             queryset = queryset.filter(lesson_id=lesson_id)

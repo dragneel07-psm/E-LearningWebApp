@@ -31,6 +31,13 @@ This folder is the execution guide for product, design, engineering, QA, and ope
 | 11 | Production Launch | Product + Engineering + Support | Launch runbook, support workflow, DR readiness |
 | 12 | Scale and Optimize | Engineering + Data + CS | Scale roadmap and performance plan |
 
+## Latest Implemented Improvements (March 2026)
+- Promotion Exception Center shipped for admin review and bulk decisions.
+- Mandatory `decision_reason` + full decision history audit trail added.
+- Results publish now locks promotion edits until explicit admin reopen.
+- Reopen results endpoint added with actor/reason/time audit logging.
+- Exception review UI improved with search and pagination.
+
 ## Folder Structure
 ```text
 .agent/sdlc-workflow/

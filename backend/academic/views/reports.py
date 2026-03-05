@@ -10,6 +10,7 @@ from academic.models.attendance import Attendance
 from academic.models.class_section import Section
 from core.reports import generate_pdf_response, generate_excel_response
 from core.utils.audit import record_audit_event
+from core.utils.cache_keys import tenant_cache_key
 from django.shortcuts import get_object_or_404
 
 
@@ -139,7 +140,14 @@ class ReportViewSet(viewsets.ViewSet):
         end_date = request.query_params.get('end_date') or timezone.now().strftime("%Y-%m-%d")
         
         from django.core.cache import cache
-        cache_key = f"attendance_summary_data_{section_id}_{start_date}_{end_date}_{using_db}"
+        cache_key = tenant_cache_key(
+            "attendance_summary_data",
+            section_id,
+            start_date,
+            end_date,
+            using_db,
+            request=request,
+        )
         data = cache.get(cache_key)
         
         if not data:
@@ -209,7 +217,14 @@ class ReportViewSet(viewsets.ViewSet):
         end_date = request.query_params.get('end_date') or timezone.now().strftime("%Y-%m-%d")
         
         from django.core.cache import cache
-        cache_key = f"attendance_summary_data_{section_id}_{start_date}_{end_date}_{using_db}"
+        cache_key = tenant_cache_key(
+            "attendance_summary_data",
+            section_id,
+            start_date,
+            end_date,
+            using_db,
+            request=request,
+        )
         rows = cache.get(cache_key)
         
         if not rows:

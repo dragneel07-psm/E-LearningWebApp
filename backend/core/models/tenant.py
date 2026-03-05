@@ -2,6 +2,11 @@ from django.db import models
 import uuid as uuid_lib
 from django_tenants.models import TenantMixin, DomainMixin
 from .base import TimeStampedModel
+from core.utils.storage_paths import tenant_scoped_upload_path
+
+
+def tenant_logo_upload_to(instance, filename):
+    return tenant_scoped_upload_path(getattr(instance, "schema_name", None), "tenant_logos", filename)
 
 class Tenant(TenantMixin, TimeStampedModel):
     name = models.CharField(max_length=255)
@@ -22,7 +27,7 @@ class Tenant(TenantMixin, TimeStampedModel):
     website = models.URLField(blank=True, null=True)
     current_academic_year = models.CharField(max_length=20, default='2024-2025')
     established_year = models.IntegerField(blank=True, null=True)
-    logo = models.ImageField(upload_to='tenant_logos/', blank=True, null=True)
+    logo = models.ImageField(upload_to=tenant_logo_upload_to, blank=True, null=True)
     
     # Feature Flags for SaaS Admin to control tenant capabilities
     features = models.JSONField(

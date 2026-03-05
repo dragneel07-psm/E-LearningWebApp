@@ -88,6 +88,7 @@ AUTH_USER_MODEL = 'users.UserAccount'
 MIDDLEWARE = [
     "corsheaders.middleware.CorsMiddleware",  # Must be as high as possible
     "django.middleware.security.SecurityMiddleware",
+    "core.middleware.RequestContextMiddleware",
     "core.middleware.TenantFromHeaderMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
@@ -205,10 +206,15 @@ CORS_ALLOWED_ORIGINS = [
 if os.environ.get("FRONTEND_URL"):
     CORS_ALLOWED_ORIGINS.append(os.environ.get("FRONTEND_URL").rstrip('/'))
 
-# Allow any Vercel preview deployment
-CORS_ALLOWED_ORIGIN_REGEXES = [
-    r"^https:\/\/.*\.vercel\.app$",
-]
+# CORS regex origins can be set explicitly in production.
+_cors_origin_regexes = os.environ.get("CORS_ALLOWED_ORIGIN_REGEXES", "").strip()
+if _cors_origin_regexes:
+    CORS_ALLOWED_ORIGIN_REGEXES = [item.strip() for item in _cors_origin_regexes.split(",") if item.strip()]
+elif DEBUG:
+    # Keep Vercel preview convenience in non-production.
+    CORS_ALLOWED_ORIGIN_REGEXES = [r"^https:\/\/.*\.vercel\.app$"]
+else:
+    CORS_ALLOWED_ORIGIN_REGEXES = []
 
 CORS_ALLOW_ALL_ORIGINS = os.environ.get("CORS_ALLOW_ALL_ORIGINS", "False").lower() == "true"
 CORS_ALLOW_CREDENTIALS = True
@@ -225,7 +231,7 @@ CORS_ALLOW_HEADERS = list(default_headers) + [
 # REST Framework Configuration - Allow public access for demo
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
-        'rest_framework_simplejwt.authentication.JWTAuthentication',
+        'users.authentication.TenantAwareJWTAuthentication',
         'rest_framework.authentication.SessionAuthentication',
     ],
     'DEFAULT_PERMISSION_CLASSES': [
@@ -237,10 +243,16 @@ REST_FRAMEWORK = {
     ],
     'DEFAULT_THROTTLE_RATES': {
         'anon': '100/day',
-        'user': '1000/day'
+        'user': '1000/day',
+        'auth_login': os.environ.get('THROTTLE_AUTH_LOGIN', '20/min'),
+        'auth_refresh': os.environ.get('THROTTLE_AUTH_REFRESH', '40/min'),
+        'auth_register': os.environ.get('THROTTLE_AUTH_REGISTER', '5/hour'),
+        'auth_password_reset': os.environ.get('THROTTLE_AUTH_PASSWORD_RESET', '5/hour'),
+        'auth_password_reset_confirm': os.environ.get('THROTTLE_AUTH_PASSWORD_RESET_CONFIRM', '10/hour'),
     },
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
-    'PAGE_SIZE': 20
+    'PAGE_SIZE': 20,
+    'EXCEPTION_HANDLER': 'core.exceptions.api_exception_handler',
 }
 
 from datetime import timedelta
@@ -257,6 +269,37 @@ SIMPLE_JWT = {
 
 FRONTEND_URL = os.environ.get("FRONTEND_URL", "http://localhost:3000")
 DEFAULT_FROM_EMAIL = os.environ.get("DEFAULT_FROM_EMAIL", "support@elearning.dev")
+
+# Tenant trust policy:
+# - dev_only (default): allow x-tenant-id only when DEBUG=True
+# - always: trust x-tenant-id in all envs (not recommended)
+# - never: ignore x-tenant-id in all envs
+TENANT_HEADER_TRUST_MODE = os.environ.get("TENANT_HEADER_TRUST_MODE", "dev_only").lower()
+
+# Security headers baseline
+SECURE_CONTENT_TYPE_NOSNIFF = True
+X_FRAME_OPTIONS = "DENY"
+SECURE_REFERRER_POLICY = "same-origin"
+SECURE_CROSS_ORIGIN_OPENER_POLICY = "same-origin"
+
+if DEBUG:
+    SESSION_COOKIE_SECURE = False
+    CSRF_COOKIE_SECURE = False
+    SECURE_SSL_REDIRECT = False
+    SECURE_HSTS_SECONDS = 0
+else:
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    SECURE_SSL_REDIRECT = os.environ.get("SECURE_SSL_REDIRECT", "false").lower() == "true"
+    SECURE_HSTS_SECONDS = int(os.environ.get("SECURE_HSTS_SECONDS", str(60 * 60 * 24 * 30)))
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = os.environ.get("SECURE_HSTS_INCLUDE_SUBDOMAINS", "true").lower() == "true"
+    SECURE_HSTS_PRELOAD = os.environ.get("SECURE_HSTS_PRELOAD", "false").lower() == "true"
+
+if os.environ.get("SECURE_PROXY_SSL_HEADER"):
+    # expected format: HTTP_X_FORWARDED_PROTO,https
+    _proxy_parts = [p.strip() for p in os.environ["SECURE_PROXY_SSL_HEADER"].split(",", 1)]
+    if len(_proxy_parts) == 2 and _proxy_parts[0] and _proxy_parts[1]:
+        SECURE_PROXY_SSL_HEADER = (_proxy_parts[0], _proxy_parts[1])
 
 # Caching Configuration
 if 'REDIS_URL' in os.environ:

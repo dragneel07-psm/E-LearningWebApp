@@ -1,6 +1,13 @@
 from django.db import models
 from .class_section import AcademicClass
 from .student import Student
+from core.utils.storage_paths import schema_from_current_connection, tenant_scoped_upload_path
+
+
+def notice_attachment_upload_to(instance, filename):
+    tenant = getattr(instance, "tenant", None)
+    schema_name = getattr(tenant, "schema_name", None) if tenant else schema_from_current_connection()
+    return tenant_scoped_upload_path(schema_name, "notices", filename)
 
 class Notice(models.Model):
     PRIORITY_CHOICES = [
@@ -28,7 +35,7 @@ class Notice(models.Model):
     
     published_date = models.DateTimeField(auto_now_add=True)
     expiry_date = models.DateField(null=True, blank=True)
-    attachment = models.FileField(upload_to='notices/', null=True, blank=True, help_text="Upload PDF or Image")
+    attachment = models.FileField(upload_to=notice_attachment_upload_to, null=True, blank=True, help_text="Upload PDF or Image")
 
     class Meta:
         ordering = ['-published_date']
