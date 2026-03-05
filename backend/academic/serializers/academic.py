@@ -24,7 +24,11 @@ class SubjectSerializer(serializers.ModelSerializer):
 
     def get_total_lessons(self, obj):
         from ..models.lesson import Lesson
-        return Lesson.objects.filter(chapter__subject=obj).count()
+        qs = Lesson.objects.filter(chapter__subject=obj)
+        request = self.context.get('request')
+        if request and getattr(request.user, 'role', None) == 'student':
+            qs = qs.filter(is_published=True, chapter__is_published=True)
+        return qs.count()
 
     def get_additional_teacher_names(self, obj):
         names = []
@@ -45,7 +49,9 @@ class SubjectSerializer(serializers.ModelSerializer):
             student = Student.objects.get(user=request.user)
             return LessonProgress.objects.filter(
                 student=student, 
-                lesson__chapter__subject=obj, 
+                lesson__chapter__subject=obj,
+                lesson__is_published=True,
+                lesson__chapter__is_published=True,
                 completed=True
             ).count()
         except Student.DoesNotExist:
@@ -53,9 +59,36 @@ class SubjectSerializer(serializers.ModelSerializer):
             return 0
 
     def get_progress_percentage(self, obj):
+        request = self.context.get('request')
         total = self.get_total_lessons(obj)
         if total == 0:
             return 0
+
+        if request and request.user.is_authenticated and getattr(request.user, 'role', None) == 'student':
+            from ..models.lesson import LessonProgress
+            from ..models.student import Student
+
+            try:
+                student = Student.objects.get(user=request.user)
+            except Student.DoesNotExist:
+                return 0
+
+            progresses = LessonProgress.objects.filter(
+                student=student,
+                lesson__chapter__subject=obj,
+                lesson__is_published=True,
+                lesson__chapter__is_published=True,
+            ).values('completed', 'progress_percent')
+
+            total_progress = 0.0
+            for progress in progresses:
+                if progress.get('completed'):
+                    total_progress += 100.0
+                else:
+                    total_progress += max(0.0, min(100.0, float(progress.get('progress_percent') or 0.0)))
+
+            return round(total_progress / total)
+
         completed = self.get_completed_lessons(obj)
         return round((completed / total) * 100)
 

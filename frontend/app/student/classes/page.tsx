@@ -13,8 +13,12 @@ type CourseWithMeta = Subject & { teacher_details?: Teacher; academic_class_deta
 
 function toList<T>(payload: unknown): T[] {
     if (Array.isArray(payload)) return payload as T[];
-    if (payload && typeof payload === 'object' && Array.isArray((payload as any).results)) {
-        return (payload as any).results as T[];
+    if (
+        payload &&
+        typeof payload === 'object' &&
+        Array.isArray((payload as { results?: unknown[] }).results)
+    ) {
+        return (payload as { results: T[] }).results;
     }
     return [];
 }
@@ -66,9 +70,13 @@ export default function MyClassesPage() {
                     try {
                         const lessons = await academicAPI.getLessons(undefined, course.id);
                         const totalLessons = lessons.length;
-                        const completedLessons = lessons.filter((lesson) => lesson.completed === true || lesson.user_progress?.completed === true).length;
+                        const totalProgress = lessons.reduce((sum, lesson) => {
+                            if (lesson.completed === true || lesson.user_progress?.completed === true) return sum + 100;
+                            const partial = Number(lesson.progress_percent ?? lesson.user_progress?.progress_percent ?? 0);
+                            return sum + Math.max(0, Math.min(100, partial));
+                        }, 0);
                         const computedProgress = totalLessons > 0
-                            ? Math.round((completedLessons / totalLessons) * 100)
+                            ? Math.round(totalProgress / totalLessons)
                             : Number(course.progress_percentage || 0);
                         return [course.id, computedProgress] as const;
                     } catch {

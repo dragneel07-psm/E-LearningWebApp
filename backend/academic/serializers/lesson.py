@@ -9,37 +9,82 @@ class LessonMaterialSerializer(serializers.ModelSerializer):
 class LessonProgressSerializer(serializers.ModelSerializer):
     class Meta:
         model = LessonProgress
-        fields = ['id', 'student', 'lesson', 'completed', 'last_accessed', 'completed_at']
+        fields = [
+            'id',
+            'student',
+            'lesson',
+            'completed',
+            'progress_percent',
+            'video_watched_seconds',
+            'video_duration_seconds',
+            'last_accessed',
+            'last_watched_at',
+            'completed_at',
+        ]
 
 class LessonSummarySerializer(serializers.ModelSerializer):
     completed = serializers.SerializerMethodField()
+    progress_percent = serializers.SerializerMethodField()
 
     class Meta:
         model = Lesson
-        fields = ['id', 'chapter', 'title', 'content_type', 'order', 'is_published', 'duration_minutes', 'updated_at', 'completed']
+        fields = [
+            'id',
+            'chapter',
+            'title',
+            'content_type',
+            'order',
+            'is_published',
+            'duration_minutes',
+            'updated_at',
+            'completed',
+            'progress_percent',
+        ]
+
+    def _get_student(self, request):
+        from academic.models.student import Student
+
+        student = getattr(request.user, 'student_profile', None)
+        if student:
+            return student
+        return Student.objects.filter(user=request.user).first()
+
+    def _get_progress(self, obj):
+        cache = getattr(self, '_progress_cache', None)
+        if cache is None:
+            cache = {}
+            setattr(self, '_progress_cache', cache)
+        if obj.id in cache:
+            return cache[obj.id]
+
+        request = self.context.get('request')
+        if not request or not request.user.is_authenticated:
+            cache[obj.id] = None
+            return None
+        try:
+            from academic.models.lesson import LessonProgress
+            student = self._get_student(request)
+            if not student:
+                cache[obj.id] = None
+                return None
+            progress = LessonProgress.objects.filter(student=student, lesson=obj).first()
+            cache[obj.id] = progress
+            return progress
+        except Exception:
+            cache[obj.id] = None
+            return None
 
     def get_completed(self, obj):
-        request = self.context.get('request')
-        if request and request.user.is_authenticated:
-            try:
-                # Optimized lookup
-                from academic.models.student import Student
-                from academic.models.lesson import LessonProgress
-                
-                # Try to get student from user relation first if available
-                # Or query filtering by user (safer than get() in multi-tenant if oddities exist)
-                student = None
-                if hasattr(request.user, 'student_profile'):
-                    student = request.user.student_profile
-                
-                if not student:
-                    student = Student.objects.filter(user=request.user).first()
-                
-                if student:
-                    return LessonProgress.objects.filter(student=student, lesson=obj, completed=True).exists()
-            except Exception:
-                return False
-        return False
+        progress = self._get_progress(obj)
+        return bool(progress.completed) if progress else False
+
+    def get_progress_percent(self, obj):
+        progress = self._get_progress(obj)
+        if not progress:
+            return 0
+        if progress.completed:
+            return 100
+        return round(max(0, min(100, float(progress.progress_percent or 0))), 2)
 
 class LessonDetailSerializer(serializers.ModelSerializer):
     materials = LessonMaterialSerializer(many=True, read_only=True)

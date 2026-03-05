@@ -458,7 +458,11 @@ export interface LessonProgress {
     student: string;
     lesson: number;
     completed: boolean;
+    progress_percent?: number;
+    video_watched_seconds?: number;
+    video_duration_seconds?: number;
     last_accessed: string;
+    last_watched_at?: string | null;
     completed_at?: string | null;
 }
 
@@ -477,6 +481,7 @@ export interface Lesson {
     materials?: LessonMaterial[];
     user_progress?: LessonProgress | null;
     completed?: boolean; // Convenience field for list views
+    progress_percent?: number; // Summary progress (0-100)
     created_at?: string;
     updated_at?: string;
 }
@@ -1598,8 +1603,23 @@ export const academicAPI = {
         method: 'POST',
         body: JSON.stringify({ orders })
     }),
-    toggleLessonProgress: (id: number) => apiRequest<{ completed: boolean }>(`/academic/lessons/${id}/toggle_progress/`, {
+    toggleLessonProgress: (id: number) => apiRequest<{
+        completed: boolean;
+        progress_percent?: number;
+        user_progress?: LessonProgress;
+    }>(`/academic/lessons/${id}/toggle_progress/`, {
         method: 'POST'
+    }),
+    updateLessonProgress: (
+        id: number,
+        data: { watched_seconds?: number; duration_seconds?: number; progress_percent?: number }
+    ) => apiRequest<{
+        completed: boolean;
+        progress_percent: number;
+        user_progress: LessonProgress;
+    }>(`/academic/lessons/${id}/update_progress/`, {
+        method: 'POST',
+        body: JSON.stringify(data),
     }),
 
     // Lesson Materials

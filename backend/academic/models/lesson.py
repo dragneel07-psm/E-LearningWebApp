@@ -85,7 +85,11 @@ class LessonProgress(models.Model):
     lesson = models.ForeignKey(Lesson, on_delete=models.CASCADE, related_name='progresses')
     completed = models.BooleanField(default=False)
     xp_awarded = models.BooleanField(default=False)
+    progress_percent = models.FloatField(default=0)
+    video_watched_seconds = models.FloatField(default=0)
+    video_duration_seconds = models.FloatField(default=0)
     last_accessed = models.DateTimeField(auto_now=True)
+    last_watched_at = models.DateTimeField(null=True, blank=True)
     completed_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:

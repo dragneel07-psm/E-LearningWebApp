@@ -9,22 +9,38 @@ interface VideoPlayerProps {
     url: string;
     playing?: boolean;
     onProgress?: (state: { played: number, playedSeconds: number }) => void;
+    onDuration?: (durationSeconds: number) => void;
     onComplete?: () => void;
+    onPlay?: () => void;
+    onPause?: () => void;
     initialProgress?: number; // 0 to 1
 }
 
-export function VideoPlayer({ url, playing = false, onProgress, onComplete, initialProgress = 0 }: VideoPlayerProps) {
+export function VideoPlayer({
+    url,
+    playing = false,
+    onProgress,
+    onDuration,
+    onComplete,
+    onPlay,
+    onPause,
+    initialProgress = 0
+}: VideoPlayerProps) {
     const [isLoaded, setIsLoaded] = useState(false);
-    const [hasStarted, setHasStarted] = useState(false);
     const playerRef = useRef<ReactPlayer>(null);
+    const hasSeekedRef = useRef(false);
 
     // Effect to handle initial progress seek
     useEffect(() => {
-        if (isLoaded && initialProgress > 0 && playerRef.current && !hasStarted) {
+        if (isLoaded && initialProgress > 0 && playerRef.current && !hasSeekedRef.current) {
             playerRef.current.seekTo(initialProgress, 'fraction');
-            setHasStarted(true);
+            hasSeekedRef.current = true;
         }
-    }, [isLoaded, initialProgress, hasStarted]);
+    }, [isLoaded, initialProgress]);
+
+    useEffect(() => {
+        hasSeekedRef.current = false;
+    }, [url]);
 
     return (
         <Card className="overflow-hidden bg-black aspect-video relative group border-0 shadow-2xl rounded-2xl">
@@ -47,6 +63,9 @@ export function VideoPlayer({ url, playing = false, onProgress, onComplete, init
                     controls={true}
                     onReady={() => setIsLoaded(true)}
                     onProgress={onProgress}
+                    onDuration={onDuration}
+                    onPlay={onPlay}
+                    onPause={onPause}
                     onEnded={onComplete}
                     config={{
                         youtube: {

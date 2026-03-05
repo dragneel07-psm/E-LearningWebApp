@@ -1,9 +1,8 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useParams, useRouter } from 'next/navigation';
-import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, CheckCircle, ChevronRight, Menu, FileText, Video as VideoIcon } from 'lucide-react';
 import { useGamification } from '@/components/providers/gamification-provider';
@@ -14,7 +13,7 @@ import { VideoPlayer } from "@/components/lessons/video-player";
 import { InteractiveRenderer, LessonInteractiveRenderer, Interaction } from "@/components/lessons/interactive-renderer";
 import { SafeHTML } from "@/components/ui/safe-html";
 import { toast } from "sonner";
-import { academicAPI, Lesson, Chapter } from "@/lib/api";
+import { academicAPI, Lesson, Chapter, LessonProgress } from "@/lib/api";
 
 function normalizeChapters(payload: unknown): Chapter[] {
     if (Array.isArray(payload)) return payload as Chapter[];
@@ -23,6 +22,16 @@ function normalizeChapters(payload: unknown): Chapter[] {
     }
     return [];
 }
+
+const VIDEO_SYNC_SECONDS_DELTA = 5;
+const VIDEO_SYNC_PERCENT_DELTA = 2;
+
+function toLessonProgressPercent(lesson: Lesson): number {
+    if (lesson.completed || lesson.user_progress?.completed) return 100;
+    return Math.max(0, Math.min(100, Number(lesson.progress_percent ?? lesson.user_progress?.progress_percent ?? 0)));
+}
+
+type LessonInteraction = Interaction & { position?: string };
 
 export default function LessonPlayerPage() {
     const params = useParams();
@@ -39,15 +48,27 @@ export default function LessonPlayerPage() {
     const [completing, setCompleting] = useState(false);
 
     // Video & Interactive State
-    const [isVideoPlaying, setIsVideoPlaying] = useState(false);
+    const [isVideoPlaying, setIsVideoPlaying] = useState(true);
+    const [videoDurationSeconds, setVideoDurationSeconds] = useState(0);
     const [currentTime, setCurrentTime] = useState(0);
     const [activeInteractionId, setActiveInteractionId] = useState<string | null>(null);
     const [completedInteractions, setCompletedInteractions] = useState<Set<string>>(new Set());
+    const lastSyncedProgressRef = useRef<{ seconds: number; percent: number }>({ seconds: 0, percent: 0 });
+    const syncingProgressRef = useRef(false);
 
     // -- HELPERS --
+    const persistCurrentVideoProgress = async () => {
+        if (!lesson || lesson.content_type !== 'video') return;
+        const computedPercent = videoDurationSeconds > 0
+            ? (currentTime / videoDurationSeconds) * 100
+            : toLessonProgressPercent(lesson);
+        await syncVideoProgress(currentTime, computedPercent, true);
+    };
+
     // Helper to find next lesson
-    const navigateToNextLesson = () => {
+    const navigateToNextLesson = async () => {
         if (!chapters.length || !lesson) return;
+        await persistCurrentVideoProgress();
 
         // Flatten ONLY published lessons for navigation
         const allLessons = chapters.flatMap(c => (c.lessons || []).filter(l => l.is_published));
@@ -62,6 +83,90 @@ export default function LessonPlayerPage() {
         }
     };
 
+    const applyLessonProgressToState = useCallback((targetLessonId: number, completed: boolean, userProgress?: LessonProgress | null) => {
+        setLesson((prev) => {
+            if (!prev || prev.id !== targetLessonId) return prev;
+            const mergedUserProgress = {
+                ...(prev.user_progress || {}),
+                ...(userProgress || {}),
+                completed,
+                progress_percent: completed ? 100 : Number(userProgress?.progress_percent ?? prev.user_progress?.progress_percent ?? prev.progress_percent ?? 0),
+            } as LessonProgress;
+            return {
+                ...prev,
+                completed,
+                progress_percent: mergedUserProgress.progress_percent,
+                user_progress: mergedUserProgress,
+            };
+        });
+
+        setChapters((prev) =>
+            prev.map((chapter) => ({
+                ...chapter,
+                lessons: (chapter.lessons || []).map((lessonItem) => {
+                    if (lessonItem.id !== targetLessonId) return lessonItem;
+                    const mergedUserProgress = {
+                        ...(lessonItem.user_progress || {}),
+                        ...(userProgress || {}),
+                        completed,
+                        progress_percent: completed ? 100 : Number(userProgress?.progress_percent ?? lessonItem.user_progress?.progress_percent ?? lessonItem.progress_percent ?? 0),
+                    } as LessonProgress;
+                    return {
+                        ...lessonItem,
+                        completed,
+                        progress_percent: mergedUserProgress.progress_percent,
+                        user_progress: mergedUserProgress,
+                    };
+                }),
+            }))
+        );
+    }, []);
+
+    const syncVideoProgress = useCallback(
+        async (watchedSeconds: number, progressPercent: number, force = false) => {
+            if (!lesson || lesson.content_type !== 'video') return;
+            if (syncingProgressRef.current && !force) return;
+
+            const safeSeconds = Math.max(0, watchedSeconds);
+            const safePercent = Math.max(0, Math.min(100, progressPercent));
+            const last = lastSyncedProgressRef.current;
+
+            const shouldSync =
+                force ||
+                safePercent >= 99 ||
+                safeSeconds - last.seconds >= VIDEO_SYNC_SECONDS_DELTA ||
+                safePercent - last.percent >= VIDEO_SYNC_PERCENT_DELTA;
+
+            if (!shouldSync) return;
+
+            syncingProgressRef.current = true;
+            try {
+                const wasCompleted = Boolean(lesson.completed || lesson.user_progress?.completed);
+                const payload = await academicAPI.updateLessonProgress(lesson.id, {
+                    watched_seconds: safeSeconds,
+                    duration_seconds: videoDurationSeconds > 0 ? videoDurationSeconds : undefined,
+                    progress_percent: safePercent,
+                });
+
+                lastSyncedProgressRef.current = {
+                    seconds: Math.max(last.seconds, safeSeconds),
+                    percent: Math.max(last.percent, Number(payload.progress_percent || safePercent)),
+                };
+
+                applyLessonProgressToState(lesson.id, payload.completed, payload.user_progress);
+                if (payload.completed && !wasCompleted) {
+                    awardXP(50, "Lesson Completed");
+                    toast.success("Lesson marked complete!");
+                }
+            } catch {
+                // Silent fail during streaming updates; user still gets lesson content.
+            } finally {
+                syncingProgressRef.current = false;
+            }
+        },
+        [lesson, videoDurationSeconds, applyLessonProgressToState, awardXP]
+    );
+
     // -- DATA FETCHING --
     useEffect(() => {
         const loadData = async () => {
@@ -75,8 +180,19 @@ export default function LessonPlayerPage() {
                     academicAPI.getChapters(subjectId)
                 ]);
 
-                setLesson(lessonData);
+                const mergedLesson: Lesson = {
+                    ...lessonData,
+                    completed: Boolean(lessonData.completed || lessonData.user_progress?.completed),
+                    progress_percent: toLessonProgressPercent(lessonData),
+                };
+                setLesson(mergedLesson);
                 setChapters(normalizeChapters(chaptersData));
+                setCurrentTime(Number(lessonData.user_progress?.video_watched_seconds || 0));
+                setVideoDurationSeconds(Number(lessonData.user_progress?.video_duration_seconds || 0));
+                lastSyncedProgressRef.current = {
+                    seconds: Number(lessonData.user_progress?.video_watched_seconds || 0),
+                    percent: toLessonProgressPercent(mergedLesson),
+                };
             } catch (error) {
                 console.error("Failed to load lesson context", error);
                 toast.error("Failed to load lesson content");
@@ -93,26 +209,43 @@ export default function LessonPlayerPage() {
         setCompleting(true);
         try {
             const result = await academicAPI.toggleLessonProgress(lesson.id);
-            setLesson(prev => prev ? { ...prev, completed: result.completed } : null);
+            applyLessonProgressToState(lesson.id, result.completed, result.user_progress);
 
             if (result.completed) {
                 toast.success("Lesson marked complete!");
                 awardXP(50, "Lesson Completed");
-                // Logic to find next lesson could go here
             } else {
                 toast.success("Marked as incomplete");
             }
 
-        } catch (error) {
+        } catch {
             toast.error("Failed to update progress");
         } finally {
             setCompleting(false);
         }
     };
 
-    const handleNavigate = (newLessonId: number) => {
+    const handleNavigate = async (newLessonId: number) => {
+        await persistCurrentVideoProgress();
         router.push(`/student/courses/${courseId}/lessons/${newLessonId}`);
     };
+
+    const publishedLessons = chapters.flatMap((c) => (c.lessons || []).filter((l) => l.is_published));
+    const totalProgress = publishedLessons.reduce((sum, item) => sum + toLessonProgressPercent(item), 0);
+    const overallProgressPercent = publishedLessons.length > 0 ? totalProgress / publishedLessons.length : 0;
+    const currentLessonIndex = publishedLessons.findIndex((l) => l.id === lesson?.id);
+    const isCurrentLessonCompleted = Boolean(lesson?.completed || lesson?.user_progress?.completed);
+
+    const initialVideoProgress = (() => {
+        if (!lesson || lesson.content_type !== 'video') return 0;
+        const trackedDuration = Number(lesson.user_progress?.video_duration_seconds || 0);
+        const trackedSeconds = Number(lesson.user_progress?.video_watched_seconds || 0);
+        if (trackedDuration > 0 && trackedSeconds > 0) {
+            return Math.max(0, Math.min(1, trackedSeconds / trackedDuration));
+        }
+        return Math.max(0, Math.min(1, toLessonProgressPercent(lesson) / 100));
+    })();
+    const textInteractions = (lesson?.interactive_data?.interactions || []) as LessonInteraction[];
 
     if (loading) {
         return (
@@ -133,24 +266,44 @@ export default function LessonPlayerPage() {
                         Chapter {i + 1}: {chapter.title}
                     </h3>
                     <div className="space-y-1">
-                        {chapter.lessons?.filter(l => l.is_published).map((l) => (
-                            <button
-                                key={l.id}
-                                onClick={() => handleNavigate(l.id)}
-                                className={`flex w-full items-center gap-3 rounded-xl p-3 text-left text-sm font-medium transition-colors ${l.id === lessonId
-                                    ? 'bg-indigo-50 text-indigo-700 shadow-sm ring-1 ring-indigo-200'
-                                    : 'text-slate-600 hover:bg-slate-50'
-                                    }`}
-                            >
-                                <div className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full border ${l.completed
-                                    ? 'bg-emerald-100 border-emerald-200 text-emerald-600'
-                                    : l.id === lessonId ? 'bg-white border-indigo-200 text-indigo-600' : 'bg-white border-slate-200 text-slate-300'
-                                    }`}>
-                                    {l.completed ? <CheckCircle className="h-4 w-4" /> : <div className="h-2 w-2 rounded-full bg-current" />}
-                                </div>
-                                <span className="line-clamp-2">{l.title}</span>
-                            </button>
-                        ))}
+                        {chapter.lessons?.filter(l => l.is_published).map((l) => {
+                            const isCompleted = Boolean(l.completed || l.user_progress?.completed);
+                            const lessonProgress = toLessonProgressPercent(l);
+                            const isInProgress = !isCompleted && lessonProgress > 0;
+                            return (
+                                <button
+                                    key={l.id}
+                                    onClick={() => handleNavigate(l.id)}
+                                    className={`flex w-full items-center gap-3 rounded-xl p-3 text-left text-sm font-medium transition-colors ${l.id === lessonId
+                                        ? 'bg-indigo-50 text-indigo-700 shadow-sm ring-1 ring-indigo-200'
+                                        : 'text-slate-600 hover:bg-slate-50'
+                                        }`}
+                                >
+                                    <div className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full border ${isCompleted
+                                        ? 'bg-emerald-100 border-emerald-200 text-emerald-600'
+                                        : isInProgress
+                                            ? 'bg-amber-50 border-amber-200 text-amber-600'
+                                            : l.id === lessonId
+                                                ? 'bg-white border-indigo-200 text-indigo-600'
+                                                : 'bg-white border-slate-200 text-slate-300'
+                                        }`}>
+                                        {isCompleted
+                                            ? <CheckCircle className="h-4 w-4" />
+                                            : isInProgress
+                                                ? <VideoIcon className="h-3.5 w-3.5" />
+                                                : <div className="h-2 w-2 rounded-full bg-current" />}
+                                    </div>
+                                    <span className="line-clamp-2">
+                                        {l.title}
+                                        {isInProgress && (
+                                            <span className="ml-2 text-[10px] font-bold uppercase tracking-wide text-amber-600">
+                                                {Math.round(lessonProgress)}%
+                                            </span>
+                                        )}
+                                    </span>
+                                </button>
+                            );
+                        })}
                     </div>
                 </div>
             ))}
@@ -162,7 +315,14 @@ export default function LessonPlayerPage() {
             {/* Player Header */}
             <header className="flex h-16 shrink-0 items-center justify-between border-b px-4 lg:px-6">
                 <div className="flex items-center gap-4">
-                    <Button variant="ghost" size="icon" onClick={() => router.push(`/student/courses/${courseId}`)}>
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={async () => {
+                            await persistCurrentVideoProgress();
+                            router.push(`/student/courses/${courseId}`);
+                        }}
+                    >
                         <ArrowLeft className="h-5 w-5 text-slate-500" />
                     </Button>
                     <div>
@@ -170,7 +330,7 @@ export default function LessonPlayerPage() {
                             <h1 className="text-sm font-bold text-slate-900 lg:text-lg line-clamp-1">{lesson.title}</h1>
                             <div className="hidden lg:flex items-center gap-2 px-2 py-0.5 rounded-full bg-slate-100 border border-slate-200">
                                 <span className="text-[10px] font-black text-slate-500 uppercase">
-                                    {Math.round((chapters.flatMap(c => c.lessons || []).filter(l => l.completed).length / Math.max(1, chapters.flatMap(c => c.lessons || []).length)) * 100)}% Complete
+                                    {Math.round(overallProgressPercent)}% Complete
                                 </span>
                             </div>
                         </div>
@@ -184,7 +344,7 @@ export default function LessonPlayerPage() {
                     <div className="h-2 flex-1 bg-slate-100 rounded-full overflow-hidden">
                         <motion.div
                             initial={{ width: 0 }}
-                            animate={{ width: `${(chapters.flatMap(c => c.lessons || []).filter(l => l.completed).length / Math.max(1, chapters.flatMap(c => c.lessons || []).length)) * 100}%` }}
+                            animate={{ width: `${overallProgressPercent}%` }}
                             className="h-full bg-indigo-600"
                         />
                     </div>
@@ -192,12 +352,12 @@ export default function LessonPlayerPage() {
 
                 <div className="flex items-center gap-2">
                     <Button
-                        variant={lesson.completed ? "default" : "outline"}
-                        className={lesson.completed ? "bg-emerald-600 hover:bg-emerald-700" : ""}
+                        variant={isCurrentLessonCompleted ? "default" : "outline"}
+                        className={isCurrentLessonCompleted ? "bg-emerald-600 hover:bg-emerald-700" : ""}
                         onClick={handleToggleComplete}
                         disabled={completing}
                     >
-                        {lesson.completed ? (
+                        {isCurrentLessonCompleted ? (
                             <>
                                 <CheckCircle className="mr-2 h-4 w-4" /> Completed
                             </>
@@ -247,8 +407,13 @@ export default function LessonPlayerPage() {
                                         <VideoPlayer
                                             url={lesson.video_url}
                                             playing={isVideoPlaying && !activeInteractionId}
+                                            initialProgress={initialVideoProgress}
+                                            onDuration={(seconds) => setVideoDurationSeconds(seconds)}
+                                            onPlay={() => setIsVideoPlaying(true)}
+                                            onPause={() => setIsVideoPlaying(false)}
                                             onProgress={(state) => {
                                                 setCurrentTime(state.playedSeconds);
+                                                syncVideoProgress(state.playedSeconds, state.played * 100);
 
                                                 // Check for interactions
                                                 if (lesson.interactive_data?.interactions) {
@@ -266,7 +431,10 @@ export default function LessonPlayerPage() {
                                                 }
                                             }}
                                             onComplete={() => {
-                                                if (!lesson.completed) handleToggleComplete();
+                                                const finalSeconds = videoDurationSeconds > 0
+                                                    ? videoDurationSeconds
+                                                    : Math.max(currentTime, Number(lesson.duration_minutes || 0) * 60);
+                                                syncVideoProgress(finalSeconds, 100, true);
                                             }}
                                         />
 
@@ -311,13 +479,13 @@ export default function LessonPlayerPage() {
                                         <h2 className="text-3xl font-black text-slate-900">{lesson.title}</h2>
                                         <p className="text-slate-500 font-medium">Interactive Learning Session</p>
                                     </div>
-                                    <InteractiveRenderer
-                                        type={lesson.content_type}
-                                        data={lesson.interactive_data}
-                                        onComplete={() => {
-                                            if (!lesson.completed) handleToggleComplete();
-                                        }}
-                                    />
+                                        <InteractiveRenderer
+                                            type={lesson.content_type}
+                                            data={lesson.interactive_data}
+                                            onComplete={() => {
+                                                if (!isCurrentLessonCompleted) handleToggleComplete();
+                                            }}
+                                        />
                                     {lesson.content && (
                                         <div className="mt-8 rounded-2xl border border-slate-100 bg-white p-8 shadow-sm">
                                             <SafeHTML html={lesson.content} />
@@ -331,10 +499,10 @@ export default function LessonPlayerPage() {
                                     <h2 className="text-3xl font-black text-slate-900">{lesson.title}</h2>
                                     <div className="space-y-6">
                                         {/* Start Interactions */}
-                                        {lesson.interactive_data?.interactions?.filter((i: any) => i.position === 'start').map((i: any) => (
+                                        {textInteractions.filter((i) => i.position === 'start').map((i) => (
                                             <LessonInteractiveRenderer
                                                 key={i.id}
-                                                interactions={lesson.interactive_data.interactions}
+                                                interactions={textInteractions}
                                                 activeInteractionId={i.id}
                                                 onComplete={(id) => setCompletedInteractions(prev => new Set(prev).add(id))}
                                             />
@@ -354,16 +522,16 @@ export default function LessonPlayerPage() {
                                                 type={lesson.content_type}
                                                 data={lesson.interactive_data}
                                                 onComplete={() => {
-                                                    if (!lesson.completed) handleToggleComplete();
+                                                    if (!isCurrentLessonCompleted) handleToggleComplete();
                                                 }}
                                             />
                                         )}
 
                                         {/* End / Unspecified Interactions */}
-                                        {lesson.interactive_data?.interactions?.filter((i: any) => i.position !== 'start' && i.timestamp === undefined).map((i: any) => (
+                                        {textInteractions.filter((i) => i.position !== 'start' && i.timestamp === undefined).map((i) => (
                                             <LessonInteractiveRenderer
                                                 key={i.id}
-                                                interactions={lesson.interactive_data.interactions}
+                                                interactions={textInteractions}
                                                 activeInteractionId={i.id}
                                                 onComplete={(id) => setCompletedInteractions(prev => new Set(prev).add(id))}
                                             />
@@ -406,13 +574,11 @@ export default function LessonPlayerPage() {
                                     variant="outline"
                                     className="rounded-full px-6"
                                     onClick={() => {
-                                        const allLessons = chapters.flatMap(c => (c.lessons || []).filter(l => l.is_published));
-                                        const currentIndex = allLessons.findIndex(l => l.id === lesson.id);
-                                        if (currentIndex > 0) {
-                                            handleNavigate(allLessons[currentIndex - 1].id);
+                                        if (currentLessonIndex > 0) {
+                                            handleNavigate(publishedLessons[currentLessonIndex - 1].id);
                                         }
                                     }}
-                                    disabled={chapters.flatMap(c => (c.lessons || []).filter(l => l.is_published)).findIndex(l => l.id === lesson.id) <= 0}
+                                    disabled={currentLessonIndex <= 0}
                                 >
                                     <ArrowLeft className="mr-2 h-4 w-4" /> Previous
                                 </Button>
@@ -421,7 +587,7 @@ export default function LessonPlayerPage() {
                                     className="bg-indigo-600 text-white hover:bg-indigo-700 shadow-xl shadow-indigo-100 rounded-full px-8 h-12 font-bold"
                                     onClick={navigateToNextLesson}
                                 >
-                                    {chapters.flatMap(c => (c.lessons || []).filter(l => l.is_published)).findIndex(l => l.id === lesson.id) === chapters.flatMap(c => (c.lessons || []).filter(l => l.is_published)).length - 1
+                                    {currentLessonIndex === publishedLessons.length - 1
                                         ? "Finish Course"
                                         : "Next Lesson"}
                                     <ChevronRight className="ml-2 h-4 w-4" />

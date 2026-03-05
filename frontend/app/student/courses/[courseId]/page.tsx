@@ -4,8 +4,8 @@ import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { BookOpen, Clock, CheckCircle2, PlayCircle, Lock } from 'lucide-react';
-import { academicAPI, Subject, Chapter, Lesson } from '@/lib/api';
+import { BookOpen, Clock, CheckCircle2, PlayCircle, Circle } from 'lucide-react';
+import { academicAPI, Subject, Chapter } from '@/lib/api';
 import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
 
@@ -51,9 +51,13 @@ export default function StudentCoursePage() {
 
     if (!subject) return <div>Course not found</div>;
 
-    const totalLessons = chapters.reduce((acc, c) => acc + (c.lessons?.filter(l => l.is_published).length || 0), 0);
-    const completedLessons = chapters.reduce((acc, c) => acc + (c.lessons?.filter(l => l.is_published && l.completed).length || 0), 0);
-    const progress = totalLessons > 0 ? Math.round((completedLessons / totalLessons) * 100) : 0;
+    const publishedLessons = chapters.flatMap((c) => (c.lessons || []).filter((l) => l.is_published));
+    const totalLessons = publishedLessons.length;
+    const progressTotal = publishedLessons.reduce((sum, lesson) => {
+        if (lesson.completed || lesson.user_progress?.completed) return sum + 100;
+        return sum + Math.max(0, Math.min(100, Number(lesson.progress_percent ?? lesson.user_progress?.progress_percent ?? 0)));
+    }, 0);
+    const progress = totalLessons > 0 ? Math.round(progressTotal / totalLessons) : 0;
 
     return (
         <div className="mx-auto max-w-5xl space-y-8 p-6">
@@ -83,7 +87,9 @@ export default function StudentCoursePage() {
                                 className="bg-white text-indigo-600 hover:bg-indigo-50 font-bold border-none"
                                 onClick={() => {
                                     const allLessons = chapters.flatMap(c => c.lessons || []).filter(l => l.is_published);
-                                    const firstIncomplete = allLessons.find(l => !l.completed);
+                                    const firstIncomplete = allLessons.find(
+                                        (l) => !(l.completed || l.user_progress?.completed)
+                                    );
                                     const targetLesson = firstIncomplete || allLessons[0];
                                     if (targetLesson) handleStartLesson(targetLesson.id);
                                 }}
@@ -141,7 +147,13 @@ export default function StudentCoursePage() {
                                 </Badge>
                             </div>
                             <CardContent className="p-0">
-                                {chapter.lessons?.filter(l => l.is_published).map((lesson) => (
+                                {chapter.lessons?.filter(l => l.is_published).map((lesson) => {
+                                    const isCompleted = Boolean(lesson.completed || lesson.user_progress?.completed);
+                                    const lessonProgress = isCompleted
+                                        ? 100
+                                        : Math.max(0, Math.min(100, Number(lesson.progress_percent ?? lesson.user_progress?.progress_percent ?? 0)));
+                                    const isInProgress = !isCompleted && lessonProgress > 0;
+                                    return (
                                     <div
                                         key={lesson.id}
                                         className="group flex items-center justify-between p-4 hover:bg-slate-50 transition-colors border-b last:border-0 cursor-pointer"
@@ -149,8 +161,10 @@ export default function StudentCoursePage() {
                                     >
                                         <div className="flex items-center gap-4">
                                             <div className="flex h-10 w-10 items-center justify-center rounded-full bg-indigo-50 text-indigo-600 group-hover:scale-110 transition-transform">
-                                                {lesson.completed ? (
+                                                {isCompleted ? (
                                                     <CheckCircle2 className="h-5 w-5" />
+                                                ) : isInProgress ? (
+                                                    <Circle className="h-5 w-5 text-amber-500" />
                                                 ) : (
                                                     <PlayCircle className="h-5 w-5" />
                                                 )}
@@ -162,6 +176,11 @@ export default function StudentCoursePage() {
                                                 <p className="text-xs text-slate-400 flex items-center gap-1">
                                                     <Clock className="h-3 w-3" /> {lesson.duration_minutes} min
                                                 </p>
+                                                {isInProgress && (
+                                                    <p className="text-[10px] font-bold text-amber-600 uppercase tracking-wide mt-1">
+                                                        In Progress {Math.round(lessonProgress)}%
+                                                    </p>
+                                                )}
                                             </div>
                                         </div>
 
@@ -169,7 +188,8 @@ export default function StudentCoursePage() {
                                             Start Lesson
                                         </Button>
                                     </div>
-                                ))}
+                                    );
+                                })}
                                 {(!chapter.lessons || chapter.lessons.length === 0) && (
                                     <div className="p-6 text-center text-slate-400 text-sm">
                                         No lessons available in this chapter.

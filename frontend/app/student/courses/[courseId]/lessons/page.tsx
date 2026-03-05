@@ -2,11 +2,11 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import {
-    FileText, Video, Link as LinkIcon,
+    FileText,
     ArrowLeft, CheckCircle2, Circle,
     PlayCircle, BookOpen, ChevronRight,
     Clock, Download, HardDrive, Loader2
@@ -38,6 +38,7 @@ export default function StudentCourseLessonsPage() {
     const [subject, setSubject] = useState<Subject | null>(null);
     const [chapters, setChapters] = useState<Chapter[]>([]);
     const [completedLessons, setCompletedLessons] = useState<Set<number>>(new Set());
+    const [lessonProgressMap, setLessonProgressMap] = useState<Record<number, number>>({});
     const [loading, setLoading] = useState(true);
     const [downloadingIds, setDownloadingIds] = useState<Set<number>>(new Set());
     const [downloadedIds, setDownloadedIds] = useState<Set<number>>(new Set());
@@ -55,14 +56,21 @@ export default function StudentCourseLessonsPage() {
 
             // Calculate completed lessons from the backend data
             const completed = new Set<number>();
+            const progressMap: Record<number, number> = {};
             const downloaded = new Set<number>();
             normalizedChapters.forEach(chapter => {
                 chapter.lessons?.forEach(lesson => {
-                    if (lesson.completed) completed.add(lesson.id);
+                    const isCompleted = Boolean(lesson.completed || lesson.user_progress?.completed);
+                    const progressPercent = isCompleted
+                        ? 100
+                        : Math.max(0, Math.min(100, Number(lesson.progress_percent ?? lesson.user_progress?.progress_percent ?? 0)));
+                    if (isCompleted) completed.add(lesson.id);
+                    progressMap[lesson.id] = progressPercent;
                     if (isLessonDownloaded(String(lesson.id))) downloaded.add(lesson.id);
                 });
             });
             setCompletedLessons(completed);
+            setLessonProgressMap(progressMap);
             setDownloadedIds(downloaded);
         } catch (error) {
             console.error('Failed to load curriculum data:', error);
@@ -77,9 +85,14 @@ export default function StudentCourseLessonsPage() {
     }, [loadData]);
 
     const totalLessons = chapters.reduce((acc, chapter) => acc + (chapter.lessons?.filter(l => l.is_published).length || 0), 0);
-    const progressPercentage = totalLessons > 0
-        ? (completedLessons.size / totalLessons) * 100
-        : 0;
+    const cumulativeLessonProgress = chapters.reduce((sum, chapter) => {
+        return sum + (chapter.lessons?.filter(l => l.is_published).reduce((innerSum, lesson) => {
+            const isCompleted = completedLessons.has(lesson.id);
+            const progress = isCompleted ? 100 : Number(lessonProgressMap[lesson.id] || 0);
+            return innerSum + Math.max(0, Math.min(100, progress));
+        }, 0) || 0);
+    }, 0);
+    const progressPercentage = totalLessons > 0 ? (cumulativeLessonProgress / totalLessons) : 0;
 
     const handleDownloadLesson = async (e: React.MouseEvent, lesson: Lesson) => {
         e.stopPropagation();
@@ -198,6 +211,8 @@ export default function StudentCourseLessonsPage() {
                             <div className="grid gap-4">
                                 {chapter.lessons?.filter(l => l.is_published).map((lesson, lessonIndex) => {
                                     const isCompleted = completedLessons.has(lesson.id);
+                                    const lessonProgress = isCompleted ? 100 : Number(lessonProgressMap[lesson.id] || 0);
+                                    const isInProgress = !isCompleted && lessonProgress > 0;
 
                                     return (
                                         <Card
@@ -216,6 +231,8 @@ export default function StudentCourseLessonsPage() {
                                                             }`}>
                                                             {isCompleted ? (
                                                                 <CheckCircle2 className="h-6 w-6" />
+                                                            ) : isInProgress ? (
+                                                                <Circle className="h-6 w-6 text-amber-500" />
                                                             ) : lesson.video_url ? (
                                                                 <PlayCircle className="h-6 w-6" />
                                                             ) : (
@@ -236,12 +253,22 @@ export default function StudentCourseLessonsPage() {
                                                             <h3 className={`text-lg font-bold ${isCompleted ? 'text-slate-600' : 'text-slate-800'}`}>
                                                                 {lesson.title}
                                                             </h3>
+                                                            {isInProgress && (
+                                                                <div className="mt-2 max-w-xs">
+                                                                    <Progress value={lessonProgress} className="h-1.5" />
+                                                                </div>
+                                                            )}
                                                         </div>
 
                                                         <div className="flex items-center gap-2">
                                                             {isCompleted && (
                                                                 <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100 border-none px-3 font-bold">
                                                                     COMPLETED
+                                                                </Badge>
+                                                            )}
+                                                            {isInProgress && (
+                                                                <Badge className="bg-amber-100 text-amber-700 hover:bg-amber-100 border-none px-3 font-bold">
+                                                                    IN PROGRESS {Math.round(lessonProgress)}%
                                                                 </Badge>
                                                             )}
                                                             {/* Download for offline button */}

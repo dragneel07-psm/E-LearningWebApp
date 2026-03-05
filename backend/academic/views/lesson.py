@@ -2,12 +2,15 @@ from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
-from academic.models.lesson import Chapter, Lesson, LessonMaterial
+from django.utils import timezone
+from academic.models.lesson import Chapter, Lesson, LessonMaterial, LessonProgress
+from academic.models.student import Student
 from academic.serializers.lesson import (
     ChapterSerializer, 
     LessonDetailSerializer, 
     LessonSummarySerializer,
-    LessonMaterialSerializer
+    LessonMaterialSerializer,
+    LessonProgressSerializer,
 )
 
 class ChapterViewSet(viewsets.ModelViewSet):
@@ -68,6 +71,18 @@ class LessonViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(chapter__subject_id=subject_id)
             
         return queryset.order_by('chapter__order', 'order')
+
+    def _award_lesson_rewards_if_needed(self, student, lesson, progress):
+        if not progress.completed or progress.xp_awarded:
+            return
+        try:
+            from gamification.services.gamification_service import GamificationService
+            GamificationService.on_lesson_complete(student, lesson)
+            progress.xp_awarded = True
+            progress.save(update_fields=['xp_awarded'])
+        except ImportError:
+            # Gamification app may not be enabled in all environments.
+            pass
     
     @action(detail=False, methods=['post'])
     def reorder(self, request):
@@ -91,36 +106,111 @@ class LessonViewSet(viewsets.ModelViewSet):
         Toggle completion status for the current student.
         """
         lesson = self.get_object()
-        from academic.models.student import Student
-        from academic.models.lesson import LessonProgress
-        from django.utils import timezone
         
         try:
             student = Student.objects.get(user=request.user)
-            progress, created = LessonProgress.objects.get_or_create(student=student, lesson=lesson)
+            progress, _ = LessonProgress.objects.get_or_create(student=student, lesson=lesson)
             
             # Toggle logic
             progress.completed = not progress.completed
             if progress.completed:
                 progress.completed_at = timezone.now()
+                progress.progress_percent = 100
+                if progress.video_duration_seconds > 0:
+                    progress.video_watched_seconds = max(
+                        float(progress.video_watched_seconds or 0),
+                        float(progress.video_duration_seconds or 0),
+                    )
             else:
                 progress.completed_at = None
+                if float(progress.progress_percent or 0) >= 100:
+                    progress.progress_percent = 99.0
             
             progress.save()
-            
-            # Award gamification rewards if completed AND not previously awarded
-            if progress.completed and not progress.xp_awarded:
-                try:
-                    from gamification.services.gamification_service import GamificationService
-                    GamificationService.on_lesson_complete(student, lesson)
-                    progress.xp_awarded = True
-                    progress.save(update_fields=['xp_awarded'])
-                except ImportError:
-                    pass # App might not be fully ready in all environments
+            self._award_lesson_rewards_if_needed(student, lesson, progress)
 
-            return Response({'completed': progress.completed})
+            return Response({
+                'completed': progress.completed,
+                'progress_percent': round(float(progress.progress_percent or 0), 2),
+                'user_progress': LessonProgressSerializer(progress).data,
+            })
         except Student.DoesNotExist:
             return Response({'error': 'Student profile not found'}, status=404)
+
+    @action(detail=True, methods=['post'])
+    def update_progress(self, request, pk=None):
+        """
+        Update lesson progress with partial progress support for video watch tracking.
+        Expects one or more of:
+        - watched_seconds (number)
+        - duration_seconds (number)
+        - progress_percent (number 0-100)
+        """
+        lesson = self.get_object()
+
+        try:
+            student = Student.objects.get(user=request.user)
+        except Student.DoesNotExist:
+            return Response({'error': 'Student profile not found'}, status=404)
+
+        progress, _ = LessonProgress.objects.get_or_create(student=student, lesson=lesson)
+
+        def to_float(value):
+            if value is None or value == '':
+                return None
+            try:
+                return float(value)
+            except (TypeError, ValueError):
+                return None
+
+        watched_seconds = to_float(request.data.get('watched_seconds'))
+        duration_seconds = to_float(request.data.get('duration_seconds'))
+        reported_percent = to_float(request.data.get('progress_percent'))
+
+        if watched_seconds is None and duration_seconds is None and reported_percent is None:
+            return Response(
+                {'error': 'Provide at least one of watched_seconds, duration_seconds, or progress_percent.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if duration_seconds is not None and duration_seconds > 0:
+            progress.video_duration_seconds = max(float(progress.video_duration_seconds or 0), duration_seconds)
+
+        if watched_seconds is not None and watched_seconds >= 0:
+            progress.video_watched_seconds = max(float(progress.video_watched_seconds or 0), watched_seconds)
+            progress.last_watched_at = timezone.now()
+
+        candidate_percentages = [float(progress.progress_percent or 0)]
+        if reported_percent is not None:
+            candidate_percentages.append(reported_percent)
+        if progress.video_duration_seconds > 0:
+            candidate_percentages.append((float(progress.video_watched_seconds or 0) / float(progress.video_duration_seconds)) * 100)
+
+        next_percent = max(candidate_percentages)
+        next_percent = max(0.0, min(100.0, next_percent))
+        progress.progress_percent = next_percent
+
+        newly_completed = False
+        if next_percent >= 95 and not progress.completed:
+            progress.completed = True
+            progress.completed_at = timezone.now()
+            newly_completed = True
+        elif progress.completed and next_percent < 95:
+            # Do not auto-uncomplete once completed.
+            progress.progress_percent = max(progress.progress_percent, 100.0)
+
+        if progress.completed and float(progress.progress_percent or 0) < 100:
+            progress.progress_percent = 100.0
+
+        progress.save()
+        if newly_completed:
+            self._award_lesson_rewards_if_needed(student, lesson, progress)
+
+        return Response({
+            'completed': progress.completed,
+            'progress_percent': round(float(progress.progress_percent or 0), 2),
+            'user_progress': LessonProgressSerializer(progress).data,
+        })
 
 class LessonMaterialViewSet(viewsets.ModelViewSet):
     queryset = LessonMaterial.objects.all()
