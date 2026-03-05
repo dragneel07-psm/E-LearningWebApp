@@ -148,3 +148,38 @@ class StudentPromotionDecisionHistory(models.Model):
 
     def __str__(self):
         return f"{self.assessment_id} | {self.student_id} | {self.action}"
+
+
+class AssessmentResultPublicationAudit(models.Model):
+    ACTIONS = [
+        ('publish', 'Publish'),
+        ('unpublish', 'Unpublish'),
+        ('reopen', 'Reopen'),
+    ]
+
+    audit_id = models.UUIDField(default=uuid_lib.uuid4, editable=False, unique=True)
+    assessment = models.ForeignKey(
+        Assessment,
+        on_delete=models.CASCADE,
+        related_name='result_publication_audit',
+    )
+    action = models.CharField(max_length=16, choices=ACTIONS)
+    was_published = models.BooleanField(default=False)
+    is_published = models.BooleanField(default=False)
+    published_at_before = models.DateTimeField(null=True, blank=True)
+    published_at_after = models.DateTimeField(null=True, blank=True)
+    reason = models.TextField(blank=True, default='')
+    performed_by = models.ForeignKey(
+        'users.UserAccount',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='assessment_result_publication_audit',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.assessment_id} | {self.action}"

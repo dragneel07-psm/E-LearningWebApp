@@ -7,6 +7,7 @@ from django.utils import timezone
 from academic.models import AcademicYear
 from academic.models.assessment import (
     Assessment,
+    AssessmentResultPublicationAudit,
     Result,
     StudentPromotionDecision,
     StudentPromotionDecisionHistory,
@@ -66,6 +67,13 @@ class AssessmentViewSet(viewsets.ModelViewSet):
             and getattr(user, 'role', None) in ['teacher', 'admin', 'staff', 'management', 'saas_admin']
         )
 
+    def _can_reopen_results(self, user):
+        return bool(
+            user
+            and user.is_authenticated
+            and getattr(user, 'role', None) in ['admin', 'staff', 'management', 'saas_admin']
+        )
+
     def _promotion_scope_for_assessment(self, assessment):
         if getattr(assessment, 'section_id', None):
             return {'section': assessment.section}
@@ -121,6 +129,32 @@ class AssessmentViewSet(viewsets.ModelViewSet):
     def _decision_reason_from_request(self, request) -> str:
         reason = str(request.data.get('decision_reason') or '').strip()
         return reason
+
+    def _publication_reason_from_request(self, request) -> str:
+        return str(request.data.get('reason') or '').strip()
+
+    def _record_publication_audit(
+        self,
+        *,
+        assessment: Assessment,
+        action: str,
+        was_published: bool,
+        is_published: bool,
+        published_at_before,
+        published_at_after,
+        reason: str,
+        user,
+    ) -> None:
+        AssessmentResultPublicationAudit.objects.create(
+            assessment=assessment,
+            action=action,
+            was_published=was_published,
+            is_published=is_published,
+            published_at_before=published_at_before,
+            published_at_after=published_at_after,
+            reason=reason,
+            performed_by=user,
+        )
 
     def _record_promotion_history(
         self,
@@ -286,6 +320,29 @@ class AssessmentViewSet(viewsets.ModelViewSet):
             'pending_decisions': pending,
         }
 
+        publication_audit = []
+        for audit_item in (
+            AssessmentResultPublicationAudit.objects
+            .filter(assessment=assessment)
+            .select_related('performed_by')
+            .order_by('-created_at')[:5]
+        ):
+            publication_audit.append(
+                {
+                    'action': audit_item.action,
+                    'was_published': audit_item.was_published,
+                    'is_published': audit_item.is_published,
+                    'reason': audit_item.reason,
+                    'performed_by': getattr(audit_item.performed_by, 'username', None),
+                    'performed_by_name': (
+                        f"{audit_item.performed_by.first_name} {audit_item.performed_by.last_name}".strip()
+                        if getattr(audit_item, 'performed_by', None)
+                        else ''
+                    ),
+                    'created_at': audit_item.created_at,
+                }
+            )
+
         return {
             'assessment_id': str(assessment.assessment_id),
             'assessment_title': assessment.title,
@@ -301,6 +358,7 @@ class AssessmentViewSet(viewsets.ModelViewSet):
                 'min_attendance_percentage': rules.min_attendance_percentage,
             },
             'summary': summary,
+            'publication_audit': publication_audit,
             'students': rows,
             'available_filters': {
                 'classes': list(class_counts.values()),
@@ -367,6 +425,8 @@ class AssessmentViewSet(viewsets.ModelViewSet):
         assessment = self.get_object()
         publish = _to_bool(request.data.get('publish'), True)
         was_published = bool(assessment.results_published)
+        published_at_before = assessment.results_published_at
+        publication_reason = self._publication_reason_from_request(request)
 
         if publish:
             assessment.results_published = True
@@ -375,6 +435,16 @@ class AssessmentViewSet(viewsets.ModelViewSet):
             assessment.results_published = False
             assessment.results_published_at = None
         assessment.save(update_fields=['results_published', 'results_published_at'])
+        self._record_publication_audit(
+            assessment=assessment,
+            action='publish' if publish else 'unpublish',
+            was_published=was_published,
+            is_published=bool(assessment.results_published),
+            published_at_before=published_at_before,
+            published_at_after=assessment.results_published_at,
+            reason=publication_reason,
+            user=request.user,
+        )
 
         promotion_summary = None
         if (
@@ -396,6 +466,59 @@ class AssessmentViewSet(viewsets.ModelViewSet):
                 'results_published_at': assessment.results_published_at,
                 'is_final_assessment': assessment.is_final_assessment,
                 'student_promotion': promotion_summary,
+            }
+        )
+
+    @action(detail=True, methods=['post'])
+    def reopen_results(self, request, pk=None):
+        if not self._can_reopen_results(request.user):
+            return Response(
+                {'detail': 'You do not have permission to reopen results.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        assessment = self.get_object()
+        if not assessment.is_final_assessment:
+            return Response(
+                {'detail': 'Reopen is only available for final assessments.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if not assessment.results_published:
+            return Response(
+                {'detail': 'Results are already open for edits.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        reason = self._publication_reason_from_request(request)
+        if not reason:
+            return Response(
+                {'detail': 'reason is required to reopen results.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        was_published = bool(assessment.results_published)
+        published_at_before = assessment.results_published_at
+        assessment.results_published = False
+        assessment.results_published_at = None
+        assessment.save(update_fields=['results_published', 'results_published_at'])
+
+        self._record_publication_audit(
+            assessment=assessment,
+            action='reopen',
+            was_published=was_published,
+            is_published=False,
+            published_at_before=published_at_before,
+            published_at_after=assessment.results_published_at,
+            reason=reason,
+            user=request.user,
+        )
+
+        return Response(
+            {
+                'assessment_id': str(assessment.assessment_id),
+                'results_published': assessment.results_published,
+                'results_published_at': assessment.results_published_at,
+                'reopened': True,
             }
         )
 

@@ -466,6 +466,13 @@ export interface PublishAssessmentResultsResponse {
     } | null;
 }
 
+export interface ReopenAssessmentResultsResponse {
+    assessment_id: string;
+    results_published: boolean;
+    results_published_at: string | null;
+    reopened: boolean;
+}
+
 export type PromotionExceptionAction = 'promote' | 'hold' | 'override' | 'clear';
 
 export interface PromotionExceptionStudent {
@@ -520,6 +527,15 @@ export interface PromotionExceptionsResponse {
         overrides: number;
         pending_decisions: number;
     };
+    publication_audit?: Array<{
+        action: 'publish' | 'unpublish' | 'reopen';
+        was_published: boolean;
+        is_published: boolean;
+        reason?: string;
+        performed_by?: string | null;
+        performed_by_name?: string | null;
+        created_at: string;
+    }>;
     students: PromotionExceptionStudent[];
     available_filters: {
         classes: Array<{ id: number; name: string; count: number }>;
@@ -1680,6 +1696,28 @@ export const academicAPI = {
             method: 'POST',
             body: JSON.stringify(data || {}),
         }),
+    reopenAssessmentResults: (
+        id: string,
+        data: {
+            reason: string;
+            academic_year?: number | string;
+        }
+    ) => {
+        const query = new URLSearchParams();
+        if (data.academic_year !== undefined && data.academic_year !== '') {
+            query.set('academic_year', String(data.academic_year));
+        }
+        const payload = { ...data };
+        delete (payload as { academic_year?: number | string }).academic_year;
+        const suffix = query.toString() ? `?${query.toString()}` : '';
+        return apiRequest<ReopenAssessmentResultsResponse>(
+            `/academic/assessments/${id}/reopen_results/${suffix}`,
+            {
+                method: 'POST',
+                body: JSON.stringify(payload),
+            }
+        );
+    },
     getPromotionExceptions: (
         id: string,
         params?: {

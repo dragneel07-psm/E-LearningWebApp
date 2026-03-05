@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { toast } from 'sonner';
-import { ArrowLeft, CheckCircle2, Loader2, ShieldAlert, UserRoundCheck } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, Loader2, RotateCcw, ShieldAlert, UserRoundCheck } from 'lucide-react';
 
 import { academicAPI, Assessment, PromotionExceptionAction, PromotionExceptionsResponse } from '@/lib/api';
 import { Badge } from '@/components/ui/badge';
@@ -45,6 +45,7 @@ export default function PromotionExceptionsPage() {
 
     const [actionStudentId, setActionStudentId] = useState<string | null>(null);
     const [bulkActionLoading, setBulkActionLoading] = useState<PromotionExceptionAction | null>(null);
+    const [reopening, setReopening] = useState(false);
 
     const selectedAssessment = useMemo(
         () => assessments.find((item) => item.id === selectedAssessmentId) || null,
@@ -186,6 +187,34 @@ export default function PromotionExceptionsPage() {
         }
     }
 
+    async function handleReopenResults() {
+        if (!selectedAssessmentId) return;
+        const reason = decisionReason.trim();
+        if (!reason) {
+            toast.error('Reopen reason is required');
+            return;
+        }
+
+        try {
+            setReopening(true);
+            const response = await academicAPI.reopenAssessmentResults(selectedAssessmentId, {
+                reason,
+                academic_year: selectedAssessment?.academic_year ?? undefined,
+            });
+            if (response.reopened) {
+                toast.success('Results reopened. You can now edit promotion decisions.');
+            } else {
+                toast.success('Results reopened');
+            }
+            await loadRows(selectedAssessmentId);
+        } catch (error) {
+            console.error('Failed to reopen results', error);
+            toast.error('Failed to reopen results');
+        } finally {
+            setReopening(false);
+        }
+    }
+
     const summary = payload?.summary;
     const isLocked = Boolean(payload?.locked);
 
@@ -224,8 +253,17 @@ export default function PromotionExceptionsPage() {
                 </CardHeader>
                 <CardContent className="grid gap-4 md:grid-cols-6">
                     {isLocked ? (
-                        <div className="md:col-span-6 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
-                            {payload?.lock_reason || 'Decisions are locked for this assessment.'}
+                        <div className="md:col-span-6 flex flex-wrap items-center justify-between gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                            <span>{payload?.lock_reason || 'Decisions are locked for this assessment.'}</span>
+                            <Button
+                                size="sm"
+                                onClick={handleReopenResults}
+                                disabled={reopening}
+                                className="bg-amber-600 hover:bg-amber-700"
+                            >
+                                {reopening ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RotateCcw className="mr-2 h-4 w-4" />}
+                                Reopen Results
+                            </Button>
                         </div>
                     ) : null}
                     <div className="grid gap-2 md:col-span-2">
@@ -303,7 +341,7 @@ export default function PromotionExceptionsPage() {
                     </div>
                     <div className="md:col-span-6 flex flex-wrap items-center gap-2">
                         <div className="w-full md:max-w-md">
-                            <Label htmlFor="decision_reason" className="mb-2 block">Decision Reason (Required)</Label>
+                            <Label htmlFor="decision_reason" className="mb-2 block">Decision / Reopen Reason (Required)</Label>
                             <Input
                                 id="decision_reason"
                                 value={decisionReason}
@@ -312,6 +350,23 @@ export default function PromotionExceptionsPage() {
                             />
                         </div>
                     </div>
+                    {payload?.publication_audit && payload.publication_audit.length > 0 ? (
+                        <div className="md:col-span-6 rounded-md border border-slate-200 bg-slate-50 p-3">
+                            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-600">Recent Result Status Changes</p>
+                            <div className="space-y-1 text-xs text-slate-600">
+                                {payload.publication_audit.slice(0, 3).map((event, index) => (
+                                    <p key={`${event.action}-${event.created_at}-${index}`}>
+                                        <span className="font-semibold">{event.action.toUpperCase()}</span>
+                                        {' • '}
+                                        {(event.performed_by_name || event.performed_by || 'Unknown')}
+                                        {' • '}
+                                        {new Date(event.created_at).toLocaleString()}
+                                        {event.reason ? ` • ${event.reason}` : ''}
+                                    </p>
+                                ))}
+                            </div>
+                        </div>
+                    ) : null}
                     <div className="md:col-span-6 flex flex-wrap items-center gap-2">
                         <Button onClick={applyThresholds} variant="outline">Apply Rules</Button>
                         <Button

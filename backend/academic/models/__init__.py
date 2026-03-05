@@ -10,6 +10,7 @@ from .attendance import Attendance
 from .assessment import (
     Assessment,
     Result,
+    AssessmentResultPublicationAudit,
     StudentPromotionDecision,
     StudentPromotionDecisionHistory,
 )

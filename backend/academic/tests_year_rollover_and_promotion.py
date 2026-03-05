@@ -7,6 +7,7 @@ from academic.models import (
     AcademicClass,
     AcademicYear,
     Assessment,
+    AssessmentResultPublicationAudit,
     Attendance,
     Chapter,
     Lesson,
@@ -663,3 +664,51 @@ class AcademicYearRolloverAndPromotionTests(FastTenantTestCase):
         )
         self.assertEqual(locked_decide.status_code, status.HTTP_409_CONFLICT)
         self.assertIn("locked", str(locked_decide.data.get("detail", "")).lower())
+
+        reopen_without_reason = self.client.post(
+            f"/api/academic/assessments/{assessment.assessment_id}/reopen_results/?academic_year={year.id}",
+            {},
+            format="json",
+        )
+        self.assertEqual(reopen_without_reason.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("reason", str(reopen_without_reason.data.get("detail", "")).lower())
+
+        reopen_response = self.client.post(
+            f"/api/academic/assessments/{assessment.assessment_id}/reopen_results/?academic_year={year.id}",
+            {"reason": "Reopen for correction after committee review"},
+            format="json",
+        )
+        self.assertEqual(reopen_response.status_code, status.HTTP_200_OK)
+        self.assertTrue(reopen_response.data.get("reopened"))
+        self.assertFalse(reopen_response.data.get("results_published"))
+
+        unlocked_decide = self.client.post(
+            f"/api/academic/assessments/{assessment.assessment_id}/promotion_exceptions/decide/?academic_year={year.id}",
+            {
+                "student_id": str(low_attendance_student.student_id),
+                "action": "promote",
+                "decision_reason": "Override after reopened moderation",
+                "min_score_percentage": 40,
+                "min_attendance_percentage": 60,
+            },
+            format="json",
+        )
+        self.assertEqual(unlocked_decide.status_code, status.HTTP_200_OK)
+
+        audit_rows = AssessmentResultPublicationAudit.objects.filter(assessment=assessment)
+        self.assertTrue(
+            audit_rows.filter(
+                action="publish",
+                is_published=True,
+                was_published=False,
+            ).exists()
+        )
+        self.assertTrue(
+            audit_rows.filter(
+                action="reopen",
+                reason="Reopen for correction after committee review",
+                is_published=False,
+                was_published=True,
+                performed_by=self.admin_user,
+            ).exists()
+        )
