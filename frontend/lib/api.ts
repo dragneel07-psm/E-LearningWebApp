@@ -1001,6 +1001,15 @@ export interface TutorChatResponse {
     fallback_reason?: string;
 }
 
+export interface AtRiskStudent {
+    student_id: string;
+    student_name?: string;
+    risk_score: number;
+    reasons: string[];
+    suggested_actions: string[];
+    metrics?: Record<string, any>;
+}
+
 export interface LessonAiArtifact {
     summary: string;
     bullets: string[];
@@ -1020,6 +1029,35 @@ export interface GeneratedQuizQuestion {
 export interface GeneratedQuizResponse {
     quiz_id: string;
     questions: GeneratedQuizQuestion[];
+}
+
+export interface GradingRubric {
+    id: string;
+    title: string;
+    criteria: any;
+    total_points: number;
+    created_by?: string | null;
+    created_at: string;
+    updated_at: string;
+}
+
+export interface AIGradingDraft {
+    id: string;
+    submission_id: string;
+    rubric_id: string;
+    score: number;
+    feedback: string;
+    criteria_breakdown: Array<{
+        criterion: string;
+        points_awarded: number;
+        max_points: number;
+        feedback?: string;
+    }>;
+    status: 'draft' | 'approved' | 'rejected' | string;
+    approved_by?: string | null;
+    approved_at?: string | null;
+    created_at: string;
+    updated_at: string;
 }
 
 export interface GeneratedExamQuestion {
@@ -2514,6 +2552,53 @@ export const aiAPI = {
         const suffix = query.toString() ? `?${query.toString()}` : '';
         return apiRequest<AiGeneratedArtifactRecord[]>(`/ai/artifacts/${suffix}`);
     },
+    getAtRiskStudents: (classId: string | number, notify: boolean = true) =>
+        apiRequest<AtRiskStudent[]>(
+            `/ai/analytics/at_risk_students/?class_id=${encodeURIComponent(String(classId))}&notify=${notify ? '1' : '0'}`
+        ),
+    listGradingRubrics: () => apiRequest<GradingRubric[]>('/ai/grading/rubrics/'),
+    createGradingRubric: (data: {
+        title: string;
+        criteria: any;
+        total_points: number;
+    }) =>
+        apiRequest<GradingRubric>('/ai/grading/rubrics/', {
+            method: 'POST',
+            body: JSON.stringify(data),
+        }),
+    gradeSubmissionWithRubric: (data: {
+        submission_id: string;
+        rubric_id: string;
+    }) =>
+        apiRequest<{
+            draft_id: string;
+            score: number;
+            feedback: string;
+            criteria_breakdown: Array<{
+                criterion: string;
+                points_awarded: number;
+                max_points: number;
+                feedback?: string;
+            }>;
+            status: string;
+        }>('/ai/grading/grade_submission/', {
+            method: 'POST',
+            body: JSON.stringify(data),
+        }),
+    listGradingDrafts: (submissionId?: string) => {
+        const query = submissionId ? `?submission_id=${encodeURIComponent(submissionId)}` : '';
+        return apiRequest<AIGradingDraft[]>(`/ai/grading/drafts/${query}`);
+    },
+    approveGradingDraft: (draftId: string) =>
+        apiRequest<{
+            status: string;
+            draft_id: string;
+            score: number;
+            approved_at?: string | null;
+        }>('/ai/grading/approve_draft/', {
+            method: 'POST',
+            body: JSON.stringify({ draft_id: draftId }),
+        }),
     getAILogs: async () => {
         const firstPage = await apiRequest<any[] | PaginatedResponse<any>>('/ai/logs/');
         if (Array.isArray(firstPage)) return firstPage;
@@ -2984,6 +3069,19 @@ export const api = {
             source_id?: string | number;
             limit?: number;
         }) => aiAPI.getArtifacts(params),
+        getAtRiskStudents: (classId: string | number, notify: boolean = true) => aiAPI.getAtRiskStudents(classId, notify),
+        listGradingRubrics: () => aiAPI.listGradingRubrics(),
+        createGradingRubric: (data: {
+            title: string;
+            criteria: any;
+            total_points: number;
+        }) => aiAPI.createGradingRubric(data),
+        gradeSubmissionWithRubric: (data: {
+            submission_id: string;
+            rubric_id: string;
+        }) => aiAPI.gradeSubmissionWithRubric(data),
+        listGradingDrafts: (submissionId?: string) => aiAPI.listGradingDrafts(submissionId),
+        approveGradingDraft: (draftId: string) => aiAPI.approveGradingDraft(draftId),
         getStudySchedule: () => apiRequest<any[]>('/ai/study-schedule/'),
         generateStudySchedule: () => apiRequest<any[]>('/ai/study-schedule/generate/', { method: 'POST' }),
         updateStudyEvent: (id: string, updates: any) =>

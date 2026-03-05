@@ -7,6 +7,7 @@ from uuid import uuid4
 from django.conf import settings
 from django.core.cache import cache
 from django.utils import timezone
+from django.utils.dateparse import parse_datetime
 
 logger = logging.getLogger(__name__)
 
@@ -54,6 +55,124 @@ def _serialize_value(value: Any) -> Any:
     if isinstance(value, (str, int, float, bool, list, dict)):
         return value
     return str(value)
+
+
+def _job_model():
+    try:
+        from core.models import Job
+
+        return Job
+    except Exception:
+        return None
+
+
+def _job_payload_from_db(job_id: str) -> dict[str, Any] | None:
+    job_model = _job_model()
+    if job_model is None:
+        return None
+
+    try:
+        job = job_model.objects.filter(job_id=job_id).first()
+    except Exception:
+        return None
+
+    if job is None:
+        return None
+
+    payload = {
+        "job_id": job.job_id,
+        "backend": job.backend,
+        "task_name": job.task_name,
+        "tenant_schema": job.tenant_schema,
+        "submitted_at": job.submitted_at.isoformat() if job.submitted_at else None,
+        "state": job.state,
+        "status": job.status,
+        "ready": job.status in {"success", "failure", "cancelled"},
+        "result": job.result,
+        "error": job.error or None,
+    }
+    return payload
+
+
+def _persist_job_payload(job_id: str, payload: dict[str, Any]) -> None:
+    job_model = _job_model()
+    if job_model is None:
+        return
+
+    submitted_at_raw = payload.get("submitted_at")
+    submitted_at = None
+    if submitted_at_raw:
+        submitted_at = parse_datetime(str(submitted_at_raw))
+    if submitted_at is None:
+        submitted_at = timezone.now()
+
+    now = timezone.now()
+    status = str(payload.get("status") or _state_to_status(str(payload.get("state") or "PENDING"))).strip().lower()
+    state = str(payload.get("state") or "PENDING").strip().upper()
+    ready = bool(payload.get("ready", False))
+
+    try:
+        job, created = job_model.objects.get_or_create(
+            job_id=job_id,
+            defaults={
+                "task_name": str(payload.get("task_name") or "task"),
+                "tenant_schema": str(payload.get("tenant_schema") or "public").strip().lower(),
+                "backend": str(payload.get("backend") or "sync").strip().lower(),
+                "status": status,
+                "state": state,
+                "submitted_at": submitted_at,
+                "result": payload.get("result"),
+                "error": str(payload.get("error") or ""),
+                "meta": payload.get("meta") if isinstance(payload.get("meta"), dict) else {},
+            },
+        )
+    except Exception:
+        return
+
+    if created:
+        if status in {"running", "retrying"}:
+            job.started_at = now
+        if ready:
+            job.completed_at = now
+        try:
+            job.save(update_fields=["started_at", "completed_at", "updated_at"])
+        except Exception:
+            pass
+        return
+
+    updated_fields: list[str] = []
+
+    def _set(field: str, value: Any) -> None:
+        if getattr(job, field) != value:
+            setattr(job, field, value)
+            updated_fields.append(field)
+
+    _set("task_name", str(payload.get("task_name") or job.task_name))
+    _set("tenant_schema", str(payload.get("tenant_schema") or job.tenant_schema or "public").strip().lower())
+    _set("backend", str(payload.get("backend") or job.backend or "sync").strip().lower())
+    _set("status", status)
+    _set("state", state)
+    _set("submitted_at", submitted_at)
+    _set("result", payload.get("result"))
+    _set("error", str(payload.get("error") or ""))
+
+    if isinstance(payload.get("meta"), dict):
+        _set("meta", payload.get("meta"))
+
+    if status in {"running", "retrying"} and job.started_at is None:
+        job.started_at = now
+        updated_fields.append("started_at")
+
+    if ready and job.completed_at is None:
+        job.completed_at = now
+        updated_fields.append("completed_at")
+
+    if updated_fields:
+        updated_fields.append("updated_at")
+        try:
+            job.save(update_fields=updated_fields)
+        except Exception:
+            pass
 
 
 def background_task(*task_args, **task_kwargs):
@@ -122,22 +241,24 @@ def enqueue_job(
         async_result = task.delay(*args, **kwargs)
         job_id = str(getattr(async_result, "id", "") or uuid4())
         state = str(getattr(async_result, "state", "PENDING") or "PENDING")
+        ready = bool(getattr(async_result, "ready", lambda: False)())
 
         payload = {
             "job_id": job_id,
             "backend": "celery",
             "state": state,
             "status": _state_to_status(state),
-            "ready": bool(getattr(async_result, "ready", lambda: False)()),
+            "ready": ready,
             **cache_payload_base,
         }
-        if bool(getattr(async_result, "ready", lambda: False)()):
+        if ready:
             if bool(getattr(async_result, "successful", lambda: False)()):
                 payload["result"] = _serialize_value(getattr(async_result, "result", None))
             elif bool(getattr(async_result, "failed", lambda: False)()):
                 payload["error"] = str(getattr(async_result, "result", "Job failed"))
 
         cache.set(_job_cache_key(job_id), payload, timeout=_job_status_ttl())
+        _persist_job_payload(job_id, payload)
         return {
             "job_id": job_id,
             "status": payload["status"],
@@ -173,6 +294,7 @@ def enqueue_job(
             **cache_payload_base,
         }
     cache.set(_job_cache_key(job_id), payload, timeout=_job_status_ttl())
+    _persist_job_payload(job_id, payload)
     return {
         "job_id": job_id,
         "status": payload["status"],
@@ -188,21 +310,22 @@ def get_job_status(job_id: str) -> dict[str, Any] | None:
 
     cache_key = _job_cache_key(job_id)
     cached = cache.get(cache_key) or {}
-    backend = str(cached.get("backend") or _async_backend())
+    db_payload = _job_payload_from_db(job_id) or {}
+    backend = str(cached.get("backend") or db_payload.get("backend") or _async_backend())
 
     if backend == "celery" and CELERY_AVAILABLE and AsyncResult is not None:
         async_result = AsyncResult(job_id)
         state = str(getattr(async_result, "state", "PENDING") or "PENDING")
         # Celery returns PENDING for unknown IDs. Treat uncached PENDING as not found.
-        if state == "PENDING" and not cached:
+        if state == "PENDING" and not cached and not db_payload:
             return None
 
         payload = {
             "job_id": job_id,
             "backend": "celery",
-            "task_name": cached.get("task_name"),
-            "tenant_schema": cached.get("tenant_schema"),
-            "submitted_at": cached.get("submitted_at"),
+            "task_name": cached.get("task_name") or db_payload.get("task_name"),
+            "tenant_schema": cached.get("tenant_schema") or db_payload.get("tenant_schema"),
+            "submitted_at": cached.get("submitted_at") or db_payload.get("submitted_at"),
             "state": state,
             "status": _state_to_status(state),
             "ready": bool(getattr(async_result, "ready", lambda: False)()),
@@ -215,14 +338,19 @@ def get_job_status(job_id: str) -> dict[str, Any] | None:
                 payload["error"] = str(getattr(async_result, "result", "Job failed"))
             elif cached.get("result") is not None:
                 payload["result"] = cached.get("result")
+            elif db_payload.get("result") is not None:
+                payload["result"] = db_payload.get("result")
             elif cached.get("error"):
                 payload["error"] = cached.get("error")
+            elif db_payload.get("error"):
+                payload["error"] = db_payload.get("error")
 
         cache.set(cache_key, payload, timeout=_job_status_ttl())
+        _persist_job_payload(job_id, payload)
         return payload
 
     if cached:
-        return {
+        payload = {
             "job_id": job_id,
             "backend": cached.get("backend", "sync"),
             "task_name": cached.get("task_name"),
@@ -234,4 +362,10 @@ def get_job_status(job_id: str) -> dict[str, Any] | None:
             "result": cached.get("result"),
             "error": cached.get("error"),
         }
+        _persist_job_payload(job_id, payload)
+        return payload
+
+    if db_payload:
+        cache.set(cache_key, db_payload, timeout=_job_status_ttl())
+        return db_payload
     return None

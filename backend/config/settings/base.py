@@ -327,6 +327,18 @@ AI_CONTENT_CHUNK_OVERLAP_WORDS = int(os.environ.get("AI_CONTENT_CHUNK_OVERLAP_WO
 AI_TUTOR_TOP_K = int(os.environ.get("AI_TUTOR_TOP_K", "5"))
 AI_TUTOR_MIN_SIMILARITY = float(os.environ.get("AI_TUTOR_MIN_SIMILARITY", "0.58"))
 
+# AI Risk Analytics
+AI_RISK_LOOKBACK_DAYS = int(os.environ.get("AI_RISK_LOOKBACK_DAYS", "30"))
+AI_RISK_INACTIVITY_DAYS = int(os.environ.get("AI_RISK_INACTIVITY_DAYS", "14"))
+AI_AT_RISK_NOTIFICATION_THRESHOLD = int(os.environ.get("AI_AT_RISK_NOTIFICATION_THRESHOLD", "75"))
+AI_AT_RISK_MIN_SCORE = int(os.environ.get("AI_AT_RISK_MIN_SCORE", "40"))
+AI_RISK_USE_LLM_EXPLANATIONS = os.environ.get("AI_RISK_USE_LLM_EXPLANATIONS", "false").lower() == "true"
+
+# AI Admin Assistant
+AI_ADMIN_ASSISTANT_LOOKBACK_DAYS = int(os.environ.get("AI_ADMIN_ASSISTANT_LOOKBACK_DAYS", "30"))
+AI_ADMIN_ASSISTANT_USE_LLM_CLASSIFIER = os.environ.get("AI_ADMIN_ASSISTANT_USE_LLM_CLASSIFIER", "false").lower() == "true"
+AI_ADMIN_ASSISTANT_USE_LLM_RESPONSE = os.environ.get("AI_ADMIN_ASSISTANT_USE_LLM_RESPONSE", "false").lower() == "true"
+
 # Tenant trust policy:
 # - dev_only (default): allow x-tenant-id only in DEBUG + local hostnames
 # - always: allow x-tenant-id in DEBUG + local hostnames

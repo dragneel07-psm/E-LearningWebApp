@@ -160,3 +160,66 @@ class AiGeneratedArtifact(models.Model):
 
     def __str__(self):
         return f"{self.artifact_type}:{self.source_type}:{self.source_id}:{self.lang}"
+
+
+class GradingRubric(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid_lib.uuid4, editable=False)
+    tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE, db_constraint=False, related_name="grading_rubrics")
+    title = models.CharField(max_length=255)
+    criteria = models.JSONField(default=list, blank=True)
+    total_points = models.PositiveIntegerField(default=100)
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["tenant", "title"], name="ai_rubric_tenant_title_idx"),
+            models.Index(fields=["tenant", "created_at"], name="ai_rubric_tenant_created_idx"),
+        ]
+
+    def __str__(self):
+        return f"{self.title} ({self.total_points})"
+
+
+class AIGradingDraft(models.Model):
+    STATUS_CHOICES = [
+        ("draft", "Draft"),
+        ("approved", "Approved"),
+        ("rejected", "Rejected"),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid_lib.uuid4, editable=False)
+    tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE, db_constraint=False, related_name="ai_grading_drafts")
+    submission = models.ForeignKey("academic.Submission", on_delete=models.CASCADE, related_name="ai_grading_drafts")
+    rubric = models.ForeignKey(GradingRubric, on_delete=models.CASCADE, related_name="drafts")
+    score = models.FloatField(default=0)
+    feedback = models.TextField(blank=True, default="")
+    criteria_breakdown = models.JSONField(default=list, blank=True)
+    status = models.CharField(max_length=16, choices=STATUS_CHOICES, default="draft")
+    approved_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="approved_ai_grading_drafts",
+    )
+    approved_at = models.DateTimeField(null=True, blank=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="created_ai_grading_drafts",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["tenant", "status"], name="ai_grd_draft_tnt_st_idx"),
+            models.Index(fields=["tenant", "submission", "created_at"], name="ai_grade_draft_submission_idx"),
+        ]
+
+    def __str__(self):
+        return f"{self.submission_id}:{self.status}:{self.score}"

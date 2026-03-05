@@ -1,10 +1,12 @@
 from django.contrib.auth import get_user_model
+from django.core.cache import cache
 from django.test import SimpleTestCase, override_settings
 from django_tenants.test.cases import FastTenantTestCase
 from django_tenants.utils import tenant_context
 from rest_framework.test import APIClient
 
 from core.async_jobs import background_task, enqueue, enqueue_job, get_job_status
+from core.models import Job
 
 
 @background_task(name="test.add")
@@ -80,3 +82,18 @@ class JobStatusApiTests(FastTenantTestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data.get("status"), "success")
         self.assertEqual(response.data.get("result"), 15)
+
+        persisted = Job.objects.filter(job_id=job["job_id"]).first()
+        self.assertIsNotNone(persisted)
+        self.assertEqual(persisted.tenant_schema, self.tenant.schema_name)
+        self.assertEqual(persisted.status, "success")
+        self.assertEqual(persisted.result, 15)
+
+        cache.delete(f"async_job:v1:{job['job_id']}")
+        cached_miss_response = self.client.get(
+            f"/api/core/jobs/{job['job_id']}/",
+            HTTP_HOST=self.get_test_tenant_domain(),
+            HTTP_X_TENANT_ID=self.tenant.schema_name,
+        )
+        self.assertEqual(cached_miss_response.status_code, 200)
+        self.assertEqual(cached_miss_response.data.get("status"), "success")

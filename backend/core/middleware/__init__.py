@@ -105,7 +105,6 @@ class TenantFromHeaderMiddleware(TenantMainMiddleware):
 
     Trust modes:
       - dev_only (default): trust x-tenant-id only in DEBUG + local hostnames
-      - always: trust x-tenant-id in DEBUG + local hostnames
       - never: ignore x-tenant-id in all environments
     """
 
@@ -128,15 +127,8 @@ class TenantFromHeaderMiddleware(TenantMainMiddleware):
             return False
         if not cls._is_local_hostname(hostname):
             return False
-        if mode == "always":
-            return True
         # dev_only (default) while DEBUG/local only.
-        return bool(getattr(settings, "DEBUG", False))
-
-    @staticmethod
-    def _is_tenant_active(tenant) -> bool:
-        tenant_status = str(getattr(tenant, "status", "active") or "active").strip().lower()
-        return tenant_status in ACTIVE_TENANT_STATUSES
+        return True
 
     @staticmethod
     def _tenant_identifier_matches(domain_model, tenant, tenant_identifier: str) -> bool:
@@ -156,6 +148,11 @@ class TenantFromHeaderMiddleware(TenantMainMiddleware):
             ).exists()
         except Exception:
             return False
+
+    @staticmethod
+    def _is_tenant_active(tenant) -> bool:
+        tenant_status = str(getattr(tenant, "status", "active") or "active").strip().lower()
+        return tenant_status in ACTIVE_TENANT_STATUSES
 
     def process_request(self, request):
         connection.set_schema_to_public()

@@ -6,12 +6,22 @@ from rest_framework.permissions import IsAuthenticated
 from .models import AIInteractionLog, StudentAIReport, LearningPath, LearningNode
 from .serializers import (
     AIInteractionLogSerializer,
+    ContentChunkSearchRequestSerializer,
+    ContentChunkSearchResponseSerializer,
     StudentAIReportSerializer,
     LearningPathSerializer,
     LearningNodeSerializer,
+    AdminAssistantQueryRequestSerializer,
+    AdminAssistantQueryResponseSerializer,
+    AIGradingDraftSerializer,
+    ApproveGradingDraftRequestSerializer,
     AiGeneratedArtifactSerializer,
+    CreateGradingRubricSerializer,
     ExamPaperGenerateRequestSerializer,
     ExamPaperGenerateResponseSerializer,
+    GradeSubmissionDraftResponseSerializer,
+    GradeSubmissionRequestSerializer,
+    GradingRubricSerializer,
     LessonArtifactResponseSerializer,
     QuizGenerationRequestSerializer,
     QuizGenerationResponseSerializer,
@@ -19,13 +29,17 @@ from .serializers import (
 from users.models import UserAccount
 from academic.models import Lesson
 from academic.models import Student, Subject, Teacher
+from academic.models.submission import Submission
 from django.utils import timezone
 from core.mixins import TenantScopedQuerysetMixin
 from core.async_jobs import enqueue_job
 from .services.rag_tutor_service import RAGTutorService
+from .services.admin_assistant_service import AdminAssistantService
+from .services.assisted_grading_service import AssistedGradingError, AssistedGradingService
 from .services.exam_generator_service import ExamPaperGenerationError, ExamPaperGeneratorService
 from .services.lesson_summary_service import LessonSummaryService
 from .services.quiz_generator_service import QuizGeneratorService, QuizGenerationError
+from .services.risk_analytics_service import RiskAnalyticsService
 from .services.personalization_service import PersonalizationService
 from .services.learning_path_service import LearningPathService
 from .services.predictive_service import PredictiveAnalyticsService
@@ -33,7 +47,7 @@ from .services.reporting_service import ReportingService
 from .services.schedule_service import ScheduleService
 from .throttling import TutorChatRateThrottle
 from .tasks import ai_index_content_task, generate_summary_task, generate_quiz_task
-from .models import AiGeneratedArtifact, StudyEvent
+from .models import AIGradingDraft, AiGeneratedArtifact, GradingRubric, StudyEvent
 from .serializers import StudyEventSerializer
 
 class StudyEventViewSet(TenantScopedQuerysetMixin, viewsets.ModelViewSet):
@@ -237,6 +251,41 @@ def teacher_analytics(request):
         traceback.print_exc()
         return Response({'error': str(e)}, status=500)
 
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def at_risk_students(request):
+    role = str(getattr(request.user, "role", "") or "").strip().lower()
+    if role not in {"teacher", "admin"}:
+        return Response({"detail": "Only Teacher/Admin can access at-risk analytics."}, status=status.HTTP_403_FORBIDDEN)
+
+    tenant = getattr(request, "tenant", None) or getattr(request.user, "tenant", None)
+    if tenant is None:
+        return Response({"error": "tenant context is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+    class_id_raw = request.query_params.get("class_id")
+    if class_id_raw in (None, ""):
+        return Response({"error": "class_id is required"}, status=status.HTTP_400_BAD_REQUEST)
+    try:
+        class_id = int(str(class_id_raw).strip())
+    except (TypeError, ValueError):
+        return Response({"error": "class_id must be a numeric id"}, status=status.HTTP_400_BAD_REQUEST)
+
+    if role == "teacher":
+        teacher = Teacher.objects.prefetch_related("assigned_classes").filter(user=request.user).first()
+        if not teacher or not teacher.assigned_classes.filter(id=class_id).exists():
+            return Response({"detail": "You do not have access to this class risk analytics."}, status=status.HTTP_403_FORBIDDEN)
+
+    send_notifications = str(request.query_params.get("notify", "1")).strip().lower() not in {"0", "false", "no"}
+    try:
+        service = RiskAnalyticsService(tenant=tenant, user=request.user)
+        payload = service.get_at_risk_students(class_id=class_id, send_notifications=send_notifications)
+        return Response(payload, status=status.HTTP_200_OK)
+    except Exception as exc:
+        import traceback
+        traceback.print_exc()
+        return Response({"error": str(exc)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def student_report(request, student_id):
@@ -357,6 +406,89 @@ def enqueue_ai_quiz(request):
         job_tenant_schema=tenant_schema,
     )
     return Response(job, status=status.HTTP_202_ACCEPTED)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def admin_assistant_query(request):
+    role = str(getattr(request.user, "role", "") or "").strip().lower()
+    allowed_roles = {"admin", "staff", "school_admin", "accountant", "principal"}
+    if role not in allowed_roles:
+        return Response(
+            {"detail": "Only SchoolAdmin/Accountant/Principal can access Admin AI Assistant."},
+            status=status.HTTP_403_FORBIDDEN,
+        )
+
+    tenant = getattr(request, "tenant", None) or getattr(request.user, "tenant", None)
+    if tenant is None or str(getattr(tenant, "schema_name", "public")).strip().lower() == "public":
+        return Response({"error": "tenant context is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+    serializer = AdminAssistantQueryRequestSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+    question = serializer.validated_data["question"]
+
+    try:
+        service = AdminAssistantService(tenant=tenant, user=request.user)
+        payload = service.answer_question(question)
+        response_serializer = AdminAssistantQueryResponseSerializer(data=payload)
+        response_serializer.is_valid(raise_exception=True)
+        return Response(response_serializer.validated_data, status=status.HTTP_200_OK)
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+@throttle_classes([TutorChatRateThrottle])
+def ai_chunk_search(request):
+    tenant = getattr(request, "tenant", None) or getattr(request.user, "tenant", None)
+    if tenant is None:
+        return Response({"error": "tenant context is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+    serializer = ContentChunkSearchRequestSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+    payload = serializer.validated_data
+
+    query = str(payload["query"]).strip()
+    if not query:
+        return Response({"error": "query is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+    context_payload = dict(payload.get("context") or {})
+    if payload.get("source_type"):
+        context_payload["source_type"] = payload["source_type"]
+    if payload.get("source_id"):
+        context_payload["source_id"] = payload["source_id"]
+
+    service = RAGTutorService(tenant=tenant)
+    service.top_k = int(payload.get("top_k", service.top_k))
+    retrieved = service.retrieve_relevant_chunks(query, context=context_payload)
+
+    min_similarity = payload.get("min_similarity", None)
+    results = []
+    for item in retrieved:
+        chunk = item.get("chunk")
+        if chunk is None:
+            continue
+        similarity = float(item.get("similarity") or 0.0)
+        if min_similarity is not None and similarity < float(min_similarity):
+            continue
+        results.append(
+            {
+                "chunk_id": chunk.id,
+                "source_type": chunk.source_type,
+                "source_id": str(chunk.source_id),
+                "text": chunk.text,
+                "metadata": chunk.metadata or {},
+                "similarity": round(similarity, 6),
+            }
+        )
+
+    response_payload = {"count": len(results), "results": results}
+    output = ContentChunkSearchResponseSerializer(data=response_payload)
+    output.is_valid(raise_exception=True)
+    return Response(output.validated_data, status=status.HTTP_200_OK)
 
 
 @api_view(['POST'])
@@ -512,6 +644,31 @@ def _is_teacher_or_admin(user) -> bool:
     return role in {"teacher", "admin"}
 
 
+def _teacher_can_manage_submission(user, submission: Submission) -> bool:
+    role = str(getattr(user, "role", "") or "").strip().lower()
+    if role == "admin":
+        return True
+    if role != "teacher":
+        return False
+
+    teacher = Teacher.objects.prefetch_related("assigned_classes").filter(user=user).first()
+    if not teacher:
+        return False
+
+    assessment = getattr(submission, "assessment", None)
+    subject = getattr(assessment, "subject", None)
+    if not subject:
+        return False
+
+    if getattr(subject, "teacher_id", None) == teacher.teacher_id:
+        return True
+    if subject.additional_teachers.filter(teacher_id=teacher.teacher_id).exists():
+        return True
+
+    class_id = getattr(subject, "academic_class_id", None)
+    return bool(class_id and teacher.assigned_classes.filter(id=class_id).exists())
+
+
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 @throttle_classes([TutorChatRateThrottle])
@@ -584,3 +741,164 @@ def ai_generated_artifacts(request):
 
     serializer = AiGeneratedArtifactSerializer(queryset[:limit], many=True)
     return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+@api_view(["GET", "POST"])
+@permission_classes([IsAuthenticated])
+@throttle_classes([TutorChatRateThrottle])
+def ai_grading_rubrics(request):
+    if not _is_teacher_or_admin(request.user):
+        return Response(
+            {"detail": "Only Teacher/Admin can manage grading rubrics."},
+            status=status.HTTP_403_FORBIDDEN,
+        )
+
+    tenant = getattr(request, "tenant", None) or getattr(request.user, "tenant", None)
+    if tenant is None:
+        return Response({"error": "tenant context is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+    if request.method == "GET":
+        rubrics = GradingRubric.objects.filter(tenant=tenant).order_by("-created_at")
+        serializer = GradingRubricSerializer(rubrics, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    serializer = CreateGradingRubricSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+    payload = serializer.validated_data
+    rubric = GradingRubric.objects.create(
+        tenant=tenant,
+        title=payload["title"],
+        criteria=payload.get("criteria") or [],
+        total_points=int(payload["total_points"]),
+        created_by=request.user if getattr(request.user, "is_authenticated", False) else None,
+    )
+    output = GradingRubricSerializer(rubric)
+    return Response(output.data, status=status.HTTP_201_CREATED)
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+@throttle_classes([TutorChatRateThrottle])
+def ai_grading_drafts(request):
+    if not _is_teacher_or_admin(request.user):
+        return Response(
+            {"detail": "Only Teacher/Admin can access grading drafts."},
+            status=status.HTTP_403_FORBIDDEN,
+        )
+
+    tenant = getattr(request, "tenant", None) or getattr(request.user, "tenant", None)
+    if tenant is None:
+        return Response({"error": "tenant context is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+    queryset = AIGradingDraft.objects.filter(tenant=tenant).select_related("submission", "submission__assessment", "submission__assessment__subject")
+    submission_id = str(request.query_params.get("submission_id") or "").strip()
+    if submission_id:
+        queryset = queryset.filter(submission__submission_id=submission_id)
+
+    role = str(getattr(request.user, "role", "") or "").strip().lower()
+    if role == "teacher":
+        allowed_ids: list[str] = []
+        for draft in queryset:
+            if _teacher_can_manage_submission(request.user, draft.submission):
+                allowed_ids.append(str(draft.id))
+        queryset = queryset.filter(id__in=allowed_ids)
+
+    serializer = AIGradingDraftSerializer(queryset.order_by("-created_at")[:50], many=True)
+    return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+@throttle_classes([TutorChatRateThrottle])
+def ai_grade_submission(request):
+    if not _is_teacher_or_admin(request.user):
+        return Response(
+            {"detail": "Only Teacher/Admin can generate AI grading drafts."},
+            status=status.HTTP_403_FORBIDDEN,
+        )
+
+    tenant = getattr(request, "tenant", None) or getattr(request.user, "tenant", None)
+    if tenant is None:
+        return Response({"error": "tenant context is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+    serializer = GradeSubmissionRequestSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+    payload = serializer.validated_data
+
+    submission = Submission.objects.select_related("assessment", "assessment__subject").filter(submission_id=payload["submission_id"]).first()
+    if submission is None:
+        return Response({"error": "submission not found"}, status=status.HTTP_404_NOT_FOUND)
+    if str(getattr(request.user, "role", "") or "").strip().lower() == "teacher" and not _teacher_can_manage_submission(request.user, submission):
+        return Response({"detail": "You can grade only submissions in your assigned classes/subjects."}, status=status.HTTP_403_FORBIDDEN)
+
+    try:
+        service = AssistedGradingService(tenant=tenant, user=request.user)
+        draft = service.generate_draft(
+            submission_id=str(payload["submission_id"]),
+            rubric_id=str(payload["rubric_id"]),
+            request=request,
+        )
+        output = GradeSubmissionDraftResponseSerializer(
+            data={
+                "draft_id": str(draft.id),
+                "score": float(draft.score),
+                "feedback": draft.feedback,
+                "criteria_breakdown": draft.criteria_breakdown if isinstance(draft.criteria_breakdown, list) else [],
+                "status": draft.status,
+            }
+        )
+        output.is_valid(raise_exception=True)
+        return Response(output.validated_data, status=status.HTTP_200_OK)
+    except AssistedGradingError as exc:
+        return Response({"error": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+    except Exception as exc:
+        import traceback
+        traceback.print_exc()
+        return Response({"error": str(exc)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+@throttle_classes([TutorChatRateThrottle])
+def ai_approve_grading_draft(request):
+    if not _is_teacher_or_admin(request.user):
+        return Response(
+            {"detail": "Only Teacher/Admin can approve AI grading drafts."},
+            status=status.HTTP_403_FORBIDDEN,
+        )
+
+    tenant = getattr(request, "tenant", None) or getattr(request.user, "tenant", None)
+    if tenant is None:
+        return Response({"error": "tenant context is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+    serializer = ApproveGradingDraftRequestSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+    payload = serializer.validated_data
+
+    draft = AIGradingDraft.objects.select_related("submission", "submission__assessment", "submission__assessment__subject").filter(
+        id=payload["draft_id"],
+        tenant=tenant,
+    ).first()
+    if draft is None:
+        return Response({"error": "draft not found"}, status=status.HTTP_404_NOT_FOUND)
+    if str(getattr(request.user, "role", "") or "").strip().lower() == "teacher" and not _teacher_can_manage_submission(request.user, draft.submission):
+        return Response({"detail": "You can approve only submissions in your assigned classes/subjects."}, status=status.HTTP_403_FORBIDDEN)
+
+    try:
+        service = AssistedGradingService(tenant=tenant, user=request.user)
+        approved = service.approve_draft(draft_id=str(payload["draft_id"]), request=request)
+        return Response(
+            {
+                "status": approved.status,
+                "draft_id": str(approved.id),
+                "score": float(approved.score),
+                "approved_at": approved.approved_at,
+            },
+            status=status.HTTP_200_OK,
+        )
+    except AssistedGradingError as exc:
+        return Response({"error": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+    except Exception as exc:
+        import traceback
+        traceback.print_exc()
+        return Response({"error": str(exc)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

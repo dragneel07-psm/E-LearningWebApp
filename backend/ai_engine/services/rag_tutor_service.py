@@ -90,6 +90,8 @@ class RAGTutorService:
 
         lesson_id = payload.get("lesson_id")
         chapter_id = payload.get("chapter_id")
+        source_type = str(payload.get("source_type") or "").strip().lower()
+        source_id = payload.get("source_id")
 
         filters = Q()
         if lesson_id not in (None, ""):
@@ -101,6 +103,10 @@ class RAGTutorService:
 
         if filters:
             queryset = queryset.filter(filters)
+        if source_type in {"lesson", "chapter", "material"}:
+            queryset = queryset.filter(source_type=source_type)
+        if source_id not in (None, ""):
+            queryset = queryset.filter(source_id=str(source_id))
         return queryset
 
     def _retrieve_python(self, queryset: QuerySet[ContentChunk], query_vector: list[float]) -> list[tuple[ContentChunk, float]]:

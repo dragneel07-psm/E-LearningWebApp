@@ -9,7 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { ChevronLeft, BrainCircuit, Save } from 'lucide-react';
-import { academicAPI, usersAPI, Submission, Result, Assessment, Student } from '@/lib/api';
+import { academicAPI, aiAPI, usersAPI, Submission, Result, Assessment, Student, GradingRubric, AIGradingDraft } from '@/lib/api';
 import { toast } from 'sonner';
 
 export default function GradingPage() {
@@ -27,21 +27,33 @@ export default function GradingPage() {
     const [feedback, setFeedback] = useState('');
     const [saving, setSaving] = useState(false);
     const [aiAnalyzing, setAiAnalyzing] = useState(false);
+    const [rubrics, setRubrics] = useState<GradingRubric[]>([]);
+    const [selectedRubricId, setSelectedRubricId] = useState('');
+    const [aiDraft, setAiDraft] = useState<AIGradingDraft | null>(null);
+    const [creatingRubric, setCreatingRubric] = useState(false);
 
     const loadData = useCallback(async () => {
         try {
             const sub = await academicAPI.getSubmission(submissionId);
             setSubmission(sub);
 
-            const [assessmentData, studentData, userData] = await Promise.all([
+            const [assessmentData, studentData, userData, rubricData, draftData] = await Promise.all([
                 academicAPI.getAssessment(sub.assessment),
                 academicAPI.getStudent(sub.student),
-                usersAPI.getMe().catch(() => null)
+                usersAPI.getMe().catch(() => null),
+                aiAPI.listGradingRubrics().catch(() => []),
+                aiAPI.listGradingDrafts(submissionId).catch(() => []),
             ]);
 
             setAssessment(assessmentData);
             setStudent(studentData);
             setUser(userData);
+            setRubrics(rubricData);
+            if (rubricData.length > 0) {
+                setSelectedRubricId((prev) => prev || rubricData[0].id);
+            }
+            const latestDraft = draftData.find((item) => item.status === 'draft') || draftData[0] || null;
+            setAiDraft(latestDraft);
 
             if (sub.result) {
                 const resultData = await academicAPI.getResult(sub.result.result_id);
@@ -77,6 +89,76 @@ export default function GradingPage() {
             toast.error('Failed to save grade');
         } finally {
             setSaving(false);
+        }
+    };
+
+    const handleCreateDefaultRubric = async () => {
+        setCreatingRubric(true);
+        try {
+            const rubric = await aiAPI.createGradingRubric({
+                title: 'Default Subjective Rubric',
+                total_points: assessment?.total_marks || 100,
+                criteria: [
+                    { name: 'Accuracy', max_points: Math.round((assessment?.total_marks || 100) * 0.5), description: 'Facts and conceptual correctness' },
+                    { name: 'Clarity', max_points: Math.round((assessment?.total_marks || 100) * 0.25), description: 'Structured and understandable writing' },
+                    { name: 'Completeness', max_points: Math.round((assessment?.total_marks || 100) * 0.25), description: 'Covers required points and examples' },
+                ],
+            });
+            setRubrics((prev) => [rubric, ...prev]);
+            setSelectedRubricId(rubric.id);
+            toast.success('Default rubric created');
+        } catch (error) {
+            console.error('Failed to create rubric', error);
+            toast.error('Failed to create rubric');
+        } finally {
+            setCreatingRubric(false);
+        }
+    };
+
+    const handleGenerateDraft = async () => {
+        if (!selectedRubricId) {
+            toast.error('Select a grading rubric first');
+            return;
+        }
+        setAiAnalyzing(true);
+        try {
+            const draftResponse = await aiAPI.gradeSubmissionWithRubric({
+                submission_id: submissionId,
+                rubric_id: selectedRubricId,
+            });
+            const drafts = await aiAPI.listGradingDrafts(submissionId);
+            const draft = drafts.find((item) => item.id === draftResponse.draft_id) || drafts[0] || null;
+            setAiDraft(draft);
+            if (draft) {
+                setGrade(Math.round(draft.score));
+                setFeedback(draft.feedback || '');
+            }
+            toast.success('AI draft grade generated');
+        } catch (error) {
+            console.error('Failed to generate AI draft', error);
+            toast.error('Failed to generate AI draft');
+        } finally {
+            setAiAnalyzing(false);
+        }
+    };
+
+    const handleApproveDraft = async () => {
+        if (!aiDraft) {
+            toast.error('No AI draft available');
+            return;
+        }
+        setAiAnalyzing(true);
+        try {
+            const approved = await aiAPI.approveGradingDraft(aiDraft.id);
+            setGrade(Math.round(approved.score));
+            setFeedback(aiDraft.feedback || '');
+            toast.success('AI draft approved and finalized');
+            await loadData();
+        } catch (error) {
+            console.error('Failed to approve AI draft', error);
+            toast.error('Failed to approve AI draft');
+        } finally {
+            setAiAnalyzing(false);
         }
     };
 
@@ -125,48 +207,92 @@ export default function GradingPage() {
                                 </CardTitle>
                             </CardHeader>
                             <CardContent className="space-y-3">
-                                {result?.answers_data ? (
-                                    <>
-                                        <div className="flex justify-between items-center text-sm font-medium">
-                                            <span className="text-slate-600">Suggested Score:</span>
-                                            <span className="text-indigo-700 bg-indigo-100 px-2 py-0.5 rounded">{result?.score}/100</span>
-                                        </div>
-                                        <div className="text-sm text-slate-700 bg-white p-3 rounded border border-indigo-100 italic">
-                                            &quot;{result?.ai_feedback || "No overall AI feedback. Review individual answers for details."}&quot;
-                                        </div>
-                                        <div className="flex gap-2">
-                                            <Button size="sm" variant="outline" className="text-xs h-7 border-indigo-200 text-indigo-700 bg-white" onClick={() => {
-                                                setGrade(result?.score || 0);
-                                                setFeedback(result?.ai_feedback || '');
-                                            }}>
-                                                Apply AI Score
-                                            </Button>
-                                        </div>
-                                    </>
-                                ) : (
+                                {rubrics.length === 0 ? (
                                     <div className="text-center py-4">
-                                        <p className="text-xs text-slate-500 mb-3">AI grading has not been performed for this submission yet.</p>
+                                        <p className="text-xs text-slate-500 mb-3">No rubric found. Create one to run AI-assisted grading.</p>
                                         <Button
                                             size="sm"
                                             className="bg-indigo-600 hover:bg-indigo-700 h-8 text-xs"
-                                            onClick={async () => {
-                                                setAiAnalyzing(true);
-                                                try {
-                                                    await academicAPI.triggerAIGrading(submissionId);
-                                                    await loadData();
-                                                    toast.success('AI analysis completed');
-                                                } catch (err) {
-                                                    console.error(err);
-                                                    toast.error('Failed to run AI analysis');
-                                                } finally {
-                                                    setAiAnalyzing(false);
-                                                }
-                                            }}
+                                            onClick={handleCreateDefaultRubric}
+                                            disabled={creatingRubric}
+                                        >
+                                            {creatingRubric ? 'Creating...' : 'Create Default Rubric'}
+                                        </Button>
+                                    </div>
+                                ) : (
+                                    <>
+                                        <div className="space-y-1">
+                                            <Label className="text-xs text-slate-600">Grading Rubric</Label>
+                                            <select
+                                                value={selectedRubricId}
+                                                onChange={(e) => setSelectedRubricId(e.target.value)}
+                                                className="w-full rounded border border-indigo-200 bg-white px-2 py-1 text-xs text-slate-700"
+                                            >
+                                                {rubrics.map((rubric) => (
+                                                    <option key={rubric.id} value={rubric.id}>
+                                                        {rubric.title} ({rubric.total_points})
+                                                    </option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                        <Button
+                                            size="sm"
+                                            className="bg-indigo-600 hover:bg-indigo-700 h-8 text-xs"
+                                            onClick={handleGenerateDraft}
                                             disabled={aiAnalyzing}
                                         >
                                             <BrainCircuit className="h-3 w-3 mr-2" />
-                                            {aiAnalyzing ? 'Analyzing...' : 'Trigger AI Analysis'}
+                                            {aiAnalyzing ? 'Analyzing...' : 'AI Grade'}
                                         </Button>
+                                    </>
+                                )}
+
+                                {aiDraft && (
+                                    <div className="space-y-2 rounded border border-indigo-100 bg-white p-3">
+                                        <div className="flex items-center justify-between text-sm font-medium">
+                                            <span className="text-slate-600">Draft Score:</span>
+                                            <span className="text-indigo-700 bg-indigo-100 px-2 py-0.5 rounded">{Math.round(aiDraft.score)}/{assessment?.total_marks || 100}</span>
+                                        </div>
+                                        <div className="text-sm text-slate-700 bg-indigo-50/40 p-2 rounded border border-indigo-100">
+                                            {aiDraft.feedback || 'No AI feedback'}
+                                        </div>
+                                        <div className="max-h-36 overflow-y-auto space-y-1">
+                                            {aiDraft.criteria_breakdown?.map((row, idx) => (
+                                                <div key={`${row.criterion}-${idx}`} className="text-xs text-slate-600 border rounded px-2 py-1">
+                                                    <div className="font-semibold text-slate-700">
+                                                        {row.criterion}: {row.points_awarded}/{row.max_points}
+                                                    </div>
+                                                    {row.feedback ? <div>{row.feedback}</div> : null}
+                                                </div>
+                                            ))}
+                                        </div>
+                                        <div className="flex gap-2">
+                                            <Button
+                                                size="sm"
+                                                variant="outline"
+                                                className="text-xs h-7 border-indigo-200 text-indigo-700 bg-white"
+                                                onClick={() => {
+                                                    setGrade(Math.round(aiDraft.score));
+                                                    setFeedback(aiDraft.feedback || '');
+                                                }}
+                                            >
+                                                Apply Draft
+                                            </Button>
+                                            {aiDraft.status === 'draft' ? (
+                                                <Button
+                                                    size="sm"
+                                                    className="h-7 text-xs bg-emerald-600 hover:bg-emerald-700"
+                                                    onClick={handleApproveDraft}
+                                                    disabled={aiAnalyzing}
+                                                >
+                                                    {aiAnalyzing ? 'Approving...' : 'Approve Draft'}
+                                                </Button>
+                                            ) : (
+                                                <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100">
+                                                    {aiDraft.status.toUpperCase()}
+                                                </Badge>
+                                            )}
+                                        </div>
                                     </div>
                                 )}
                             </CardContent>

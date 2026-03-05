@@ -10,7 +10,7 @@ import {
     ChevronRight, ClipboardList, CheckCircle, TrendingUp
 } from 'lucide-react';
 import { CreateLessonDialog } from '@/components/create-lesson-dialog';
-import { academicAPI, User, usersAPI, aiAPI } from '@/lib/api';
+import { academicAPI, AtRiskStudent, User, usersAPI, aiAPI } from '@/lib/api';
 import { AITeachingAssistant } from '@/components/ai-teaching-assistant';
 import { MyProfileDialog } from '@/components/my-profile-dialog';
 import { AttendanceTrends } from '@/components/attendance-trends';
@@ -52,6 +52,7 @@ export default function TeacherDashboard() {
     const [schoolName, setSchoolName] = useState("Teacher");
     const [schedule, setSchedule] = useState<ScheduleSlot[]>([]);
     const [performanceTrends, setPerformanceTrends] = useState<Array<{ name: string; score: number }>>([]);
+    const [atRiskStudents, setAtRiskStudents] = useState<AtRiskStudent[]>([]);
 
     const [alerts, setAlerts] = useState<any[]>([]);
 
@@ -151,6 +152,34 @@ export default function TeacherDashboard() {
                     const feature = String(log.feature_used || '').toLowerCase();
                     return feature.includes('grading') || feature.includes('evaluation') || feature.includes('eval');
                 }).length;
+
+                const classIds = Array.from(
+                    new Set(
+                        subjects
+                            .map((subject) => Number(subject.academic_class))
+                            .filter((value) => Number.isFinite(value) && value > 0)
+                    )
+                );
+                if (classIds.length > 0) {
+                    const riskByClass = await Promise.all(
+                        classIds.map((classId) => aiAPI.getAtRiskStudents(classId, true).catch(() => []))
+                    );
+                    const merged: Record<string, AtRiskStudent> = {};
+                    for (const rows of riskByClass) {
+                        for (const row of rows) {
+                            const key = String(row.student_id);
+                            if (!merged[key] || Number(row.risk_score) > Number(merged[key].risk_score)) {
+                                merged[key] = row;
+                            }
+                        }
+                    }
+                    const topRisk = Object.values(merged)
+                        .sort((a, b) => Number(b.risk_score) - Number(a.risk_score))
+                        .slice(0, 5);
+                    setAtRiskStudents(topRisk);
+                } else {
+                    setAtRiskStudents([]);
+                }
 
                 setStats({
                     totalStudents: students.length,
@@ -410,6 +439,46 @@ export default function TeacherDashboard() {
                                     </div>
                                 ))}
                             </div>
+                        </CardContent>
+                    </Card>
+
+                    <Card className="border-slate-200 shadow-sm">
+                        <CardHeader className="flex flex-row items-center justify-between pb-2">
+                            <CardTitle className="text-base font-bold text-slate-800 flex items-center gap-2">
+                                <AlertTriangle className="h-4 w-4 text-rose-500" /> At Risk Students
+                            </CardTitle>
+                            <Badge variant="outline" className="bg-rose-50 text-rose-600 border-rose-100">
+                                {atRiskStudents.length}
+                            </Badge>
+                        </CardHeader>
+                        <CardContent className="space-y-3">
+                            {atRiskStudents.length === 0 ? (
+                                <p className="text-sm text-slate-500">No high-risk students detected in assigned classes.</p>
+                            ) : (
+                                atRiskStudents.map((row) => (
+                                    <div key={row.student_id} className="rounded-lg border border-slate-200 p-3">
+                                        <div className="flex items-center justify-between gap-2">
+                                            <p className="font-semibold text-slate-900 text-sm truncate">
+                                                {row.student_name || row.student_id}
+                                            </p>
+                                            <Badge className="bg-rose-100 text-rose-700 hover:bg-rose-100">
+                                                {row.risk_score}/100
+                                            </Badge>
+                                        </div>
+                                        <p className="text-xs text-slate-600 mt-1 line-clamp-2">
+                                            {row.reasons?.[0] || 'Multiple risk indicators detected.'}
+                                        </p>
+                                        <p className="text-[11px] text-slate-500 mt-1 line-clamp-2">
+                                            Action: {row.suggested_actions?.[0] || 'Schedule mentor follow-up.'}
+                                        </p>
+                                    </div>
+                                ))
+                            )}
+                            <Link href="/teacher/students" className="inline-block">
+                                <Button variant="link" size="sm" className="h-auto p-0 text-indigo-600 text-xs">
+                                    View Student Profiles <ChevronRight className="h-3 w-3 ml-1" />
+                                </Button>
+                            </Link>
                         </CardContent>
                     </Card>
                 </div>

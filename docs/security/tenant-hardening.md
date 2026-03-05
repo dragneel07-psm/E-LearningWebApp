@@ -25,7 +25,7 @@ File: `backend/core/middleware/__init__.py`
 ### 3) Spoofed `x-tenant-id` rejected in production
 File: `backend/core/middleware/__init__.py`
 
-- If a request includes `x-tenant-id` in non-trusted environments and that value does not match the domain-resolved tenant, request is rejected with:
+- If a request includes `x-tenant-id` in non-trusted environments and the value does not match the domain-resolved tenant, request is rejected with:
   - `400`
   - payload code: `tenant_header_rejected`
 
@@ -52,7 +52,7 @@ File: `backend/core/tests_tenant_security.py`
 ### JWT tenant isolation
 File: `backend/users/tests_tenant_auth.py`
 
-- tenant A token used against tenant B domain is rejected (`401/403`)
+- tenant A token used against tenant B domain is rejected (`401`, tenant mismatch code)
 - token missing `tenant_schema` claim is rejected (`401`, `token_tenant_missing`)
 - existing mismatch and tenant status tests retained
 

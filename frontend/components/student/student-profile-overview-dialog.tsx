@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { academicAPI, Student, StudentProfileOverview } from '@/lib/api';
+import { academicAPI, aiAPI, AtRiskStudent, Student, StudentProfileOverview } from '@/lib/api';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -40,10 +40,12 @@ function statusBadgeClass(status: string): string {
 export function StudentProfileOverviewDialog({ student, open, onOpenChange }: StudentProfileOverviewDialogProps) {
     const [loading, setLoading] = useState(false);
     const [overview, setOverview] = useState<StudentProfileOverview | null>(null);
+    const [riskInsight, setRiskInsight] = useState<AtRiskStudent | null>(null);
 
     useEffect(() => {
         if (!open || !student?.id) {
             setOverview(null);
+            setRiskInsight(null);
             setLoading(false);
             return;
         }
@@ -57,10 +59,30 @@ export function StudentProfileOverviewDialog({ student, open, onOpenChange }: St
                 if (!cancelled) {
                     setOverview(payload);
                 }
+                const classId = Number(payload?.student?.class_id || student?.academic_class || 0);
+                if (classId > 0) {
+                    try {
+                        const riskRows = await aiAPI.getAtRiskStudents(classId, false);
+                        if (!cancelled) {
+                            const selected = riskRows.find((row) => {
+                                const target = String(student.id || student.student_id || '').toLowerCase();
+                                return String(row.student_id || '').toLowerCase() === target;
+                            }) || null;
+                            setRiskInsight(selected);
+                        }
+                    } catch (_err) {
+                        if (!cancelled) {
+                            setRiskInsight(null);
+                        }
+                    }
+                } else if (!cancelled) {
+                    setRiskInsight(null);
+                }
             } catch (error) {
                 console.error('Failed to load student profile overview:', error);
                 if (!cancelled) {
                     setOverview(null);
+                    setRiskInsight(null);
                     toast.error('Failed to load student profile details.');
                 }
             } finally {
@@ -257,6 +279,42 @@ export function StudentProfileOverviewDialog({ student, open, onOpenChange }: St
                                 <p className="text-xs text-slate-500 mt-3">
                                     Attention subjects: {overview.analytics.needs_attention_subjects.length > 0 ? overview.analytics.needs_attention_subjects.join(', ') : 'None'}
                                 </p>
+                            </CardContent>
+                        </Card>
+
+                        <Card className="border-slate-200">
+                            <CardContent className="p-4">
+                                <h3 className="font-semibold text-slate-900 mb-3 flex items-center">
+                                    <AlertCircle className="h-4 w-4 mr-2 text-orange-600" /> Risk Insights (Teacher)
+                                </h3>
+                                {!riskInsight ? (
+                                    <p className="text-sm text-slate-500">No high-risk alerts for this student in the selected class.</p>
+                                ) : (
+                                    <div className="space-y-3">
+                                        <div className="flex items-center justify-between rounded-lg border border-orange-100 bg-orange-50/40 p-3">
+                                            <p className="text-sm font-medium text-slate-900">Risk Score</p>
+                                            <Badge className="bg-orange-100 text-orange-700 hover:bg-orange-100">
+                                                {riskInsight.risk_score}/100
+                                            </Badge>
+                                        </div>
+                                        <div>
+                                            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-1">Reasons</p>
+                                            <ul className="list-disc pl-5 text-sm text-slate-700 space-y-1">
+                                                {(riskInsight.reasons || []).map((reason, idx) => (
+                                                    <li key={`risk-reason-${idx}`}>{reason}</li>
+                                                ))}
+                                            </ul>
+                                        </div>
+                                        <div>
+                                            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-1">Suggested Actions</p>
+                                            <ul className="list-disc pl-5 text-sm text-slate-700 space-y-1">
+                                                {(riskInsight.suggested_actions || []).map((item, idx) => (
+                                                    <li key={`risk-action-${idx}`}>{item}</li>
+                                                ))}
+                                            </ul>
+                                        </div>
+                                    </div>
+                                )}
                             </CardContent>
                         </Card>
                     </div>

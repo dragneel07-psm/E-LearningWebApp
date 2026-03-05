@@ -97,7 +97,11 @@ class TenantJwtIsolationTests(FastTenantTestCase):
         cross_tenant_client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.access_token}")
         response = cross_tenant_client.get("/api/users/accounts/me/")
 
-        self.assertIn(response.status_code, {status.HTTP_401_UNAUTHORIZED, status.HTTP_403_FORBIDDEN})
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+        self.assertIn(
+            response.data.get("code"),
+            {"token_tenant_mismatch", "token_tenant_user_mismatch", "validation_error"},
+        )
 
     def test_tenant_status_blocks_authenticated_requests(self):
         self.tenant.status = "expired"
