@@ -355,6 +355,8 @@ def ai_tutor_chat(request):
             'response': response_text,
             'tokens_used': tokens_used,
             'is_demo': is_demo,
+            'error': response_data.get('error'),
+            'fallback_reason': response_data.get('reason'),
         })
         
     except Exception as e:

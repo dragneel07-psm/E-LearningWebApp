@@ -70,13 +70,13 @@ def resolve_provider_and_base_url(provider_name: str, base_url: str, api_key: st
     url_is_openai = "openai.com" in normalized_url.lower()
 
     if key_is_openrouter:
+        # OpenRouter key prefix is definitive; use canonical OpenRouter endpoint.
         resolved_provider = "OpenRouter"
-        if not normalized_url or url_is_openai:
-            normalized_url = OPENROUTER_BASE_URL
+        normalized_url = OPENROUTER_BASE_URL
     elif key_is_openai:
+        # OpenAI key prefix is definitive; use canonical OpenAI endpoint.
         resolved_provider = "OpenAI"
-        if not normalized_url or url_is_openrouter:
-            normalized_url = DEFAULT_BASE_URL
+        normalized_url = DEFAULT_BASE_URL
     elif provider_hint == "openrouter" or url_is_openrouter:
         resolved_provider = "OpenRouter"
         if not normalized_url or url_is_openai:

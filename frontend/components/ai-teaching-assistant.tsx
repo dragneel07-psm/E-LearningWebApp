@@ -52,6 +52,11 @@ export function AITeachingAssistant() {
             const response = await aiAPI.chat(userMsg, '', toApiHistory(messages));
             const reply = response?.response?.trim() || 'No response returned by AI service.';
             const suffix = response?.is_demo ? '\n\n[Demo mode response]' : '';
+            const providerError = response?.error?.trim();
+
+            if (response?.is_demo && providerError) {
+                setError(providerError);
+            }
 
             setMessages((prev) => [...prev, { role: 'ai', content: `${reply}${suffix}` }]);
         } catch (e: any) {

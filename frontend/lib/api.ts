@@ -1834,7 +1834,13 @@ export const libraryAPI = {
 // AI Engine API
 export const aiAPI = {
     chat: (message: string, studentId: string, conversationHistory: ChatMessage[]) =>
-        apiRequest<{ response: string; tokens_used: number; is_demo: boolean }>('/ai/tutor/chat/', {
+        apiRequest<{
+            response: string;
+            tokens_used: number;
+            is_demo: boolean;
+            error?: string;
+            fallback_reason?: string;
+        }>('/ai/tutor/chat/', {
             method: 'POST',
             body: JSON.stringify({
                 message,

@@ -62,20 +62,39 @@ class AITutorService:
         """
         
         self._refresh_client()
+        config = get_ai_provider_config()
 
         # Fallback mode if provider is not configured
         if not self.client:
+            if not config.get('enabled'):
+                return {
+                    'response': self._get_demo_response(message),
+                    'tokens_used': 0,
+                    'is_demo': True,
+                    'error': 'AI features are disabled in SaaS settings.',
+                    'reason': 'disabled',
+                }
+            if not config.get('configured'):
+                return {
+                    'response': self._get_demo_response(message),
+                    'tokens_used': 0,
+                    'is_demo': True,
+                    'error': 'AI provider is not configured. Please add a valid API key in SaaS settings.',
+                    'reason': 'not_configured',
+                }
             if self._client_init_error:
                 return {
                     'response': f"I'm having trouble connecting right now. Here is a fallback explanation: {self._get_demo_response(message)}",
                     'tokens_used': 0,
                     'is_demo': True,
                     'error': self._client_init_error,
+                    'reason': 'client_init_error',
                 }
             return {
                 'response': self._get_demo_response(message),
                 'tokens_used': 0,
-                'is_demo': True
+                'is_demo': True,
+                'reason': 'fallback',
             }
         
         try:
@@ -119,11 +138,18 @@ class AITutorService:
             
         except Exception as e:
             # Fallback response on provider errors
+            error_text = str(e)
+            if 'connection' in error_text.lower() or 'timed out' in error_text.lower():
+                print(
+                    f"AI Tutor provider connection error | provider={config.get('provider_name')} "
+                    f"base_url={config.get('base_url')} model={self.model} error={error_text}"
+                )
             return {
                 'response': f"I'm having trouble connecting right now. Here is a fallback explanation: {self._get_demo_response(message)}",
                 'tokens_used': 0,
                 'is_demo': True,
-                'error': str(e)
+                'error': error_text,
+                'reason': 'provider_error',
             }
     
     def _build_system_prompt(self, student_context: Dict = None) -> str:
