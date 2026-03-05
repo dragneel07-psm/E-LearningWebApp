@@ -46,10 +46,37 @@ export function LoginForm({ role, title, subtitle }: LoginFormProps) {
             }
             const result = await authService.login(data as LoginCredentials);
 
+            // Redirect based on role returned from API (most reliable)
+            const userRole = (result.user?.role || role || '').toLowerCase();
+
+            const rolePortalLabels: Record<string, string> = {
+                admin: 'Admin Portal',
+                teacher: 'Teacher Portal',
+                student: 'Student Portal',
+                saas_admin: 'SaaS Admin Portal',
+            };
+
+            const allowedRolesByPortal: Record<NonNullable<LoginFormProps['role']>, string[]> = {
+                admin: ['admin', 'staff'],
+                teacher: ['teacher'],
+                student: ['student', 'parent'],
+                saas_admin: ['saas_admin'],
+            };
+
+            if (role) {
+                const allowedRoles = allowedRolesByPortal[role] || [];
+                if (userRole && !allowedRoles.includes(userRole)) {
+                    authService.logout();
+                    toast.error(
+                        `This account is '${userRole}'. Please sign in from ${rolePortalLabels[userRole] || 'the correct portal'}.`
+                    );
+                    setIsLoading(false);
+                    return;
+                }
+            }
+
             toast.success('Welcome back! Sign in successful.');
 
-            // Redirect based on role returned from API (most reliable)
-            const userRole = result.user?.role || role;
             let targetPath = redirectPath;
             if (!targetPath) {
                 switch (userRole) {
