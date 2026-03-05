@@ -7,6 +7,7 @@ from rest_framework.response import Response
 from ..models import AcademicYear, AcademicClass, Section, Subject
 from ..serializers import AcademicYearSerializer, AcademicClassSerializer, SectionSerializer, SubjectSerializer
 from ..services.academic_year_service import (
+    PromotionRules,
     YearRolloverOptions,
     create_next_academic_year,
     ensure_current_academic_year,
@@ -114,6 +115,7 @@ class AcademicYearViewSet(viewsets.ModelViewSet):
             ),
             migrate_timetable=self._to_bool(options_payload.get('migrate_timetable', True), True),
             auto_upgrade_students=self._to_bool(options_payload.get('auto_upgrade_students', False), False),
+            promotion_rules=PromotionRules.from_payload(options_payload),
         )
 
         summary = rollover_academic_year(

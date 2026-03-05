@@ -98,6 +98,10 @@ export interface AcademicYearRolloverOptions {
     migrate_exercises?: boolean;
     migrate_assessments?: boolean;
     auto_upgrade_students?: boolean;
+    min_score_percentage?: number;
+    min_attendance_percentage?: number;
+    manual_promote_student_ids?: string[];
+    manual_hold_student_ids?: string[];
 }
 
 export interface AcademicYearRolloverRequest {
@@ -425,6 +429,11 @@ export interface PublishAssessmentResultsResponse {
     student_promotion?: {
         promoted_students: number;
         skipped_students: number;
+        failed_score?: number;
+        failed_attendance?: number;
+        manual_promoted?: number;
+        manual_held?: number;
+        insufficient_data?: number;
     } | null;
 }
 
@@ -1539,7 +1548,16 @@ export const academicAPI = {
     }),
     publishAssessmentResults: (
         id: string,
-        data?: { publish?: boolean; auto_upgrade_students?: boolean }
+        data?: {
+            publish?: boolean;
+            auto_upgrade_students?: boolean;
+            promotion_rules?: {
+                min_score_percentage?: number;
+                min_attendance_percentage?: number;
+                manual_promote_student_ids?: string[];
+                manual_hold_student_ids?: string[];
+            };
+        }
     ) =>
         apiRequest<PublishAssessmentResultsResponse>(`/academic/assessments/${id}/publish_results/`, {
             method: 'POST',

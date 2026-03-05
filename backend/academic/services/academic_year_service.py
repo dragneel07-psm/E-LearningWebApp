@@ -1,14 +1,88 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
 from typing import Dict, Optional
 
 from django.db import connection, transaction
+from django.db.models import Q
 from django.utils import timezone
 
-from academic.models import AcademicClass, AcademicYear, Assessment, Chapter, Lesson, LessonMaterial, Section, Student, Subject, Timetable
+from academic.models import (
+    AcademicClass,
+    AcademicYear,
+    Assessment,
+    Attendance,
+    Chapter,
+    Lesson,
+    LessonMaterial,
+    Result,
+    Section,
+    Student,
+    Subject,
+    Timetable,
+)
 from academic.models.question import Question
+
+
+@dataclass
+class PromotionRules:
+    min_score_percentage: Optional[float] = None
+    min_attendance_percentage: Optional[float] = None
+    manual_promote_student_ids: tuple[str, ...] = ()
+    manual_hold_student_ids: tuple[str, ...] = ()
+
+    @classmethod
+    def from_payload(cls, payload: Optional[object]) -> "PromotionRules":
+        if not isinstance(payload, dict):
+            return cls()
+
+        def _to_optional_percent(value: object) -> Optional[float]:
+            if value is None:
+                return None
+            if isinstance(value, str):
+                raw = value.strip()
+                if raw == "":
+                    return None
+                value = raw
+            try:
+                parsed = float(value)  # type: ignore[arg-type]
+            except (TypeError, ValueError):
+                return None
+            if parsed < 0:
+                parsed = 0.0
+            if parsed > 100:
+                parsed = 100.0
+            return parsed
+
+        def _to_student_ids(value: object) -> tuple[str, ...]:
+            if value is None:
+                return ()
+            if isinstance(value, str):
+                parts = [item.strip() for item in value.split(",")]
+            elif isinstance(value, (list, tuple, set)):
+                parts = [str(item).strip() for item in value]
+            else:
+                return ()
+
+            cleaned = []
+            seen = set()
+            for item in parts:
+                if not item:
+                    continue
+                key = item.lower()
+                if key in seen:
+                    continue
+                seen.add(key)
+                cleaned.append(item)
+            return tuple(cleaned)
+
+        return cls(
+            min_score_percentage=_to_optional_percent(payload.get("min_score_percentage")),
+            min_attendance_percentage=_to_optional_percent(payload.get("min_attendance_percentage")),
+            manual_promote_student_ids=_to_student_ids(payload.get("manual_promote_student_ids")),
+            manual_hold_student_ids=_to_student_ids(payload.get("manual_hold_student_ids")),
+        )
 
 
 @dataclass
@@ -18,6 +92,7 @@ class YearRolloverOptions:
     migrate_assessments: bool = True
     migrate_timetable: bool = True
     auto_upgrade_students: bool = False
+    promotion_rules: PromotionRules = field(default_factory=PromotionRules)
 
 
 def _to_date(value: Optional[object]) -> Optional[date]:
@@ -142,14 +217,33 @@ def promote_students_to_next_class(
     *,
     academic_class: Optional[AcademicClass] = None,
     section: Optional[Section] = None,
+    academic_year: Optional[AcademicYear] = None,
+    rules: Optional[PromotionRules] = None,
 ) -> Dict[str, int]:
     classes = list(AcademicClass.objects.order_by("order", "id"))
     if not classes:
-        return {"promoted_students": 0, "skipped_students": 0}
+        return {
+            "promoted_students": 0,
+            "skipped_students": 0,
+            "failed_score": 0,
+            "failed_attendance": 0,
+            "manual_promoted": 0,
+            "manual_held": 0,
+            "insufficient_data": 0,
+        }
 
     class_index = {cls.id: idx for idx, cls in enumerate(classes)}
     promoted = 0
     skipped = 0
+    failed_score = 0
+    failed_attendance = 0
+    manual_promoted = 0
+    manual_held = 0
+    insufficient_data = 0
+
+    rules = rules or PromotionRules()
+    manual_promote_ids = {value.lower() for value in rules.manual_promote_student_ids}
+    manual_hold_ids = {value.lower() for value in rules.manual_hold_student_ids}
 
     students_qs = Student.objects.select_related("academic_class", "section")
     if section is not None:
@@ -158,9 +252,75 @@ def promote_students_to_next_class(
         students_qs = students_qs.filter(academic_class=academic_class)
 
     for student in students_qs:
+        student_id_text = str(student.student_id).lower()
+
+        if student_id_text in manual_hold_ids:
+            manual_held += 1
+            skipped += 1
+            continue
+
         if not student.academic_class_id or student.academic_class_id not in class_index:
             skipped += 1
             continue
+
+        if student_id_text not in manual_promote_ids:
+            if rules.min_score_percentage is not None:
+                result_qs = Result.objects.filter(
+                    student=student,
+                    assessment__is_final_assessment=True,
+                    assessment__results_published=True,
+                    assessment__subject__academic_class=student.academic_class,
+                ).select_related("assessment")
+
+                if academic_year is not None:
+                    result_qs = result_qs.filter(assessment__academic_year=academic_year)
+
+                if student.section_id:
+                    result_qs = result_qs.filter(
+                        Q(assessment__section=student.section) | Q(assessment__section__isnull=True)
+                    )
+                else:
+                    result_qs = result_qs.filter(assessment__section__isnull=True)
+
+                percentages = []
+                for result in result_qs:
+                    total_marks = max(float(getattr(result.assessment, "total_marks", 0) or 0), 1.0)
+                    percentages.append((float(result.score) / total_marks) * 100.0)
+
+                if not percentages:
+                    insufficient_data += 1
+                    skipped += 1
+                    continue
+
+                average_score = sum(percentages) / len(percentages)
+                if average_score < rules.min_score_percentage:
+                    failed_score += 1
+                    skipped += 1
+                    continue
+
+            if rules.min_attendance_percentage is not None:
+                attendance_qs = Attendance.objects.filter(
+                    student=student,
+                    subject__academic_class=student.academic_class,
+                )
+                if academic_year is not None:
+                    attendance_qs = attendance_qs.filter(
+                        date__gte=academic_year.start_date,
+                        date__lte=academic_year.end_date,
+                    )
+
+                total_attendance = attendance_qs.count()
+                if total_attendance <= 0:
+                    insufficient_data += 1
+                    skipped += 1
+                    continue
+
+                attended_count = attendance_qs.filter(status__in=["present", "late", "excused"]).count()
+                attendance_percentage = (attended_count / total_attendance) * 100.0
+                if attendance_percentage < rules.min_attendance_percentage:
+                    failed_attendance += 1
+                    skipped += 1
+                    continue
 
         idx = class_index[student.academic_class_id]
         if idx >= len(classes) - 1:
@@ -178,9 +338,20 @@ def promote_students_to_next_class(
         student.academic_class = next_class
         student.section = next_section
         student.save(update_fields=["academic_class", "section"])
+
+        if student_id_text in manual_promote_ids:
+            manual_promoted += 1
         promoted += 1
 
-    return {"promoted_students": promoted, "skipped_students": skipped}
+    return {
+        "promoted_students": promoted,
+        "skipped_students": skipped,
+        "failed_score": failed_score,
+        "failed_attendance": failed_attendance,
+        "manual_promoted": manual_promoted,
+        "manual_held": manual_held,
+        "insufficient_data": insufficient_data,
+    }
 
 
 @transaction.atomic
@@ -405,7 +576,10 @@ def rollover_academic_year(
             summary["timetable_entries_migrated"] = len(timetable_to_create)
 
     if options.auto_upgrade_students:
-        promotion_summary = promote_students_to_next_class()
+        promotion_summary = promote_students_to_next_class(
+            academic_year=source_year,
+            rules=options.promotion_rules,
+        )
         summary["students_promoted"] = promotion_summary["promoted_students"]
         summary["students_skipped"] = promotion_summary["skipped_students"]
 

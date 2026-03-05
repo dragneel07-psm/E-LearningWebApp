@@ -14,7 +14,11 @@ from academic.serializers.assessment import (
     SubmissionSerializer, ResultSerializer
 )
 from academic.services.grading_service import GradingService
-from academic.services.academic_year_service import ensure_current_academic_year, promote_students_to_next_class
+from academic.services.academic_year_service import (
+    PromotionRules,
+    ensure_current_academic_year,
+    promote_students_to_next_class,
+)
 
 
 def _to_bool(value, default=False):
@@ -62,6 +66,24 @@ class AssessmentViewSet(viewsets.ModelViewSet):
             return {'academic_class': assessment.subject.academic_class}
         return {}
 
+    def _promotion_rules_from_request(self, request):
+        payload = {}
+        nested = request.data.get('promotion_rules')
+        if isinstance(nested, dict):
+            payload.update(nested)
+
+        direct_fields = [
+            'min_score_percentage',
+            'min_attendance_percentage',
+            'manual_promote_student_ids',
+            'manual_hold_student_ids',
+        ]
+        for field_name in direct_fields:
+            if field_name in request.data:
+                payload[field_name] = request.data.get(field_name)
+
+        return PromotionRules.from_payload(payload)
+
     def get_queryset(self):
         queryset = Assessment.objects.select_related('academic_year', 'subject', 'subject__academic_class', 'section').all()
         requested_year, has_year_filter = _resolve_request_year(self.request)
@@ -103,7 +125,11 @@ class AssessmentViewSet(viewsets.ModelViewSet):
             and updated.is_final_assessment
             and _to_bool(self.request.data.get('auto_upgrade_students'), True)
         ):
-            promote_students_to_next_class(**self._promotion_scope_for_assessment(updated))
+            promote_students_to_next_class(
+                academic_year=updated.academic_year,
+                rules=self._promotion_rules_from_request(self.request),
+                **self._promotion_scope_for_assessment(updated),
+            )
 
     @action(detail=True, methods=['post'])
     def publish_results(self, request, pk=None):
@@ -133,6 +159,8 @@ class AssessmentViewSet(viewsets.ModelViewSet):
             and _to_bool(request.data.get('auto_upgrade_students'), True)
         ):
             promotion_summary = promote_students_to_next_class(
+                academic_year=assessment.academic_year,
+                rules=self._promotion_rules_from_request(request),
                 **self._promotion_scope_for_assessment(assessment)
             )
 

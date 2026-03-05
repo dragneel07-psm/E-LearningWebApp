@@ -56,6 +56,10 @@ type RolloverFormState = {
     migrate_lessons: boolean;
     migrate_quizzes_exercises: boolean;
     auto_upgrade_students: boolean;
+    min_score_percentage: string;
+    min_attendance_percentage: string;
+    manual_promote_student_ids: string;
+    manual_hold_student_ids: string;
 };
 
 const pad2 = (value: number) => String(value).padStart(2, '0');
@@ -93,6 +97,13 @@ function suggestNextYearDraft(source: AcademicYear | null) {
     };
 }
 
+function parseStudentIdList(raw: string): string[] {
+    return raw
+        .split(',')
+        .map((item) => item.trim())
+        .filter(Boolean);
+}
+
 export default function AcademicYearsPage() {
     const [years, setYears] = useState<AcademicYear[]>([]);
     const [loading, setLoading] = useState(true);
@@ -122,6 +133,10 @@ export default function AcademicYearsPage() {
         migrate_lessons: true,
         migrate_quizzes_exercises: true,
         auto_upgrade_students: false,
+        min_score_percentage: '',
+        min_attendance_percentage: '',
+        manual_promote_student_ids: '',
+        manual_hold_student_ids: '',
     });
 
     useEffect(() => {
@@ -180,6 +195,10 @@ export default function AcademicYearsPage() {
             migrate_lessons: true,
             migrate_quizzes_exercises: true,
             auto_upgrade_students: false,
+            min_score_percentage: '',
+            min_attendance_percentage: '',
+            manual_promote_student_ids: '',
+            manual_hold_student_ids: '',
         });
         setIsRolloverDialogOpen(true);
     }
@@ -281,6 +300,22 @@ export default function AcademicYearsPage() {
             return;
         }
 
+        const scoreThreshold = rolloverForm.min_score_percentage.trim() === ''
+            ? undefined
+            : Number(rolloverForm.min_score_percentage);
+        const attendanceThreshold = rolloverForm.min_attendance_percentage.trim() === ''
+            ? undefined
+            : Number(rolloverForm.min_attendance_percentage);
+
+        if (scoreThreshold !== undefined && (Number.isNaN(scoreThreshold) || scoreThreshold < 0 || scoreThreshold > 100)) {
+            toast.error('Min score percentage must be between 0 and 100');
+            return;
+        }
+        if (attendanceThreshold !== undefined && (Number.isNaN(attendanceThreshold) || attendanceThreshold < 0 || attendanceThreshold > 100)) {
+            toast.error('Min attendance percentage must be between 0 and 100');
+            return;
+        }
+
         const payload: AcademicYearRolloverRequest = {
             source_year: Number(rolloverForm.source_year),
             options: {
@@ -289,6 +324,10 @@ export default function AcademicYearsPage() {
                 migrate_lessons: rolloverForm.migrate_lessons,
                 migrate_quizzes: rolloverForm.migrate_quizzes_exercises,
                 auto_upgrade_students: rolloverForm.auto_upgrade_students,
+                min_score_percentage: scoreThreshold,
+                min_attendance_percentage: attendanceThreshold,
+                manual_promote_student_ids: parseStudentIdList(rolloverForm.manual_promote_student_ids),
+                manual_hold_student_ids: parseStudentIdList(rolloverForm.manual_hold_student_ids),
             },
         };
 
@@ -648,6 +687,64 @@ export default function AcademicYearsPage() {
                                 <p className="mt-1 text-xs text-slate-500">
                                     Students in final class remain unchanged and are counted as skipped.
                                 </p>
+
+                                {rolloverForm.auto_upgrade_students ? (
+                                    <div className="mt-3 grid gap-3 rounded-md bg-slate-50 p-3">
+                                        <p className="text-xs font-medium uppercase tracking-wide text-slate-600">Promotion Rules</p>
+                                        <div className="grid grid-cols-2 gap-3">
+                                            <div className="grid gap-2">
+                                                <Label htmlFor="rollover_min_score">Min final score %</Label>
+                                                <Input
+                                                    id="rollover_min_score"
+                                                    type="number"
+                                                    min={0}
+                                                    max={100}
+                                                    placeholder="e.g. 40"
+                                                    value={rolloverForm.min_score_percentage}
+                                                    onChange={(event) =>
+                                                        setRolloverForm((prev) => ({ ...prev, min_score_percentage: event.target.value }))
+                                                    }
+                                                />
+                                            </div>
+                                            <div className="grid gap-2">
+                                                <Label htmlFor="rollover_min_attendance">Min attendance %</Label>
+                                                <Input
+                                                    id="rollover_min_attendance"
+                                                    type="number"
+                                                    min={0}
+                                                    max={100}
+                                                    placeholder="e.g. 75"
+                                                    value={rolloverForm.min_attendance_percentage}
+                                                    onChange={(event) =>
+                                                        setRolloverForm((prev) => ({ ...prev, min_attendance_percentage: event.target.value }))
+                                                    }
+                                                />
+                                            </div>
+                                        </div>
+                                        <div className="grid gap-2">
+                                            <Label htmlFor="rollover_manual_promote">Manual promote student IDs (comma-separated)</Label>
+                                            <Input
+                                                id="rollover_manual_promote"
+                                                placeholder="uuid-1, uuid-2"
+                                                value={rolloverForm.manual_promote_student_ids}
+                                                onChange={(event) =>
+                                                    setRolloverForm((prev) => ({ ...prev, manual_promote_student_ids: event.target.value }))
+                                                }
+                                            />
+                                        </div>
+                                        <div className="grid gap-2">
+                                            <Label htmlFor="rollover_manual_hold">Manual hold student IDs (comma-separated)</Label>
+                                            <Input
+                                                id="rollover_manual_hold"
+                                                placeholder="uuid-3, uuid-4"
+                                                value={rolloverForm.manual_hold_student_ids}
+                                                onChange={(event) =>
+                                                    setRolloverForm((prev) => ({ ...prev, manual_hold_student_ids: event.target.value }))
+                                                }
+                                            />
+                                        </div>
+                                    </div>
+                                ) : null}
                             </div>
                         </div>
                     </div>

@@ -27,6 +27,10 @@ export default function AssessmentManager() {
     const [publishTarget, setPublishTarget] = useState<Assessment | null>(null);
     const [publishRequestedState, setPublishRequestedState] = useState<boolean>(true);
     const [publishAutoUpgrade, setPublishAutoUpgrade] = useState<boolean>(true);
+    const [publishMinScore, setPublishMinScore] = useState<string>('');
+    const [publishMinAttendance, setPublishMinAttendance] = useState<string>('');
+    const [publishManualPromoteInput, setPublishManualPromoteInput] = useState<string>('');
+    const [publishManualHoldInput, setPublishManualHoldInput] = useState<string>('');
     const [publishing, setPublishing] = useState(false);
 
     // Form State
@@ -145,21 +149,54 @@ export default function AssessmentManager() {
         setPublishTarget(assessment);
         setPublishRequestedState(publish);
         setPublishAutoUpgrade(publish && Boolean(assessment.is_final_assessment));
+        setPublishMinScore('');
+        setPublishMinAttendance('');
+        setPublishManualPromoteInput('');
+        setPublishManualHoldInput('');
         setIsPublishDialogOpen(true);
     };
 
     const handlePublishSubmit = async () => {
         if (!publishTarget?.id) return;
+
+        const scoreThreshold = publishMinScore.trim() === '' ? undefined : Number(publishMinScore);
+        const attendanceThreshold = publishMinAttendance.trim() === '' ? undefined : Number(publishMinAttendance);
+        if (scoreThreshold !== undefined && (Number.isNaN(scoreThreshold) || scoreThreshold < 0 || scoreThreshold > 100)) {
+            toast.error('Min score percentage must be between 0 and 100');
+            return;
+        }
+        if (attendanceThreshold !== undefined && (Number.isNaN(attendanceThreshold) || attendanceThreshold < 0 || attendanceThreshold > 100)) {
+            toast.error('Min attendance percentage must be between 0 and 100');
+            return;
+        }
+
+        const parseStudentIds = (raw: string) =>
+            raw
+                .split(',')
+                .map((item) => item.trim())
+                .filter(Boolean);
+
         try {
             setPublishing(true);
             const response = await academicAPI.publishAssessmentResults(publishTarget.id, {
                 publish: publishRequestedState,
                 auto_upgrade_students: publishAutoUpgrade,
+                promotion_rules: {
+                    min_score_percentage: scoreThreshold,
+                    min_attendance_percentage: attendanceThreshold,
+                    manual_promote_student_ids: parseStudentIds(publishManualPromoteInput),
+                    manual_hold_student_ids: parseStudentIds(publishManualHoldInput),
+                },
             });
             if (publishRequestedState) {
                 const promoted = response.student_promotion?.promoted_students ?? 0;
                 if (response.is_final_assessment && publishAutoUpgrade) {
-                    toast.success(`Results published. Students promoted: ${promoted}`);
+                    const held = response.student_promotion?.manual_held ?? 0;
+                    const failedScore = response.student_promotion?.failed_score ?? 0;
+                    const failedAttendance = response.student_promotion?.failed_attendance ?? 0;
+                    toast.success(
+                        `Results published. Promoted: ${promoted}, Held: ${held}, Failed(score): ${failedScore}, Failed(attendance): ${failedAttendance}`,
+                    );
                 } else {
                     toast.success('Results published successfully');
                 }
@@ -485,14 +522,66 @@ export default function AssessmentManager() {
                         </DialogDescription>
                     </DialogHeader>
                     {publishRequestedState && publishTarget?.is_final_assessment ? (
-                        <div className="flex items-center justify-between rounded-md border border-slate-200 p-3">
-                            <div>
-                                <p className="text-sm font-semibold text-slate-700">Auto-upgrade students</p>
-                                <p className="text-xs text-slate-500">
-                                    Promote students of this assessment scope to the next class after publish.
-                                </p>
+                        <div className="grid gap-3 rounded-md border border-slate-200 p-3">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <p className="text-sm font-semibold text-slate-700">Auto-upgrade students</p>
+                                    <p className="text-xs text-slate-500">
+                                        Promote students of this assessment scope to the next class after publish.
+                                    </p>
+                                </div>
+                                <Switch checked={publishAutoUpgrade} onCheckedChange={setPublishAutoUpgrade} />
                             </div>
-                            <Switch checked={publishAutoUpgrade} onCheckedChange={setPublishAutoUpgrade} />
+
+                            {publishAutoUpgrade ? (
+                                <div className="grid gap-3 rounded-md bg-slate-50 p-3">
+                                    <p className="text-xs font-medium uppercase tracking-wide text-slate-600">Promotion Rules</p>
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <div className="grid gap-2">
+                                            <Label htmlFor="publish_min_score">Min final score %</Label>
+                                            <Input
+                                                id="publish_min_score"
+                                                type="number"
+                                                min={0}
+                                                max={100}
+                                                placeholder="e.g. 40"
+                                                value={publishMinScore}
+                                                onChange={(event) => setPublishMinScore(event.target.value)}
+                                            />
+                                        </div>
+                                        <div className="grid gap-2">
+                                            <Label htmlFor="publish_min_attendance">Min attendance %</Label>
+                                            <Input
+                                                id="publish_min_attendance"
+                                                type="number"
+                                                min={0}
+                                                max={100}
+                                                placeholder="e.g. 75"
+                                                value={publishMinAttendance}
+                                                onChange={(event) => setPublishMinAttendance(event.target.value)}
+                                            />
+                                        </div>
+                                    </div>
+                                    <div className="grid gap-2">
+                                        <Label htmlFor="publish_manual_promote">Manual promote student IDs (comma-separated)</Label>
+                                        <Input
+                                            id="publish_manual_promote"
+                                            placeholder="uuid-1, uuid-2"
+                                            value={publishManualPromoteInput}
+                                            onChange={(event) => setPublishManualPromoteInput(event.target.value)}
+                                        />
+                                    </div>
+                                    <div className="grid gap-2">
+                                        <Label htmlFor="publish_manual_hold">Manual hold student IDs (comma-separated)</Label>
+                                        <Input
+                                            id="publish_manual_hold"
+                                            placeholder="uuid-3, uuid-4"
+                                            value={publishManualHoldInput}
+                                            onChange={(event) => setPublishManualHoldInput(event.target.value)}
+                                        />
+                                    </div>
+                                </div>
+                            ) : null}
                         </div>
                     ) : null}
                     <DialogFooter>

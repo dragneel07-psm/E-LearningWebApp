@@ -7,6 +7,7 @@ from academic.models import (
     AcademicClass,
     AcademicYear,
     Assessment,
+    Attendance,
     Chapter,
     Lesson,
     LessonMaterial,
@@ -268,3 +269,110 @@ class AcademicYearRolloverAndPromotionTests(FastTenantTestCase):
         self.assertEqual(response.data["student_promotion"]["promoted_students"], 1)
         self.assertEqual(promoted_student.academic_class_id, class_8.id)
         self.assertEqual(unaffected_student.academic_class_id, class_8.id)
+
+    def test_publish_final_results_applies_threshold_rules_and_manual_overrides(self):
+        year = AcademicYear.objects.create(
+            name="2071-2072",
+            start_date="2023-04-01",
+            end_date="2024-03-31",
+            is_current=True,
+        )
+        class_6 = AcademicClass.objects.create(name="Grade 6", order=6)
+        class_7 = AcademicClass.objects.create(name="Grade 7", order=7)
+        section_6a = Section.objects.create(name="A", academic_class=class_6)
+        Section.objects.create(name="A", academic_class=class_7)
+
+        low_score_user = User.objects.create_user(
+            username="low_score_student",
+            email="low_score_student@example.com",
+            password="Student@1234",
+            role="student",
+            tenant=self.tenant,
+        )
+        low_score_student = Student.objects.create(
+            user=low_score_user,
+            academic_class=class_6,
+            section=section_6a,
+        )
+        manual_promote_user = User.objects.create_user(
+            username="manual_promote_student",
+            email="manual_promote_student@example.com",
+            password="Student@1234",
+            role="student",
+            tenant=self.tenant,
+        )
+        manual_promote_student = Student.objects.create(
+            user=manual_promote_user,
+            academic_class=class_6,
+            section=section_6a,
+        )
+        manual_hold_user = User.objects.create_user(
+            username="manual_hold_student",
+            email="manual_hold_student@example.com",
+            password="Student@1234",
+            role="student",
+            tenant=self.tenant,
+        )
+        manual_hold_student = Student.objects.create(
+            user=manual_hold_user,
+            academic_class=class_6,
+            section=section_6a,
+        )
+
+        subject = Subject.objects.create(
+            name="English",
+            code="ENG-6",
+            academic_class=class_6,
+            academic_year=year,
+            is_active=True,
+        )
+        assessment = Assessment.objects.create(
+            academic_year=year,
+            subject=subject,
+            section=section_6a,
+            title="Grade 6 Final English",
+            type="exam",
+            total_marks=100,
+            passing_marks=40,
+            is_final_assessment=True,
+        )
+
+        Result.objects.create(assessment=assessment, student=low_score_student, score=30, time_taken_minutes=40)
+        Result.objects.create(assessment=assessment, student=manual_promote_student, score=20, time_taken_minutes=40)
+        Result.objects.create(assessment=assessment, student=manual_hold_student, score=95, time_taken_minutes=40)
+
+        Attendance.objects.create(student=low_score_student, subject=subject, date="2023-05-02", status="present")
+        Attendance.objects.create(student=low_score_student, subject=subject, date="2023-05-03", status="absent")
+        Attendance.objects.create(student=manual_promote_student, subject=subject, date="2023-05-02", status="absent")
+        Attendance.objects.create(student=manual_hold_student, subject=subject, date="2023-05-02", status="present")
+
+        response = self.client.post(
+            f"/api/academic/assessments/{assessment.assessment_id}/publish_results/?academic_year={year.id}",
+            {
+                "publish": True,
+                "auto_upgrade_students": True,
+                "promotion_rules": {
+                    "min_score_percentage": 40,
+                    "min_attendance_percentage": 60,
+                    "manual_promote_student_ids": [str(manual_promote_student.student_id)],
+                    "manual_hold_student_ids": [str(manual_hold_student.student_id)],
+                },
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        summary = response.data.get("student_promotion") or {}
+
+        low_score_student.refresh_from_db()
+        manual_promote_student.refresh_from_db()
+        manual_hold_student.refresh_from_db()
+
+        self.assertEqual(low_score_student.academic_class_id, class_6.id)
+        self.assertEqual(manual_promote_student.academic_class_id, class_7.id)
+        self.assertEqual(manual_hold_student.academic_class_id, class_6.id)
+
+        self.assertEqual(summary.get("promoted_students"), 1)
+        self.assertEqual(summary.get("failed_score"), 1)
+        self.assertEqual(summary.get("manual_promoted"), 1)
+        self.assertEqual(summary.get("manual_held"), 1)
