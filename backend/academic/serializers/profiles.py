@@ -182,10 +182,39 @@ class StudentCreateSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'student_id']
     
     def validate_email(self, value):
-        """Ensure email is unique"""
-        if User.objects.filter(email=value).exists():
-            raise serializers.ValidationError("A user with this email already exists.")
-        return value.lower()
+        """
+        Validate email with tenant/role-aware messaging.
+        Allows reusing an existing same-tenant student user if profile does not yet exist.
+        """
+        normalized_email = (value or '').strip().lower()
+        existing_user = User.objects.filter(email__iexact=normalized_email).select_related('tenant').first()
+        if not existing_user:
+            return normalized_email
+
+        request = self.context.get('request')
+        current_tenant = None
+        if request:
+            current_tenant = getattr(request, 'tenant', None) or getattr(getattr(request, 'user', None), 'tenant', None)
+
+        if current_tenant and existing_user.tenant_id and existing_user.tenant_id != current_tenant.pk:
+            raise serializers.ValidationError("This email already belongs to a user in another school tenant.")
+
+        if existing_user.role != 'student':
+            role_label = (existing_user.role or 'user').replace('_', ' ')
+            raise serializers.ValidationError(f"This email is already used by a {role_label} account.")
+
+        existing_student = Student.objects.select_related('academic_class', 'section').filter(user=existing_user).first()
+        if existing_student:
+            class_name = existing_student.academic_class.name if existing_student.academic_class else None
+            section_name = existing_student.section.name if existing_student.section else None
+            location_bits = [bit for bit in [class_name, section_name] if bit]
+            location = f" ({' / '.join(location_bits)})" if location_bits else ""
+            raise serializers.ValidationError(
+                f"A student with this email already exists in this school{location}."
+            )
+
+        # Existing student user without profile is allowed and will be linked in create().
+        return normalized_email
     
     def validate(self, data):
         """Ensure section belongs to the selected class"""
@@ -208,30 +237,55 @@ class StudentCreateSerializer(serializers.ModelSerializer):
         date_of_birth = validated_data.pop('date_of_birth', None)
         
         with transaction.atomic():
-            # Generate username from email
-            username = email.split('@')[0]
-            base_username = username
-            counter = 1
-            while User.objects.filter(username=username).exists():
-                username = f"{base_username}{counter}"
-                counter += 1
-            
             # Get tenant from request context
             request = self.context.get('request')
             tenant = getattr(request, 'tenant', None) if request else None
+            user = User.objects.filter(email__iexact=email).first()
+            if user:
+                if tenant and user.tenant_id and user.tenant_id != tenant.pk:
+                    raise serializers.ValidationError({
+                        'email': 'This email already belongs to another school tenant.'
+                    })
+                if user.role != 'student':
+                    raise serializers.ValidationError({
+                        'email': f"This email is already used by a {user.role.replace('_', ' ')} account."
+                    })
+                if Student.objects.filter(user=user).exists():
+                    raise serializers.ValidationError({
+                        'email': 'A student with this email already exists in this school.'
+                    })
 
-            # Create user account
-            user = User.objects.create_user(
-                username=username,
-                email=email,
-                password=password,
-                first_name=first_name,
-                last_name=last_name,
-                phone_number=phone_number,
-                date_of_birth=date_of_birth,
-                role='student',
-                tenant=tenant
-            )
+                # Reuse the existing student user and sync profile fields.
+                user.first_name = first_name
+                user.last_name = last_name
+                user.phone_number = phone_number
+                user.date_of_birth = date_of_birth
+                if tenant and not user.tenant_id:
+                    user.tenant = tenant
+                if password:
+                    user.set_password(password)
+                user.save()
+            else:
+                # Generate username from email
+                username = email.split('@')[0]
+                base_username = username
+                counter = 1
+                while User.objects.filter(username=username).exists():
+                    username = f"{base_username}{counter}"
+                    counter += 1
+
+                # Create user account
+                user = User.objects.create_user(
+                    username=username,
+                    email=email,
+                    password=password,
+                    first_name=first_name,
+                    last_name=last_name,
+                    phone_number=phone_number,
+                    date_of_birth=date_of_birth,
+                    role='student',
+                    tenant=tenant
+                )
             
             # Create student profile
             student = Student.objects.create(user=user, **validated_data)

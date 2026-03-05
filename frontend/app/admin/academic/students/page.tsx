@@ -140,7 +140,23 @@ export default function StudentsPage() {
             await loadData(); // Reload to get updates
         } catch (error) {
             console.error(error);
-            toast.error("Failed to save student");
+            let message = "Failed to save student";
+            if (error instanceof Error) {
+                message = error.message || message;
+                try {
+                    const parsed = JSON.parse(error.message);
+                    if (Array.isArray(parsed?.email) && parsed.email[0]) {
+                        message = parsed.email[0];
+                    } else if (Array.isArray(parsed?.non_field_errors) && parsed.non_field_errors[0]) {
+                        message = parsed.non_field_errors[0];
+                    } else if (typeof parsed?.detail === 'string' && parsed.detail) {
+                        message = parsed.detail;
+                    }
+                } catch {
+                    // Keep original message when API did not return JSON payload.
+                }
+            }
+            toast.error(message);
         } finally {
             setSubmitting(false);
         }
