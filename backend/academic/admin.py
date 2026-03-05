@@ -2,7 +2,7 @@ from django.contrib import admin
 from .models import (
     AcademicYear, AcademicClass, Section, Student, Teacher, Parent,
     Subject, Chapter, Lesson, LessonMaterial, LessonProgress,
-    Attendance, Timetable, Assessment, Result, Notice
+    Attendance, Timetable, Assessment, Result, Notice, AdmissionEnquiry
 )
 
 @admin.register(AcademicYear)
@@ -97,3 +97,10 @@ class NoticeAdmin(admin.ModelAdmin):
     list_display = ('title', 'category', 'priority', 'published_date')
     list_filter = ('category', 'priority')
     search_fields = ('title', 'content')
+
+
+@admin.register(AdmissionEnquiry)
+class AdmissionEnquiryAdmin(admin.ModelAdmin):
+    list_display = ('first_name', 'last_name', 'phone_number', 'desired_class', 'status', 'source', 'created_at')
+    list_filter = ('status', 'source', 'desired_class')
+    search_fields = ('first_name', 'last_name', 'guardian_name', 'email', 'phone_number')

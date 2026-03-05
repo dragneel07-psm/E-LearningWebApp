@@ -10,3 +10,4 @@ from .attendance import Attendance
 from .assessment import Assessment, Result
 from .timetable import Timetable
 from .exam import Exam, ExamSeating
+from .admission import AdmissionEnquiry

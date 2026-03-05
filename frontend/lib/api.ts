@@ -962,6 +962,99 @@ export interface Notice {
     attachment_url?: string | null;
 }
 
+export type AdmissionEnquiryStatus =
+    | 'new'
+    | 'contacted'
+    | 'interested'
+    | 'application_started'
+    | 'converted'
+    | 'closed';
+
+export type AdmissionEnquirySource =
+    | 'walk_in'
+    | 'website'
+    | 'referral'
+    | 'social'
+    | 'phone'
+    | 'other';
+
+export interface AdmissionEnquiry {
+    id: string;
+    enquiry_id: string;
+    tenant?: number | string;
+    first_name: string;
+    last_name?: string;
+    guardian_name?: string;
+    email?: string | null;
+    phone_number: string;
+    desired_class?: number | null;
+    desired_class_name?: string;
+    desired_section_name?: string;
+    status: AdmissionEnquiryStatus;
+    source: AdmissionEnquirySource;
+    notes?: string | null;
+    follow_up_date?: string | null;
+    converted_student?: string | null;
+    converted_student_name?: string;
+    handled_by?: string | null;
+    handled_by_name?: string;
+    created_at?: string;
+    updated_at?: string;
+}
+
+export interface AdmissionPipelineBucket {
+    label: string;
+    count: number;
+}
+
+export interface AdmissionPipeline {
+    new: AdmissionPipelineBucket;
+    contacted: AdmissionPipelineBucket;
+    interested: AdmissionPipelineBucket;
+    application_started: AdmissionPipelineBucket;
+    converted: AdmissionPipelineBucket;
+    closed: AdmissionPipelineBucket;
+    total: number;
+}
+
+export interface SchoolERPOverview {
+    academic_year: string | null;
+    school: {
+        tenant_id: string | null;
+        tenant_name: string | null;
+    };
+    summary: {
+        total_students: number;
+        total_teachers: number;
+        total_classes: number;
+        total_subjects: number;
+        upcoming_assessments: number;
+        published_results: number;
+    };
+    attendance_today: {
+        date: string;
+        total_marked: number;
+        present: number;
+        absent: number;
+        late: number;
+    };
+    admissions: {
+        total_enquiries: number;
+        new: number;
+        contacted: number;
+        interested: number;
+        application_started: number;
+        converted: number;
+        closed: number;
+    };
+    finance: {
+        total_revenue: number;
+        total_pending: number;
+        total_expenses: number;
+        net_balance: number;
+    };
+}
+
 // Helper function to get auth token
 function getAuthToken(): string | null {
     if (typeof window !== 'undefined') {
@@ -1519,6 +1612,7 @@ export const academicAPI = {
         total_classes: number;
         total_subjects: number;
     }>('/academic/stats/'),
+    getERPOverview: () => apiRequest<SchoolERPOverview>('/academic/erp/overview/'),
 
     // Students
     getStudents: async (params?: { section_id?: string }) => {
@@ -1551,6 +1645,60 @@ export const academicAPI = {
     deleteStudent: (id: string) => apiRequest<void>(`/academic/students/${id}/`, {
         method: 'DELETE'
     }),
+
+    // Admissions
+    getAdmissions: async (params?: {
+        status?: AdmissionEnquiryStatus | 'all';
+        source?: AdmissionEnquirySource | 'all';
+        desired_class?: number | string;
+        q?: string;
+    }) => {
+        const search = new URLSearchParams();
+        if (params?.status && params.status !== 'all') search.set('status', params.status);
+        if (params?.source && params.source !== 'all') search.set('source', params.source);
+        if (params?.desired_class !== undefined && params?.desired_class !== null && params?.desired_class !== '') {
+            search.set('desired_class', String(params.desired_class));
+        }
+        if (params?.q) search.set('q', params.q);
+
+        const query = search.toString();
+        const endpoint = `/academic/admissions/${query ? `?${query}` : ''}`;
+        const payload = await apiRequest<AdmissionEnquiry[] | PaginatedResponse<AdmissionEnquiry>>(endpoint);
+        return normalizeArrayPayload(payload);
+    },
+    getAdmission: (id: string) => apiRequest<AdmissionEnquiry>(`/academic/admissions/${id}/`),
+    createAdmission: (data: Partial<AdmissionEnquiry>) => apiRequest<AdmissionEnquiry>('/academic/admissions/', {
+        method: 'POST',
+        body: JSON.stringify(data),
+    }),
+    updateAdmission: (id: string, data: Partial<AdmissionEnquiry>) => apiRequest<AdmissionEnquiry>(`/academic/admissions/${id}/`, {
+        method: 'PATCH',
+        body: JSON.stringify(data),
+    }),
+    deleteAdmission: (id: string) => apiRequest<void>(`/academic/admissions/${id}/`, {
+        method: 'DELETE',
+    }),
+    getAdmissionsPipeline: () => apiRequest<AdmissionPipeline>('/academic/admissions/pipeline/'),
+    convertAdmissionToStudent: (
+        id: string,
+        data: {
+            email?: string;
+            password?: string;
+            first_name?: string;
+            last_name?: string;
+            phone_number?: string;
+            academic_class: number | string;
+            section?: number | string;
+            username?: string;
+        }
+    ) =>
+        apiRequest<{ detail: string; student_id: string; enquiry: AdmissionEnquiry }>(
+            `/academic/admissions/${id}/convert_to_student/`,
+            {
+                method: 'POST',
+                body: JSON.stringify(data),
+            }
+        ),
 
     // Chapters
     getChapters: async (subjectId?: number) => {

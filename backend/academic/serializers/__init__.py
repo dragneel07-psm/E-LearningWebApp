@@ -8,3 +8,4 @@ from .profiles import (
     ParentSerializer
 )
 from .notice import NoticeSerializer
+from .admission import AdmissionEnquirySerializer

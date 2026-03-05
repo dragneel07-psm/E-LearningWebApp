@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, Users, GraduationCap, School, CreditCard, BarChart3, Settings, LogOut, Bell, BookOpen, Calendar, Library, Wallet, DollarSign, ClipboardList, FileText, MessageSquare, type LucideIcon } from 'lucide-react';
+import { LayoutDashboard, Users, GraduationCap, School, CreditCard, BarChart3, Settings, LogOut, Bell, BookOpen, Calendar, Library, Wallet, DollarSign, ClipboardList, FileText, MessageSquare, UserRoundPlus, type LucideIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 type NavigationItem = {
@@ -14,6 +14,8 @@ type NavigationItem = {
 
 const navigation: NavigationItem[] = [
     { name: 'Dashboard', href: '/admin', icon: LayoutDashboard },
+    { name: 'ERP Overview', href: '/admin/erp', icon: BarChart3 },
+    { name: 'Admissions', href: '/admin/admissions', icon: UserRoundPlus },
     { name: 'Academic Years', href: '/admin/academic/years', icon: Calendar },
     { name: 'Classes', href: '/admin/academic/classes', icon: School },
     { name: 'Timetable', href: '/admin/timetable', icon: Calendar },

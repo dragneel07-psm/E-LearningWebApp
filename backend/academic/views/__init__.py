@@ -7,3 +7,5 @@ from .timetable import TimetableViewSet
 from .exam import ExamViewSet, ExamSeatingViewSet
 from .notice import NoticeViewSet
 from .reports import ReportViewSet
+from .admission import AdmissionEnquiryViewSet
+from .erp import SchoolERPOverviewView

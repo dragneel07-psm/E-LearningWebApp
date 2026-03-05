@@ -220,6 +220,7 @@ export default function AcademicControlDashboard() {
                     <ManagementCard title="Subjects" desc="Manage subject definitions and curriculum." icon={BookOpen} link="/admin/academic/subjects" actionLink="/admin/academic/subjects" />
                     <ManagementCard title="Student Management" desc="Manage student profiles, enrollments, and progress." icon={Users} link="/admin/academic/students" actionLink="/admin/academic/students" />
                     <ManagementCard title="Teacher Management" desc="Manage faculty, assignments, and workload." icon={GraduationCap} link="/admin/academic/teachers" actionLink="/admin/academic/teachers" />
+                    <ManagementCard title="Admissions" desc="Track enquiries and convert applicants into student accounts." icon={Users} link="/admin/admissions" actionLink="/admin/admissions" />
                 </div>
             </div>
         </div>

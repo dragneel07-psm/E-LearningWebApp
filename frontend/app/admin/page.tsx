@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Users, GraduationCap, School, TrendingUp, ArrowUpRight, ArrowDownRight, UserPlus, FilePlus, Calendar, MoreVertical, CreditCard, BookOpen } from 'lucide-react';
+import { Users, GraduationCap, School, TrendingUp, ArrowUpRight, ArrowDownRight, UserPlus, FilePlus, Calendar, MoreVertical, CreditCard, BookOpen, UserRoundPlus, BarChart3 } from 'lucide-react';
 import { academicAPI, usersAPI, billingAPI } from '@/lib/api';
 import { XAxis, YAxis, CartesianGrid, Tooltip, AreaChart, Area, PieChart, Pie, Cell, Legend } from 'recharts';
 import { SafeResponsiveContainer } from '@/components/ui/safe-responsive-container';
@@ -381,6 +381,22 @@ export default function SchoolAdminDashboard() {
                         >
                             <Calendar className="h-6 w-6" />
                             Schedule
+                        </Button>
+                        <Button
+                            variant="outline"
+                            className="h-24 flex flex-col gap-2 border-slate-200 bg-white hover:bg-slate-50 hover:text-indigo-600"
+                            onClick={() => router.push('/admin/admissions')}
+                        >
+                            <UserRoundPlus className="h-6 w-6" />
+                            Admissions
+                        </Button>
+                        <Button
+                            variant="outline"
+                            className="h-24 flex flex-col gap-2 border-slate-200 bg-white hover:bg-slate-50 hover:text-indigo-600"
+                            onClick={() => router.push('/admin/erp')}
+                        >
+                            <BarChart3 className="h-6 w-6" />
+                            ERP Overview
                         </Button>
                     </CardContent>
                 </Card>
