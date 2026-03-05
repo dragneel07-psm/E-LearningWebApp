@@ -1,5 +1,6 @@
 from django.contrib.auth import get_user_model
 from django.db import connection
+from django.test import override_settings
 from django_tenants.test.cases import FastTenantTestCase
 from django_tenants.utils import tenant_context, schema_context
 from rest_framework import status
@@ -12,6 +13,7 @@ from core.models.tenant import Tenant, Domain
 User = get_user_model()
 
 
+@override_settings(ALLOWED_HOSTS=["localhost", "127.0.0.1", ".localhost", ".local"])
 class TenantJwtIsolationTests(FastTenantTestCase):
     @classmethod
     def setup_tenant(cls, tenant):
@@ -111,3 +113,34 @@ class TenantJwtIsolationTests(FastTenantTestCase):
         response = self.client.get("/api/users/accounts/me/")
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
         self.assertEqual(response.json().get("code"), "tenant_inactive")
+
+    def test_saas_admin_role_must_not_be_tenant_scoped(self):
+        with tenant_context(self.tenant):
+            self.user.role = "saas_admin"
+            self.user.save(update_fields=["role"])
+
+        forged_token = AccessToken.for_user(self.user)
+        forged_token["tenant_schema"] = self.tenant.schema_name
+        forged_token["tenant_id"] = str(self.tenant.id)
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {str(forged_token)}")
+        response = self.client.get("/api/users/accounts/me/")
+
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+        self.assertEqual(response.data.get("code"), "saas_admin_scope_invalid")
+
+    def test_tenant_role_without_tenant_assignment_is_rejected(self):
+        with tenant_context(self.tenant):
+            self.user.tenant = None
+            self.user.save(update_fields=["tenant"])
+
+        forged_token = AccessToken.for_user(self.user)
+        forged_token["tenant_schema"] = "public"
+        forged_token["tenant_id"] = None
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {str(forged_token)}")
+        response = self.client.get("/api/users/accounts/me/")
+
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+        self.assertIn(
+            response.data.get("code"),
+            {"token_tenant_user_mismatch", "tenant_user_missing_tenant"},
+        )

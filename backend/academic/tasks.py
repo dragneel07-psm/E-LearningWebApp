@@ -1,7 +1,12 @@
 from datetime import date
+try:
+    from celery import shared_task
+except Exception:
+    from core.async_jobs import background_task as shared_task
 from notifications.services import NotificationService
 from .models import Attendance
 
+@shared_task(name="academic.check_daily_attendance")
 def check_daily_attendance():
     """
     Checks today's attendance and notifies parents of absent students.
@@ -32,6 +37,7 @@ def check_daily_attendance():
         
     return f"Sent {count} absent alerts."
 
+@shared_task(name="academic.check_upcoming_exams")
 def check_upcoming_exams():
     """
     Checks for exams scheduled in the next 24 hours and notifies students.

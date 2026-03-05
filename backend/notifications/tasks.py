@@ -1,6 +1,9 @@
 from __future__ import annotations
 
-from core.async_jobs import background_task
+try:
+    from celery import shared_task
+except Exception:
+    from core.async_jobs import background_task as shared_task
 from notifications.services import EmailService, SMSService
 from django.contrib.auth import get_user_model
 from django_tenants.utils import schema_context
@@ -8,7 +11,7 @@ from django_tenants.utils import schema_context
 from core.models import Tenant
 
 
-@background_task(name="notifications.send_email")
+@shared_task(name="notifications.send_email")
 def send_email_notification_task(
     recipient_email: str,
     subject: str,
@@ -23,12 +26,12 @@ def send_email_notification_task(
     )
 
 
-@background_task(name="notifications.send_sms")
+@shared_task(name="notifications.send_sms")
 def send_sms_notification_task(recipient_phone: str, message: str):
     return SMSService.send_sms(recipient_phone=recipient_phone, message=message)
 
 
-@background_task(name="notifications.send_notification")
+@shared_task(name="notifications.send_notification")
 def send_notification_task(
     *,
     tenant_schema: str,

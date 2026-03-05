@@ -3,10 +3,13 @@ from __future__ import annotations
 import json
 from typing import Any
 
+try:
+    from celery import shared_task
+except Exception:
+    from core.async_jobs import background_task as shared_task
 from django.contrib.auth import get_user_model
 from django_tenants.utils import schema_context
 
-from core.async_jobs import background_task
 from core.models import Tenant
 
 from .models import AIInteractionLog
@@ -69,7 +72,7 @@ def _fallback_quiz(content: str, question_count: int) -> list[dict[str, Any]]:
     ]
 
 
-@background_task(name="ai.index_content")
+@shared_task(name="ai.index_content")
 def ai_index_content_task(
     *,
     tenant_schema: str,
@@ -105,7 +108,7 @@ def ai_index_content_task(
     return result
 
 
-@background_task(name="ai.generate_summary")
+@shared_task(name="ai.generate_summary")
 def generate_summary_task(
     *,
     tenant_schema: str,
@@ -148,7 +151,7 @@ def generate_summary_task(
     return parsed
 
 
-@background_task(name="ai.generate_quiz")
+@shared_task(name="ai.generate_quiz")
 def generate_quiz_task(
     *,
     tenant_schema: str,

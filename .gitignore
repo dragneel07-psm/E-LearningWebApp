@@ -152,6 +152,30 @@ staticfiles/
 .pytest_cache/
 .venv*/
 
+# Django / Python artifacts
+__pycache__/
+*.pyc
+.coverage
+htmlcov/
+
+# Local env files (keep example files)
+backend/.env
+frontend/.env*
+!frontend/.env.example
+mobile/.env*
+!mobile/.env.example
+
+# SQLite artifacts
+*.sqlite3.*
+
+# Django generated assets
+backend/media/
+backend/staticfiles/
+
+# Next.js build output
+frontend/.next/
+frontend/out/
+
 # Playwright
 /test-results/
 /playwright-report/

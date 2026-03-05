@@ -1,7 +1,12 @@
 from datetime import date
+try:
+    from celery import shared_task
+except Exception:
+    from core.async_jobs import background_task as shared_task
 from notifications.services import NotificationService
 from .models import StudentFee
 
+@shared_task(name="billing.check_overdue_fees")
 def check_overdue_fees():
     """
     Checks for overdue fees and sends reminders to students/parents.

@@ -104,7 +104,7 @@ class TenantFromHeaderMiddleware(TenantMainMiddleware):
     Extends django-tenants middleware with a strict tenant-header trust mode.
 
     Trust modes:
-      - dev_only (default): trust x-tenant-id only in DEBUG + local hostnames
+      - dev_only (default): trust x-tenant-id only in DEBUG + localhost/127.0.0.1/*.local hosts
       - never: ignore x-tenant-id in all environments
     """
 
@@ -116,7 +116,7 @@ class TenantFromHeaderMiddleware(TenantMainMiddleware):
         host = host.split(":", 1)[0]
         if host in {"localhost", "127.0.0.1", "::1", "[::1]"}:
             return True
-        return host.endswith(".localhost") or host.endswith(".localtest.me") or host.endswith(".lvh.me")
+        return host.endswith(".local")
 
     @classmethod
     def _should_trust_tenant_header(cls, hostname: str) -> bool:
@@ -127,27 +127,8 @@ class TenantFromHeaderMiddleware(TenantMainMiddleware):
             return False
         if not cls._is_local_hostname(hostname):
             return False
-        # dev_only (default) while DEBUG/local only.
+        # dev_only (default): DEBUG + localhost only.
         return True
-
-    @staticmethod
-    def _tenant_identifier_matches(domain_model, tenant, tenant_identifier: str) -> bool:
-        candidate = str(tenant_identifier or "").strip().lower()
-        if not candidate:
-            return True
-
-        if candidate == str(getattr(tenant, "schema_name", "") or "").strip().lower():
-            return True
-        subdomain = str(getattr(tenant, "subdomain", "") or "").strip().lower()
-        if subdomain and candidate == subdomain:
-            return True
-
-        try:
-            return domain_model.objects.filter(tenant=tenant).filter(
-                Q(domain__iexact=candidate) | Q(domain__istartswith=f"{candidate}.")
-            ).exists()
-        except Exception:
-            return False
 
     @staticmethod
     def _is_tenant_active(tenant) -> bool:
@@ -169,7 +150,7 @@ class TenantFromHeaderMiddleware(TenantMainMiddleware):
         except domain_model.DoesNotExist:
             tenant = None
 
-        # 2. Optional x-tenant-id fallback (dev/local by default)
+        # 2. Optional x-tenant-id fallback (debug + local only)
         tenant_id = (
             request.META.get('HTTP_X_TENANT_ID', '')
             or request.headers.get('x-tenant-id', '')
@@ -221,18 +202,7 @@ class TenantFromHeaderMiddleware(TenantMainMiddleware):
         if tenant is None:
             return self.no_tenant_found(request, hostname)
 
-        # 6. Reject spoofed x-tenant-id on non-trusted environments.
-        if tenant_id and not trust_header and not self._tenant_identifier_matches(domain_model, tenant, tenant_id):
-            return JsonResponse(
-                {
-                    "code": "tenant_header_rejected",
-                    "message": "x-tenant-id header is not accepted for this environment.",
-                    "trace_id": getattr(request, "request_id", None),
-                },
-                status=400,
-            )
-
-        # 7. Tenant status gate
+        # 6. Tenant status gate
         set_request_context(
             tenant_schema=getattr(tenant, "schema_name", "public"),
             tenant_id=str(getattr(tenant, "id", "") or "-"),
