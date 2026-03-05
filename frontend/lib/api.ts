@@ -2365,10 +2365,22 @@ export const api = {
         list: () => apiRequest('/core/audit-logs/'),
     },
     gamification: {
-        getBadges: () => apiRequest<Badge[]>('/gamification/available-badges/'),
-        getMyBadges: () => apiRequest<StudentBadge[]>('/gamification/student-badges/'),
-        getStudentBadges: () => apiRequest<StudentBadge[]>('/gamification/student-badges/'),
-        getLeaderboard: (scope: 'class' | 'school' = 'class') => apiRequest<any[]>(`/gamification/leaderboard/?scope=${scope}`),
+        getBadges: async () => {
+            const payload = await apiRequest<Badge[] | PaginatedResponse<Badge>>('/gamification/available-badges/');
+            return normalizeArrayPayload(payload);
+        },
+        getMyBadges: async () => {
+            const payload = await apiRequest<StudentBadge[] | PaginatedResponse<StudentBadge>>('/gamification/student-badges/');
+            return normalizeArrayPayload(payload);
+        },
+        getStudentBadges: async () => {
+            const payload = await apiRequest<StudentBadge[] | PaginatedResponse<StudentBadge>>('/gamification/student-badges/');
+            return normalizeArrayPayload(payload);
+        },
+        getLeaderboard: async (scope: 'class' | 'school' = 'class') => {
+            const payload = await apiRequest<any[] | PaginatedResponse<any>>(`/gamification/leaderboard/?scope=${scope}`);
+            return normalizeArrayPayload(payload);
+        },
         getMyStats: () => apiRequest<any>('/gamification/profile/my_stats/'),
         updateProfile: (id: string, data: any) => apiRequest<any>(`/gamification/profile/${id}/`, {
             method: 'PATCH',

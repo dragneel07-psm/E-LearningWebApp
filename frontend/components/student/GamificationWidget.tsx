@@ -18,9 +18,10 @@ export function GamificationWidget() {
         async function loadBadges() {
             try {
                 const data = await gamificationAPI.getStudentBadges();
-                setBadges(data);
+                setBadges(Array.isArray(data) ? data : []);
             } catch (error) {
                 console.error('Failed to load badges:', error);
+                setBadges([]);
             } finally {
                 setBadgesLoading(false);
             }
@@ -115,4 +116,3 @@ export function GamificationWidget() {
         </Card>
     );
 }
-

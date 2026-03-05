@@ -132,7 +132,7 @@ export default function StudentDashboard() {
 
             // 1. Fetch Subjects
             const subjects = await helpers.getStudentSubjects(student.id);
-            setCourses(subjects);
+            setCourses(Array.isArray(subjects) ? subjects : []);
 
             const [allAssessments, mySubmissions, myAttendance, myTimetable] = await Promise.all([
                 academicAPI.getAssessments(),
@@ -207,6 +207,10 @@ export default function StudentDashboard() {
         </div>
     );
 
+    const recommendationItems = Array.isArray(recommendations?.recommendations)
+        ? recommendations.recommendations
+        : [];
+
     return (
         <div className="space-y-6">
 
@@ -279,8 +283,8 @@ export default function StudentDashboard() {
             </div>
 
             {/* 1. AI Smart Path - High Visibility */}
-            {user?.tenant_features?.student_ai_chatbot !== false && recommendations && recommendations.recommendations.length > 0 && (
-                <SmartPathWidget recommendation={recommendations.recommendations[0]} />
+            {user?.tenant_features?.student_ai_chatbot !== false && recommendationItems.length > 0 && (
+                <SmartPathWidget recommendation={recommendationItems[0]} />
             )}
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -388,7 +392,7 @@ export default function StudentDashboard() {
                     )}
 
                     {/* AI Recommendations */}
-                    {user?.tenant_features?.student_ai_chatbot !== false && recommendations && recommendations.recommendations.length > 0 && (
+                    {user?.tenant_features?.student_ai_chatbot !== false && recommendationItems.length > 0 && (
                         <Card className="border-none shadow-md overflow-hidden bg-white border-l-4 border-indigo-500">
                             <CardHeader className="pb-3 flex flex-row items-center gap-2">
                                 <Sparkles className="h-5 w-5 text-indigo-600 animate-pulse" />
@@ -398,11 +402,11 @@ export default function StudentDashboard() {
                                 <div className="p-3 bg-indigo-50/50 rounded-xl border border-indigo-100 flex gap-3">
                                     <Lightbulb className="h-5 w-5 text-indigo-600 shrink-0" />
                                     <p className="text-xs text-indigo-900 leading-relaxed italic">
-                                        &quot;{recommendations.learning_style_advice}&quot;
+                                        &quot;{recommendations?.learning_style_advice || 'Keep a steady study pace and revise with short daily sessions.'}&quot;
                                     </p>
                                 </div>
                                 <div className="space-y-3">
-                                    {recommendations.recommendations.map((rec: any) => (
+                                    {recommendationItems.map((rec: any) => (
                                         <div
                                             key={rec.id}
                                             className="group p-3 rounded-xl border border-slate-100 transition-all hover:shadow-sm hover:border-indigo-200 cursor-pointer"
