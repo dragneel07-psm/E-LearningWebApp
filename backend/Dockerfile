@@ -70,16 +70,5 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
 # Expose port
 EXPOSE 8000
 
-# Run gunicorn with optimal settings for Python 3.13
-CMD ["gunicorn", \
-    "--bind", "0.0.0.0:8000", \
-    "--workers", "4", \
-    "--worker-class", "sync", \
-    "--timeout", "120", \
-    "--keep-alive", "5", \
-    "--max-requests", "1000", \
-    "--max-requests-jitter", "100", \
-    "--log-level", "info", \
-    "--access-logfile", "-", \
-    "--error-logfile", "-", \
-    "config.wsgi:application"]
+# Use project startup script so migrations/bootstrap run before Gunicorn.
+CMD ["bash", "scripts/railway-start-web.sh"]
