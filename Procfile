@@ -1,2 +1,2 @@
-web: bash scripts/railway-start-web.sh
-worker: bash scripts/railway-start-worker.sh
+web: bash -lc 'if [ -f backend/scripts/railway-start-web.sh ]; then exec bash backend/scripts/railway-start-web.sh; elif [ -f scripts/railway-start-web.sh ]; then exec bash scripts/railway-start-web.sh; elif [ -f manage.py ]; then exec /opt/venv/bin/gunicorn config.wsgi --bind 0.0.0.0:${PORT:-8000}; else echo "Unable to locate web start script"; exit 1; fi'
+worker: bash -lc 'if [ -f backend/scripts/railway-start-worker.sh ]; then exec bash backend/scripts/railway-start-worker.sh; elif [ -f scripts/railway-start-worker.sh ]; then exec bash scripts/railway-start-worker.sh; elif [ -f manage.py ] || [ -f backend/manage.py ]; then if [ -f backend/manage.py ]; then cd backend; fi; exec /opt/venv/bin/celery -A config.celery:app worker --loglevel=${CELERY_LOG_LEVEL:-info} --concurrency=${CELERY_WORKER_CONCURRENCY:-2}; else echo "Unable to locate worker start script"; exit 1; fi'

@@ -69,7 +69,7 @@ Use existing repo scripts:
 1. `railway.toml` default start command is `bash scripts/railway-start-web.sh`.
 2. For `backend-web`, keep default (or set same value explicitly).
 3. For `backend-worker`, set Railway service **Custom Start Command** to:
-   - `bash scripts/railway-start-worker.sh`
+   - `bash -lc 'if [ -f backend/manage.py ]; then cd backend; fi; exec /opt/venv/bin/celery -A config.celery:app worker --loglevel=${CELERY_LOG_LEVEL:-info} --concurrency=${CELERY_WORKER_CONCURRENCY:-2}'`
 
 Why this is needed:
 
