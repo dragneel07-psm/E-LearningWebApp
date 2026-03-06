@@ -25,6 +25,36 @@ function normalizeBackendOrigin(raw: string): string {
     return selected.replace(/\/+$/, "").replace(/\/api$/i, "");
 }
 
+function normalizeHostWithPort(rawHost: string): string {
+    return (rawHost || "").trim().toLowerCase();
+}
+
+function isLikelyProxyLoop(request: NextRequest, backendOrigin: string): boolean {
+    let target: URL;
+    try {
+        target = new URL(backendOrigin);
+    } catch {
+        return false;
+    }
+
+    const requestHost = normalizeHostWithPort(request.headers.get("host") || request.nextUrl.host);
+    const targetHost = normalizeHostWithPort(target.host);
+
+    if (!requestHost || !targetHost) {
+        return false;
+    }
+
+    // Exact host match means /api proxy points back to this same Next.js app.
+    if (requestHost === targetHost) {
+        return true;
+    }
+
+    // Also guard against common www/non-www loop.
+    const requestNoWww = requestHost.replace(/^www\./, "");
+    const targetNoWww = targetHost.replace(/^www\./, "");
+    return requestNoWww === targetNoWww;
+}
+
 function resolveBackendOrigin(): string {
     const explicit = normalizeBackendOrigin(process.env.BACKEND_API_ORIGIN || process.env.API_PROXY_TARGET || "");
     if (explicit) return explicit;
@@ -62,6 +92,28 @@ function buildForwardHeaders(request: NextRequest): Headers {
 }
 
 async function proxyRequest(request: NextRequest, pathParts: string[]): Promise<NextResponse> {
+    const backendOrigin = resolveBackendOrigin();
+    if (!backendOrigin) {
+        return NextResponse.json(
+            {
+                code: "backend_origin_missing",
+                message: "Set BACKEND_API_ORIGIN (or API_PROXY_TARGET) to your Railway backend origin.",
+            },
+            { status: 500 },
+        );
+    }
+
+    if (isLikelyProxyLoop(request, backendOrigin)) {
+        return NextResponse.json(
+            {
+                code: "backend_origin_loop",
+                message:
+                    "BACKEND_API_ORIGIN points to the frontend host. Set it to the Railway backend origin.",
+            },
+            { status: 500 },
+        );
+    }
+
     const targetUrl = buildTargetUrl(request, pathParts);
     if (!targetUrl) {
         return NextResponse.json(
@@ -77,13 +129,27 @@ async function proxyRequest(request: NextRequest, pathParts: string[]): Promise<
     const hasBody = method !== "GET" && method !== "HEAD";
     const forwardHeaders = buildForwardHeaders(request);
 
-    const upstreamResponse = await fetch(targetUrl, {
-        method,
-        headers: forwardHeaders,
-        body: hasBody ? await request.arrayBuffer() : undefined,
-        redirect: "manual",
-        cache: "no-store",
-    });
+    let upstreamResponse: Response;
+    try {
+        upstreamResponse = await fetch(targetUrl, {
+            method,
+            headers: forwardHeaders,
+            body: hasBody ? await request.arrayBuffer() : undefined,
+            // Follow redirects server-side so browser clients don't enter redirect loops.
+            redirect: "follow",
+            cache: "no-store",
+        });
+    } catch (error) {
+        const detail = error instanceof Error ? error.message : "Unknown upstream error";
+        return NextResponse.json(
+            {
+                code: "backend_proxy_failed",
+                message: "Backend API request failed.",
+                detail,
+            },
+            { status: 502 },
+        );
+    }
 
     const responseHeaders = new Headers(upstreamResponse.headers);
     for (const header of HOP_BY_HOP_HEADERS) {

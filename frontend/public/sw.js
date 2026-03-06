@@ -151,7 +151,16 @@ async function networkFirstWithCache(request, cacheName, timeoutMs = 5000) {
         console.log('[SW] Network failed, trying cache:', request.url);
         const cached = await caches.match(request);
         if (cached) return cached;
-        throw error;
+        return new Response(
+            JSON.stringify({
+                code: 'network_unavailable',
+                message: 'Network unavailable and no cached response found.',
+            }),
+            {
+                status: 503,
+                headers: { 'Content-Type': 'application/json' },
+            }
+        );
     }
 }
 
@@ -180,7 +189,20 @@ async function staleWhileRevalidate(request, cacheName) {
         return response;
     }).catch(() => null);
 
-    return cached || networkFetch;
+    const networkResponse = await networkFetch;
+    if (cached) return cached;
+    if (networkResponse) return networkResponse;
+
+    return new Response(
+        JSON.stringify({
+            code: 'offline_unavailable',
+            message: 'Resource unavailable offline.',
+        }),
+        {
+            status: 503,
+            headers: { 'Content-Type': 'application/json' },
+        }
+    );
 }
 
 // ─── HELPERS ─────────────────────────────────────────────────
