@@ -27,8 +27,18 @@ const PUBLIC_PATHS = [
 ];
 
 function getBackendApiBaseUrl(): string | null {
-    let url = (process.env.NEXT_PUBLIC_API_URL || '').trim();
+    const raw = (process.env.NEXT_PUBLIC_API_URL || '').trim();
+    const candidates = raw.split(',').map((item) => item.trim()).filter(Boolean);
+    const apiAbsoluteCandidate = candidates.find((item) => /^https?:\/\//i.test(item) && /\/api(\/|$)/i.test(item));
+    let url = apiAbsoluteCandidate
+        || candidates.find((item) => /^https?:\/\//i.test(item))
+        || candidates.find((item) => !item.startsWith('/'))
+        || raw;
     if (!url) return null;
+
+    if (url.startsWith('/')) {
+        return null;
+    }
 
     if (!url.startsWith('http://') && !url.startsWith('https://')) {
         url = `https://${url}`;

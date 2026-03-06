@@ -14,6 +14,7 @@ from pathlib import Path
 import logging
 import os
 from datetime import timedelta
+from urllib.parse import urlsplit
 from django.core.exceptions import ImproperlyConfigured
 from dotenv import load_dotenv
 
@@ -30,6 +31,30 @@ def _csv_env_list(key: str, default: list[str] | None = None) -> list[str]:
     if not value:
         return list(default or [])
     return [item.strip() for item in value.split(",") if item.strip()]
+
+
+def _normalize_origin(origin: str) -> str:
+    value = (origin or "").strip()
+    if not value:
+        return ""
+    if "://" not in value:
+        return value.rstrip("/")
+    parsed = urlsplit(value)
+    if not parsed.scheme or not parsed.netloc:
+        return value.rstrip("/")
+    return f"{parsed.scheme}://{parsed.netloc}"
+
+
+def _normalize_origins(origins: list[str]) -> list[str]:
+    normalized: list[str] = []
+    seen: set[str] = set()
+    for origin in origins:
+        candidate = _normalize_origin(origin)
+        if not candidate or candidate in seen:
+            continue
+        normalized.append(candidate)
+        seen.add(candidate)
+    return normalized
 
 
 # Quick-start development settings - unsuitable for production
@@ -260,8 +285,11 @@ else:
     # In production, CORS must be explicit.
     CORS_ALLOWED_ORIGINS = _csv_env_list("CORS_ALLOWED_ORIGINS", [])
 
-if _frontend_url_env and _frontend_url_env not in CORS_ALLOWED_ORIGINS:
-    CORS_ALLOWED_ORIGINS.append(_frontend_url_env)
+frontend_origin = _normalize_origin(_frontend_url_env)
+if frontend_origin and frontend_origin not in CORS_ALLOWED_ORIGINS:
+    CORS_ALLOWED_ORIGINS.append(frontend_origin)
+
+CORS_ALLOWED_ORIGINS = _normalize_origins(CORS_ALLOWED_ORIGINS)
 
 _cors_origin_regexes = _csv_env_list("CORS_ALLOWED_ORIGIN_REGEXES", [])
 if _cors_origin_regexes:
@@ -275,7 +303,7 @@ CORS_ALLOW_ALL_ORIGINS = os.environ.get("CORS_ALLOW_ALL_ORIGINS", "false").lower
 CORS_ALLOW_CREDENTIALS = True
 
 _csrf_trusted_from_env = _csv_env_list("CSRF_TRUSTED_ORIGINS", [])
-CSRF_TRUSTED_ORIGINS = _csrf_trusted_from_env or list(CORS_ALLOWED_ORIGINS)
+CSRF_TRUSTED_ORIGINS = _normalize_origins(_csrf_trusted_from_env or list(CORS_ALLOWED_ORIGINS))
 
 from corsheaders.defaults import default_headers
 CORS_ALLOW_HEADERS = list(default_headers) + [

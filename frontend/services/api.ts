@@ -3,8 +3,20 @@ import { getAccessToken } from '@/lib/auth';
 import { getTenantFromSubdomain } from '@/lib/tenant';
 
 function normalizeApiBaseUrl(rawUrl: string): string {
-    let normalized = (rawUrl || '').trim();
+    const candidates = (rawUrl || '')
+        .split(',')
+        .map((item) => item.trim())
+        .filter(Boolean);
+    const apiAbsoluteCandidate = candidates.find((item) => /^https?:\/\//i.test(item) && /\/api(\/|$)/i.test(item));
+    let normalized = apiAbsoluteCandidate
+        || candidates.find((item) => /^https?:\/\//i.test(item))
+        || candidates.find((item) => !item.startsWith('/'))
+        || (rawUrl || '').trim();
     if (!normalized) {
+        normalized = 'http://localhost:8000';
+    }
+
+    if (normalized.startsWith('/')) {
         normalized = 'http://localhost:8000';
     }
 

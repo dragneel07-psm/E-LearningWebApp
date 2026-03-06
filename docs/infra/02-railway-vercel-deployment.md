@@ -14,7 +14,7 @@ This runbook prepares and deploys:
   - `x-tenant-id` is ignored in production.
   - tenant resolution is domain/hostname based only.
 - You have DNS access for:
-  - API domain (Railway)
+  - API domain `avn.manyaltech.com` (Railway)
   - App domain (Vercel)
 
 ## 2. Repo Readiness (already applied)
@@ -53,9 +53,9 @@ Set these on both `backend-web` and `backend-worker`:
 ```bash
 SECRET_KEY=...
 DEBUG=False
-ALLOWED_HOSTS=api.yourdomain.com
+ALLOWED_HOSTS=.manyaltech.com,e-learningwebapp-production-1112.up.railway.app,localhost,127.0.0.1
 TIME_ZONE=Asia/Kathmandu
-FRONTEND_URL=https://yourdomain.com
+FRONTEND_URL=https://www.manyaltech.com
 
 DATABASE_URL=<from Railway Postgres>
 REDIS_URL=<from Railway Redis>
@@ -64,16 +64,21 @@ CELERY_BROKER_URL=<same as REDIS_URL>
 CELERY_RESULT_BACKEND=<same as REDIS_URL>
 
 TENANT_HEADER_TRUST_MODE=never
+PRIMARY_PUBLIC_DOMAIN=avn.manyaltech.com
+PUBLIC_DOMAINS=avn.manyaltech.com,manyaltech.com,www.manyaltech.com
 
-CORS_ALLOWED_ORIGINS=https://yourdomain.com
-CSRF_TRUSTED_ORIGINS=https://yourdomain.com
+CORS_ALLOWED_ORIGINS=https://www.manyaltech.com,https://manyaltech.com
+CSRF_TRUSTED_ORIGINS=https://www.manyaltech.com,https://manyaltech.com
 ```
+
+Note: keep origins as `scheme://host` only (no trailing slash, path, query, or fragment).
 
 Optional but recommended:
 
 ```bash
 SENTRY_DSN=...
 SECURE_SSL_REDIRECT=true
+SECURE_PROXY_SSL_HEADER=HTTP_X_FORWARDED_PROTO,https
 SECURE_HSTS_SECONDS=2592000
 SECURE_HSTS_INCLUDE_SUBDOMAINS=true
 ```
@@ -84,7 +89,35 @@ Because production is domain-resolved:
 - Add tenant domains in your `Domain` table.
 - Ensure incoming hostnames to Railway match those tenant domains.
 
-For SaaS/public flows, keep a public domain (for example `api.yourdomain.com`) mapped to `public`.
+For SaaS/public flows, keep a public domain (for example `avn.manyaltech.com`) mapped to `public`.
+
+### Example: add tenant subdomain `avn.manyaltech.com`
+
+1. Add custom domain in Railway for backend-web service:
+   - `avn.manyaltech.com`
+2. Add DNS record:
+   - `CNAME avn -> <your-railway-backend-domain>`
+3. Upsert domain mapping in Django (`Domain` table):
+
+```bash
+cd backend
+.venv/bin/python manage.py shell -c "
+from core.models.tenant import Tenant, Domain
+tenant = Tenant.objects.get(schema_name='avn')  # change if your schema name differs
+Domain.objects.update_or_create(
+    domain='avn.manyaltech.com',
+    defaults={'tenant': tenant, 'is_primary': True},
+)
+print('Domain mapped:', 'avn.manyaltech.com', '->', tenant.schema_name)
+"
+```
+
+4. Verify routing:
+
+```bash
+curl -i https://avn.manyaltech.com/healthz
+curl -i https://avn.manyaltech.com/api/core/tenant-check/
+```
 
 ## 4. Deploy Frontend to Vercel
 
@@ -99,9 +132,11 @@ For SaaS/public flows, keep a public domain (for example `api.yourdomain.com`) m
 Set in Vercel:
 
 ```bash
-NEXT_PUBLIC_API_URL=https://api.yourdomain.com/api
-NEXT_PUBLIC_SITE_URL=https://yourdomain.com
+NEXT_PUBLIC_API_URL=https://avn.manyaltech.com/api
+NEXT_PUBLIC_SITE_URL=https://www.manyaltech.com
 ```
+
+Important: `NEXT_PUBLIC_API_URL` must be a single URL value (no comma-separated list).
 
 If you use analytics:
 
@@ -111,14 +146,14 @@ NEXT_PUBLIC_GA_ID=G-XXXXXXXXXX
 
 ## 4.3 Frontend Domain
 
-- Add custom domain in Vercel (for example `yourdomain.com`).
+- Add custom domain in Vercel (for example `manyaltech.com`).
 - Update backend CORS/CSRF allowlists with the final Vercel domain.
 
 ## 5. Post-Deploy Smoke Test
 
 Run in order:
-1. `GET https://api.yourdomain.com/healthz` -> `200`
-2. `GET https://api.yourdomain.com/readyz` -> `200`
+1. `GET https://avn.manyaltech.com/healthz` -> `200`
+2. `GET https://avn.manyaltech.com/readyz` -> `200`
 3. Login from frontend
 4. Verify one async endpoint:
    - queue job
