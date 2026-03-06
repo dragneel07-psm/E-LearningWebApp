@@ -2,6 +2,7 @@
 set -euo pipefail
 
 PORT="${PORT:-8000}"
+MIGRATION_VERBOSITY="${MIGRATION_VERBOSITY:-0}"
 
 if [ -f manage.py ]; then
   APP_DIR="."
@@ -59,9 +60,9 @@ GUNICORN_BIN="$(resolve_gunicorn_bin)"
 
 cd "${APP_DIR}"
 
-"${PY_BIN}" manage.py migrate_schemas --shared --noinput
-"${PY_BIN}" manage.py migrate_schemas --schema=public --noinput
-"${PY_BIN}" manage.py migrate_schemas --tenant --noinput
+# --shared already migrates the public schema; no need to run --schema=public again.
+"${PY_BIN}" manage.py migrate_schemas --shared --noinput --verbosity="${MIGRATION_VERBOSITY}"
+"${PY_BIN}" manage.py migrate_schemas --tenant --noinput --verbosity="${MIGRATION_VERBOSITY}"
 "${PY_BIN}" manage.py init_prod
 
 exec "${GUNICORN_BIN}" config.wsgi --bind "0.0.0.0:${PORT}"

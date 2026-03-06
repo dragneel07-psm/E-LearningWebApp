@@ -93,6 +93,7 @@ REDIS_URL=<from Railway Redis>
 ASYNC_TASK_BACKEND=celery
 CELERY_BROKER_URL=<same as REDIS_URL>
 CELERY_RESULT_BACKEND=<same as REDIS_URL>
+MIGRATION_VERBOSITY=0
 
 TENANT_HEADER_TRUST_MODE=never
 PRIMARY_PUBLIC_DOMAIN=manyaltech.com
@@ -114,6 +115,7 @@ Notes:
 1. Do not include trailing `/` in CORS/CSRF origins.
 2. Keep `ALLOWED_HOSTS` explicit in production.
 3. `USE_X_FORWARDED_HOST=true` is mandatory for proxy-based tenant routing.
+4. `MIGRATION_VERBOSITY=0` keeps boot logs compact; set `1` or `2` temporarily when debugging migrations.
 
 ## 5. Vercel Frontend Deployment
 
