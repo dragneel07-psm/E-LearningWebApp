@@ -65,13 +65,26 @@ function resolveBackendOrigin(): string {
     return normalizeBackendOrigin(process.env.NEXT_PUBLIC_API_URL || "");
 }
 
+function buildBackendApiPath(pathParts: string[]): string {
+    const joined = (pathParts || []).join("/").replace(/^\/+/, "");
+    if (!joined) {
+        return "api/";
+    }
+
+    // Preserve file-like paths as-is, append trailing slash for API resource routes.
+    const isFileLike = /\/[^/]+\.[^/]+$/.test(`/${joined}`);
+    if (joined.endsWith("/") || isFileLike) {
+        return `api/${joined}`;
+    }
+    return `api/${joined}/`;
+}
+
 function buildTargetUrl(request: NextRequest, pathParts: string[]): URL | null {
     const backendOrigin = resolveBackendOrigin();
     if (!backendOrigin) return null;
 
     const base = `${backendOrigin}/`;
-    const path = pathParts.length ? pathParts.join("/") : "";
-    const targetUrl = new URL(`api/${path}`, base);
+    const targetUrl = new URL(buildBackendApiPath(pathParts), base);
     targetUrl.search = request.nextUrl.search;
     return targetUrl;
 }
@@ -135,8 +148,8 @@ async function proxyRequest(request: NextRequest, pathParts: string[]): Promise<
             method,
             headers: forwardHeaders,
             body: hasBody ? await request.arrayBuffer() : undefined,
-            // Follow redirects server-side so browser clients don't enter redirect loops.
-            redirect: "follow",
+            // Keep redirect handling explicit to avoid POST -> GET rewrites on 301/302.
+            redirect: "manual",
             cache: "no-store",
         });
     } catch (error) {
