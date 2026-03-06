@@ -25,13 +25,29 @@ export const getTenantFromSubdomain = (hostname: string): string | null => {
         return null;
     }
 
-    // tenant.example.com -> tenant
+    // tenant.example.com -> tenant (except reserved public labels)
     if (parts.length > 2) {
-        return parts[0];
+        const label = parts[0];
+        if (label === 'www') return null;
+        return label;
     }
 
     // Root domains like example.com do not imply a tenant.
     return null;
+};
+
+export const isLocalHost = (hostname: string): boolean => {
+    const normalizedHost = (hostname || '').trim().toLowerCase();
+    if (!normalizedHost) return false;
+    if (normalizedHost === 'localhost' || normalizedHost === '127.0.0.1') return true;
+    return normalizedHost.endsWith('.localhost') || normalizedHost.endsWith('.local');
+};
+
+export type LoginPortalContext = 'public' | 'tenant' | 'local';
+
+export const getLoginPortalContext = (hostname: string): LoginPortalContext => {
+    if (isLocalHost(hostname)) return 'local';
+    return getTenantFromSubdomain(hostname) ? 'tenant' : 'public';
 };
 
 type TenantInfo = {

@@ -1,9 +1,24 @@
 'use client';
 
-import { Suspense } from 'react';
+import { Suspense, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { LoginForm } from '@/components/auth/login-form';
+import { getLoginPortalContext } from '@/lib/tenant';
 
 export default function StudentLoginPage() {
+    const router = useRouter();
+    const portalContext = getLoginPortalContext(
+        typeof window !== 'undefined' ? window.location.hostname : 'localhost'
+    );
+
+    useEffect(() => {
+        if (portalContext === 'public') {
+            router.replace('/login');
+        }
+    }, [portalContext, router]);
+
+    if (portalContext === 'public') return null;
+
     return (
         <div className="relative flex items-center justify-center min-h-screen overflow-hidden bg-[#0a0a0c]">
             {/* Ambient Background Effects */}

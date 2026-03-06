@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { User, GraduationCap, ShieldCheck, ArrowRight } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { getLoginPortalContext } from '@/lib/tenant';
 
 const roles = [
     {
@@ -46,6 +47,20 @@ const roles = [
 export const dynamic = 'force-dynamic';
 
 export default function LoginPortalPage() {
+    const portalContext = getLoginPortalContext(
+        typeof window !== 'undefined' ? window.location.hostname : 'localhost'
+    );
+
+    const visibleRoles = roles.filter((role) => {
+        if (portalContext === 'public') {
+            return role.id === 'saas';
+        }
+        if (portalContext === 'tenant') {
+            return role.id !== 'saas';
+        }
+        return true;
+    });
+
     return (
         <div className="relative flex items-center justify-center min-h-screen overflow-hidden bg-[#0a0a0c] p-4">
             {/* Ambient Background Effects */}
@@ -65,8 +80,8 @@ export default function LoginPortalPage() {
                     </p>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                    {roles.map((role, index) => (
+                <div className={`grid grid-cols-1 gap-6 ${visibleRoles.length === 4 ? 'md:grid-cols-2 lg:grid-cols-4' : visibleRoles.length > 1 ? 'md:grid-cols-2 lg:grid-cols-3' : 'max-w-sm mx-auto'}`}>
+                    {visibleRoles.map((role, index) => (
                         <motion.div
                             key={role.id}
                             initial={{ opacity: 0, y: 20 }}

@@ -1,9 +1,24 @@
 'use client';
 
-import { Suspense } from 'react';
+import { Suspense, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { LoginForm } from '@/components/auth/login-form';
+import { getLoginPortalContext } from '@/lib/tenant';
 
 export default function SaasLoginPage() {
+    const router = useRouter();
+    const portalContext = getLoginPortalContext(
+        typeof window !== 'undefined' ? window.location.hostname : 'localhost'
+    );
+
+    useEffect(() => {
+        if (portalContext === 'tenant') {
+            router.replace('/login');
+        }
+    }, [portalContext, router]);
+
+    if (portalContext === 'tenant') return null;
+
     return (
         <div className="relative flex items-center justify-center min-h-screen overflow-hidden bg-[#050505]">
             {/* SaaS-specific Ambient Background Effects - Cyberspace feel */}
