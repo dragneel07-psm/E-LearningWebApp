@@ -72,5 +72,56 @@ class Command(BaseCommand):
                 self.stdout.write(self.style.SUCCESS(f'✅ Created domain: {d}'))
             else:
                 self.stdout.write(self.style.SUCCESS(f'✅ Verified/Updated domain: {d}'))
+
+        # 3. Backfill default subdomain domains for existing non-public tenants.
+        # This keeps historical tenants reachable even if they were created before BASE_DOMAIN was set.
+        base_domain = _normalize_domain(os.environ.get("BASE_DOMAIN", ""))
+        if base_domain:
+            tenant_defaults_created = 0
+            tenant_defaults_verified = 0
+            tenant_defaults_skipped = 0
+            tenant_defaults_errors = 0
+
+            for school_tenant in Tenant.objects.exclude(schema_name="public").all():
+                subdomain = str(getattr(school_tenant, "subdomain", "") or "").strip().lower()
+                if not subdomain:
+                    tenant_defaults_skipped += 1
+                    continue
+                expected_domain = f"{subdomain}.{base_domain}"
+
+                # Keep existing custom primary domain unchanged; default subdomain domain can be secondary.
+                has_primary = Domain.objects.filter(tenant=school_tenant, is_primary=True).exists()
+                try:
+                    _, created = Domain.objects.update_or_create(
+                        domain=expected_domain,
+                        defaults={
+                            "tenant": school_tenant,
+                            "is_primary": not has_primary,
+                        },
+                    )
+                    if created:
+                        tenant_defaults_created += 1
+                        self.stdout.write(self.style.SUCCESS(
+                            f"✅ Created default tenant domain: {expected_domain} -> {school_tenant.schema_name}"
+                        ))
+                    else:
+                        tenant_defaults_verified += 1
+                except Exception as exc:
+                    tenant_defaults_errors += 1
+                    self.stdout.write(self.style.WARNING(
+                        f"⚠️ Could not upsert tenant domain {expected_domain}: {exc}"
+                    ))
+
+            self.stdout.write(self.style.NOTICE(
+                "ℹ️ Tenant domain backfill summary: "
+                f"created={tenant_defaults_created}, "
+                f"verified={tenant_defaults_verified}, "
+                f"skipped_no_subdomain={tenant_defaults_skipped}, "
+                f"errors={tenant_defaults_errors}"
+            ))
+        else:
+            self.stdout.write(self.style.WARNING(
+                "⚠️ BASE_DOMAIN is not set; skipped tenant default-domain backfill."
+            ))
         
         self.stdout.write(self.style.SUCCESS('🚀 Production initialization complete.'))
