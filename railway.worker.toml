@@ -1,6 +1,6 @@
 [build]
 builder = "NIXPACKS"
-buildCommand = "/opt/venv/bin/pip install setuptools && /opt/venv/bin/pip install -r backend/requirements.txt"
+buildCommand = "/opt/venv/bin/pip install setuptools && if [ -f backend/requirements.txt ]; then /opt/venv/bin/pip install -r backend/requirements.txt; else /opt/venv/bin/pip install -r requirements.txt; fi"
 
 [deploy]
-startCommand = "bash scripts/railway-start-worker.sh"
+startCommand = "bash -lc 'if [ -f backend/manage.py ]; then cd backend; fi; exec /opt/venv/bin/celery -A config.celery:app worker --loglevel=${CELERY_LOG_LEVEL:-info} --concurrency=${CELERY_WORKER_CONCURRENCY:-2}'"
