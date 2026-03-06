@@ -52,8 +52,9 @@ RUN pip install --no-cache /wheels/*
 # Copy project files
 COPY . .
 
-# Collect static files
-RUN python manage.py collectstatic --noinput || true
+# Collect static files during image build. Runtime env vars (including ALLOWED_HOSTS)
+# may not be available at build time, so provide a temporary safe default here.
+RUN ALLOWED_HOSTS=localhost,127.0.0.1 python manage.py collectstatic --noinput || true
 
 # Create non-root user for security
 RUN addgroup --system django && adduser --system --ingroup django django
