@@ -26,8 +26,13 @@ const PUBLIC_PATHS = [
     '/icons/'
 ];
 
-function getBackendApiBaseUrl(): string | null {
+function getBackendApiBaseUrl(request: NextRequest): string | null {
     const raw = (process.env.NEXT_PUBLIC_API_URL || '').trim();
+    const rawNormalized = raw.toLowerCase();
+    if (rawNormalized === '/api' || rawNormalized === 'api' || rawNormalized === 'same-origin' || rawNormalized === 'same_origin' || rawNormalized === 'relative') {
+        return request.nextUrl.origin;
+    }
+
     const candidates = raw.split(',').map((item) => item.trim()).filter(Boolean);
     const apiAbsoluteCandidate = candidates.find((item) => /^https?:\/\//i.test(item) && /\/api(\/|$)/i.test(item));
     let url = apiAbsoluteCandidate
@@ -52,8 +57,8 @@ function getBackendApiBaseUrl(): string | null {
     return url;
 }
 
-async function getUserFromBackend(token: string, tenantId: string): Promise<UserPayload | null> {
-    const backendBase = getBackendApiBaseUrl();
+async function getUserFromBackend(request: NextRequest, token: string, tenantId: string): Promise<UserPayload | null> {
+    const backendBase = getBackendApiBaseUrl(request);
     if (!backendBase) return null;
 
     try {
@@ -133,7 +138,7 @@ export async function proxy(request: NextRequest) {
         }
 
         if (!user) {
-            user = await getUserFromBackend(token, tenantForValidation);
+            user = await getUserFromBackend(request, token, tenantForValidation);
         }
 
         if (!user) {

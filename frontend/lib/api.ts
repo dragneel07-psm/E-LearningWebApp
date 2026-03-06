@@ -10,6 +10,11 @@ import { removeTokens } from "./auth";
 export const getApiBaseUrl = () => {
     const fallback = 'http://localhost:8000/api';
     const rawUrl = (process.env.NEXT_PUBLIC_API_URL || '').trim();
+    const rawLower = rawUrl.toLowerCase();
+    if (rawLower === '/api' || rawLower === 'api' || rawLower === 'same-origin' || rawLower === 'same_origin' || rawLower === 'relative') {
+        return '/api';
+    }
+
     const candidates = rawUrl.split(',').map((item) => item.trim()).filter(Boolean);
     const apiAbsoluteCandidate = candidates.find((item) => /^https?:\/\//i.test(item) && /\/api(\/|$)/i.test(item));
     let url = apiAbsoluteCandidate
@@ -18,7 +23,7 @@ export const getApiBaseUrl = () => {
         || rawUrl
         || fallback;
 
-    // Ignore invalid path-only values such as "/api" and fall back to default.
+    // Ignore invalid path-only values and fall back to default.
     if (url.startsWith('/')) {
         url = fallback;
     }

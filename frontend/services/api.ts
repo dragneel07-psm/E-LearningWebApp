@@ -3,6 +3,12 @@ import { getAccessToken } from '@/lib/auth';
 import { getTenantFromSubdomain } from '@/lib/tenant';
 
 function normalizeApiBaseUrl(rawUrl: string): string {
+    const rawNormalized = (rawUrl || '').trim().toLowerCase();
+    if (rawNormalized === '/api' || rawNormalized === 'api' || rawNormalized === 'same-origin' || rawNormalized === 'same_origin' || rawNormalized === 'relative') {
+        // Keep paths in callers untouched (most service callers already prefix "/api/...").
+        return '';
+    }
+
     const candidates = (rawUrl || '')
         .split(',')
         .map((item) => item.trim())

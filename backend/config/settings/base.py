@@ -465,6 +465,9 @@ if os.environ.get("SECURE_PROXY_SSL_HEADER"):
     if len(_proxy_parts) == 2 and _proxy_parts[0] and _proxy_parts[1]:
         SECURE_PROXY_SSL_HEADER = (_proxy_parts[0], _proxy_parts[1])
 
+# Enable only when running behind a trusted proxy that forwards tenant hostnames.
+USE_X_FORWARDED_HOST = os.environ.get("USE_X_FORWARDED_HOST", "false").lower() == "true"
+
 # Caching Configuration
 if 'REDIS_URL' in os.environ:
     CACHES = {
