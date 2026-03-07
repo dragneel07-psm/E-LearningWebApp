@@ -84,11 +84,53 @@ function getUserFromToken(token: string): UserPayload | null {
     }
 }
 
-function getLatestCookieValue(request: NextRequest, name: string): string | undefined {
-    const allValues = request.cookies.getAll(name)
-        .map((item) => item.value)
-        .filter((value) => Boolean(value && value.trim()));
+function normalizeTokenCandidate(rawValue: string): string {
+    const raw = (rawValue || '').trim();
+    if (!raw) return '';
+
+    let decoded = raw;
+    try {
+        decoded = decodeURIComponent(raw);
+    } catch {
+        decoded = raw;
+    }
+
+    const normalized = decoded.trim();
+    if (normalized.toLowerCase().startsWith('bearer ')) {
+        return normalized.slice(7).trim();
+    }
+    return normalized;
+}
+
+function isLikelyJwt(token: string): boolean {
+    const parts = token.split('.');
+    if (parts.length !== 3) return false;
+    return parts.every((part) => /^[A-Za-z0-9\-_]+$/.test(part));
+}
+
+function getLatestAccessToken(request: NextRequest): string | undefined {
+    const allValues = request.cookies.getAll('access_token')
+        .map((item) => normalizeTokenCandidate(item.value))
+        .filter((value) => Boolean(value));
+
     if (allValues.length === 0) return undefined;
+
+    // Prefer the newest cookie value that is parseable as JWT payload.
+    for (let idx = allValues.length - 1; idx >= 0; idx -= 1) {
+        const candidate = allValues[idx];
+        if (getUserFromToken(candidate)) {
+            return candidate;
+        }
+    }
+
+    // Fall back to JWT-shaped token if payload parsing failed.
+    for (let idx = allValues.length - 1; idx >= 0; idx -= 1) {
+        const candidate = allValues[idx];
+        if (isLikelyJwt(candidate)) {
+            return candidate;
+        }
+    }
+
     return allValues[allValues.length - 1];
 }
 
@@ -101,17 +143,24 @@ export async function proxy(request: NextRequest) {
     requestHeaders.set('x-tenant-id', tenantSubdomain || 'public');
 
     // 2. Auth Handling
-    const token = getLatestCookieValue(request, 'access_token');
+    const token = getLatestAccessToken(request);
+    const isAuthPage = pathname.startsWith('/login') || pathname.startsWith('/register');
 
     // Allow access to public paths
     if (pathname === '/' || PUBLIC_PATHS.some(path => pathname.startsWith(path))) {
-        // If logged in and at root or login/register, perform dashboard redirect
-        if (token && (pathname === '/' || pathname.startsWith('/login') || pathname.startsWith('/register'))) {
-            // Decoded and redirected in next block
-        } else if (!token && pathname === '/' && tenantSubdomain && tenantSubdomain !== 'localhost') {
+        // Tenant subdomains without a session should enter via login page.
+        if (!token && pathname === '/' && tenantSubdomain && tenantSubdomain !== 'localhost') {
             // Tenant subdomains should show school entry/login, not SaaS marketing root.
             return NextResponse.redirect(new URL('/login', request.url));
-        } else {
+        }
+        // Always allow /login and /register to render; avoid server-side auth loops.
+        if (isAuthPage) {
+            return NextResponse.next({
+                request: { headers: requestHeaders }
+            });
+        }
+        // For "/", continue into token check below so we can redirect authenticated users.
+        if (pathname !== '/') {
             return NextResponse.next({
                 request: { headers: requestHeaders }
             });
@@ -153,7 +202,9 @@ export async function proxy(request: NextRequest) {
         // Check expiration
         if (user.exp && user.exp * 1000 < Date.now()) {
             console.log(`[Proxy] Token expired (exp ${user.exp * 1000} < now ${Date.now()})`);
-            const response = NextResponse.redirect(new URL('/login', request.url));
+            const response = isAuthPage
+                ? NextResponse.next({ request: { headers: requestHeaders } })
+                : NextResponse.redirect(new URL('/login', request.url));
             clearAuthCookies(response);
             return response;
         }
@@ -175,8 +226,8 @@ export async function proxy(request: NextRequest) {
             return NextResponse.redirect(new URL('/unauthorized', request.url));
         }
 
-        // Root or Auth Redirect: Send logged-in user to their specific dashboard if they hit root, login, or register
-        if (pathname === '/' || pathname.startsWith('/login') || pathname.startsWith('/register')) {
+        // Root redirect only: auth pages are handled client-side to avoid loops on stale cookies.
+        if (pathname === '/') {
             const dashboardMap: Record<string, string> = {
                 admin: '/admin',
                 staff: '/admin',
@@ -191,8 +242,8 @@ export async function proxy(request: NextRequest) {
 
     } catch (e) {
         console.error('[Proxy] JWT Decode/Verify error:', e);
-        // Avoid login->login redirect loops when cookie is invalid/stale.
-        if (pathname.startsWith('/login')) {
+        // Avoid auth-page redirect loops when cookie is invalid/stale.
+        if (isAuthPage) {
             const response = NextResponse.next({
                 request: { headers: requestHeaders }
             });

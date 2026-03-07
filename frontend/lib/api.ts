@@ -1414,6 +1414,7 @@ function getResolvedTenantId(): string {
 export const DATA_MUTATED_EVENT = 'elearn:data-mutated';
 const LAST_MUTATION_AT_KEY = 'elearn:last-mutation-at';
 const FRESH_FETCH_WINDOW_MS = 30_000;
+const ME_CACHE_WINDOW_MS = 5_000;
 type ApiRequestOptions = RequestInit & { skipAuthRedirectOn401?: boolean };
 
 function getRequestMethod(options: RequestInit): string {
@@ -1646,6 +1647,9 @@ export const coreAPI = {
 };
 
 // Users API
+let inFlightMeRequest: Promise<User> | null = null;
+let lastMeSnapshot: { value: User; timestamp: number } | null = null;
+
 export const usersAPI = {
     getAccounts: async (tenantId?: string) => {
         const tenantHeaders = tenantId ? { 'x-tenant-id': tenantId } : undefined;
@@ -1677,7 +1681,26 @@ export const usersAPI = {
 
         return all;
     },
-    getMe: () => apiRequest<User>('/users/accounts/me/'),
+    getMe: () => {
+        const now = Date.now();
+        if (lastMeSnapshot && (now - lastMeSnapshot.timestamp) <= ME_CACHE_WINDOW_MS) {
+            return Promise.resolve(lastMeSnapshot.value);
+        }
+        if (inFlightMeRequest) {
+            return inFlightMeRequest;
+        }
+
+        inFlightMeRequest = apiRequest<User>('/users/accounts/me/')
+            .then((user) => {
+                lastMeSnapshot = { value: user, timestamp: Date.now() };
+                return user;
+            })
+            .finally(() => {
+                inFlightMeRequest = null;
+            });
+
+        return inFlightMeRequest;
+    },
     getAccount: (id: string, tenantId?: string) => apiRequest<User>(`/users/accounts/${id}/`, {
         headers: tenantId ? { 'x-tenant-id': tenantId } : undefined
     }),

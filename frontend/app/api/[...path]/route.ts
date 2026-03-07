@@ -107,17 +107,19 @@ function buildForwardHeaders(request: NextRequest): Headers {
 async function proxyRequest(request: NextRequest, pathParts: string[]): Promise<NextResponse> {
     const backendOrigin = resolveBackendOrigin();
     if (!backendOrigin) {
-        return NextResponse.json(
+        const response = NextResponse.json(
             {
                 code: "backend_origin_missing",
                 message: "Set BACKEND_API_ORIGIN (or API_PROXY_TARGET) to your Railway backend origin.",
             },
             { status: 500 },
         );
+        response.headers.set("cache-control", "no-store, no-cache, must-revalidate, max-age=0");
+        return response;
     }
 
     if (isLikelyProxyLoop(request, backendOrigin)) {
-        return NextResponse.json(
+        const response = NextResponse.json(
             {
                 code: "backend_origin_loop",
                 message:
@@ -125,17 +127,21 @@ async function proxyRequest(request: NextRequest, pathParts: string[]): Promise<
             },
             { status: 500 },
         );
+        response.headers.set("cache-control", "no-store, no-cache, must-revalidate, max-age=0");
+        return response;
     }
 
     const targetUrl = buildTargetUrl(request, pathParts);
     if (!targetUrl) {
-        return NextResponse.json(
+        const response = NextResponse.json(
             {
                 code: "backend_origin_missing",
                 message: "Set BACKEND_API_ORIGIN (or API_PROXY_TARGET) to your Railway backend origin.",
             },
             { status: 500 },
         );
+        response.headers.set("cache-control", "no-store, no-cache, must-revalidate, max-age=0");
+        return response;
     }
 
     const method = request.method.toUpperCase();
@@ -154,7 +160,7 @@ async function proxyRequest(request: NextRequest, pathParts: string[]): Promise<
         });
     } catch (error) {
         const detail = error instanceof Error ? error.message : "Unknown upstream error";
-        return NextResponse.json(
+        const response = NextResponse.json(
             {
                 code: "backend_proxy_failed",
                 message: "Backend API request failed.",
@@ -162,12 +168,18 @@ async function proxyRequest(request: NextRequest, pathParts: string[]): Promise<
             },
             { status: 502 },
         );
+        response.headers.set("cache-control", "no-store, no-cache, must-revalidate, max-age=0");
+        return response;
     }
 
     const responseHeaders = new Headers(upstreamResponse.headers);
     for (const header of HOP_BY_HOP_HEADERS) {
         responseHeaders.delete(header);
     }
+    responseHeaders.set("x-api-proxy", "nextjs-route-handler");
+    responseHeaders.set("x-backend-origin", backendOrigin);
+    responseHeaders.set("cache-control", "no-store, no-cache, must-revalidate, max-age=0");
+
     return new NextResponse(upstreamResponse.body, {
         status: upstreamResponse.status,
         headers: responseHeaders,

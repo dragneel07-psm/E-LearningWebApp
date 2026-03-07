@@ -49,6 +49,7 @@ class IsSaaSAdmin(permissions.BasePermission):
 
 class SaasKPIView(APIView):
     permission_classes = [IsSaaSAdmin]
+    throttle_classes = []
 
     def get(self, request):
         force_refresh = _as_bool(request.query_params.get("refresh"))
@@ -210,6 +211,7 @@ class SaasKPIView(APIView):
 
 class SaasAIUsageView(APIView):
     permission_classes = [IsSaaSAdmin]
+    throttle_classes = []
 
     def get(self, request):
         force_refresh = _as_bool(request.query_params.get("refresh"))
@@ -380,6 +382,7 @@ class SaasAIUsageView(APIView):
 
 class TenantAdminPasswordResetView(APIView):
     permission_classes = [IsSaaSAdmin]
+    throttle_classes = []
 
     def post(self, request):
         tenant_id = request.data.get('tenant_id')
@@ -472,6 +475,7 @@ def _ensure_role_profile(role: str, user):
 
 class TenantUsersView(APIView):
     permission_classes = [IsSaaSAdmin]
+    throttle_classes = []
 
     def get(self, request, tenant_id):
         try:
@@ -544,6 +548,7 @@ class TenantUsersView(APIView):
 
 class TenantUserDetailView(APIView):
     permission_classes = [IsSaaSAdmin]
+    throttle_classes = []
 
     def patch(self, request, tenant_id, user_id):
         try:
@@ -602,6 +607,7 @@ class TenantUserDetailView(APIView):
 
 class TenantUserPasswordResetView(APIView):
     permission_classes = [IsSaaSAdmin]
+    throttle_classes = []
 
     def post(self, request, tenant_id, user_id):
         new_password = request.data.get("new_password")

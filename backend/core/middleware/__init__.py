@@ -128,6 +128,30 @@ class TenantFromHeaderMiddleware(TenantMainMiddleware):
             return True
         return host.endswith(".local")
 
+    @staticmethod
+    def _extract_hostname(raw_host: str) -> str:
+        value = str(raw_host or "").strip().lower()
+        if not value:
+            return ""
+        # RFC 7239 / proxy chains may provide comma-separated hosts.
+        value = value.split(",", 1)[0].strip()
+        # Drop optional port.
+        return value.split(":", 1)[0].strip()
+
+    def _hostname_from_request(self, request) -> str:
+        """
+        Resolve hostname for tenant routing with proxy-awareness.
+
+        In production we front the backend with a Next.js API proxy, so
+        request.host points to the backend service domain while the original
+        tenant host is forwarded via X-Forwarded-Host.
+        """
+        forwarded_host = self._extract_hostname(request.headers.get("x-forwarded-host", ""))
+        if forwarded_host:
+            return forwarded_host
+
+        return self._extract_hostname(self.hostname_from_request(request))
+
     @classmethod
     def _should_trust_tenant_header(cls, hostname: str) -> bool:
         mode = str(getattr(settings, "TENANT_HEADER_TRUST_MODE", "dev_only")).strip().lower()
@@ -169,7 +193,7 @@ class TenantFromHeaderMiddleware(TenantMainMiddleware):
             set_request_context(tenant_schema="public", tenant_id="-")
             return
 
-        hostname = self.hostname_from_request(request)
+        hostname = self._hostname_from_request(request)
         domain_model = get_tenant_domain_model()
         tenant_model = get_tenant_model()
 

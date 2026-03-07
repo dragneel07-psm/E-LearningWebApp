@@ -26,6 +26,7 @@ from core.metrics import prometheus_metrics_payload
 
 class TenantCheckView(APIView):
     permission_classes = [permissions.AllowAny]
+    throttle_classes = []
 
     def get(self, request):
         # We only consider it a "School Code" match if it resolved to a non-public tenant
@@ -139,6 +140,7 @@ from .views_saas import IsSaaSAdmin
 class TenantViewSet(viewsets.ModelViewSet):
     queryset = Tenant.objects.select_related('subscription__plan').all()
     permission_classes = [IsSaaSAdmin]
+    throttle_classes = []
 
     def get_serializer_class(self):
         if self.action == 'create':

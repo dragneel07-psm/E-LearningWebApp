@@ -1,6 +1,5 @@
 // lib/auth.ts
 import { jwtDecode } from "jwt-decode";
-import { UserProfile } from "@/types/auth"; // Try to infer from token
 
 export interface UserPayload {
     user_id: string;
@@ -30,6 +29,7 @@ export const setTokens = (access: string, refresh: string, options?: SetTokenOpt
     if (typeof window !== 'undefined') {
         localStorage.setItem(ACCESS_KEY, access);
         localStorage.setItem(REFRESH_KEY, refresh);
+        const encodedAccess = encodeURIComponent(access);
 
         // Set cookie for middleware/server accessibility
         const isSecure = window.location.protocol === 'https:';
@@ -40,12 +40,12 @@ export const setTokens = (access: string, refresh: string, options?: SetTokenOpt
             // Canonical public SaaS cookie: shared domain only.
             // Clear host-scoped value first to avoid duplicate-cookie redirect loops.
             document.cookie = `access_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT`;
-            document.cookie = `access_token=${access}; path=/; domain=.manyaltech.com; ${secureAttr}samesite=lax`;
+            document.cookie = `access_token=${encodedAccess}; path=/; domain=.manyaltech.com; ${secureAttr}samesite=lax`;
         } else {
             // Canonical tenant/local cookie: host-scoped only.
             // Clear shared-domain value to avoid stale conflicts.
             document.cookie = `access_token=; path=/; domain=.manyaltech.com; expires=Thu, 01 Jan 1970 00:00:00 GMT`;
-            document.cookie = `access_token=${access}; path=/; ${secureAttr}samesite=lax`;
+            document.cookie = `access_token=${encodedAccess}; path=/; ${secureAttr}samesite=lax`;
         }
     }
 };

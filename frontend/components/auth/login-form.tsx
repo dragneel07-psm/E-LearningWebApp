@@ -102,10 +102,25 @@ export function LoginForm({ role, title, subtitle }: LoginFormProps) {
             router.replace(targetPath);
         } catch (err: unknown) {
             console.error("Login Error:", err);
-            const axiosLike = err as { response?: { data?: { detail?: string; non_field_errors?: string[] } } };
-            const msg = axiosLike.response?.data?.detail
-                || axiosLike.response?.data?.non_field_errors?.[0]
-                || 'Invalid credentials. Check your email, password, and school code.';
+            const axiosLike = err as {
+                response?: {
+                    status?: number;
+                    data?: {
+                        detail?: string;
+                        message?: string;
+                        code?: string;
+                        non_field_errors?: string[];
+                    };
+                };
+            };
+            const apiData = axiosLike.response?.data;
+            const apiStatus = axiosLike.response?.status;
+            const msg = apiData?.detail
+                || apiData?.message
+                || apiData?.non_field_errors?.[0]
+                || (apiStatus === 401
+                    ? 'Invalid credentials. Check your email, password, and school code.'
+                    : 'Login failed. Please try again.');
             toast.error(msg);
             setIsLoading(false);
         }

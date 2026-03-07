@@ -39,7 +39,12 @@ class UserAccountViewSet(TenantScopedQuerysetMixin, viewsets.ModelViewSet):
             return UserManagementSerializer
         return UserAccountSerializer
     
-    @action(detail=False, methods=['get', 'patch'], permission_classes=[permissions.IsAuthenticated])
+    @action(
+        detail=False,
+        methods=['get', 'patch'],
+        permission_classes=[permissions.IsAuthenticated],
+        throttle_classes=[],
+    )
     def me(self, request):
         if request.method == 'GET':
             serializer = self.get_serializer(request.user)
