@@ -10,6 +10,7 @@ Priority order:
 
 import re
 import uuid
+import os
 from django.conf import settings
 from django.http import JsonResponse
 from django_tenants.middleware.main import TenantMainMiddleware
@@ -184,6 +185,36 @@ class TenantFromHeaderMiddleware(TenantMainMiddleware):
         path = cls._normalize_path(getattr(request, "path_info", "") or getattr(request, "path", ""))
         return path in PROBE_PATHS
 
+    @classmethod
+    def _subdomain_from_base_domain(cls, hostname: str) -> str | None:
+        """
+        Fallback tenant inference when Domain rows are missing/stale.
+        Only applies to hosts under BASE_DOMAIN.
+        """
+        host = cls._extract_hostname(hostname).strip(".")
+        base_domain = cls._extract_hostname(getattr(settings, "BASE_DOMAIN", "") or os.environ.get("BASE_DOMAIN", "")).strip(".")
+
+        if not host or not base_domain:
+            return None
+
+        if host == base_domain or host == f"www.{base_domain}":
+            return "public"
+
+        suffix = f".{base_domain}"
+        if not host.endswith(suffix):
+            return None
+
+        label = host[: -len(suffix)].strip(".")
+        if not label:
+            return None
+        # We only support single-label tenant subdomains here.
+        if "." in label:
+            return None
+        if label == "www":
+            return "public"
+
+        return label
+
     def process_request(self, request):
         connection.set_schema_to_public()
 
@@ -238,7 +269,25 @@ class TenantFromHeaderMiddleware(TenantMainMiddleware):
                     schema_name__iexact=tenant_id
                 ).first()
 
-        # 3. In production, domain is mandatory and header fallback is disabled.
+        # 3. BASE_DOMAIN fallback for production safety when domain rows are stale/missing.
+        # This keeps demo/school subdomains operational without requiring manual Domain backfill.
+        if tenant is None:
+            inferred_subdomain = self._subdomain_from_base_domain(hostname)
+            if inferred_subdomain:
+                try:
+                    if inferred_subdomain == "public":
+                        tenant = tenant_model.objects.filter(schema_name__iexact="public").first()
+                    else:
+                        tenant = tenant_model.objects.filter(
+                            Q(schema_name__iexact=inferred_subdomain)
+                            | Q(subdomain__iexact=inferred_subdomain)
+                        ).first()
+                except DatabaseError:
+                    tenant = tenant_model.objects.filter(
+                        schema_name__iexact=inferred_subdomain
+                    ).first()
+
+        # 4. In production, domain/base-domain fallback is mandatory and header fallback is disabled.
         if tenant is None and not bool(getattr(settings, "DEBUG", False)):
             return JsonResponse(
                 {
@@ -249,15 +298,15 @@ class TenantFromHeaderMiddleware(TenantMainMiddleware):
                 status=400,
             )
 
-        # 4. In debug, keep public fallback for local developer workflows.
+        # 5. In debug, keep public fallback for local developer workflows.
         if tenant is None:
             tenant = tenant_model.objects.filter(schema_name__iexact="public").first()
 
-        # 5. Nothing resolved
+        # 6. Nothing resolved
         if tenant is None:
             return self.no_tenant_found(request, hostname)
 
-        # 6. Tenant status gate
+        # 7. Tenant status gate
         set_request_context(
             tenant_schema=getattr(tenant, "schema_name", "public"),
             tenant_id=str(getattr(tenant, "id", "") or "-"),

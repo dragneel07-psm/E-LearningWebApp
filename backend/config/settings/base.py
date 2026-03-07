@@ -86,6 +86,12 @@ _append_allowed_host("healthcheck.railway.app")
 _append_allowed_host(os.environ.get("RAILWAY_PUBLIC_DOMAIN", ""))
 _append_allowed_host(os.environ.get("RAILWAY_PRIVATE_DOMAIN", ""))
 
+# Primary SaaS domain used for wildcard tenant hostnames (e.g. demo.example.com).
+BASE_DOMAIN = (os.environ.get("BASE_DOMAIN", "") or "").strip().lower()
+if BASE_DOMAIN:
+    _append_allowed_host(BASE_DOMAIN)
+    _append_allowed_host(f".{BASE_DOMAIN}")
+
 
 # Application definition
 

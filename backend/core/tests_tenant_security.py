@@ -93,3 +93,32 @@ class TenantResolutionSecurityTests(FastTenantTestCase):
         )
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data.get("status"), "ok")
+
+    @override_settings(
+        DEBUG=False,
+        TENANT_HEADER_TRUST_MODE="never",
+        BASE_DOMAIN="manyaltech.com",
+        ALLOWED_HOSTS=["localhost", "127.0.0.1", ".localhost", ".local", "manyaltech.com", ".manyaltech.com"],
+    )
+    def test_base_domain_subdomain_fallback_resolves_tenant_without_domain_row(self):
+        response = self.client.get(
+            self.tenant_check_url,
+            HTTP_HOST=f"{self.tenant.schema_name}.manyaltech.com",
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.data.get("exists"))
+        self.assertEqual(response.data.get("schema_name"), self.tenant.schema_name)
+
+    @override_settings(
+        DEBUG=False,
+        TENANT_HEADER_TRUST_MODE="never",
+        BASE_DOMAIN="manyaltech.com",
+        ALLOWED_HOSTS=["localhost", "127.0.0.1", ".localhost", ".local", "manyaltech.com", ".manyaltech.com"],
+    )
+    def test_base_domain_fallback_keeps_unknown_subdomain_blocked(self):
+        response = self.client.get(
+            self.tenant_check_url,
+            HTTP_HOST="unknown-school.manyaltech.com",
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json().get("code"), "tenant_domain_required")
