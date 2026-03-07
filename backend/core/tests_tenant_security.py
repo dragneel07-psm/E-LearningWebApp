@@ -122,3 +122,19 @@ class TenantResolutionSecurityTests(FastTenantTestCase):
         )
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json().get("code"), "tenant_domain_required")
+
+    @override_settings(
+        DEBUG=False,
+        TENANT_HEADER_TRUST_MODE="never",
+        BASE_DOMAIN="manyaltech.com",
+        ALLOWED_HOSTS=["localhost", "127.0.0.1", ".localhost", ".local", "manyaltech.com", ".manyaltech.com", ".railway.app"],
+    )
+    def test_x_tenant_host_header_resolves_tenant(self):
+        response = self.client.get(
+            self.tenant_check_url,
+            HTTP_HOST="backend.up.railway.app",
+            HTTP_X_TENANT_HOST=f"{self.tenant.schema_name}.manyaltech.com",
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.data.get("exists"))
+        self.assertEqual(response.data.get("schema_name"), self.tenant.schema_name)

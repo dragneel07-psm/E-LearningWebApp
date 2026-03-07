@@ -98,6 +98,9 @@ function buildForwardHeaders(request: NextRequest): Headers {
 
     const originalHost = request.headers.get("host");
     if (originalHost) {
+        // Explicitly preserve browser host for backend tenant resolution.
+        // Some upstream proxies may rewrite/append x-forwarded-host.
+        headers.set("x-tenant-host", originalHost);
         headers.set("x-forwarded-host", originalHost);
     }
     headers.set("x-forwarded-proto", request.nextUrl.protocol.replace(":", ""));

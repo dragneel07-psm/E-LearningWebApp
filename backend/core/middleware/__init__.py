@@ -145,8 +145,15 @@ class TenantFromHeaderMiddleware(TenantMainMiddleware):
 
         In production we front the backend with a Next.js API proxy, so
         request.host points to the backend service domain while the original
-        tenant host is forwarded via X-Forwarded-Host.
+        tenant host is forwarded via X-Tenant-Host / X-Forwarded-Host.
         """
+        tenant_host = self._extract_hostname(request.headers.get("x-tenant-host", ""))
+        if tenant_host:
+            # Only trust tenant host hints that match configured base-domain rules.
+            # This avoids accidental routing to unrelated hosts.
+            if self._subdomain_from_base_domain(tenant_host) is not None:
+                return tenant_host
+
         forwarded_host = self._extract_hostname(request.headers.get("x-forwarded-host", ""))
         if forwarded_host:
             return forwarded_host
