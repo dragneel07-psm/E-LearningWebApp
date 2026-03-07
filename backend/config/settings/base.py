@@ -337,8 +337,9 @@ REST_FRAMEWORK = {
         'rest_framework.throttling.UserRateThrottle'
     ],
     'DEFAULT_THROTTLE_RATES': {
-        'anon': '100/day',
-        'user': '1000/day',
+        # Keep anonymous traffic constrained, but avoid long lockouts for authenticated SPA usage.
+        'anon': os.environ.get('THROTTLE_ANON', '300/hour'),
+        'user': os.environ.get('THROTTLE_USER', '5000/hour'),
         'auth_login': os.environ.get('THROTTLE_AUTH_LOGIN', '20/min'),
         'auth_refresh': os.environ.get('THROTTLE_AUTH_REFRESH', '40/min'),
         'auth_register': os.environ.get('THROTTLE_AUTH_REGISTER', '5/hour'),
