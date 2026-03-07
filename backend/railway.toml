@@ -1,0 +1,6 @@
+[build]
+builder = "NIXPACKS"
+buildCommand = "/opt/venv/bin/pip install setuptools && /opt/venv/bin/pip install -r requirements.txt"
+
+[deploy]
+startCommand = "bash scripts/railway-start-web.sh"

@@ -4,6 +4,28 @@ set -euo pipefail
 PORT="${PORT:-8000}"
 MIGRATION_VERBOSITY="${MIGRATION_VERBOSITY:-0}"
 
+ensure_allowed_host() {
+  local host="$1"
+  if [ -z "$host" ]; then
+    return 0
+  fi
+  case ",${ALLOWED_HOSTS:-}," in
+    *,"$host",*) ;;
+    *)
+      if [ -n "${ALLOWED_HOSTS:-}" ]; then
+        ALLOWED_HOSTS="${ALLOWED_HOSTS},${host}"
+      else
+        ALLOWED_HOSTS="${host}"
+      fi
+      ;;
+  esac
+}
+
+ensure_allowed_host "healthcheck.railway.app"
+ensure_allowed_host "${RAILWAY_PUBLIC_DOMAIN:-}"
+ensure_allowed_host "${RAILWAY_PRIVATE_DOMAIN:-}"
+export ALLOWED_HOSTS
+
 if [ -f manage.py ]; then
   APP_DIR="."
 elif [ -f backend/manage.py ]; then
