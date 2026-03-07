@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -14,6 +14,7 @@ import { Loader2, Lock, Mail, ArrowRight, Sparkles, Building2 } from 'lucide-rea
 import { motion } from 'framer-motion';
 import { toast } from 'sonner';
 import Link from 'next/link';
+import { useTenantIdentity } from '@/hooks/use-tenant-identity';
 
 
 interface LoginFormProps {
@@ -27,6 +28,7 @@ export function LoginForm({ role, title, subtitle }: LoginFormProps) {
     const searchParams = useSearchParams();
     const redirectPath = searchParams.get('redirect');
     const [isLoading, setIsLoading] = useState(false);
+    const { tenantName, tenantSchema, isTenantContext, isLoading: isTenantLoading } = useTenantIdentity();
 
     const schema = z.object({
         email: z.string().email("Please enter a valid email address"),
@@ -34,9 +36,17 @@ export function LoginForm({ role, title, subtitle }: LoginFormProps) {
         school_code: role === 'saas_admin' ? z.string().optional() : z.string().min(1, "School code is required"),
     });
 
-    const { register, handleSubmit, formState: { errors } } = useForm<z.infer<typeof schema>>({
+    const { register, handleSubmit, setValue, getValues, formState: { errors } } = useForm<z.infer<typeof schema>>({
         resolver: zodResolver(schema)
     });
+
+    useEffect(() => {
+        if (role === 'saas_admin') return;
+        if (!isTenantContext || !tenantSchema) return;
+        if (!getValues('school_code')) {
+            setValue('school_code', tenantSchema, { shouldValidate: true });
+        }
+    }, [getValues, isTenantContext, role, setValue, tenantSchema]);
 
     const onSubmit = async (data: z.infer<typeof schema>) => {
         setIsLoading(true);
@@ -148,6 +158,15 @@ export function LoginForm({ role, title, subtitle }: LoginFormProps) {
                         <p className="text-slate-400 text-sm tracking-wide">
                             {subtitle || 'Sign in to access your account'}
                         </p>
+                        {role !== 'saas_admin' && isTenantContext && (
+                            <div className="inline-flex items-center gap-2 rounded-full border border-cyan-400/30 bg-cyan-500/10 px-4 py-2 text-xs text-cyan-100">
+                                <Building2 className="h-4 w-4" />
+                                <span>
+                                    Tenant: <strong>{tenantName || tenantSchema || 'Unknown'}</strong>
+                                    {isTenantLoading ? ' ...' : ''}
+                                </span>
+                            </div>
+                        )}
                     </div>
 
                     <form onSubmit={handleSubmit(onSubmit)} className="space-y-6" autoComplete="off">
