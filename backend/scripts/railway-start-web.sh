@@ -2,7 +2,15 @@
 set -euo pipefail
 
 PORT="${PORT:-8000}"
-MIGRATION_VERBOSITY="${MIGRATION_VERBOSITY:-0}"
+MIGRATION_VERBOSITY="${MIGRATION_VERBOSITY:-1}"
+RUN_STARTUP_MIGRATIONS="${RUN_STARTUP_MIGRATIONS:-true}"
+RUN_STARTUP_INIT_PROD="${RUN_STARTUP_INIT_PROD:-true}"
+
+log() {
+  printf '[railway-web-start] %s\n' "$1"
+}
+
+log "Booting web service (pwd=$(pwd), PORT=${PORT})"
 
 ensure_allowed_host() {
   local host="$1"
@@ -82,9 +90,24 @@ GUNICORN_BIN="$(resolve_gunicorn_bin)"
 
 cd "${APP_DIR}"
 
-# --shared already migrates the public schema; no need to run --schema=public again.
-"${PY_BIN}" manage.py migrate_schemas --shared --noinput --verbosity="${MIGRATION_VERBOSITY}"
-"${PY_BIN}" manage.py migrate_schemas --tenant --noinput --verbosity="${MIGRATION_VERBOSITY}"
-"${PY_BIN}" manage.py init_prod
+log "Using APP_DIR=${APP_DIR}, PY_BIN=${PY_BIN}, GUNICORN_BIN=${GUNICORN_BIN}"
 
+if [ "${RUN_STARTUP_MIGRATIONS}" = "true" ]; then
+  # --shared already migrates the public schema; no need to run --schema=public again.
+  log "Running shared migrations"
+  "${PY_BIN}" manage.py migrate_schemas --shared --noinput --verbosity="${MIGRATION_VERBOSITY}"
+  log "Running tenant migrations"
+  "${PY_BIN}" manage.py migrate_schemas --tenant --noinput --verbosity="${MIGRATION_VERBOSITY}"
+else
+  log "Skipping migrations (RUN_STARTUP_MIGRATIONS=${RUN_STARTUP_MIGRATIONS})"
+fi
+
+if [ "${RUN_STARTUP_INIT_PROD}" = "true" ]; then
+  log "Running init_prod bootstrap"
+  "${PY_BIN}" manage.py init_prod
+else
+  log "Skipping init_prod (RUN_STARTUP_INIT_PROD=${RUN_STARTUP_INIT_PROD})"
+fi
+
+log "Starting gunicorn"
 exec "${GUNICORN_BIN}" config.wsgi --bind "0.0.0.0:${PORT}"
