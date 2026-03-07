@@ -26,6 +26,38 @@ const PUBLIC_PATHS = [
     '/icons/'
 ];
 
+function getTenantFromHostname(hostname: string): string | null {
+    const normalizedHost = (hostname || '').trim().toLowerCase();
+    const parts = normalizedHost.split('.').filter(Boolean);
+
+    if (!normalizedHost) return null;
+
+    if (normalizedHost === 'localhost' || normalizedHost === '127.0.0.1') {
+        return 'localhost';
+    }
+
+    if (parts.length > 1 && parts[parts.length - 1] === 'localhost') {
+        return parts[0] === 'localhost' ? 'localhost' : parts[0];
+    }
+
+    const managedHostSuffixes = [
+        '.vercel.app',
+        '.railway.app',
+        '.up.railway.app',
+    ];
+    if (managedHostSuffixes.some((suffix) => normalizedHost.endsWith(suffix))) {
+        return null;
+    }
+
+    if (parts.length > 2) {
+        const label = parts[0];
+        if (label === 'www') return null;
+        return label;
+    }
+
+    return null;
+}
+
 function getBackendApiBaseUrl(request: NextRequest): string | null {
     const raw = (process.env.NEXT_PUBLIC_API_URL || '').trim();
     const rawNormalized = raw.toLowerCase();
@@ -92,8 +124,8 @@ export async function proxy(request: NextRequest) {
 
     // 1. Tenant Handling (Pass subdomain to headers)
     const requestHeaders = new Headers(request.headers);
-    const tenantSubdomain = hostname.split('.')[0];
-    requestHeaders.set('x-tenant-id', tenantSubdomain);
+    const tenantSubdomain = getTenantFromHostname(hostname);
+    requestHeaders.set('x-tenant-id', tenantSubdomain || 'public');
 
     // 2. Auth Handling
     const token = request.cookies.get('access_token')?.value;
@@ -103,6 +135,9 @@ export async function proxy(request: NextRequest) {
         // If logged in and at root or login/register, perform dashboard redirect
         if (token && (pathname === '/' || pathname.startsWith('/login') || pathname.startsWith('/register'))) {
             // Decoded and redirected in next block
+        } else if (!token && pathname === '/' && tenantSubdomain && tenantSubdomain !== 'localhost') {
+            // Tenant subdomains should show school entry/login, not SaaS marketing root.
+            return NextResponse.redirect(new URL('/login', request.url));
         } else {
             return NextResponse.next({
                 request: { headers: requestHeaders }
