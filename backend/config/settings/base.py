@@ -472,6 +472,22 @@ else:
     SECURE_HSTS_INCLUDE_SUBDOMAINS = os.environ.get("SECURE_HSTS_INCLUDE_SUBDOMAINS", "true").lower() == "true"
     SECURE_HSTS_PRELOAD = os.environ.get("SECURE_HSTS_PRELOAD", "false").lower() == "true"
 
+# Keep liveness/readiness endpoints reachable over HTTP for platform health probes
+# even when SECURE_SSL_REDIRECT is enabled.
+_default_secure_redirect_exempt = [
+    "healthz/?$",
+    "readyz/?$",
+    "metrics/?$",
+    "api/core/healthz/?$",
+    "api/core/readyz/?$",
+    "api/core/metrics/?$",
+]
+SECURE_REDIRECT_EXEMPT = []
+for _pattern in _csv_env_list("SECURE_REDIRECT_EXEMPT", _default_secure_redirect_exempt):
+    _normalized_pattern = _pattern.strip().lstrip("/")
+    if _normalized_pattern and _normalized_pattern not in SECURE_REDIRECT_EXEMPT:
+        SECURE_REDIRECT_EXEMPT.append(_normalized_pattern)
+
 if os.environ.get("SECURE_PROXY_SSL_HEADER"):
     # expected format: HTTP_X_FORWARDED_PROTO,https
     _proxy_parts = [p.strip() for p in os.environ["SECURE_PROXY_SSL_HEADER"].split(",", 1)]

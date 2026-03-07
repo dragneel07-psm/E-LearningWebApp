@@ -3,8 +3,8 @@ set -euo pipefail
 
 PORT="${PORT:-8000}"
 MIGRATION_VERBOSITY="${MIGRATION_VERBOSITY:-1}"
-RUN_STARTUP_MIGRATIONS="${RUN_STARTUP_MIGRATIONS:-true}"
-RUN_STARTUP_INIT_PROD="${RUN_STARTUP_INIT_PROD:-true}"
+RUN_STARTUP_MIGRATIONS="${RUN_STARTUP_MIGRATIONS:-false}"
+RUN_STARTUP_INIT_PROD="${RUN_STARTUP_INIT_PROD:-false}"
 
 log() {
   printf '[railway-web-start] %s\n' "$1"
@@ -91,6 +91,7 @@ GUNICORN_BIN="$(resolve_gunicorn_bin)"
 cd "${APP_DIR}"
 
 log "Using APP_DIR=${APP_DIR}, PY_BIN=${PY_BIN}, GUNICORN_BIN=${GUNICORN_BIN}"
+log "Startup tasks: RUN_STARTUP_MIGRATIONS=${RUN_STARTUP_MIGRATIONS}, RUN_STARTUP_INIT_PROD=${RUN_STARTUP_INIT_PROD}"
 
 if [ "${RUN_STARTUP_MIGRATIONS}" = "true" ]; then
   # --shared already migrates the public schema; no need to run --schema=public again.
