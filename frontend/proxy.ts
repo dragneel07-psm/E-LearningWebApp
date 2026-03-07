@@ -84,6 +84,14 @@ function getUserFromToken(token: string): UserPayload | null {
     }
 }
 
+function getLatestCookieValue(request: NextRequest, name: string): string | undefined {
+    const allValues = request.cookies.getAll(name)
+        .map((item) => item.value)
+        .filter((value) => Boolean(value && value.trim()));
+    if (allValues.length === 0) return undefined;
+    return allValues[allValues.length - 1];
+}
+
 export async function proxy(request: NextRequest) {
     const { pathname, hostname } = request.nextUrl;
 
@@ -93,7 +101,7 @@ export async function proxy(request: NextRequest) {
     requestHeaders.set('x-tenant-id', tenantSubdomain || 'public');
 
     // 2. Auth Handling
-    const token = request.cookies.get('access_token')?.value;
+    const token = getLatestCookieValue(request, 'access_token');
 
     // Allow access to public paths
     if (pathname === '/' || PUBLIC_PATHS.some(path => pathname.startsWith(path))) {

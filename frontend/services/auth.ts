@@ -18,14 +18,16 @@ function setTenantCookie(tenantId: string) {
     const useSharedManyaltechDomain =
         tenantId === 'public' && (host === 'manyaltech.com' || host === 'www.manyaltech.com');
     const encodedTenantId = encodeURIComponent(tenantId);
-    const commonAttrs = `path=/; ${isSecure ? 'secure; ' : ''}samesite=lax`;
+    const secureAttr = isSecure ? 'secure; ' : '';
 
-    // Host-scoped cookie for deterministic reads on the current hostname.
-    document.cookie = `tenant_id=${encodedTenantId}; ${commonAttrs}`;
-
-    // Shared cookie for apex/www public SaaS flow.
     if (useSharedManyaltechDomain) {
-        document.cookie = `tenant_id=${encodedTenantId}; path=/; domain=.manyaltech.com; ${isSecure ? 'secure; ' : ''}samesite=lax`;
+        // Canonical public SaaS cookie: shared domain only.
+        document.cookie = `tenant_id=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT`;
+        document.cookie = `tenant_id=${encodedTenantId}; path=/; domain=.manyaltech.com; ${secureAttr}samesite=lax`;
+    } else {
+        // Canonical tenant/local cookie: host-scoped only.
+        document.cookie = `tenant_id=; path=/; domain=.manyaltech.com; expires=Thu, 01 Jan 1970 00:00:00 GMT`;
+        document.cookie = `tenant_id=${encodedTenantId}; path=/; ${secureAttr}samesite=lax`;
     }
 }
 
