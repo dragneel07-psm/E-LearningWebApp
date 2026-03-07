@@ -81,10 +81,8 @@ api.interceptors.request.use((config) => {
             // Use cached if available AND not 'localhost' (which means no tenant was resolved)
             const tenant = (cachedTenant && cachedTenant !== 'localhost')
                 ? cachedTenant
-                : (subdomainTenant !== 'localhost' ? subdomainTenant : null);
-            if (tenant) {
-                config.headers['x-tenant-id'] = tenant;
-            }
+                : (subdomainTenant && subdomainTenant !== 'localhost' ? subdomainTenant : null);
+            config.headers['x-tenant-id'] = tenant || 'public';
         }
     }
     return config;

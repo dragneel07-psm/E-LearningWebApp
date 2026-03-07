@@ -4,6 +4,7 @@
  */
 
 import { removeTokens } from "./auth";
+import { getTenantFromSubdomain } from "./tenant";
 
 // API Base Configuration
 // API Base Configuration
@@ -1394,6 +1395,22 @@ function getAuthToken(): string | null {
     return null;
 }
 
+function getResolvedTenantId(): string {
+    if (typeof window === 'undefined') return 'public';
+
+    const cachedTenant = (localStorage.getItem('tenant_id') || '').trim().toLowerCase();
+    if (cachedTenant && cachedTenant !== 'localhost') {
+        return cachedTenant;
+    }
+
+    const subdomainTenant = (getTenantFromSubdomain(window.location.hostname) || '').trim().toLowerCase();
+    if (subdomainTenant && subdomainTenant !== 'localhost') {
+        return subdomainTenant;
+    }
+
+    return 'public';
+}
+
 export const DATA_MUTATED_EVENT = 'elearn:data-mutated';
 const LAST_MUTATION_AT_KEY = 'elearn:last-mutation-at';
 const FRESH_FETCH_WINDOW_MS = 30_000;
@@ -1457,8 +1474,7 @@ export async function apiRequest<T>(
     // get 'public' and school users get their own tenant slug.
     const explicitTenantHeader = headers['x-tenant-id'] || headers['X-Tenant-Id'];
     if (!explicitTenantHeader) {
-        const storedTenantId = (typeof window !== 'undefined' ? localStorage.getItem('tenant_id') : null) || 'demo';
-        headers['x-tenant-id'] = storedTenantId;
+        headers['x-tenant-id'] = getResolvedTenantId();
     }
 
     try {
@@ -1546,8 +1562,7 @@ async function apiRequestBlob(
     }
     const explicitTenantHeader = headers['x-tenant-id'] || headers['X-Tenant-Id'];
     if (!explicitTenantHeader) {
-        const blobTenantId = (typeof window !== 'undefined' ? localStorage.getItem('tenant_id') : null) || 'demo';
-        headers['x-tenant-id'] = blobTenantId;
+        headers['x-tenant-id'] = getResolvedTenantId();
     }
 
     const response = await fetch(`${API_BASE_URL}${endpoint}`, {
@@ -2817,7 +2832,7 @@ export const helpers = {
 
     downloadFile: async (url: string, filename: string) => {
         const token = getAuthToken();
-        const downloadTenantId = (typeof window !== 'undefined' ? localStorage.getItem('tenant_id') : null) || 'demo';
+        const downloadTenantId = getResolvedTenantId();
         const response = await fetch(url, {
             headers: {
                 'Authorization': `Bearer ${token}`,

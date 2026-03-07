@@ -33,15 +33,17 @@ export const setTokens = (access: string, refresh: string, options?: SetTokenOpt
 
         // Set cookie for middleware/server accessibility
         const isSecure = window.location.protocol === 'https:';
-        const domainPart = shouldUseSharedManyaltechDomain(options?.tenantId)
-            ? 'domain=.manyaltech.com; '
-            : '';
+        const useSharedDomain = shouldUseSharedManyaltechDomain(options?.tenantId);
+        const commonAttrs = `path=/; ${isSecure ? 'secure; ' : ''}samesite=lax`;
 
-        // Don't set domain for localhost - let the browser handle it per host
-        // This allows cookies to work on localhost, demo.localhost, etc. independently
-        const cookieString = `access_token=${encodeURIComponent(access)}; path=/; ${domainPart}${isSecure ? 'secure;' : ''} samesite=lax`;
+        // Always set a host-scoped cookie so middleware can read it reliably.
+        document.cookie = `access_token=${access}; ${commonAttrs}`;
 
-        document.cookie = cookieString;
+        // On SaaS apex/www hosts, also set a shared domain cookie to keep auth state
+        // consistent across manyaltech.com and www.manyaltech.com.
+        if (useSharedDomain) {
+            document.cookie = `access_token=${access}; path=/; domain=.manyaltech.com; ${isSecure ? 'secure; ' : ''}samesite=lax`;
+        }
     }
 };
 
