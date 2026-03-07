@@ -74,6 +74,19 @@ else:
         raise RuntimeError("ALLOWED_HOSTS must be explicitly configured when DEBUG=False.")
 
 
+def _append_allowed_host(host: str) -> None:
+    candidate = (host or "").strip()
+    if not candidate or "*" in ALLOWED_HOSTS or candidate in ALLOWED_HOSTS:
+        return
+    ALLOWED_HOSTS.append(candidate)
+
+
+# Railway health checks use this Host header.
+_append_allowed_host("healthcheck.railway.app")
+_append_allowed_host(os.environ.get("RAILWAY_PUBLIC_DOMAIN", ""))
+_append_allowed_host(os.environ.get("RAILWAY_PRIVATE_DOMAIN", ""))
+
+
 # Application definition
 
 # Multi-Tenancy Configuration
