@@ -1,5 +1,5 @@
 from .base import *
 
 DEBUG = False
-ALLOWED_HOSTS = ['yourdomain.com']
+# Keep ALLOWED_HOSTS from base.py so env values and Railway healthcheck host remain allowed.
 # Add other production settings here
