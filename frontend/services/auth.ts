@@ -14,7 +14,11 @@ import { getTenantFromSubdomain } from '@/lib/tenant';
 function setTenantCookie(tenantId: string) {
     if (typeof window === 'undefined') return;
     const isSecure = window.location.protocol === 'https:';
-    document.cookie = `tenant_id=${encodeURIComponent(tenantId)}; path=/; ${isSecure ? 'secure;' : ''} samesite=lax`;
+    const host = (window.location.hostname || '').trim().toLowerCase();
+    const useSharedManyaltechDomain =
+        tenantId === 'public' && (host === 'manyaltech.com' || host === 'www.manyaltech.com');
+    const domainPart = useSharedManyaltechDomain ? 'domain=.manyaltech.com; ' : '';
+    document.cookie = `tenant_id=${encodeURIComponent(tenantId)}; path=/; ${domainPart}${isSecure ? 'secure;' : ''} samesite=lax`;
 }
 
 export const authService = {
@@ -44,7 +48,7 @@ export const authService = {
         });
 
         if (response.data.access && response.data.refresh) {
-            setTokens(response.data.access, response.data.refresh);
+            setTokens(response.data.access, response.data.refresh, { tenantId });
             // Cache school_code so subsequent requests use the right tenant
             if (typeof window !== 'undefined') {
                 localStorage.setItem('tenant_id', tenantId);
@@ -66,7 +70,7 @@ export const authService = {
         });
 
         if (response.data.tokens?.access) {
-            setTokens(response.data.tokens.access, response.data.tokens.refresh);
+            setTokens(response.data.tokens.access, response.data.tokens.refresh, { tenantId });
             if (typeof window !== 'undefined') {
                 localStorage.setItem('tenant_id', tenantId);
                 setTenantCookie(tenantId);

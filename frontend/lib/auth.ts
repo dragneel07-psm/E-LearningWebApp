@@ -14,17 +14,32 @@ export interface UserPayload {
 const ACCESS_KEY = 'access_token';
 const REFRESH_KEY = 'refresh_token';
 
-export const setTokens = (access: string, refresh: string) => {
+type SetTokenOptions = {
+    tenantId?: string;
+};
+
+function shouldUseSharedManyaltechDomain(tenantId?: string): boolean {
+    if (typeof window === 'undefined') return false;
+    if (tenantId !== 'public') return false;
+
+    const host = (window.location.hostname || '').trim().toLowerCase();
+    return host === 'manyaltech.com' || host === 'www.manyaltech.com';
+}
+
+export const setTokens = (access: string, refresh: string, options?: SetTokenOptions) => {
     if (typeof window !== 'undefined') {
         localStorage.setItem(ACCESS_KEY, access);
         localStorage.setItem(REFRESH_KEY, refresh);
 
         // Set cookie for middleware/server accessibility
         const isSecure = window.location.protocol === 'https:';
+        const domainPart = shouldUseSharedManyaltechDomain(options?.tenantId)
+            ? 'domain=.manyaltech.com; '
+            : '';
 
         // Don't set domain for localhost - let the browser handle it per host
         // This allows cookies to work on localhost, demo.localhost, etc. independently
-        const cookieString = `access_token=${access}; path=/; ${isSecure ? 'secure;' : ''} samesite=lax`;
+        const cookieString = `access_token=${encodeURIComponent(access)}; path=/; ${domainPart}${isSecure ? 'secure;' : ''} samesite=lax`;
 
         document.cookie = cookieString;
     }
@@ -52,7 +67,9 @@ export const removeTokens = () => {
 
         // Clear cookie
         document.cookie = `access_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT`;
+        document.cookie = `access_token=; path=/; domain=.manyaltech.com; expires=Thu, 01 Jan 1970 00:00:00 GMT`;
         document.cookie = `tenant_id=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT`;
+        document.cookie = `tenant_id=; path=/; domain=.manyaltech.com; expires=Thu, 01 Jan 1970 00:00:00 GMT`;
 
         console.log('[Auth] Tokens removed');
     }
