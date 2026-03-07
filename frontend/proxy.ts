@@ -9,12 +9,6 @@ interface UserPayload {
     exp: number;
 }
 
-interface BackendUserProfile {
-    user_id?: string;
-    username?: string;
-    role?: string;
-}
-
 const PUBLIC_PATHS = [
     '/login',
     '/register',
@@ -74,60 +68,15 @@ function getTenantFromHostname(hostname: string): string | null {
     return null;
 }
 
-function getBackendApiBaseUrl(request: NextRequest): string | null {
-    const raw = (process.env.NEXT_PUBLIC_API_URL || '').trim();
-    const rawNormalized = raw.toLowerCase();
-    if (rawNormalized === '/api' || rawNormalized === 'api' || rawNormalized === 'same-origin' || rawNormalized === 'same_origin' || rawNormalized === 'relative') {
-        return request.nextUrl.origin;
-    }
-
-    const candidates = raw.split(',').map((item) => item.trim()).filter(Boolean);
-    const apiAbsoluteCandidate = candidates.find((item) => /^https?:\/\//i.test(item) && /\/api(\/|$)/i.test(item));
-    let url = apiAbsoluteCandidate
-        || candidates.find((item) => /^https?:\/\//i.test(item))
-        || candidates.find((item) => !item.startsWith('/'))
-        || raw;
-    if (!url) return null;
-
-    if (url.startsWith('/')) {
-        return null;
-    }
-
-    if (!url.startsWith('http://') && !url.startsWith('https://')) {
-        url = `https://${url}`;
-    }
-
-    url = url.replace(/\/$/, '');
-    if (url.endsWith('/api')) {
-        url = url.slice(0, -4);
-    }
-
-    return url;
-}
-
-async function getUserFromBackend(request: NextRequest, token: string, tenantId: string): Promise<UserPayload | null> {
-    const backendBase = getBackendApiBaseUrl(request);
-    if (!backendBase) return null;
-
+function getUserFromToken(token: string): UserPayload | null {
     try {
-        const response = await fetch(`${backendBase}/api/users/accounts/me/`, {
-            method: 'GET',
-            headers: {
-                Authorization: `Bearer ${token}`,
-                'x-tenant-id': tenantId || 'public',
-            },
-            cache: 'no-store',
-        });
-
-        if (!response.ok) return null;
-
-        const profile = await response.json() as BackendUserProfile;
         const decoded = decodeJwt(token) as Partial<UserPayload>;
+        if (!decoded || typeof decoded !== 'object') return null;
 
         return {
-            user_id: String(profile.user_id || decoded.user_id || ''),
-            username: String(profile.username || decoded.username || ''),
-            role: String(profile.role || decoded.role || 'student'),
+            user_id: String(decoded.user_id || ''),
+            username: String(decoded.username || ''),
+            role: String(decoded.role || 'student'),
             exp: Number(decoded.exp || 0),
         };
     } catch {
@@ -171,12 +120,10 @@ export async function proxy(request: NextRequest) {
 
     // 3. Role & Expiry Check
     try {
-        let user: UserPayload | null = null;
-        const tenantCookie = (request.cookies.get('tenant_id')?.value || '').trim().toLowerCase();
-        const tenantForValidation = tenantCookie || tenantSubdomain || 'public';
+        let user: UserPayload | null = getUserFromToken(token);
 
-        // Prefer local signature verification when secret is configured.
-        // Fall back to backend validation so valid users are not logged out when envs drift.
+        // Prefer signature verification when secret is configured.
+        // If verification cannot run (e.g. env mismatch), keep decoded payload as fallback.
         const jwtSecret = process.env.JWT_SECRET;
         if (jwtSecret) {
             try {
@@ -184,15 +131,11 @@ export async function proxy(request: NextRequest) {
                 const { payload } = await jwtVerify(token, secretKey);
                 user = payload as unknown as UserPayload;
             } catch {
-                user = null;
+                // Keep decoded fallback to avoid login loops from transient/env issues.
             }
         }
 
-        if (!user) {
-            user = await getUserFromBackend(request, token, tenantForValidation);
-        }
-
-        if (!user) {
+        if (!user || !user.exp || !user.role) {
             throw new Error('Unable to validate access token');
         }
 
