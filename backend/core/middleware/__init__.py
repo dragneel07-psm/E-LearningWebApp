@@ -22,6 +22,16 @@ from core.logging_context import reset_request_context, set_request_context
 
 REQUEST_ID_PATTERN = re.compile(r"^[A-Za-z0-9\-_.]{8,128}$")
 ACTIVE_TENANT_STATUSES = {"active", "trial"}
+PROBE_PATHS = frozenset(
+    {
+        "/healthz",
+        "/readyz",
+        "/metrics",
+        "/api/core/healthz",
+        "/api/core/readyz",
+        "/api/core/metrics",
+    }
+)
 
 
 class RequestContextMiddleware:
@@ -135,8 +145,29 @@ class TenantFromHeaderMiddleware(TenantMainMiddleware):
         tenant_status = str(getattr(tenant, "status", "active") or "active").strip().lower()
         return tenant_status in ACTIVE_TENANT_STATUSES
 
+    @staticmethod
+    def _normalize_path(path: str) -> str:
+        value = (path or "").strip()
+        if not value:
+            return "/"
+        normalized = value if value.startswith("/") else f"/{value}"
+        if len(normalized) > 1 and normalized.endswith("/"):
+            return normalized[:-1]
+        return normalized
+
+    @classmethod
+    def _is_probe_request(cls, request) -> bool:
+        path = cls._normalize_path(getattr(request, "path_info", "") or getattr(request, "path", ""))
+        return path in PROBE_PATHS
+
     def process_request(self, request):
         connection.set_schema_to_public()
+
+        # Platform probes should stay liveness-focused and not depend on tenant-domain resolution.
+        if self._is_probe_request(request):
+            request.tenant = None
+            set_request_context(tenant_schema="public", tenant_id="-")
+            return
 
         hostname = self.hostname_from_request(request)
         domain_model = get_tenant_domain_model()

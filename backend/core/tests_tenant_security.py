@@ -84,3 +84,12 @@ class TenantResolutionSecurityTests(FastTenantTestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTrue(response.data.get("exists"))
         self.assertEqual(response.data.get("schema_name"), self.tenant.schema_name)
+
+    @override_settings(DEBUG=False, TENANT_HEADER_TRUST_MODE="dev_only")
+    def test_healthz_probe_is_not_blocked_by_tenant_domain_guard(self):
+        response = self.client.get(
+            "/healthz",
+            HTTP_HOST="healthcheck.railway.app",
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data.get("status"), "ok")
