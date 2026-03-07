@@ -26,6 +26,22 @@ const PUBLIC_PATHS = [
     '/icons/'
 ];
 
+function clearAuthCookies(response: NextResponse): void {
+    const expiredAt = new Date(0);
+    const baseOptions = { path: '/', expires: expiredAt };
+
+    // Host-scoped cookies
+    response.cookies.set('access_token', '', baseOptions);
+    response.cookies.set('refresh_token', '', baseOptions);
+    response.cookies.set('tenant_id', '', baseOptions);
+
+    // Domain-scoped cookies (used for SaaS auth across apex/www)
+    const sharedDomain = 'manyaltech.com';
+    response.cookies.set('access_token', '', { ...baseOptions, domain: sharedDomain });
+    response.cookies.set('refresh_token', '', { ...baseOptions, domain: sharedDomain });
+    response.cookies.set('tenant_id', '', { ...baseOptions, domain: sharedDomain });
+}
+
 function getTenantFromHostname(hostname: string): string | null {
     const normalizedHost = (hostname || '').trim().toLowerCase();
     const parts = normalizedHost.split('.').filter(Boolean);
@@ -187,8 +203,7 @@ export async function proxy(request: NextRequest) {
         if (user.exp && user.exp * 1000 < Date.now()) {
             console.log(`[Proxy] Token expired (exp ${user.exp * 1000} < now ${Date.now()})`);
             const response = NextResponse.redirect(new URL('/login', request.url));
-            response.cookies.delete('access_token');
-            response.cookies.delete('refresh_token');
+            clearAuthCookies(response);
             return response;
         }
 
@@ -225,9 +240,16 @@ export async function proxy(request: NextRequest) {
 
     } catch (e) {
         console.error('[Proxy] JWT Decode/Verify error:', e);
+        // Avoid login->login redirect loops when cookie is invalid/stale.
+        if (pathname.startsWith('/login')) {
+            const response = NextResponse.next({
+                request: { headers: requestHeaders }
+            });
+            clearAuthCookies(response);
+            return response;
+        }
         const response = NextResponse.redirect(new URL('/login', request.url));
-        response.cookies.delete('access_token');
-        response.cookies.delete('refresh_token');
+        clearAuthCookies(response);
         return response;
     }
 
