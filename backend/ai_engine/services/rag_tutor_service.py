@@ -511,6 +511,137 @@ class RAGTutorService:
             suggestions.append("Ask with lesson or chapter context, e.g. key concept, summary, or example question")
         return f"I’m not sure from the available context. {suggestions[0]}."
 
+    def stream_answer(
+        self,
+        message: str,
+        context: dict[str, Any] | None = None,
+        conversation_history: list[dict[str, Any]] | None = None,
+    ):
+        """
+        Generator that yields streaming chunks for WebSocket delivery.
+
+        Yields dicts with shape:
+          {"type": "token",  "content": "<partial text>"}
+          {"type": "done",   "answer": "<full answer>", "sources": [...],
+                             "confidence": 0.87, "confidence_label": "high",
+                             "mode": "direct", "usage": {...}}
+          {"type": "error",  "detail": "<message>"}         (on failure)
+          {"type": "no_context"}                             (no grounded chunks)
+
+        Falls back to non-streaming if the OpenAI client is unavailable.
+        """
+        retrieved = self.retrieve_relevant_chunks(message, context=context)
+        grounded = [item for item in retrieved if float(item["similarity"]) >= self.min_similarity]
+
+        if not grounded:
+            if not self._requires_grounding(context):
+                # General LLM — stream if possible, else demo
+                yield from self._stream_general(message, context=context, conversation_history=conversation_history)
+                return
+            yield {"type": "no_context", "detail": self._no_context_response(context)}
+            return
+
+        messages = self._build_grounded_messages(
+            message, grounded, conversation_history=conversation_history, context=context
+        )
+        client = self._openai_client()
+        confidence = self._compute_confidence(grounded)
+        citations = self._build_citations(grounded)
+        mode = str((context or {}).get("mode") or "direct")
+
+        if not client:
+            # Fallback: non-streaming answer
+            answer = self._no_context_response(context)
+            yield {"type": "token", "content": answer}
+            yield {
+                "type": "done",
+                "answer": answer,
+                "sources": citations,
+                "confidence": confidence,
+                "confidence_label": self._confidence_label(confidence),
+                "mode": mode,
+                "usage": {"model": "fallback", "prompt_tokens": 0, "completion_tokens": 0},
+                "is_demo": True,
+            }
+            return
+
+        try:
+            stream = client.chat.completions.create(
+                model=self.model,
+                messages=messages,
+                temperature=0.2,
+                max_tokens=500,
+                stream=True,
+            )
+            full_answer = ""
+            prompt_tokens = 0
+            completion_tokens = 0
+            for chunk in stream:
+                delta = chunk.choices[0].delta if chunk.choices else None
+                if delta and delta.content:
+                    full_answer += delta.content
+                    yield {"type": "token", "content": delta.content}
+                # Capture usage from final chunk (OpenAI sends it on last chunk)
+                if hasattr(chunk, "usage") and chunk.usage:
+                    prompt_tokens = int(getattr(chunk.usage, "prompt_tokens", 0) or 0)
+                    completion_tokens = int(getattr(chunk.usage, "completion_tokens", 0) or 0)
+
+            yield {
+                "type": "done",
+                "answer": full_answer,
+                "sources": citations,
+                "confidence": confidence,
+                "confidence_label": self._confidence_label(confidence),
+                "mode": mode,
+                "usage": {
+                    "model": self.model,
+                    "prompt_tokens": prompt_tokens,
+                    "completion_tokens": completion_tokens,
+                },
+                "is_demo": False,
+            }
+        except Exception as exc:
+            logger.warning("Streaming tutor chat failed: %s", exc)
+            yield {"type": "error", "detail": "AI provider error. Please try again."}
+
+    def _stream_general(
+        self,
+        message: str,
+        context: dict[str, Any] | None = None,
+        conversation_history: list[dict[str, Any]] | None = None,
+    ):
+        """Streaming path for general (non-grounded) LLM responses."""
+        messages = self._build_general_messages(
+            message, conversation_history=conversation_history, context=context
+        )
+        client = self._openai_client()
+        if not client:
+            demo = self._demo_general_response(message, context=context)
+            yield {"type": "token", "content": demo}
+            yield {"type": "done", "answer": demo, "sources": [], "confidence": 0.0,
+                   "confidence_label": "low", "mode": "direct",
+                   "usage": {"model": "fallback-demo", "prompt_tokens": 0, "completion_tokens": 0},
+                   "is_demo": True}
+            return
+        try:
+            stream = client.chat.completions.create(
+                model=self.model, messages=messages,
+                temperature=0.3, max_tokens=500, stream=True,
+            )
+            full_answer = ""
+            for chunk in stream:
+                delta = chunk.choices[0].delta if chunk.choices else None
+                if delta and delta.content:
+                    full_answer += delta.content
+                    yield {"type": "token", "content": delta.content}
+            yield {"type": "done", "answer": full_answer, "sources": [], "confidence": 0.0,
+                   "confidence_label": "low", "mode": "direct",
+                   "usage": {"model": self.model, "prompt_tokens": 0, "completion_tokens": 0},
+                   "is_demo": False, "fallback_reason": "general_llm"}
+        except Exception as exc:
+            logger.warning("Streaming general chat failed: %s", exc)
+            yield {"type": "error", "detail": "AI provider error. Please try again."}
+
     @staticmethod
     def _build_citations(grounded: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """

@@ -97,6 +97,8 @@ if BASE_DOMAIN:
 
 # Multi-Tenancy Configuration
 SHARED_APPS = [
+    "daphne",          # ASGI server — must be first for runserver to use ASGI
+    "channels",        # WebSocket layer
     "django_tenants",  # mandatory
     "django.contrib.admin",
     "django.contrib.auth",
@@ -554,6 +556,21 @@ else:
 # Async task processing
 ASYNC_TASK_BACKEND = os.environ.get("ASYNC_TASK_BACKEND", "sync").strip().lower()
 REDIS_URL = os.environ.get("REDIS_URL", "redis://127.0.0.1:6379/1")
+
+# Django Channels — WebSocket layer backed by Redis
+CHANNEL_LAYERS = {
+    "default": {
+        "BACKEND": "channels_redis.core.RedisChannelLayer",
+        "CONFIG": {
+            "hosts": [os.environ.get("REDIS_URL", "redis://127.0.0.1:6379/0")],
+            "capacity": 1500,
+            "expiry": 60,
+        },
+    },
+}
+
+ASGI_APPLICATION = "config.asgi.application"
+
 CELERY_BROKER_URL = os.environ.get("CELERY_BROKER_URL", REDIS_URL)
 CELERY_RESULT_BACKEND = os.environ.get("CELERY_RESULT_BACKEND", REDIS_URL)
 CELERY_TASK_ALWAYS_EAGER = os.environ.get("CELERY_TASK_ALWAYS_EAGER", "false").lower() == "true"

@@ -4,6 +4,44 @@ from academic.models import Notice
 from users.models import UserAccount
 from .models import Notification
 
+
+def _push_notification_ws(notification: Notification):
+    """
+    Push a Notification to the recipient's WebSocket group via the channel layer.
+    Safe to call from any sync context (signal handlers, Celery tasks).
+    No-ops silently if the channel layer is unavailable or Redis is down.
+    """
+    try:
+        from channels.layers import get_channel_layer
+        from asgiref.sync import async_to_sync
+        from notifications.consumers import notification_group_name
+
+        channel_layer = get_channel_layer()
+        if channel_layer is None:
+            return
+
+        group = notification_group_name(notification.recipient_id)
+        async_to_sync(channel_layer.group_send)(
+            group,
+            {
+                "type": "send.notification",
+                "id": str(notification.pk),
+                "title": notification.title,
+                "message": notification.message,
+                "link": notification.link or "",
+                "created_at": notification.created_at.isoformat(),
+            },
+        )
+    except Exception:
+        pass  # WebSocket push is best-effort; never block DB writes
+
+
+@receiver(post_save, sender=Notification)
+def push_notification_on_create(sender, instance, created, **kwargs):
+    """Push every newly created Notification to the recipient's WebSocket."""
+    if created:
+        _push_notification_ws(instance)
+
 @receiver(post_save, sender=Notice)
 def create_notice_notification(sender, instance, created, **kwargs):
     if created:
