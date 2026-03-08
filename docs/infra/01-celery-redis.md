@@ -92,3 +92,10 @@ cd backend
 ## Notes
 - In environments where Celery package is unavailable, the queue helper falls back to synchronous execution and still returns a `job_id`.
 - For production, use `ASYNC_TASK_BACKEND=celery` with running `redis` + `worker` services.
+
+## Redis — Additional Usage: Channel Layer (WebSocket)
+
+Redis is also used as the **Django Channels channel layer** for WebSocket real-time push.
+The same `REDIS_URL` is shared between Celery and Channels.
+
+See `docs/infra/03-websocket-channels.md` for full WebSocket documentation.

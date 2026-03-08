@@ -65,6 +65,7 @@ Upgrade the LMS into a safer, tenant-correct, school-ERP-ready platform without 
   - async task abstraction added (`core.async_jobs`) supporting `sync` and `celery` modes
   - notifications email/SMS delivery moved to background task dispatch with sync fallback for dev/tests
   - deployment scaffolding added (`backend/Procfile` worker process)
+  - **WebSocket real-time layer added** (Django Channels 4.2 + channels-redis): streaming tutor chat and live notification push; see `docs/infra/03-websocket-channels.md`
   - remaining: move heavy report/PDF/import/AI pipelines to worker queues and add retry/backoff policies
 - [~] C16-C18: Query optimization policy, indexing pass, and pagination/max-page standardization.
   - query hot paths updated with `select_related` for billing lists and dashboard recent feeds

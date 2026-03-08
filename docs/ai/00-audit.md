@@ -34,14 +34,21 @@ Scope: `backend` (Django + DRF + django-tenants), `frontend` (Next.js), `mobile`
     - `/api/ai/logs/`
     - `/api/ai/reports/`
     - `/api/ai/learning-paths/`
-    - `/api/ai/learning-nodes/`
+    - `/api/ai/learning-nodes/` (+ `complete` and `due` actions — Phase 1)
     - `/api/ai/study-schedule/`
+    - `/api/ai/conversations/` (+ `messages` action — Phase 2)
+    - `/api/ai/skill-tags/` (Phase 3)
+    - `/api/ai/skill-mastery/` (+ `gaps`, `update_mastery` — Phase 3)
+    - `/api/ai/token-budgets/` (+ `my_usage` — Phase 5)
   - Function endpoints:
-    - `/api/ai/tutor/chat/`
+    - `/api/ai/tutor/chat/` (REST — enhanced with budget, confidence, conversation_id)
     - `/api/ai/analytics/teacher/`
     - `/api/ai/personalization/recommendations/`
     - `/api/ai/reports/student/<uuid:student_id>/`
     - `/api/ai/reports/student/<uuid:student_id>/history/`
+  - WebSocket endpoints (Phase 6):
+    - `ws/tutor/chat/?token=<jwt>` → `TutorStreamConsumer` (streaming)
+    - `ws/notifications/?token=<jwt>` → `NotificationConsumer` (live push)
 - Main implementation:
   - `backend/ai_engine/views.py`
 
