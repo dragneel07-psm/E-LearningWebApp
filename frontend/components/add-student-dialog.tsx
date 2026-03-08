@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { usersAPI, academicAPI, AcademicClass, User } from '@/lib/api';
+import { academicAPI, AcademicClass, Student } from '@/lib/api';
 import { useEffect } from 'react';
 import { toast } from 'sonner';
 
@@ -48,23 +48,15 @@ export function AddStudentDialog({ open, onOpenChange, onSuccess }: AddStudentDi
         setLoading(true);
 
         try {
-            // Create user account
-            const userData: Partial<User> & { password: string } = {
-                username: formData.username,
+            const payload: Partial<Student> & { password: string } = {
                 email: formData.email,
                 password: formData.password,
                 first_name: formData.first_name,
                 last_name: formData.last_name,
-                role: 'student' as const
+                academic_class: parseInt(formData.academic_class, 10),
             };
 
-            const user = await usersAPI.createAccount(userData);
-
-            // Create student profile
-            await academicAPI.createStudent({
-                user_id: user.user_id,
-                academic_class: parseInt(formData.academic_class)
-            } as any); // Cast as any because createStudent expects full Student but we pass partial from models slice
+            await academicAPI.createStudent(payload);
 
             toast.success('Student created successfully');
             onOpenChange(false);
