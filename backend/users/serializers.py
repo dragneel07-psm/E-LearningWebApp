@@ -351,26 +351,38 @@ class PasswordResetSerializer(serializers.Serializer):
     email = serializers.EmailField()
 
     def validate_email(self, value):
-        if not UserAccount.objects.filter(email=value).exists():
-            raise serializers.ValidationError("User with this email does not exist.")
-        return value
+        return (value or "").strip().lower()
 
 class PasswordResetConfirmSerializer(serializers.Serializer):
-    uid = serializers.CharField()
+    uid = serializers.CharField(required=False, allow_blank=True)
+    uidb64 = serializers.CharField(required=False, allow_blank=True)
     token = serializers.CharField()
     new_password = serializers.CharField(
         write_only=True,
+        required=False,
         min_length=8,
         validators=[validate_password]
     )
-    confirm_password = serializers.CharField(write_only=True)
+    password = serializers.CharField(write_only=True, required=False, min_length=8)
+    confirm_password = serializers.CharField(write_only=True, required=False)
 
     def validate(self, attrs):
-        if attrs['new_password'] != attrs['confirm_password']:
+        uid_value = attrs.get("uid") or attrs.get("uidb64")
+        if not uid_value:
+            raise serializers.ValidationError({"uid": "uid (or uidb64) is required."})
+
+        password_value = attrs.get("new_password") or attrs.get("password")
+        if not password_value:
+            raise serializers.ValidationError({"new_password": "new_password (or password) is required."})
+
+        confirm_password = attrs.get("confirm_password")
+        if confirm_password and password_value != confirm_password:
             raise serializers.ValidationError({"new_password": "Passwords do not match."})
+
+        validate_password(password_value)
             
         try:
-            uid = force_str(urlsafe_base64_decode(attrs['uid']))
+            uid = force_str(urlsafe_base64_decode(uid_value))
             self.user = UserAccount.objects.get(pk=uid)
         except (TypeError, ValueError, OverflowError, UserAccount.DoesNotExist):
             raise serializers.ValidationError({"uid": "Invalid user ID."})
@@ -378,6 +390,8 @@ class PasswordResetConfirmSerializer(serializers.Serializer):
         if not default_token_generator.check_token(self.user, attrs['token']):
             raise serializers.ValidationError({"token": "Invalid or expired token."})
 
+        attrs["uid"] = uid_value
+        attrs["new_password"] = password_value
         return attrs
 
     def save(self):

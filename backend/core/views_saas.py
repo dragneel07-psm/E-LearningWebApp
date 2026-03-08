@@ -1,6 +1,7 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import permissions
+import logging
 from django.core.cache import cache
 from django.db import IntegrityError
 from django.db.models import Sum, Count, Max
@@ -14,10 +15,12 @@ from django.db.models.functions import TruncDate
 from django.utils import timezone
 from ai_engine.services.provider_config import get_ai_provider_config
 from core.utils.audit import record_audit_event
+from users.emailing import send_tenant_account_created_email
 
 KPI_CACHE_KEY = "saas:kpi:v2"
 AI_USAGE_CACHE_KEY = "saas:ai-usage:v2"
 DASHBOARD_CACHE_TTL_SECONDS = 60
+logger = logging.getLogger(__name__)
 
 
 def _as_bool(value) -> bool:
@@ -527,6 +530,11 @@ class TenantUsersView(APIView):
                     is_staff=role in ["admin", "staff"],
                 )
                 _ensure_role_profile(role, user)
+                try:
+                    send_tenant_account_created_email(user, tenant=tenant)
+                except Exception as exc:
+                    # User creation should succeed even when email provider is temporarily unavailable.
+                    logger.warning("Failed to send tenant account created email: %s", exc)
                 record_audit_event(
                     action="core.tenant_user_created",
                     user=request.user,

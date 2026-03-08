@@ -45,6 +45,21 @@ class PasswordResetTests(TestCase):
         self.user.refresh_from_db()
         self.assertTrue(self.user.check_password('NewPassword123!'))
 
+    def test_confirm_reset_success_with_frontend_payload_shape(self):
+        """Frontend sends uidb64 + password (without confirm_password)."""
+        token = default_token_generator.make_token(self.user)
+        uidb64 = urlsafe_base64_encode(force_bytes(self.user.pk))
+
+        response = self.client.post(self.confirm_url, {
+            'uidb64': uidb64,
+            'token': token,
+            'password': 'NewPassword123!',
+        })
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        self.user.refresh_from_db()
+        self.assertTrue(self.user.check_password('NewPassword123!'))
+
     def test_confirm_reset_mismatch(self):
         """Test that password mismatch fails"""
         token = default_token_generator.make_token(self.user)

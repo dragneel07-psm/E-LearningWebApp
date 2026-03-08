@@ -17,13 +17,18 @@ from .throttling import (
     RegisterRateThrottle,
 )
 import traceback
-from django.conf import settings
-from django.core.mail import send_mail
-from django.contrib.auth.tokens import default_token_generator
-from django.utils.http import urlsafe_base64_encode
-from django.utils.encoding import force_bytes
+import logging
 from django.shortcuts import get_object_or_404
+from django.db import connection
+from django_tenants.utils import schema_context
 from core.utils.audit import record_audit_event
+from core.models import Tenant
+from .emailing import (
+    send_password_reset_email,
+    send_saas_admin_registration_email,
+)
+
+logger = logging.getLogger(__name__)
 
 class UserAccountViewSet(TenantScopedQuerysetMixin, viewsets.ModelViewSet):
     queryset = UserAccount.objects.all()
@@ -171,6 +176,12 @@ def register_user(request):
     
     if serializer.is_valid():
         user = serializer.save()
+        try:
+            # Notify newly registered SaaS admin with login and recovery links.
+            send_saas_admin_registration_email(user)
+        except Exception as exc:
+            # Account should remain created even if email provider is temporarily unavailable.
+            logger.warning("Failed to send SaaS admin registration email: %s", exc)
         return Response({
             'message': 'User registered successfully',
             'user': {
@@ -210,30 +221,56 @@ class PasswordResetView(views.APIView):
     permission_classes = [permissions.AllowAny]
     throttle_classes = [PasswordResetRateThrottle]
 
+    def _tenant_targets_for_email(self, email: str, request):
+        """
+        Resolve reset targets in current schema and, when on public schema,
+        across tenant schemas so forgot-password works for all registered accounts.
+        """
+        targets: list[tuple[UserAccount, object]] = []
+        seen: set[str] = set()
+
+        for user in UserAccount.objects.filter(email__iexact=email, is_active=True):
+            key = f"{connection.schema_name}:{user.pk}"
+            if key in seen:
+                continue
+            seen.add(key)
+            targets.append((user, getattr(user, "tenant", None)))
+
+        # If no user in current schema and we're on public, probe tenant schemas.
+        if targets or connection.schema_name != "public":
+            return targets
+
+        for tenant in Tenant.objects.exclude(schema_name="public"):
+            try:
+                with schema_context(tenant.schema_name):
+                    tenant_user = UserAccount.objects.filter(email__iexact=email, is_active=True).first()
+                    if not tenant_user:
+                        continue
+                    key = f"{tenant.schema_name}:{tenant_user.pk}"
+                    if key in seen:
+                        continue
+                    seen.add(key)
+                    targets.append((tenant_user, tenant))
+            except Exception as exc:
+                logger.warning("Password reset lookup failed for schema %s: %s", tenant.schema_name, exc)
+                continue
+
+        return targets
+
     def post(self, request):
         serializer = PasswordResetSerializer(data=request.data)
         if serializer.is_valid():
             email = serializer.validated_data['email']
-            user = UserAccount.objects.get(email=email)
-            
-            # Generate Token
-            token = default_token_generator.make_token(user)
-            uid = urlsafe_base64_encode(force_bytes(user.pk))
-            
-            # Construct Link (Frontend URL)
-            frontend_url = getattr(settings, 'FRONTEND_URL', 'http://localhost:3000')
-            reset_link = f"{frontend_url}/reset-password?uidb64={uid}&token={token}"
-            
-            # Send Email (Mock/Console)
-            print(f"--- PASSWORD RESET EMAIL ---\nTo: {email}\nLink: {reset_link}\n----------------------------")
-            send_mail(
-                subject="Password Reset Request",
-                message=f"Click the link to reset your password: {reset_link}",
-                from_email=settings.DEFAULT_FROM_EMAIL or 'noreply@example.com',
-                recipient_list=[email],
-                fail_silently=True # Prevent crash in dev without smtp
-            )
-            
+            targets = self._tenant_targets_for_email(email, request)
+            if not targets:
+                return Response(
+                    {"email": ["User with this email does not exist."]},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            for user, tenant in targets:
+                send_password_reset_email(user, tenant=tenant, reason="forgot_password")
+
             return Response({"message": "Password reset link sent to email."}, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
