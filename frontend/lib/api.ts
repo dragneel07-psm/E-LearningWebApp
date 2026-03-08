@@ -2545,7 +2545,7 @@ export const aiAPI = {
         const completionTokens = Number(payload.usage?.completion_tokens ?? 0);
         const model = String(payload.usage?.model ?? 'fallback');
         const totalTokens = Number(payload.tokens_used ?? (promptTokens + completionTokens));
-        const isDemo = Boolean(payload.is_demo ?? model.startsWith('fallback'));
+        const isDemo = Boolean(payload.is_demo);
 
         return {
             answer,

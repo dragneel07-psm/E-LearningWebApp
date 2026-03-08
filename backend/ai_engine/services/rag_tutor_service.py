@@ -183,6 +183,177 @@ class RAGTutorService:
             {"role": "user", "content": user_prompt},
         ]
 
+    @staticmethod
+    def _sanitize_history(conversation_history: list[dict[str, Any]] | None = None) -> list[dict[str, str]]:
+        cleaned: list[dict[str, str]] = []
+        for item in conversation_history or []:
+            if not isinstance(item, dict):
+                continue
+            role = str(item.get("role") or "").strip().lower()
+            if role == "ai":
+                role = "assistant"
+            if role not in {"user", "assistant"}:
+                continue
+            content = item.get("content")
+            if not isinstance(content, str):
+                continue
+            content_text = content.strip()
+            if not content_text:
+                continue
+            cleaned.append({"role": role, "content": content_text})
+        return cleaned[-6:]
+
+    def _build_grounded_messages(
+        self,
+        message: str,
+        snippets: list[dict[str, Any]],
+        *,
+        conversation_history: list[dict[str, Any]] | None = None,
+        context: dict[str, Any] | None = None,
+    ) -> list[dict[str, str]]:
+        tenant_name = getattr(self.tenant, "name", "the school")
+        user_role = str((context or {}).get("user_role") or "").strip().lower()
+        audience = "teacher-friendly" if user_role == "teacher" else "student-friendly"
+        rules = (
+            "You are a careful school tutor assistant.\n"
+            "Rules:\n"
+            "1) Use only the provided snippets as factual grounding.\n"
+            "2) If snippets are insufficient, explicitly say \"I’m not sure\".\n"
+            f"3) Be concise, clear, and {audience}.\n"
+            "4) Do not invent sources, facts, or citations.\n"
+            f"5) Keep tone appropriate for {tenant_name} classroom culture."
+        )
+        context_block = "\n\n".join(
+            [
+                (
+                    f"[Source {idx + 1}] type={item['chunk'].source_type} id={item['chunk'].source_id}\n"
+                    f"{item['chunk'].text[:900]}"
+                )
+                for idx, item in enumerate(snippets)
+            ]
+        )
+        user_prompt = (
+            f"Question:\n{message}\n\n"
+            f"Grounding snippets:\n{context_block}\n\n"
+            "Answer using only the snippets. If uncertain, say \"I’m not sure\" and suggest what to ask next."
+        )
+        messages = [{"role": "system", "content": rules}]
+        messages.extend(self._sanitize_history(conversation_history))
+        messages.append({"role": "user", "content": user_prompt})
+        return messages
+
+    def _build_general_messages(
+        self,
+        message: str,
+        *,
+        conversation_history: list[dict[str, Any]] | None = None,
+        context: dict[str, Any] | None = None,
+    ) -> list[dict[str, str]]:
+        tenant_name = getattr(self.tenant, "name", "the school")
+        user_role = str((context or {}).get("user_role") or "").strip().lower()
+        if user_role == "teacher":
+            rules = (
+                "You are an AI teaching assistant for school teachers.\n"
+                "Help with quizzes, homework, lesson planning, examples, summaries, and classroom strategies.\n"
+                "If school-specific records, lesson text, or chapter material are missing, give a practical general answer "
+                "and state what context would improve it.\n"
+                "Do not claim to have accessed internal school data unless it was provided.\n"
+                f"Keep responses classroom-ready and appropriate for {tenant_name}."
+            )
+        else:
+            rules = (
+                "You are a helpful school tutor assistant.\n"
+                "Explain concepts clearly, give examples, and keep answers practical.\n"
+                "If lesson-specific material is missing, give a general answer and say what context would improve it.\n"
+                "Do not claim to have seen materials that were not provided.\n"
+                f"Keep responses appropriate for {tenant_name}."
+            )
+        messages = [{"role": "system", "content": rules}]
+        messages.extend(self._sanitize_history(conversation_history))
+        messages.append({"role": "user", "content": message})
+        return messages
+
+    @staticmethod
+    def _requires_grounding(context: dict[str, Any] | None = None) -> bool:
+        payload = context or {}
+        return any(
+            payload.get(key) not in (None, "")
+            for key in ("lesson_id", "chapter_id", "source_id", "source_type")
+        )
+
+    @staticmethod
+    def _demo_general_response(message: str, context: dict[str, Any] | None = None) -> str:
+        prompt = str(message or "").strip()
+        lowered = prompt.lower()
+        user_role = str((context or {}).get("user_role") or "").strip().lower()
+
+        if "quiz" in lowered or "multiple choice" in lowered:
+            return (
+                "I can help draft that. Share the subject, grade, and topic for a tailored version. "
+                "A solid starting format is 5 multiple-choice questions, 2 short answers, and a brief answer key."
+            )
+        if "homework" in lowered or "assignment" in lowered:
+            return (
+                "I can help build that. Share the class level, topic, and difficulty you want. "
+                "A useful homework structure is: 1 recap question, 3 practice questions, 1 application task, and 1 reflection prompt."
+            )
+        if "summary" in lowered or "summarize" in lowered:
+            return (
+                "I can summarize it once you share the lesson title or text. "
+                "A good class summary usually covers the key idea, 2 to 3 supporting points, and one example."
+            )
+        if user_role == "teacher" and ("weak" in lowered or "support" in lowered or "struggling" in lowered):
+            return (
+                "A practical next step is to group struggling students by the specific skill gap, reteach one concept briefly, "
+                "use one worked example, then check understanding with a short exit question."
+            )
+        return (
+            "I can help with that. Share the subject, grade, topic, or lesson text, and I can give a more targeted answer."
+        )
+
+    def _general_fallback_metadata(self) -> tuple[str | None, str | None]:
+        if not self.config.get("enabled"):
+            return "disabled", "AI features are disabled in SaaS settings."
+        if not self.config.get("configured"):
+            return "not_configured", "AI provider is not configured. Please add a valid API key in SaaS settings."
+        return "provider_error", "AI provider is unavailable right now."
+
+    def answer_without_grounding(
+        self,
+        message: str,
+        *,
+        context: dict[str, Any] | None = None,
+        conversation_history: list[dict[str, Any]] | None = None,
+    ) -> dict[str, Any]:
+        messages = self._build_general_messages(
+            message,
+            conversation_history=conversation_history,
+            context=context,
+        )
+        answer, usage = self._call_chat_model(messages)
+        if answer:
+            return {
+                "answer": answer,
+                "sources": [],
+                "usage": usage,
+                "is_demo": False,
+                "fallback_reason": "general_llm",
+            }
+
+        fallback_reason, error = self._general_fallback_metadata()
+        return {
+            "answer": self._demo_general_response(message, context=context),
+            "sources": [],
+            "usage": {
+                "model": "fallback-demo",
+                "prompt_tokens": 0,
+                "completion_tokens": 0,
+            },
+            "is_demo": True,
+            "fallback_reason": fallback_reason,
+            "error": error,
+        }
+
     def _call_chat_model(self, messages: list[dict[str, str]]) -> tuple[str, dict[str, Any]]:
         client = self._openai_client()
         if not client:
@@ -235,11 +406,22 @@ class RAGTutorService:
             suggestions.append("Ask with lesson or chapter context, e.g. key concept, summary, or example question")
         return f"I’m not sure from the available context. {suggestions[0]}."
 
-    def answer_question(self, message: str, context: dict[str, Any] | None = None) -> dict[str, Any]:
+    def answer_question(
+        self,
+        message: str,
+        context: dict[str, Any] | None = None,
+        conversation_history: list[dict[str, Any]] | None = None,
+    ) -> dict[str, Any]:
         retrieved = self.retrieve_relevant_chunks(message, context=context)
         grounded = [item for item in retrieved if float(item["similarity"]) >= self.min_similarity]
 
         if not grounded:
+            if not self._requires_grounding(context):
+                return self.answer_without_grounding(
+                    message,
+                    context=context,
+                    conversation_history=conversation_history,
+                )
             return {
                 "answer": self._no_context_response(context),
                 "sources": [],
@@ -248,9 +430,16 @@ class RAGTutorService:
                     "prompt_tokens": 0,
                     "completion_tokens": 0,
                 },
+                "is_demo": False,
+                "fallback_reason": "no_context",
             }
 
-        messages = self._build_messages(message, grounded)
+        messages = self._build_grounded_messages(
+            message,
+            grounded,
+            conversation_history=conversation_history,
+            context=context,
+        )
         answer, usage = self._call_chat_model(messages)
         if not answer:
             answer = self._no_context_response(context)
@@ -267,4 +456,5 @@ class RAGTutorService:
             "answer": answer,
             "sources": sources,
             "usage": usage,
+            "is_demo": False,
         }

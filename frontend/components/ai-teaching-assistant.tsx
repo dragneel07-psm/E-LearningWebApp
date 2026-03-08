@@ -152,7 +152,8 @@ export function AITeachingAssistant() {
                                         variant="outline"
                                         size="sm"
                                         className="justify-start h-auto py-2 px-3 text-xs border-indigo-100 hover:bg-indigo-50 hover:text-indigo-700 hover:border-indigo-200"
-                                        onClick={() => setInput(action.prompt)}
+                                        onClick={() => void handleSubmit(action.prompt)}
+                                        disabled={loading}
                                     >
                                         <action.icon className="h-3 w-3 mr-2 shrink-0" />
                                         {action.label}

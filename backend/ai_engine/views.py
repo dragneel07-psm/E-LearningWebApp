@@ -505,6 +505,11 @@ def ai_tutor_chat(request):
     context_payload = request.data.get('context') or {}
     if context_payload and not isinstance(context_payload, dict):
         return Response({'error': 'context must be an object'}, status=status.HTTP_400_BAD_REQUEST)
+    context_payload = dict(context_payload)
+
+    history_payload = request.data.get("conversation_history") or []
+    if history_payload and not isinstance(history_payload, list):
+        return Response({'error': 'conversation_history must be an array'}, status=status.HTTP_400_BAD_REQUEST)
 
     tenant = getattr(request, 'tenant', None) or getattr(request.user, 'tenant', None)
     if tenant is None:
@@ -512,12 +517,20 @@ def ai_tutor_chat(request):
 
     try:
         db_alias = getattr(request, 'db_alias', 'default')
+        context_payload.setdefault("user_role", str(getattr(request.user, "role", "") or "").strip().lower())
         service = RAGTutorService(tenant=tenant)
-        response_data = service.answer_question(message, context=context_payload)
+        response_data = service.answer_question(
+            message,
+            context=context_payload,
+            conversation_history=history_payload,
+        )
 
         answer = str(response_data.get('answer') or '')
         sources = response_data.get('sources') if isinstance(response_data.get('sources'), list) else []
         usage = response_data.get('usage') if isinstance(response_data.get('usage'), dict) else {}
+        is_demo = bool(response_data.get("is_demo"))
+        fallback_reason = response_data.get("fallback_reason")
+        error = response_data.get("error")
         prompt_tokens = int(usage.get('prompt_tokens') or 0)
         completion_tokens = int(usage.get('completion_tokens') or 0)
 
@@ -542,6 +555,9 @@ def ai_tutor_chat(request):
                     'prompt_tokens': prompt_tokens,
                     'completion_tokens': completion_tokens,
                 },
+                'is_demo': is_demo,
+                'fallback_reason': fallback_reason,
+                'error': error,
             },
             status=status.HTTP_200_OK,
         )

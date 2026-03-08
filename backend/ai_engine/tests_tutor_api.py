@@ -81,3 +81,38 @@ class TutorChatApiTests(FastTenantTestCase):
         self.assertEqual(response.data["usage"]["model"], "gpt-4o-mini")
         self.assertEqual(response.data["usage"]["prompt_tokens"], 42)
         self.assertEqual(response.data["usage"]["completion_tokens"], 18)
+
+    @patch("ai_engine.services.rag_tutor_service.RAGTutorService.retrieve_relevant_chunks", return_value=[])
+    @patch("ai_engine.services.rag_tutor_service.RAGTutorService._call_chat_model")
+    def test_tutor_chat_uses_general_answer_when_no_grounding_context_is_requested(
+        self,
+        mock_call_chat_model,
+        _mock_retrieve_relevant_chunks,
+    ):
+        mock_call_chat_model.return_value = (
+            "Here is a quick Grade 10 algebra quiz outline with five questions and an answer key.",
+            {
+                "model": "gpt-4o-mini",
+                "prompt_tokens": 30,
+                "completion_tokens": 20,
+            },
+        )
+
+        response = self.client.post(
+            "/api/ai/tutor/chat/",
+            {
+                "message": "Generate a 5-question multiple choice quiz on Algebra for Grade 10 with answers.",
+                "conversation_history": [
+                    {"role": "user", "content": "I need a classroom-ready quiz."},
+                ],
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn("answer", response.data)
+        self.assertNotIn("I’m not sure from the available context.", response.data["answer"])
+        self.assertEqual(response.data["usage"]["model"], "gpt-4o-mini")
+        self.assertEqual(response.data["sources"], [])
+        self.assertFalse(response.data["is_demo"])
+        self.assertEqual(response.data["fallback_reason"], "general_llm")
