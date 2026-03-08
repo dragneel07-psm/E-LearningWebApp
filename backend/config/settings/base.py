@@ -419,9 +419,20 @@ EMAIL_HOST_PASSWORD = os.environ.get("EMAIL_HOST_PASSWORD", "")
 EMAIL_TIMEOUT = int(os.environ.get("EMAIL_TIMEOUT", "10"))
 DEFAULT_FROM_EMAIL = os.environ.get("DEFAULT_FROM_EMAIL", "support@elearning.dev")
 SERVER_EMAIL = os.environ.get("SERVER_EMAIL", DEFAULT_FROM_EMAIL)
+RESEND_API_KEY = (os.environ.get("RESEND_API_KEY", "") or "").strip()
+RESEND_API_URL = (os.environ.get("RESEND_API_URL", "https://api.resend.com/emails") or "").strip()
+RESEND_REQUEST_TIMEOUT = int(os.environ.get("RESEND_REQUEST_TIMEOUT", "10"))
 
 if EMAIL_USE_TLS and EMAIL_USE_SSL:
     raise ImproperlyConfigured("EMAIL_USE_TLS and EMAIL_USE_SSL cannot both be true.")
+
+if EMAIL_BACKEND == "core.email_backends.resend_backend.ResendAPIEmailBackend" and not RESEND_API_KEY:
+    if DEBUG:
+        logger.warning("EMAIL_BACKEND is set to Resend API backend but RESEND_API_KEY is empty.")
+    else:
+        raise ImproperlyConfigured(
+            "RESEND_API_KEY must be configured when using ResendAPIEmailBackend."
+        )
 
 # AI Embeddings / RAG
 AI_EMBEDDING_DIMENSIONS = int(os.environ.get("AI_EMBEDDING_DIMENSIONS", "1536"))
