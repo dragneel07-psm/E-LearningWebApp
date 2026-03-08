@@ -12,6 +12,7 @@ interface UserPayload {
 const PUBLIC_PATHS = [
     '/login',
     '/register',
+    '/verify-email',
     '/public',
     '/forgot-password',
     '/debug-auth',

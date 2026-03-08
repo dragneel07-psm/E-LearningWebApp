@@ -40,8 +40,8 @@ export function RegisterForm() {
         setIsLoading(true);
         try {
             await authService.register(data);
-            toast.success('SaaS Admin account created! Redirecting...');
-            router.push('/saas');
+            toast.success('Account created. Please verify your email before signing in.');
+            router.push('/login/saas');
         } catch (err: any) {
             console.error("Register Error Details:", err.response?.data || err);
             // Handle Django REST Framework error structure

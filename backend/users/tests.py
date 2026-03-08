@@ -27,13 +27,15 @@ class UserRegistrationTests(TestCase):
         response = self.client.post(self.register_url, self.valid_payload, format='json')
         
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        self.assertIn('tokens', response.data)
-        self.assertIn('access', response.data['tokens'])
-        self.assertIn('refresh', response.data['tokens'])
+        self.assertTrue(response.data.get('verification_required'))
         self.assertEqual(response.data['user']['email'], 'test@example.com')
+        self.assertEqual(response.data['user']['role'], 'saas_admin')
+        self.assertNotIn('tokens', response.data)
         
         # Verify user was created in database
         self.assertTrue(User.objects.filter(email='test@example.com').exists())
+        user = User.objects.get(email='test@example.com')
+        self.assertFalse(user.is_active)
     
     def test_register_duplicate_email(self):
         """Test registration with duplicate email"""
@@ -95,7 +97,7 @@ class UserRegistrationTests(TestCase):
         self.assertTrue(user.password.startswith('pbkdf2_sha256') or user.password.startswith('bcrypt'))
     
     def test_register_without_username(self):
-        """Test registration without username (should use email prefix)"""
+        """Test registration without username (should use email as username)"""
         payload = self.valid_payload.copy()
         # Don't include username
         
@@ -103,14 +105,14 @@ class UserRegistrationTests(TestCase):
         
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         user = User.objects.get(email='test@example.com')
-        self.assertEqual(user.username, 'test')  # Should use email prefix
+        self.assertEqual(user.username, 'test@example.com')
     
     def test_register_default_role(self):
-        """Test that role defaults to 'student' if not provided"""
+        """Test that public registration always creates SaaS admin users"""
         payload = self.valid_payload.copy()
         del payload['role']
         
         response = self.client.post(self.register_url, payload, format='json')
         
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        self.assertEqual(response.data['user']['role'], 'student')
+        self.assertEqual(response.data['user']['role'], 'saas_admin')

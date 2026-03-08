@@ -7,15 +7,13 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ArrowLeft, Building, Users, CreditCard, Activity, Loader2, RefreshCcw, Search, MoreHorizontal, Eye, EyeOff, Key, ShieldAlert, ShieldCheck, Save, Plus, Download, Upload, Copy } from "lucide-react";
-import { coreAPI, getApiBaseUrl, Invoice, saasApi, Subscription, SubscriptionPlan, SubscriptionPlanHistory, Tenant, User } from "@/lib/api";
+import { ArrowLeft, Building, Users, CreditCard, Activity, Loader2, RefreshCcw, Eye, EyeOff, Key, ShieldAlert, ShieldCheck, Save, Download, Upload, Copy } from "lucide-react";
+import { coreAPI, getApiBaseUrl, Invoice, saasApi, Subscription, SubscriptionPlan, SubscriptionPlanHistory, Tenant } from "@/lib/api";
 import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Switch } from "@/components/ui/switch";
 
 type TenantDetails = Tenant & {
@@ -28,38 +26,6 @@ type TenantDetails = Tenant & {
     billing_cycle?: string;
     subscription_status?: string;
     ai_usage?: string;
-};
-
-type UserFormState = {
-    first_name: string;
-    last_name: string;
-    email: string;
-    role: User['role'];
-};
-
-type NewUserFormState = {
-    first_name: string;
-    last_name: string;
-    email: string;
-    username: string;
-    password: string;
-    role: User['role'];
-};
-
-const EMPTY_USER_FORM: UserFormState = {
-    first_name: '',
-    last_name: '',
-    email: '',
-    role: 'student'
-};
-
-const EMPTY_NEW_USER_FORM: NewUserFormState = {
-    first_name: '',
-    last_name: '',
-    email: '',
-    username: '',
-    password: '',
-    role: 'student'
 };
 
 const DEFAULT_FEATURE_FLAGS: Record<string, boolean> = {
@@ -88,14 +54,6 @@ function belongsToSchool(tenantValue: unknown, school: TenantDetails): boolean {
     if (!tenantRef) return false;
     const schoolRefs = [school.id, school.tenant_id].filter(Boolean).map(String);
     return schoolRefs.includes(tenantRef);
-}
-
-function formatRole(role: string): string {
-    if (role === 'saas_admin') return 'SaaS Admin';
-    return role
-        .split('_')
-        .map(part => part.charAt(0).toUpperCase() + part.slice(1))
-        .join(' ');
 }
 
 const numberFmt = new Intl.NumberFormat('en-US');
@@ -130,24 +88,8 @@ export default function SchoolDetailsPage() {
     });
     const [featureFlags, setFeatureFlags] = useState<Record<string, boolean>>(DEFAULT_FEATURE_FLAGS);
 
-    const [users, setUsers] = useState<User[]>([]);
-    const [usersLoading, setUsersLoading] = useState(false);
-    const [userSearch, setUserSearch] = useState('');
-    const [roleFilter, setRoleFilter] = useState('all');
-    const [statusFilter, setStatusFilter] = useState('all');
-    const [selectedUser, setSelectedUser] = useState<User | null>(null);
-    const [userForm, setUserForm] = useState<UserFormState>(EMPTY_USER_FORM);
-    const [userDialogOpen, setUserDialogOpen] = useState(false);
-    const [isSavingUser, setIsSavingUser] = useState(false);
-    const [activeUserActionId, setActiveUserActionId] = useState<string | null>(null);
-    const [newUserDialogOpen, setNewUserDialogOpen] = useState(false);
-    const [newUserForm, setNewUserForm] = useState<NewUserFormState>(EMPTY_NEW_USER_FORM);
-    const [isCreatingUser, setIsCreatingUser] = useState(false);
-    const [passwordResetUser, setPasswordResetUser] = useState<User | null>(null);
-    const [passwordResetValue, setPasswordResetValue] = useState('');
-    const [passwordResetDialogOpen, setPasswordResetDialogOpen] = useState(false);
-    const [isResettingUserPassword, setIsResettingUserPassword] = useState(false);
     const [adminSharePassword, setAdminSharePassword] = useState('');
+    const [tenantAdminEmail, setTenantAdminEmail] = useState('');
     const [showSharePassword, setShowSharePassword] = useState(false);
     const [isResettingAdminPassword, setIsResettingAdminPassword] = useState(false);
 
@@ -161,25 +103,6 @@ export default function SchoolDetailsPage() {
     const [selectedPlanId, setSelectedPlanId] = useState('');
     const [selectedBillingCycle, setSelectedBillingCycle] = useState<'monthly' | 'yearly'>('monthly');
     const [isUpdatingSubscription, setIsUpdatingSubscription] = useState(false);
-
-    const loadUsers = useCallback(async (tenant: TenantDetails) => {
-        setUsersLoading(true);
-        try {
-            const tenantId = String(tenant.id ?? tenant.tenant_id ?? '');
-            if (!tenantId) {
-                setUsers([]);
-                return;
-            }
-            const tenantUsers = await saasApi.getTenantUsers(tenantId);
-            setUsers(Array.isArray(tenantUsers) ? tenantUsers : []);
-        } catch (error) {
-            console.error(error);
-            toast.error("Failed to load tenant users.");
-            setUsers([]);
-        } finally {
-            setUsersLoading(false);
-        }
-    }, []);
 
     const loadInvoices = useCallback(async (tenant: TenantDetails) => {
         setInvoicesLoading(true);
@@ -276,6 +199,7 @@ export default function SchoolDetailsPage() {
         try {
             const tenant = await saasApi.getTenant(id) as TenantDetails;
             setSchool(tenant);
+            setTenantAdminEmail('');
             setSettingsForm({
                 name: tenant.name || '',
                 subdomain: tenant.subdomain || '',
@@ -292,7 +216,6 @@ export default function SchoolDetailsPage() {
             });
 
             await Promise.all([
-                loadUsers(tenant),
                 loadInvoices(tenant),
                 loadPlanHistory(tenant),
                 loadSubscriptionContext(tenant),
@@ -303,18 +226,13 @@ export default function SchoolDetailsPage() {
         } finally {
             setIsLoading(false);
         }
-    }, [loadUsers, loadInvoices, loadPlanHistory, loadSubscriptionContext]);
+    }, [loadInvoices, loadPlanHistory, loadSubscriptionContext]);
 
     useEffect(() => {
         if (schoolId) {
             loadSchoolAndUsers(schoolId);
         }
     }, [schoolId, loadSchoolAndUsers]);
-
-    const handleRefreshUsers = async () => {
-        if (!school) return;
-        await loadUsers(school);
-    };
 
     const handleRefreshInvoices = async () => {
         if (!school) return;
@@ -329,127 +247,6 @@ export default function SchoolDetailsPage() {
     const handleRefreshSubscriptionContext = async () => {
         if (!school) return;
         await loadSubscriptionContext(school);
-    };
-
-    const handleOpenUserDialog = (user: User) => {
-        setSelectedUser(user);
-        setUserForm({
-            first_name: user.first_name || '',
-            last_name: user.last_name || '',
-            email: user.email || '',
-            role: user.role
-        });
-        setUserDialogOpen(true);
-    };
-
-    const handleSaveUser = async () => {
-        if (!selectedUser) return;
-        const tenantId = String(school?.id ?? school?.tenant_id ?? '');
-        if (!tenantId) return;
-        setIsSavingUser(true);
-        try {
-            const updated = await saasApi.updateTenantUser(tenantId, selectedUser.user_id, {
-                first_name: userForm.first_name,
-                last_name: userForm.last_name,
-                email: userForm.email,
-                role: userForm.role
-            });
-            setUsers(prev =>
-                prev.map(u => (u.user_id === selectedUser.user_id ? { ...u, ...updated } : u))
-            );
-            toast.success("User details updated.");
-            setUserDialogOpen(false);
-        } catch (error) {
-            console.error(error);
-            toast.error("Failed to update user details.");
-        } finally {
-            setIsSavingUser(false);
-        }
-    };
-
-    const handleCreateUser = async () => {
-        if (!school) return;
-        const tenantId = String(school.id ?? school.tenant_id ?? '');
-        if (!tenantId) return;
-        if (!newUserForm.first_name || !newUserForm.last_name || !newUserForm.email || !newUserForm.password) {
-            toast.error("First name, last name, email, and password are required.");
-            return;
-        }
-
-        setIsCreatingUser(true);
-        try {
-            await saasApi.createTenantUser(tenantId, {
-                first_name: newUserForm.first_name,
-                last_name: newUserForm.last_name,
-                email: newUserForm.email,
-                username: newUserForm.username || newUserForm.email.split('@')[0],
-                password: newUserForm.password,
-                role: newUserForm.role,
-                tenant: tenantId
-            });
-
-            toast.success("User created successfully.");
-            setNewUserDialogOpen(false);
-            setNewUserForm(EMPTY_NEW_USER_FORM);
-            await loadUsers(school);
-        } catch (error) {
-            console.error(error);
-            toast.error("Failed to create user.");
-        } finally {
-            setIsCreatingUser(false);
-        }
-    };
-
-    const handleToggleUserStatus = async (user: User) => {
-        const tenantId = String(school?.id ?? school?.tenant_id ?? '');
-        if (!tenantId) return;
-        setActiveUserActionId(user.user_id);
-        try {
-            const isCurrentlyActive = user.is_active !== false;
-            const updated = await saasApi.updateTenantUser(tenantId, user.user_id, { is_active: !isCurrentlyActive });
-            setUsers(prev => prev.map(u => (u.user_id === user.user_id ? { ...u, ...updated, is_active: !isCurrentlyActive } : u)));
-            toast.success(`User ${isCurrentlyActive ? 'suspended' : 'activated'} successfully.`);
-        } catch (error) {
-            console.error(error);
-            toast.error("Failed to update user status.");
-        } finally {
-            setActiveUserActionId(null);
-        }
-    };
-
-    const handleResetPasswordDialogChange = (open: boolean) => {
-        setPasswordResetDialogOpen(open);
-        if (!open) {
-            setPasswordResetUser(null);
-            setPasswordResetValue('');
-        }
-    };
-
-    const openResetPasswordDialog = (user: User) => {
-        setPasswordResetUser(user);
-        setPasswordResetValue('');
-        setPasswordResetDialogOpen(true);
-    };
-
-    const handleResetPassword = async () => {
-        if (!passwordResetUser) return;
-        const tenantId = String(school?.id ?? school?.tenant_id ?? '');
-        if (!tenantId) return;
-        if (passwordResetValue.trim().length < 6) {
-            toast.error("Password must be at least 6 characters.");
-            return;
-        }
-        setIsResettingUserPassword(true);
-        try {
-            await saasApi.resetTenantUserPassword(tenantId, passwordResetUser.user_id, passwordResetValue.trim());
-            toast.success("Password reset successfully.");
-            handleResetPasswordDialogChange(false);
-        } catch (error) {
-            console.error(error);
-            toast.error("Failed to reset password.");
-        } finally {
-            setIsResettingUserPassword(false);
-        }
     };
 
     const generateTemporaryPassword = () => {
@@ -485,20 +282,16 @@ export default function SchoolDetailsPage() {
             toast.error("Missing tenant identifier.");
             return;
         }
-        if (!primaryAdmin?.user_id) {
-            toast.error("No admin user found for this school.");
-            return;
-        }
         const temporaryPassword = generateTemporaryPassword();
         setIsResettingAdminPassword(true);
         try {
-            const result = await saasApi.resetAdminPassword(tenantId, temporaryPassword, {
-                adminUserId: primaryAdmin.user_id,
-                adminEmail: primaryAdmin.email || undefined,
-            });
+            const result = await saasApi.resetAdminPassword(tenantId, temporaryPassword);
             setAdminSharePassword(temporaryPassword);
             setShowSharePassword(true);
-            toast.success(`Temporary password set for ${result.admin_email || primaryAdmin.email || 'admin user'}.`);
+            if (result.admin_email) {
+                setTenantAdminEmail(result.admin_email);
+            }
+            toast.success(`Temporary password set for ${result.admin_email || 'tenant admin'}.`);
         } catch (error) {
             console.error(error);
             toast.error("Failed to generate temporary admin password.");
@@ -641,44 +434,10 @@ export default function SchoolDetailsPage() {
         }
     };
 
-    const filteredUsers = useMemo(() => {
-        const term = userSearch.trim().toLowerCase();
-        return users.filter(user => {
-            const fullName = `${user.first_name || ''} ${user.last_name || ''}`.trim().toLowerCase();
-            const matchesSearch = !term
-                || fullName.includes(term)
-                || (user.email || '').toLowerCase().includes(term)
-                || (user.username || '').toLowerCase().includes(term);
-            const matchesRole = roleFilter === 'all' || user.role === roleFilter;
-            const isActive = user.is_active !== false;
-            const matchesStatus = statusFilter === 'all'
-                || (statusFilter === 'active' && isActive)
-                || (statusFilter === 'inactive' && !isActive);
-            return matchesSearch && matchesRole && matchesStatus;
-        });
-    }, [users, userSearch, roleFilter, statusFilter]);
-
-    const studentCount = useMemo(
-        () => Math.max(users.filter(u => u.role === 'student').length, school?.student_count ?? 0),
-        [users, school?.student_count]
-    );
-    const teacherCount = useMemo(
-        () => Math.max(users.filter(u => u.role === 'teacher').length, school?.teacher_count ?? 0),
-        [users, school?.teacher_count]
-    );
-    const adminCount = useMemo(
-        () => Math.max(users.filter(u => u.role === 'admin').length, school?.admin_count ?? 0),
-        [users, school?.admin_count]
-    );
-    const totalUsers = useMemo(
-        () => Math.max(users.length, school?.total_users ?? 0, studentCount + teacherCount + adminCount),
-        [users.length, school?.total_users, studentCount, teacherCount, adminCount]
-    );
-    const primaryAdmin = useMemo(
-        () => users.find((u) => u.role === 'admin') || null,
-        [users]
-    );
-
+    const studentCount = school?.student_count ?? 0;
+    const teacherCount = school?.teacher_count ?? 0;
+    const adminCount = school?.admin_count ?? 0;
+    const totalUsers = Math.max(school?.total_users ?? 0, studentCount + teacherCount + adminCount);
     const aiTokensUsed = school?.ai_tokens_used ?? 0;
     const aiTokenLimit = school?.ai_token_limit ?? 0;
     const aiUsagePercent = useMemo(() => {
@@ -700,7 +459,7 @@ export default function SchoolDetailsPage() {
         || school?.website
         || (school?.subdomain ? `${school.subdomain}` : 'Not configured');
     const schoolCode = (school?.subdomain || school?.schema_name || '').trim();
-    const adminLoginEmail = (primaryAdmin?.email || '').trim();
+    const adminLoginEmail = tenantAdminEmail.trim();
 
     const paidInvoices = invoices.filter(inv => inv.status === 'paid');
     const pendingInvoices = invoices.filter(inv => inv.status === 'pending');
@@ -944,12 +703,13 @@ export default function SchoolDetailsPage() {
                                     <div className="space-y-2">
                                         <Label>Admin Login Email</Label>
                                         <div className="flex gap-2">
-                                            <Input value={adminLoginEmail || 'No admin user found'} readOnly />
+                                            <Input value={adminLoginEmail || 'Hidden (available after reset)'} readOnly />
                                             <Button
                                                 type="button"
                                                 variant="outline"
                                                 size="icon"
                                                 onClick={() => copyText('Admin email', adminLoginEmail)}
+                                                disabled={!adminLoginEmail}
                                             >
                                                 <Copy className="h-4 w-4" />
                                             </Button>
@@ -991,7 +751,7 @@ export default function SchoolDetailsPage() {
                                         type="button"
                                         variant="outline"
                                         onClick={handleGenerateAdminSharePassword}
-                                        disabled={isResettingAdminPassword || !primaryAdmin?.user_id}
+                                        disabled={isResettingAdminPassword}
                                     >
                                         {isResettingAdminPassword ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Key className="mr-2 h-4 w-4" />}
                                         Generate Temporary Password
@@ -1001,9 +761,9 @@ export default function SchoolDetailsPage() {
                                         variant="outline"
                                         onClick={() => copyText(
                                             'Credentials',
-                                            `School Code: ${schoolCode}\nAdmin Email: ${adminLoginEmail}\nTemporary Password: ${adminSharePassword}`
+                                            `School Code: ${schoolCode}\nAdmin Email: ${adminLoginEmail || 'tenant-admin'}\nTemporary Password: ${adminSharePassword}`
                                         )}
-                                        disabled={!schoolCode || !adminLoginEmail || !adminSharePassword}
+                                        disabled={!schoolCode || !adminSharePassword}
                                     >
                                         <Copy className="mr-2 h-4 w-4" />
                                         Copy Full Credentials
@@ -1057,183 +817,123 @@ export default function SchoolDetailsPage() {
                 <TabsContent value="users">
                     <Card>
                         <CardHeader>
-                            <CardTitle>User Management</CardTitle>
-                            <CardDescription>Manage users for this school tenant.</CardDescription>
+                            <CardTitle>User Management (Restricted)</CardTitle>
+                            <CardDescription>
+                                SaaS admin can only view tenant user counts and manage tenant admin password.
+                            </CardDescription>
                         </CardHeader>
                         <CardContent className="space-y-4">
-                            <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
-                                <div className="relative flex-1">
-                                    <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                                    <Input
-                                        placeholder="Search by name, username, or email"
-                                        className="pl-9"
-                                        value={userSearch}
-                                        onChange={(e) => setUserSearch(e.target.value)}
-                                    />
+                            <div className="rounded-md border p-4">
+                                <p className="text-sm text-slate-600">
+                                    Direct user listing, create, update, and status changes are disabled from SaaS admin.
+                                    School users are managed inside the tenant admin portal.
+                                </p>
+                            </div>
+
+                            <div className="grid gap-4 md:grid-cols-4">
+                                <Card>
+                                    <CardHeader className="pb-2">
+                                        <CardTitle className="text-sm font-medium">Total Users</CardTitle>
+                                    </CardHeader>
+                                    <CardContent>
+                                        <div className="text-2xl font-bold">{totalUsers}</div>
+                                    </CardContent>
+                                </Card>
+                                <Card>
+                                    <CardHeader className="pb-2">
+                                        <CardTitle className="text-sm font-medium">Students</CardTitle>
+                                    </CardHeader>
+                                    <CardContent>
+                                        <div className="text-2xl font-bold">{studentCount}</div>
+                                    </CardContent>
+                                </Card>
+                                <Card>
+                                    <CardHeader className="pb-2">
+                                        <CardTitle className="text-sm font-medium">Teachers</CardTitle>
+                                    </CardHeader>
+                                    <CardContent>
+                                        <div className="text-2xl font-bold">{teacherCount}</div>
+                                    </CardContent>
+                                </Card>
+                                <Card>
+                                    <CardHeader className="pb-2">
+                                        <CardTitle className="text-sm font-medium">Tenant Admins</CardTitle>
+                                    </CardHeader>
+                                    <CardContent>
+                                        <div className="text-2xl font-bold">{adminCount}</div>
+                                    </CardContent>
+                                </Card>
+                            </div>
+
+                            <div className="rounded-md border">
+                                <div className="border-b px-4 py-3 font-medium">Tenant AI Token Usage</div>
+                                <div className="p-4 space-y-2">
+                                    <div className="flex items-center justify-between text-sm">
+                                        <span>Used</span>
+                                        <span className="font-medium">{numberFmt.format(aiTokensUsed)} / {numberFmt.format(aiTokenLimit)} tokens</span>
+                                    </div>
+                                    <div className="h-2 rounded bg-slate-100 overflow-hidden">
+                                        <div
+                                            className={`h-full ${aiUsagePercent >= 90 ? 'bg-red-500' : aiUsagePercent >= 70 ? 'bg-amber-500' : 'bg-emerald-500'}`}
+                                            style={{ width: `${Math.min(aiUsagePercent, 100)}%` }}
+                                        />
+                                    </div>
+                                    <p className="text-xs text-slate-500">
+                                        Current usage: {aiUsagePercent.toFixed(1)}%
+                                    </p>
                                 </div>
-                                <Select value={roleFilter} onValueChange={setRoleFilter}>
-                                    <SelectTrigger className="w-full lg:w-[180px]">
-                                        <SelectValue placeholder="Role" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="all">All Roles</SelectItem>
-                                        <SelectItem value="student">Student</SelectItem>
-                                        <SelectItem value="teacher">Teacher</SelectItem>
-                                        <SelectItem value="parent">Parent</SelectItem>
-                                        <SelectItem value="admin">Admin</SelectItem>
-                                        <SelectItem value="saas_admin">SaaS Admin</SelectItem>
-                                    </SelectContent>
-                                </Select>
-                                <Select value={statusFilter} onValueChange={setStatusFilter}>
-                                    <SelectTrigger className="w-full lg:w-[160px]">
-                                        <SelectValue placeholder="Status" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="all">All Statuses</SelectItem>
-                                        <SelectItem value="active">Active</SelectItem>
-                                        <SelectItem value="inactive">Inactive</SelectItem>
-                                    </SelectContent>
-                                </Select>
-                                <Button variant="outline" onClick={handleRefreshUsers} disabled={usersLoading}>
-                                    {usersLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCcw className="mr-2 h-4 w-4" />}
-                                    Refresh
-                                </Button>
-                                <Button
-                                    onClick={() => {
-                                        setNewUserForm(EMPTY_NEW_USER_FORM);
-                                        setNewUserDialogOpen(true);
-                                    }}
-                                >
-                                    <Plus className="mr-2 h-4 w-4" /> Add User
-                                </Button>
                             </div>
 
-                            <div className="rounded-md border">
-                                <Table>
-                                    <TableHeader>
-                                        <TableRow>
-                                            <TableHead>Name</TableHead>
-                                            <TableHead>Email</TableHead>
-                                            <TableHead>Role</TableHead>
-                                            <TableHead>Status</TableHead>
-                                            <TableHead className="text-right">Menu</TableHead>
-                                        </TableRow>
-                                    </TableHeader>
-                                    <TableBody>
-                                        {usersLoading ? (
-                                            <TableRow>
-                                                <TableCell colSpan={5} className="text-center py-8">
-                                                    <Loader2 className="mx-auto h-5 w-5 animate-spin text-slate-400" />
-                                                </TableCell>
-                                            </TableRow>
-                                        ) : filteredUsers.length === 0 ? (
-                                            <TableRow>
-                                                <TableCell colSpan={5} className="py-8 text-center text-sm text-slate-500">
-                                                    No users found for current filters.
-                                                </TableCell>
-                                            </TableRow>
-                                        ) : (
-                                            filteredUsers.map((user) => (
-                                                <TableRow key={user.user_id}>
-                                                    <TableCell className="font-medium">
-                                                        {(user.first_name || user.last_name)
-                                                            ? `${user.first_name || ''} ${user.last_name || ''}`.trim()
-                                                            : user.username}
-                                                    </TableCell>
-                                                    <TableCell>{user.email}</TableCell>
-                                                    <TableCell>
-                                                        <Badge variant="outline">{formatRole(user.role)}</Badge>
-                                                    </TableCell>
-                                                    <TableCell>
-                                                        {user.is_active === false ? (
-                                                            <Badge variant="secondary">Inactive</Badge>
-                                                        ) : (
-                                                            <Badge>Active</Badge>
-                                                        )}
-                                                    </TableCell>
-                                                    <TableCell className="text-right">
-                                                        <DropdownMenu>
-                                                            <DropdownMenuTrigger asChild>
-                                                                <Button variant="ghost" size="icon" disabled={activeUserActionId === user.user_id}>
-                                                                    {activeUserActionId === user.user_id ? (
-                                                                        <Loader2 className="h-4 w-4 animate-spin" />
-                                                                    ) : (
-                                                                        <MoreHorizontal className="h-4 w-4" />
-                                                                    )}
-                                                                </Button>
-                                                            </DropdownMenuTrigger>
-                                                            <DropdownMenuContent align="end">
-                                                                <DropdownMenuItem onSelect={() => handleOpenUserDialog(user)}>
-                                                                    <Eye className="mr-2 h-4 w-4" /> View / Edit Details
-                                                                </DropdownMenuItem>
-                                                                <DropdownMenuItem onSelect={() => openResetPasswordDialog(user)}>
-                                                                    <Key className="mr-2 h-4 w-4" /> Reset Password
-                                                                </DropdownMenuItem>
-                                                                <DropdownMenuItem onSelect={() => handleToggleUserStatus(user)}>
-                                                                    {user.is_active === false ? (
-                                                                        <>
-                                                                            <ShieldCheck className="mr-2 h-4 w-4" /> Activate User
-                                                                        </>
-                                                                    ) : (
-                                                                        <>
-                                                                            <ShieldAlert className="mr-2 h-4 w-4" /> Suspend User
-                                                                        </>
-                                                                    )}
-                                                                </DropdownMenuItem>
-                                                            </DropdownMenuContent>
-                                                        </DropdownMenu>
-                                                    </TableCell>
-                                                </TableRow>
-                                            ))
-                                        )}
-                                    </TableBody>
-                                </Table>
-                            </div>
-
-                            <div className="rounded-md border">
-                                <div className="flex items-center justify-between border-b px-4 py-3">
-                                    <div className="font-medium">Plan Change History</div>
-                                    <Button variant="outline" size="sm" onClick={handleRefreshPlanHistory} disabled={planHistoryLoading}>
-                                        {planHistoryLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCcw className="mr-2 h-4 w-4" />}
-                                        Refresh History
+                            <div className="rounded-md border p-4 space-y-4">
+                                <div>
+                                    <h4 className="font-medium">Tenant Admin Password</h4>
+                                    <p className="text-xs text-slate-500 mt-1">
+                                        Only tenant admin passwords can be managed from SaaS admin.
+                                    </p>
+                                </div>
+                                <div className="space-y-2">
+                                    <Label>Tenant Admin Email</Label>
+                                    <Input value={adminLoginEmail || 'Hidden (available after reset)'} readOnly />
+                                </div>
+                                <div className="space-y-2">
+                                    <Label>Temporary Admin Password</Label>
+                                    <div className="flex gap-2">
+                                        <Input
+                                            type={showSharePassword ? 'text' : 'password'}
+                                            value={adminSharePassword || 'Generate to view temporary password'}
+                                            readOnly
+                                        />
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            size="icon"
+                                            onClick={() => setShowSharePassword((prev) => !prev)}
+                                            disabled={!adminSharePassword}
+                                        >
+                                            {showSharePassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                                        </Button>
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            size="icon"
+                                            onClick={() => copyText('Temporary password', adminSharePassword)}
+                                            disabled={!adminSharePassword}
+                                        >
+                                            <Copy className="h-4 w-4" />
+                                        </Button>
+                                    </div>
+                                </div>
+                                <div className="flex flex-wrap gap-2">
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        onClick={handleGenerateAdminSharePassword}
+                                        disabled={isResettingAdminPassword}
+                                    >
+                                        {isResettingAdminPassword ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Key className="mr-2 h-4 w-4" />}
+                                        Generate Temporary Password
                                     </Button>
                                 </div>
-                                <Table>
-                                    <TableHeader>
-                                        <TableRow>
-                                            <TableHead>Changed At</TableHead>
-                                            <TableHead>From</TableHead>
-                                            <TableHead>To</TableHead>
-                                            <TableHead>Reason</TableHead>
-                                            <TableHead>By</TableHead>
-                                        </TableRow>
-                                    </TableHeader>
-                                    <TableBody>
-                                        {planHistoryLoading ? (
-                                            <TableRow>
-                                                <TableCell colSpan={5} className="py-8 text-center">
-                                                    <Loader2 className="mx-auto h-5 w-5 animate-spin text-slate-400" />
-                                                </TableCell>
-                                            </TableRow>
-                                        ) : planHistory.length === 0 ? (
-                                            <TableRow>
-                                                <TableCell colSpan={5} className="py-8 text-center text-slate-500">
-                                                    No plan history found for this school.
-                                                </TableCell>
-                                            </TableRow>
-                                        ) : (
-                                            planHistory.map((entry) => (
-                                                <TableRow key={entry.history_id}>
-                                                    <TableCell>{new Date(entry.changed_at).toLocaleString()}</TableCell>
-                                                    <TableCell>{entry.previous_plan_name || 'N/A'}</TableCell>
-                                                    <TableCell>{entry.new_plan_name || 'N/A'}</TableCell>
-                                                    <TableCell>{entry.reason || '-'}</TableCell>
-                                                    <TableCell>{entry.changed_by_name || '-'}</TableCell>
-                                                </TableRow>
-                                            ))
-                                        )}
-                                    </TableBody>
-                                </Table>
                             </div>
                         </CardContent>
                     </Card>
@@ -1568,171 +1268,6 @@ export default function SchoolDetailsPage() {
                 </TabsContent>
             </Tabs>
 
-            <Dialog open={userDialogOpen} onOpenChange={setUserDialogOpen}>
-                <DialogContent>
-                    <DialogHeader>
-                        <DialogTitle>User Details</DialogTitle>
-                        <DialogDescription>Update user information and role.</DialogDescription>
-                    </DialogHeader>
-                    <div className="grid gap-4 py-2">
-                        <div className="grid grid-cols-2 gap-3">
-                            <div className="space-y-2">
-                                <Label htmlFor="firstName">First Name</Label>
-                                <Input
-                                    id="firstName"
-                                    value={userForm.first_name}
-                                    onChange={(e) => setUserForm(prev => ({ ...prev, first_name: e.target.value }))}
-                                />
-                            </div>
-                            <div className="space-y-2">
-                                <Label htmlFor="lastName">Last Name</Label>
-                                <Input
-                                    id="lastName"
-                                    value={userForm.last_name}
-                                    onChange={(e) => setUserForm(prev => ({ ...prev, last_name: e.target.value }))}
-                                />
-                            </div>
-                        </div>
-                        <div className="space-y-2">
-                            <Label htmlFor="email">Email</Label>
-                            <Input
-                                id="email"
-                                value={userForm.email}
-                                onChange={(e) => setUserForm(prev => ({ ...prev, email: e.target.value }))}
-                            />
-                        </div>
-                        <div className="space-y-2">
-                            <Label>Role</Label>
-                            <Select value={userForm.role} onValueChange={(value) => setUserForm(prev => ({ ...prev, role: value as User['role'] }))}>
-                                <SelectTrigger>
-                                    <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="student">Student</SelectItem>
-                                    <SelectItem value="teacher">Teacher</SelectItem>
-                                    <SelectItem value="parent">Parent</SelectItem>
-                                    <SelectItem value="admin">Admin</SelectItem>
-                                    <SelectItem value="saas_admin">SaaS Admin</SelectItem>
-                                </SelectContent>
-                            </Select>
-                        </div>
-                    </div>
-                    <DialogFooter>
-                        <Button variant="outline" onClick={() => setUserDialogOpen(false)}>Cancel</Button>
-                        <Button onClick={handleSaveUser} disabled={isSavingUser}>
-                            {isSavingUser ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                            Save User
-                        </Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
-
-            <Dialog open={newUserDialogOpen} onOpenChange={setNewUserDialogOpen}>
-                <DialogContent>
-                    <DialogHeader>
-                        <DialogTitle>Create User</DialogTitle>
-                        <DialogDescription>Add a new user account under this school.</DialogDescription>
-                    </DialogHeader>
-                    <div className="grid gap-4 py-2">
-                        <div className="grid grid-cols-2 gap-3">
-                            <div className="space-y-2">
-                                <Label htmlFor="newFirstName">First Name</Label>
-                                <Input
-                                    id="newFirstName"
-                                    value={newUserForm.first_name}
-                                    onChange={(e) => setNewUserForm(prev => ({ ...prev, first_name: e.target.value }))}
-                                />
-                            </div>
-                            <div className="space-y-2">
-                                <Label htmlFor="newLastName">Last Name</Label>
-                                <Input
-                                    id="newLastName"
-                                    value={newUserForm.last_name}
-                                    onChange={(e) => setNewUserForm(prev => ({ ...prev, last_name: e.target.value }))}
-                                />
-                            </div>
-                        </div>
-                        <div className="space-y-2">
-                            <Label htmlFor="newEmail">Email</Label>
-                            <Input
-                                id="newEmail"
-                                type="email"
-                                value={newUserForm.email}
-                                onChange={(e) => setNewUserForm(prev => ({ ...prev, email: e.target.value }))}
-                            />
-                        </div>
-                        <div className="grid grid-cols-2 gap-3">
-                            <div className="space-y-2">
-                                <Label htmlFor="newUsername">Username (Optional)</Label>
-                                <Input
-                                    id="newUsername"
-                                    value={newUserForm.username}
-                                    onChange={(e) => setNewUserForm(prev => ({ ...prev, username: e.target.value }))}
-                                />
-                            </div>
-                            <div className="space-y-2">
-                                <Label htmlFor="newPassword">Password</Label>
-                                <Input
-                                    id="newPassword"
-                                    type="password"
-                                    value={newUserForm.password}
-                                    onChange={(e) => setNewUserForm(prev => ({ ...prev, password: e.target.value }))}
-                                />
-                            </div>
-                        </div>
-                        <div className="space-y-2">
-                            <Label>Role</Label>
-                            <Select value={newUserForm.role} onValueChange={(value) => setNewUserForm(prev => ({ ...prev, role: value as User['role'] }))}>
-                                <SelectTrigger>
-                                    <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="student">Student</SelectItem>
-                                    <SelectItem value="teacher">Teacher</SelectItem>
-                                    <SelectItem value="parent">Parent</SelectItem>
-                                    <SelectItem value="admin">Admin</SelectItem>
-                                </SelectContent>
-                            </Select>
-                        </div>
-                    </div>
-                    <DialogFooter>
-                        <Button variant="outline" onClick={() => setNewUserDialogOpen(false)}>Cancel</Button>
-                        <Button onClick={handleCreateUser} disabled={isCreatingUser}>
-                            {isCreatingUser ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                            Create User
-                        </Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
-
-            <Dialog open={passwordResetDialogOpen} onOpenChange={handleResetPasswordDialogChange}>
-                <DialogContent>
-                    <DialogHeader>
-                        <DialogTitle>Reset User Password</DialogTitle>
-                        <DialogDescription>
-                            Set a new password for {passwordResetUser?.first_name || passwordResetUser?.username || passwordResetUser?.email || 'this user'}.
-                        </DialogDescription>
-                    </DialogHeader>
-                    <div className="space-y-2 py-2">
-                        <Label htmlFor="resetUserPassword">New Password</Label>
-                        <Input
-                            id="resetUserPassword"
-                            type="password"
-                            value={passwordResetValue}
-                            onChange={(e) => setPasswordResetValue(e.target.value)}
-                            placeholder="Enter at least 6 characters"
-                            autoComplete="new-password"
-                        />
-                    </div>
-                    <DialogFooter>
-                        <Button variant="outline" onClick={() => handleResetPasswordDialogChange(false)}>Cancel</Button>
-                        <Button onClick={handleResetPassword} disabled={isResettingUserPassword}>
-                            {isResettingUserPassword ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                            Reset Password
-                        </Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
         </div>
     );
 }

@@ -1,9 +1,7 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import permissions
-import logging
 from django.core.cache import cache
-from django.db import IntegrityError
 from django.db.models import Sum, Count, Max
 from core.models import Tenant
 from billing.models_saas import Invoice, Subscription
@@ -15,12 +13,10 @@ from django.db.models.functions import TruncDate
 from django.utils import timezone
 from ai_engine.services.provider_config import get_ai_provider_config
 from core.utils.audit import record_audit_event
-from users.emailing import send_tenant_account_created_email
 
 KPI_CACHE_KEY = "saas:kpi:v2"
 AI_USAGE_CACHE_KEY = "saas:ai-usage:v2"
 DASHBOARD_CACHE_TTL_SECONDS = 60
-logger = logging.getLogger(__name__)
 
 
 def _as_bool(value) -> bool:
@@ -447,111 +443,21 @@ class TenantAdminPasswordResetView(APIView):
         except Exception as e:
             return Response({"error": str(e)}, status=500)
 
-
-def _serialize_tenant_user(user):
-    return {
-        "user_id": str(user.user_id),
-        "username": user.username,
-        "email": user.email,
-        "first_name": user.first_name,
-        "last_name": user.last_name,
-        "role": user.role,
-        "tenant": str(user.tenant_id) if user.tenant_id else None,
-        "is_active": user.is_active,
-    }
-
-
-ROLE_CHOICES = {"student", "teacher", "parent", "admin", "staff", "saas_admin"}
-
-
-def _ensure_role_profile(role: str, user):
-    if role == "student":
-        from academic.models import Student
-        Student.objects.get_or_create(user=user)
-    elif role == "teacher":
-        from academic.models import Teacher
-        Teacher.objects.get_or_create(user=user)
-    elif role == "parent":
-        from academic.models import Parent
-        Parent.objects.get_or_create(user=user)
-
-
 class TenantUsersView(APIView):
     permission_classes = [IsSaaSAdmin]
     throttle_classes = []
 
     def get(self, request, tenant_id):
-        try:
-            tenant = Tenant.objects.get(id=tenant_id)
-        except Tenant.DoesNotExist:
-            return Response({"error": "Tenant not found"}, status=404)
-
-        try:
-            from users.models import UserAccount
-            with schema_context(tenant.schema_name):
-                users = UserAccount.objects.all().order_by("first_name", "last_name", "email")
-                return Response([_serialize_tenant_user(u) for u in users])
-        except Exception as e:
-            return Response({"error": str(e)}, status=500)
+        return Response(
+            {"error": "Listing tenant users from SaaS admin is disabled. View user counts only."},
+            status=403,
+        )
 
     def post(self, request, tenant_id):
-        try:
-            tenant = Tenant.objects.get(id=tenant_id)
-        except Tenant.DoesNotExist:
-            return Response({"error": "Tenant not found"}, status=404)
-
-        data = request.data or {}
-        required = ["email", "password", "first_name", "last_name"]
-        missing = [field for field in required if not data.get(field)]
-        if missing:
-            return Response({"error": f"Missing required fields: {', '.join(missing)}"}, status=400)
-
-        role = data.get("role", "student")
-        if role not in ROLE_CHOICES:
-            return Response({"error": "Invalid role"}, status=400)
-
-        username = data.get("username") or str(data.get("email")).split("@")[0]
-
-        try:
-            from users.models import UserAccount
-            with schema_context(tenant.schema_name):
-                if UserAccount.objects.filter(email=data["email"]).exists():
-                    return Response({"error": "A user with this email already exists."}, status=400)
-                if UserAccount.objects.filter(username=username).exists():
-                    return Response({"error": "A user with this username already exists."}, status=400)
-                user = UserAccount.objects.create_user(
-                    email=data["email"],
-                    username=username,
-                    password=data["password"],
-                    first_name=data["first_name"],
-                    last_name=data["last_name"],
-                    role=role,
-                    tenant=tenant,
-                    is_staff=role in ["admin", "staff"],
-                )
-                _ensure_role_profile(role, user)
-                try:
-                    send_tenant_account_created_email(user, tenant=tenant)
-                except Exception as exc:
-                    # User creation should succeed even when email provider is temporarily unavailable.
-                    logger.warning("Failed to send tenant account created email: %s", exc)
-                record_audit_event(
-                    action="core.tenant_user_created",
-                    user=request.user,
-                    request=request,
-                    details={
-                        "tenant_id": str(tenant.id),
-                        "tenant_schema": tenant.schema_name,
-                        "target_user_id": str(user.user_id),
-                        "target_email": user.email,
-                        "target_role": user.role,
-                    },
-                )
-                return Response(_serialize_tenant_user(user), status=201)
-        except IntegrityError as e:
-            return Response({"error": str(e)}, status=400)
-        except Exception as e:
-            return Response({"error": str(e)}, status=500)
+        return Response(
+            {"error": "Creating tenant users from SaaS admin is disabled."},
+            status=403,
+        )
 
 
 class TenantUserDetailView(APIView):
@@ -559,58 +465,10 @@ class TenantUserDetailView(APIView):
     throttle_classes = []
 
     def patch(self, request, tenant_id, user_id):
-        try:
-            tenant = Tenant.objects.get(id=tenant_id)
-        except Tenant.DoesNotExist:
-            return Response({"error": "Tenant not found"}, status=404)
-
-        try:
-            from users.models import UserAccount
-            with schema_context(tenant.schema_name):
-                user = UserAccount.objects.get(pk=user_id)
-                previous_role = user.role
-
-                for field in ["first_name", "last_name", "email", "username"]:
-                    if field in request.data:
-                        setattr(user, field, request.data[field])
-
-                if "role" in request.data:
-                    role = request.data["role"]
-                    if role not in ROLE_CHOICES:
-                        return Response({"error": "Invalid role"}, status=400)
-                    user.role = role
-                    user.is_staff = role in ["admin", "staff", "saas_admin"]
-
-                if "is_active" in request.data:
-                    user.is_active = bool(request.data["is_active"])
-
-                user.save()
-                if user.role != previous_role or user.role in {"student", "teacher", "parent"}:
-                    _ensure_role_profile(user.role, user)
-                record_audit_event(
-                    action="core.tenant_user_updated",
-                    user=request.user,
-                    request=request,
-                    details={
-                        "tenant_id": str(tenant.id),
-                        "tenant_schema": tenant.schema_name,
-                        "target_user_id": str(user.user_id),
-                        "before": {
-                            "role": previous_role,
-                        },
-                        "after": {
-                            "role": user.role,
-                            "is_active": user.is_active,
-                            "email": user.email,
-                            "username": user.username,
-                        },
-                    },
-                )
-                return Response(_serialize_tenant_user(user))
-        except IntegrityError as e:
-            return Response({"error": str(e)}, status=400)
-        except Exception as e:
-            return Response({"error": str(e)}, status=500)
+        return Response(
+            {"error": "Updating tenant users from SaaS admin is disabled."},
+            status=403,
+        )
 
 
 class TenantUserPasswordResetView(APIView):
@@ -631,6 +489,11 @@ class TenantUserPasswordResetView(APIView):
             from users.models import UserAccount
             with schema_context(tenant.schema_name):
                 user = UserAccount.objects.get(pk=user_id)
+                if user.role != "admin":
+                    return Response(
+                        {"error": "SaaS admin can only reset passwords for tenant admin users."},
+                        status=403,
+                    )
                 user.set_password(new_password)
                 user.save()
                 record_audit_event(

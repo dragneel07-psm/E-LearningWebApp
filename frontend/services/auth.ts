@@ -78,17 +78,13 @@ export const authService = {
         const response = await api.post<RegisterResponse>('/api/users/register/', data, {
             headers: { 'x-tenant-id': tenantId },
         });
+        return response.data;
+    },
 
-        if (response.data.tokens?.access) {
-            setTokens(response.data.tokens.access, response.data.tokens.refresh, { tenantId });
-            if (typeof window !== 'undefined') {
-                localStorage.setItem('tenant_id', tenantId);
-                setTenantCookie(tenantId);
-                if (response.data.user?.role) {
-                    localStorage.setItem('user_role', response.data.user.role);
-                }
-            }
-        }
+    async verifyEmail(uidb64: string, token: string) {
+        const response = await api.post('/api/users/verify-email/', { uidb64, token }, {
+            headers: { 'x-tenant-id': 'public' },
+        });
         return response.data;
     },
 

@@ -9,6 +9,7 @@ from rest_framework_simplejwt.exceptions import InvalidToken
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer, TokenRefreshSerializer
 from rest_framework_simplejwt.settings import api_settings
 from rest_framework_simplejwt.tokens import AccessToken, RefreshToken as _RefreshToken
+from rest_framework.exceptions import AuthenticationFailed
 from .token_policy import role_token_lifetimes
 
 def _safe_tenant_features(user) -> dict:
@@ -109,6 +110,14 @@ class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
         return token
 
     def validate(self, attrs):
+        email = (attrs.get(self.username_field) or "").strip().lower()
+        if email:
+            existing_user = UserAccount.objects.filter(email__iexact=email).first()
+            if existing_user and not existing_user.is_active:
+                if getattr(existing_user, "role", "") == "saas_admin" and getattr(existing_user, "tenant_id", None) is None:
+                    raise AuthenticationFailed("Email not verified. Please verify your email before signing in.")
+                raise AuthenticationFailed("Account is inactive. Please contact your administrator.")
+
         try:
             data = super().validate(attrs)
         except Exception as e:
@@ -196,12 +205,11 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
         required=True,
         style={'input_type': 'password'}
     )
-    tokens = serializers.SerializerMethodField(read_only=True)
     
     class Meta:
         model = UserAccount
         fields = ['user_id', 'email', 'username', 'password', 'password_confirm', 
-                  'first_name', 'last_name', 'tokens']
+                  'first_name', 'last_name']
         extra_kwargs = {
             'first_name': {'required': True},
             'last_name': {'required': True},
@@ -230,21 +238,6 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
             })
         return attrs
     
-    def get_tokens(self, obj):
-        """Generate JWT tokens for the user"""
-        refresh = _RefreshToken.for_user(obj)
-        role_lifetimes = role_token_lifetimes(getattr(obj, "role", None))
-        refresh.set_exp(lifetime=role_lifetimes.refresh)
-        claims = _tenant_claims(obj)
-        refresh["tenant_schema"] = claims["tenant_schema"]
-        refresh["tenant_id"] = claims["tenant_id"]
-        access = refresh.access_token
-        access.set_exp(lifetime=role_lifetimes.access)
-        return {
-            'refresh': str(refresh),
-            'access': str(access),
-        }
-    
     def create(self, validated_data):
         """Create SaaS Admin user with hashed password"""
         validated_data.pop('password_confirm')
@@ -263,7 +256,8 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
                 role=role,
                 tenant=None,  # SaaS Admin is global
                 is_staff=True,
-                is_superuser=True
+                is_superuser=True,
+                is_active=False,
             )
         return user
 
@@ -352,6 +346,36 @@ class PasswordResetSerializer(serializers.Serializer):
 
     def validate_email(self, value):
         return (value or "").strip().lower()
+
+
+class EmailVerificationSerializer(serializers.Serializer):
+    uid = serializers.CharField(required=False, allow_blank=True)
+    uidb64 = serializers.CharField(required=False, allow_blank=True)
+    token = serializers.CharField()
+
+    def validate(self, attrs):
+        uid_value = attrs.get("uid") or attrs.get("uidb64")
+        if not uid_value:
+            raise serializers.ValidationError({"uid": "uid (or uidb64) is required."})
+
+        try:
+            uid = force_str(urlsafe_base64_decode(uid_value))
+            user = UserAccount.objects.get(pk=uid)
+        except (TypeError, ValueError, OverflowError, UserAccount.DoesNotExist):
+            raise serializers.ValidationError({"uid": "Invalid user ID."})
+
+        if not default_token_generator.check_token(user, attrs["token"]):
+            raise serializers.ValidationError({"token": "Invalid or expired token."})
+
+        attrs["user"] = user
+        return attrs
+
+    def save(self):
+        user = self.validated_data["user"]
+        if not user.is_active:
+            user.is_active = True
+            user.save(update_fields=["is_active"])
+        return user
 
 class PasswordResetConfirmSerializer(serializers.Serializer):
     uid = serializers.CharField(required=False, allow_blank=True)

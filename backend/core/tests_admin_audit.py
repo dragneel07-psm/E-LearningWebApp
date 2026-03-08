@@ -44,7 +44,8 @@ class SaasAdminMutationAuditTests(FastTenantTestCase):
                 username="tenant_reset_target",
                 email="tenant_reset_target@example.com",
                 password="OldPass@1234",
-                role="teacher",
+                role="admin",
+                is_staff=True,
                 tenant=self.tenant,
             )
 

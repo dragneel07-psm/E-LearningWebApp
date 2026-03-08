@@ -31,8 +31,8 @@ export interface UserProfile {
 
 export interface RegisterResponse {
     message: string;
-    user: UserProfile;
-    tokens: AuthTokens;
+    verification_required?: boolean;
+    user?: UserProfile;
 }
 
 export interface LoginResponse {

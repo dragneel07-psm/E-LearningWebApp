@@ -5,7 +5,8 @@ from django.contrib.auth.models import Group, Permission
 from .models import UserAccount
 from .serializers import (
     UserAccountSerializer, UserManagementSerializer, GroupSerializer, PermissionSerializer,
-    PasswordResetSerializer, PasswordResetConfirmSerializer, RoleAwareTokenRefreshSerializer
+    PasswordResetSerializer, PasswordResetConfirmSerializer, RoleAwareTokenRefreshSerializer,
+    EmailVerificationSerializer,
 )
 from .permissions import IsAdminOrSaaSAdmin
 from core.mixins import TenantScopedQuerysetMixin
@@ -183,7 +184,8 @@ def register_user(request):
             # Account should remain created even if email provider is temporarily unavailable.
             logger.warning("Failed to send SaaS admin registration email: %s", exc)
         return Response({
-            'message': 'User registered successfully',
+            'message': 'Registration successful. Please verify your email before signing in.',
+            'verification_required': True,
             'user': {
                 'id': user.user_id,
                 'email': user.email,
@@ -192,7 +194,6 @@ def register_user(request):
                 'last_name': user.last_name,
                 'role': user.role,
             },
-            'tokens': serializer.data['tokens']
         }, status=status.HTTP_201_CREATED)
     
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
@@ -283,4 +284,18 @@ class PasswordResetConfirmView(views.APIView):
         if serializer.is_valid():
             serializer.save()
             return Response({"message": "Password reset successful."}, status=status.HTTP_200_OK)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class EmailVerificationView(views.APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request):
+        serializer = EmailVerificationSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(
+                {"message": "Email verified successfully. You can now sign in."},
+                status=status.HTTP_200_OK,
+            )
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)

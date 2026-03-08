@@ -59,6 +59,13 @@ def build_password_reset_link(user, *, tenant=None) -> str:
     return f"{frontend_base}/reset-password?uidb64={uidb64}&token={token}"
 
 
+def build_email_verification_link(user) -> str:
+    frontend_base = resolve_frontend_url_for_tenant(None)
+    uidb64 = urlsafe_base64_encode(force_bytes(user.pk))
+    token = default_token_generator.make_token(user)
+    return f"{frontend_base}/verify-email?uidb64={uidb64}&token={token}"
+
+
 def send_password_reset_email(user, *, tenant=None, reason: str = "password_reset") -> None:
     reset_link = build_password_reset_link(user, tenant=tenant)
     tenant_name = getattr(tenant or getattr(user, "tenant", None), "name", "") or "your account"
@@ -80,15 +87,15 @@ def send_password_reset_email(user, *, tenant=None, reason: str = "password_rese
 
 
 def send_saas_admin_registration_email(user) -> None:
-    frontend_base = resolve_frontend_url_for_tenant(None)
-    login_url = f"{frontend_base}/login/saas"
-    reset_link = build_password_reset_link(user, tenant=None)
-    subject = "Your SaaS Admin Account Has Been Created"
+    verify_link = build_email_verification_link(user)
+    login_url = f"{resolve_frontend_url_for_tenant(None)}/login/saas"
+    subject = "Verify Your SaaS Admin Email Address"
     message = (
         f"Hello {getattr(user, 'first_name', '') or 'there'},\n\n"
-        "Your SaaS admin account is now active.\n\n"
-        f"Sign in: {login_url}\n"
-        f"If you ever forget your password, use: {reset_link}\n\n"
+        "Thanks for registering your SaaS admin account.\n"
+        "Please verify your email address before signing in:\n"
+        f"{verify_link}\n\n"
+        f"After verification, sign in at: {login_url}\n\n"
         "Regards,\nE-Learning Platform"
     )
     send_mail(
