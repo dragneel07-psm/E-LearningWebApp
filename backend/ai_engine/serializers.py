@@ -1,5 +1,96 @@
 from rest_framework import serializers
-from .models import AIInteractionLog, StudentAIReport, LearningPath, LearningNode, StudyEvent, AiGeneratedArtifact, GradingRubric, AIGradingDraft
+from .models import (
+    AIInteractionLog, StudentAIReport, LearningPath, LearningNode, StudyEvent,
+    AiGeneratedArtifact, GradingRubric, AIGradingDraft,
+    TutorConversation, TutorMessage,
+    SkillTag, SkillMastery, SkillPracticeEvent,
+    AITokenBudget,
+)
+
+
+class SkillTagSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = SkillTag
+        fields = ['id', 'name', 'description', 'subject', 'created_at']
+        read_only_fields = ['id', 'created_at']
+
+
+class SkillMasterySerializer(serializers.ModelSerializer):
+    skill_name = serializers.CharField(source='skill_tag.name', read_only=True)
+    subject_name = serializers.SerializerMethodField()
+    is_mastered = serializers.SerializerMethodField()
+
+    class Meta:
+        model = SkillMastery
+        fields = [
+            'id', 'skill_tag', 'skill_name', 'subject_name',
+            'p_mastery', 'observations', 'is_mastered', 'updated_at',
+        ]
+        read_only_fields = fields
+
+    def get_subject_name(self, obj) -> str:
+        subject = getattr(obj.skill_tag, 'subject', None)
+        return subject.name if subject else ''
+
+    def get_is_mastered(self, obj) -> bool:
+        from ai_engine.services.bkt_service import BKTService
+        return BKTService().is_mastered(obj.p_mastery)
+
+
+class SkillPracticeEventSerializer(serializers.ModelSerializer):
+    skill_name = serializers.CharField(source='skill_tag.name', read_only=True)
+
+    class Meta:
+        model = SkillPracticeEvent
+        fields = [
+            'id', 'skill_tag', 'skill_name', 'correct', 'score_pct',
+            'source_type', 'source_id',
+            'mastery_before', 'mastery_after', 'created_at',
+        ]
+        read_only_fields = fields
+
+
+class SkillPracticeUpdateSerializer(serializers.Serializer):
+    skill_tag_id = serializers.UUIDField()
+    correct = serializers.BooleanField()
+    score_pct = serializers.FloatField(min_value=0, max_value=100, default=0.0)
+    source_type = serializers.ChoiceField(
+        choices=['assessment', 'lesson', 'tutor'], default='assessment'
+    )
+    source_id = serializers.CharField(max_length=64, default='', allow_blank=True)
+
+
+class TutorMessageSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = TutorMessage
+        fields = [
+            'id', 'role', 'content', 'sources',
+            'prompt_tokens', 'completion_tokens',
+            'is_demo', 'confidence', 'confidence_label', 'mode',
+            'created_at',
+        ]
+        read_only_fields = fields
+
+
+class TutorConversationSerializer(serializers.ModelSerializer):
+    message_count = serializers.SerializerMethodField()
+
+    class Meta:
+        model = TutorConversation
+        fields = ['id', 'subject', 'lesson', 'title', 'created_at', 'updated_at', 'message_count']
+        read_only_fields = fields
+
+    def get_message_count(self, obj) -> int:
+        return obj.messages.count()
+
+
+class TutorConversationDetailSerializer(serializers.ModelSerializer):
+    messages = TutorMessageSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = TutorConversation
+        fields = ['id', 'subject', 'lesson', 'title', 'created_at', 'updated_at', 'messages']
+        read_only_fields = fields
 
 class StudyEventSerializer(serializers.ModelSerializer):
     class Meta:
@@ -18,10 +109,23 @@ class StudentAIReportSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 class LearningNodeSerializer(serializers.ModelSerializer):
+    is_due_for_review = serializers.SerializerMethodField()
+
     class Meta:
         model = LearningNode
         fields = '__all__'
-        read_only_fields = ['id', 'learning_path']
+        read_only_fields = [
+            'id', 'learning_path',
+            'ease_factor', 'interval_days', 'repetitions',
+            'next_review_at', 'last_quality',
+            'is_due_for_review',
+        ]
+
+    def get_is_due_for_review(self, obj) -> bool:
+        from django.utils import timezone
+        if obj.status != 'completed' or obj.next_review_at is None:
+            return False
+        return obj.next_review_at <= timezone.now()
 
 class LearningPathSerializer(serializers.ModelSerializer):
     nodes = LearningNodeSerializer(many=True, read_only=True)
@@ -225,3 +329,31 @@ class ContentChunkSearchResultSerializer(serializers.Serializer):
 class ContentChunkSearchResponseSerializer(serializers.Serializer):
     count = serializers.IntegerField()
     results = ContentChunkSearchResultSerializer(many=True)
+
+
+class AITokenBudgetSerializer(serializers.ModelSerializer):
+    remaining = serializers.SerializerMethodField()
+    scope = serializers.SerializerMethodField()
+
+    class Meta:
+        model = AITokenBudget
+        fields = [
+            'id', 'student', 'daily_limit_tokens', 'used_today',
+            'remaining', 'reset_at', 'is_active', 'scope',
+            'created_at', 'updated_at',
+        ]
+        read_only_fields = ['id', 'used_today', 'created_at', 'updated_at']
+
+    def get_remaining(self, obj) -> int | None:
+        if obj.daily_limit_tokens == 0:
+            return None
+        return max(0, obj.daily_limit_tokens - obj.used_today)
+
+    def get_scope(self, obj) -> str:
+        return 'student' if obj.student_id else 'tenant'
+
+
+class AITokenBudgetCreateSerializer(serializers.Serializer):
+    daily_limit_tokens = serializers.IntegerField(min_value=0)
+    student_id = serializers.UUIDField(required=False, allow_null=True, default=None)
+    is_active = serializers.BooleanField(default=True)

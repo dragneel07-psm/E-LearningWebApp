@@ -8,6 +8,10 @@ router.register(r'reports', views.StudentAIReportViewSet, basename='student-repo
 router.register(r'learning-paths', views.LearningPathViewSet, basename='learning-paths')
 router.register(r'learning-nodes', views.LearningNodeViewSet, basename='learning-nodes')
 router.register(r'study-schedule', views.StudyEventViewSet, basename='study-schedule')
+router.register(r'conversations', views.TutorConversationViewSet, basename='tutor-conversations')
+router.register(r'skill-tags', views.SkillTagViewSet, basename='skill-tags')
+router.register(r'skill-mastery', views.SkillMasteryViewSet, basename='skill-mastery')
+router.register(r'token-budgets', views.AITokenBudgetViewSet, basename='token-budgets')
 
 urlpatterns = [
     path('', include(router.urls)),

@@ -68,6 +68,13 @@ class LearningNode(models.Model):
     ], default='locked')
     completed_at = models.DateTimeField(null=True, blank=True)
 
+    # SM-2 Spaced Repetition fields
+    ease_factor = models.FloatField(default=2.5, help_text="SM-2 ease factor (min 1.3)")
+    interval_days = models.IntegerField(default=1, help_text="Days until next review")
+    repetitions = models.IntegerField(default=0, help_text="Number of successful reviews")
+    next_review_at = models.DateTimeField(null=True, blank=True, help_text="Scheduled next review datetime")
+    last_quality = models.IntegerField(null=True, blank=True, help_text="Last recall quality rating (0-5)")
+
     class Meta:
         ordering = ['order']
 
@@ -162,6 +169,148 @@ class AiGeneratedArtifact(models.Model):
         return f"{self.artifact_type}:{self.source_type}:{self.source_id}:{self.lang}"
 
 
+class SkillTag(models.Model):
+    """
+    A fine-grained skill/concept that can be tagged on lessons and assessments.
+    Used as the unit of mastery tracking in Bayesian Knowledge Tracing.
+    Examples: "Quadratic Equations", "Cell Division", "Past Tense Verbs"
+    """
+    id = models.UUIDField(primary_key=True, default=uuid_lib.uuid4, editable=False)
+    tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE, db_constraint=False, related_name="skill_tags")
+    name = models.CharField(max_length=255)
+    description = models.TextField(blank=True, default='')
+    subject = models.ForeignKey('academic.Subject', on_delete=models.CASCADE, related_name='skill_tags', null=True, blank=True)
+    lessons = models.ManyToManyField('academic.Lesson', blank=True, related_name='skill_tags')
+    assessments = models.ManyToManyField('academic.Assessment', blank=True, related_name='skill_tags')
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = [('tenant', 'name', 'subject')]
+        indexes = [
+            models.Index(fields=['tenant', 'subject'], name='ai_skill_tenant_subject_idx'),
+        ]
+
+    def __str__(self):
+        return self.name
+
+
+class SkillMastery(models.Model):
+    """
+    Per-student, per-skill BKT mastery estimate.
+    Tracks the probability that a student has mastered a given SkillTag.
+    Updated after every practice event (assessment submission, quiz, lesson review).
+    """
+    id = models.UUIDField(primary_key=True, default=uuid_lib.uuid4, editable=False)
+    student = models.ForeignKey('academic.Student', on_delete=models.CASCADE, related_name='skill_masteries')
+    skill_tag = models.ForeignKey(SkillTag, on_delete=models.CASCADE, related_name='masteries')
+
+    # BKT parameters (can be tuned per skill or per student)
+    p_mastery = models.FloatField(default=0.1, help_text="Current estimated probability of mastery (0-1)")
+    p_transit = models.FloatField(default=0.1, help_text="P(learn after practice)")
+    p_slip = models.FloatField(default=0.1, help_text="P(wrong | mastered)")
+    p_guess = models.FloatField(default=0.2, help_text="P(correct | not mastered)")
+
+    observations = models.IntegerField(default=0, help_text="Number of practice events seen")
+    updated_at = models.DateTimeField(auto_now=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = [('student', 'skill_tag')]
+        indexes = [
+            models.Index(fields=['student', 'p_mastery'], name='ai_skill_mastery_student_idx'),
+        ]
+
+    def __str__(self):
+        return f"{self.student} | {self.skill_tag.name} | p={self.p_mastery:.2f}"
+
+
+class SkillPracticeEvent(models.Model):
+    """
+    Records a single practice observation for BKT.
+    Created whenever a student completes an assessment or lesson linked to a SkillTag.
+    """
+    SOURCE_CHOICES = [
+        ('assessment', 'Assessment'),
+        ('lesson', 'Lesson Review'),
+        ('tutor', 'AI Tutor'),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid_lib.uuid4, editable=False)
+    student = models.ForeignKey('academic.Student', on_delete=models.CASCADE, related_name='skill_events')
+    skill_tag = models.ForeignKey(SkillTag, on_delete=models.CASCADE, related_name='events')
+    correct = models.BooleanField(help_text="True if the student answered/performed correctly")
+    score_pct = models.FloatField(default=0.0, help_text="Score as percentage (0-100)")
+    source_type = models.CharField(max_length=20, choices=SOURCE_CHOICES, default='assessment')
+    source_id = models.CharField(max_length=64, blank=True, default='')
+    mastery_before = models.FloatField(default=0.0)
+    mastery_after = models.FloatField(default=0.0)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['student', 'skill_tag', 'created_at'], name='ai_spe_student_skill_idx'),
+        ]
+
+    def __str__(self):
+        return f"{self.student} | {self.skill_tag.name} | {'✓' if self.correct else '✗'}"
+
+
+class TutorConversation(models.Model):
+    """
+    Persists a multi-turn tutor chat session per student.
+    Replaces localStorage-only storage so history survives across devices/sessions.
+    """
+    id = models.UUIDField(primary_key=True, default=uuid_lib.uuid4, editable=False)
+    tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE, db_constraint=False, related_name="tutor_conversations")
+    student = models.ForeignKey('academic.Student', on_delete=models.CASCADE, related_name='tutor_conversations', null=True, blank=True)
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='tutor_conversations')
+    subject = models.ForeignKey('academic.Subject', on_delete=models.SET_NULL, null=True, blank=True)
+    lesson = models.ForeignKey('academic.Lesson', on_delete=models.SET_NULL, null=True, blank=True)
+    title = models.CharField(max_length=255, blank=True, default='')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-updated_at']
+        indexes = [
+            models.Index(fields=['tenant', 'user', '-updated_at'], name='ai_conv_tenant_user_idx'),
+        ]
+
+    def __str__(self):
+        return f"Conversation {self.id} ({self.user})"
+
+
+class TutorMessage(models.Model):
+    """
+    A single message turn in a TutorConversation.
+    """
+    ROLE_CHOICES = [('user', 'User'), ('assistant', 'Assistant')]
+
+    id = models.UUIDField(primary_key=True, default=uuid_lib.uuid4, editable=False)
+    conversation = models.ForeignKey(TutorConversation, on_delete=models.CASCADE, related_name='messages')
+    role = models.CharField(max_length=16, choices=ROLE_CHOICES)
+    content = models.TextField()
+    sources = models.JSONField(default=list, blank=True)
+    prompt_tokens = models.IntegerField(default=0)
+    completion_tokens = models.IntegerField(default=0)
+    is_demo = models.BooleanField(default=False)
+    confidence = models.FloatField(null=True, blank=True, help_text="RAG confidence score (0-1) for assistant messages")
+    confidence_label = models.CharField(max_length=16, blank=True, default='', help_text="high | moderate | low")
+    mode = models.CharField(max_length=16, blank=True, default='direct', help_text="direct | socratic")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['created_at']
+        indexes = [
+            models.Index(fields=['conversation', 'created_at'], name='ai_msg_conv_created_idx'),
+        ]
+
+    def __str__(self):
+        return f"[{self.role}] {self.content[:60]}"
+
+
 class GradingRubric(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid_lib.uuid4, editable=False)
     tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE, db_constraint=False, related_name="grading_rubrics")
@@ -223,3 +372,52 @@ class AIGradingDraft(models.Model):
 
     def __str__(self):
         return f"{self.submission_id}:{self.status}:{self.score}"
+
+
+class AITokenBudget(models.Model):
+    """
+    Daily token budget per tenant (and optionally per student).
+
+    Scope priority (highest wins):
+      1. Student-level budget (student is set)
+      2. Tenant-level budget (student is None)
+      3. No limit (no active budget record found)
+
+    Reset logic:
+      - `used_today` resets to 0 when `reset_at` is in the past.
+      - `reset_at` is advanced by 1 day on each reset.
+      - No Celery task needed — reset happens inline on the first request after midnight.
+    """
+    id = models.UUIDField(primary_key=True, default=uuid_lib.uuid4, editable=False)
+    tenant = models.ForeignKey(
+        Tenant, on_delete=models.CASCADE, db_constraint=False, related_name="ai_token_budgets"
+    )
+    student = models.ForeignKey(
+        'academic.Student', on_delete=models.CASCADE,
+        null=True, blank=True, related_name='ai_token_budgets',
+        help_text="Null = tenant-wide budget. Set = per-student override.",
+    )
+    daily_limit_tokens = models.IntegerField(
+        default=10000,
+        help_text="Max tokens per day. 0 = unlimited.",
+    )
+    used_today = models.IntegerField(default=0, help_text="Tokens consumed today.")
+    reset_at = models.DateTimeField(help_text="Next daily reset timestamp (UTC midnight).")
+    is_active = models.BooleanField(default=True, help_text="Disable to suspend enforcement.")
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        # At most one active budget per (tenant, student) pair
+        unique_together = [('tenant', 'student')]
+        indexes = [
+            models.Index(fields=['tenant', 'is_active'], name='ai_budget_tenant_active_idx'),
+            models.Index(fields=['tenant', 'student'], name='ai_budget_tenant_student_idx'),
+        ]
+
+    def __str__(self):
+        scope = f"student:{self.student_id}" if self.student_id else "tenant-wide"
+        return f"Budget({scope}) {self.used_today}/{self.daily_limit_tokens} tokens/day"

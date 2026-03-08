@@ -123,35 +123,95 @@ class RAGTutorService:
             scored.append((chunk, similarity))
         return scored
 
-    def retrieve_relevant_chunks(self, message: str, context: dict[str, Any] | None = None) -> list[dict[str, Any]]:
-        query_vector = self._embed_query(message)
-        queryset = self._base_queryset(context)
-        scored: list[tuple[ContentChunk, float]] = []
+    def _expand_query(self, message: str) -> list[str]:
+        """
+        Generate up to 2 alternative phrasings of the query via LLM.
+        Falls back to [message] alone if LLM is unavailable.
+        This increases recall by covering different vocabulary the student might use.
+        """
+        client = self._openai_client()
+        if not client:
+            return [message]
+        prompt = (
+            "You are a search query optimizer for a school learning platform.\n"
+            "Rephrase the following student question into 2 alternative queries that "
+            "express the same intent with different vocabulary. "
+            "Return only the 2 queries, one per line, no numbering, no extra text.\n\n"
+            f"Original: {message}"
+        )
+        try:
+            response = client.chat.completions.create(
+                model=self.model,
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.4,
+                max_tokens=120,
+            )
+            raw = (response.choices[0].message.content or "").strip()
+            variants = [line.strip() for line in raw.splitlines() if line.strip()][:2]
+            return [message] + variants
+        except Exception as exc:
+            logger.warning("Query expansion failed; using original only: %s", exc)
+            return [message]
 
+    def _retrieve_for_query(self, queryset, query_vector: list[float]) -> list[tuple[ContentChunk, float]]:
+        """Run vector retrieval for a single query vector."""
         if PGVECTOR_AVAILABLE and CosineDistance is not None:
             try:
                 candidates = list(
                     queryset.annotate(distance=CosineDistance("embedding", query_vector))
                     .order_by("distance")[: max(self.top_k * 4, self.top_k)]
                 )
-                for row in candidates:
-                    distance = float(getattr(row, "distance", 1.0) or 1.0)
-                    similarity = 1.0 - distance
-                    scored.append((row, similarity))
+                return [
+                    (row, 1.0 - float(getattr(row, "distance", 1.0) or 1.0))
+                    for row in candidates
+                ]
             except Exception as exc:
-                logger.warning("pgvector cosine lookup failed; falling back to Python similarity: %s", exc)
-                scored = self._retrieve_python(queryset, query_vector)
-        else:
-            scored = self._retrieve_python(queryset, query_vector)
+                logger.warning("pgvector lookup failed; falling back to Python: %s", exc)
+        return self._retrieve_python(queryset, query_vector)
 
-        scored.sort(key=lambda item: item[1], reverse=True)
+    def _merge_and_rerank(self, scored_lists: list[list[tuple[ContentChunk, float]]]) -> list[dict[str, Any]]:
+        """
+        Merge results from multiple queries (Reciprocal Rank Fusion) and deduplicate.
+        RRF score: sum(1 / (rank + 60)) across all query result lists.
+        """
+        RRF_K = 60
+        rrf_scores: dict[str, float] = {}
+        chunk_map: dict[str, ContentChunk] = {}
+
+        for scored in scored_lists:
+            # Sort descending by similarity, then assign rank
+            sorted_scored = sorted(scored, key=lambda x: x[1], reverse=True)
+            for rank, (chunk, _) in enumerate(sorted_scored):
+                cid = str(chunk.id)
+                rrf_scores[cid] = rrf_scores.get(cid, 0.0) + 1.0 / (rank + RRF_K)
+                chunk_map[cid] = chunk
+
+        ranked = sorted(rrf_scores.items(), key=lambda x: x[1], reverse=True)
         return [
-            {
-                "chunk": chunk,
-                "similarity": similarity,
-            }
-            for chunk, similarity in scored[: self.top_k]
+            {"chunk": chunk_map[cid], "similarity": score}
+            for cid, score in ranked[: self.top_k]
         ]
+
+    def retrieve_relevant_chunks(self, message: str, context: dict[str, Any] | None = None) -> list[dict[str, Any]]:
+        queries = self._expand_query(message)
+        queryset = self._base_queryset(context)
+
+        all_scored: list[list[tuple[ContentChunk, float]]] = []
+        for query in queries:
+            query_vector = self._embed_query(query)
+            scored = self._retrieve_for_query(queryset, query_vector)
+            all_scored.append(scored)
+
+        if len(all_scored) == 1:
+            # No expansion — use simple sort (faster)
+            scored_flat = all_scored[0]
+            scored_flat.sort(key=lambda item: item[1], reverse=True)
+            return [
+                {"chunk": chunk, "similarity": similarity}
+                for chunk, similarity in scored_flat[: self.top_k]
+            ]
+
+        return self._merge_and_rerank(all_scored)
 
     def _build_messages(self, message: str, snippets: list[dict[str, Any]]) -> list[dict[str, str]]:
         tenant_name = getattr(self.tenant, "name", "the school")
@@ -203,6 +263,39 @@ class RAGTutorService:
             cleaned.append({"role": role, "content": content_text})
         return cleaned[-6:]
 
+    @staticmethod
+    def _compute_confidence(grounded: list[dict[str, Any]]) -> float:
+        """
+        Confidence score (0.0–1.0) based on the mean cosine similarity of grounded chunks.
+        Interpretation:
+          >= 0.85 → High confidence (very relevant sources)
+          0.70–0.85 → Moderate confidence
+          < 0.70 → Low confidence (answer may be imprecise)
+        """
+        if not grounded:
+            return 0.0
+        similarities = [float(item.get("similarity", 0.0)) for item in grounded]
+        mean_sim = sum(similarities) / len(similarities)
+        # Clamp to [0, 1] — RRF scores can be small floats outside cosine range
+        return round(max(0.0, min(1.0, mean_sim)), 4)
+
+    @staticmethod
+    def _confidence_label(confidence: float) -> str:
+        if confidence >= 0.85:
+            return "high"
+        if confidence >= 0.70:
+            return "moderate"
+        return "low"
+
+    def _build_context_block(self, snippets: list[dict[str, Any]]) -> str:
+        parts = []
+        for idx, item in enumerate(snippets):
+            chunk = item["chunk"]
+            parts.append(
+                f"[Source {idx + 1}] type={chunk.source_type} id={chunk.source_id}\n{chunk.text[:900]}"
+            )
+        return "\n\n".join(parts)
+
     def _build_grounded_messages(
         self,
         message: str,
@@ -213,30 +306,42 @@ class RAGTutorService:
     ) -> list[dict[str, str]]:
         tenant_name = getattr(self.tenant, "name", "the school")
         user_role = str((context or {}).get("user_role") or "").strip().lower()
+        mode = str((context or {}).get("mode") or "direct").strip().lower()
         audience = "teacher-friendly" if user_role == "teacher" else "student-friendly"
-        rules = (
-            "You are a careful school tutor assistant.\n"
-            "Rules:\n"
-            "1) Use only the provided snippets as factual grounding.\n"
-            "2) If snippets are insufficient, explicitly say \"I’m not sure\".\n"
-            f"3) Be concise, clear, and {audience}.\n"
-            "4) Do not invent sources, facts, or citations.\n"
-            f"5) Keep tone appropriate for {tenant_name} classroom culture."
-        )
-        context_block = "\n\n".join(
-            [
-                (
-                    f"[Source {idx + 1}] type={item['chunk'].source_type} id={item['chunk'].source_id}\n"
-                    f"{item['chunk'].text[:900]}"
-                )
-                for idx, item in enumerate(snippets)
-            ]
-        )
-        user_prompt = (
-            f"Question:\n{message}\n\n"
-            f"Grounding snippets:\n{context_block}\n\n"
-            "Answer using only the snippets. If uncertain, say \"I’m not sure\" and suggest what to ask next."
-        )
+        context_block = self._build_context_block(snippets)
+
+        if mode == "socratic":
+            rules = (
+                "You are a Socratic school tutor. Your role is to guide the student to discover "
+                "the answer themselves — do NOT give the answer directly.\n"
+                "Rules:\n"
+                "1) Ask 1–2 focused questions that lead the student closer to the answer.\n"
+                "2) Use only the provided snippets as your factual foundation.\n"
+                "3) Acknowledge what the student already seems to understand.\n"
+                "4) If snippets are insufficient, say so and suggest a better question to ask.\n"
+                f"5) Keep a warm, encouraging tone appropriate for {tenant_name}."
+            )
+            user_prompt = (
+                f"Student’s question:\n{message}\n\n"
+                f"Grounding snippets:\n{context_block}\n\n"
+                "Guide the student with questions — do not give the answer away."
+            )
+        else:
+            rules = (
+                "You are a careful school tutor assistant.\n"
+                "Rules:\n"
+                "1) Use only the provided snippets as factual grounding.\n"
+                "2) If snippets are insufficient, explicitly say \"I’m not sure\".\n"
+                f"3) Be concise, clear, and {audience}.\n"
+                "4) Do not invent sources, facts, or citations.\n"
+                f"5) Keep tone appropriate for {tenant_name} classroom culture."
+            )
+            user_prompt = (
+                f"Question:\n{message}\n\n"
+                f"Grounding snippets:\n{context_block}\n\n"
+                "Answer using only the snippets. If uncertain, say \"I’m not sure\" and suggest what to ask next."
+            )
+
         messages = [{"role": "system", "content": rules}]
         messages.extend(self._sanitize_history(conversation_history))
         messages.append({"role": "user", "content": user_prompt})
@@ -406,6 +511,31 @@ class RAGTutorService:
             suggestions.append("Ask with lesson or chapter context, e.g. key concept, summary, or example question")
         return f"I’m not sure from the available context. {suggestions[0]}."
 
+    @staticmethod
+    def _build_citations(grounded: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """
+        Build full citation objects for each grounded chunk.
+
+        Each citation includes:
+          source_type  — 'lesson', 'chapter', or 'material'
+          source_id    — ID of the source object
+          text_span    — full text of the chunk (for exact citation anchoring)
+          snippet      — first 220 chars (for preview display)
+          similarity   — cosine similarity score (for debugging / UI confidence bars)
+          metadata     — chunk metadata dict (may contain lesson_id, chapter_id, title, etc.)
+        """
+        return [
+            {
+                "source_type": item["chunk"].source_type,
+                "source_id": str(item["chunk"].source_id),
+                "text_span": item["chunk"].text,
+                "snippet": item["chunk"].text[:220],
+                "similarity": round(float(item.get("similarity", 0.0)), 4),
+                "metadata": item["chunk"].metadata if isinstance(item["chunk"].metadata, dict) else {},
+            }
+            for item in grounded
+        ]
+
     def answer_question(
         self,
         message: str,
@@ -425,6 +555,8 @@ class RAGTutorService:
             return {
                 "answer": self._no_context_response(context),
                 "sources": [],
+                "confidence": 0.0,
+                "confidence_label": "low",
                 "usage": {
                     "model": "fallback-no-context",
                     "prompt_tokens": 0,
@@ -444,17 +576,13 @@ class RAGTutorService:
         if not answer:
             answer = self._no_context_response(context)
 
-        sources = [
-            {
-                "source_type": item["chunk"].source_type,
-                "source_id": str(item["chunk"].source_id),
-                "snippet": item["chunk"].text[:220],
-            }
-            for item in grounded
-        ]
+        confidence = self._compute_confidence(grounded)
         return {
             "answer": answer,
-            "sources": sources,
+            "sources": self._build_citations(grounded),
+            "confidence": confidence,
+            "confidence_label": self._confidence_label(confidence),
             "usage": usage,
             "is_demo": False,
+            "mode": str((context or {}).get("mode") or "direct"),
         }
