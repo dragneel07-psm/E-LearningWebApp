@@ -2,17 +2,19 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Users, TrendingUp, TrendingDown, Clock, Search, Plus, ChevronRight } from 'lucide-react';
-import { academicAPI, Subject, Assessment, Result, Student, Attendance } from '@/lib/api';
+import { Users, TrendingUp, TrendingDown, Clock, Search, ChevronRight, ClipboardList, BookOpenCheck, AlertTriangle } from 'lucide-react';
+import { academicAPI, AcademicClass, Subject, Assessment, Result, Student, Attendance } from '@/lib/api';
 import Link from 'next/link';
 import { Input } from '@/components/ui/input';
 
-interface EnrichedCourse extends Subject {
+interface EnrichedClass extends AcademicClass {
     studentCount: number;
+    assignmentCount: number;
+    assessmentCount: number;
     avgPerformance: number;
     hasPerformanceData: boolean;
+    atRiskCount: number;
     attendanceTrend: 'up' | 'down' | 'stable';
     status: 'on-track' | 'needs-attention' | 'intervention';
 }
@@ -37,14 +39,15 @@ function rateForRange(records: Attendance[], from: Date, to: Date): number {
 
 export default function ClassManagementPage() {
     const [loading, setLoading] = useState(true);
-    const [classes, setClasses] = useState<EnrichedCourse[]>([]);
+    const [classes, setClasses] = useState<EnrichedClass[]>([]);
     const [searchTerm, setSearchTerm] = useState('');
 
     useEffect(() => {
         async function loadClasses() {
             try {
                 setLoading(true);
-                const [subjectsRaw, studentsRaw, assessmentsRaw, resultsRaw, attendanceRaw] = await Promise.all([
+                const [classesRaw, subjectsRaw, studentsRaw, assessmentsRaw, resultsRaw, attendanceRaw] = await Promise.all([
+                    academicAPI.getClasses().catch(() => []),
                     academicAPI.getSubjects().catch(() => []),
                     academicAPI.getStudents().catch(() => []),
                     academicAPI.getAssessments().catch(() => []),
@@ -52,11 +55,14 @@ export default function ClassManagementPage() {
                     academicAPI.getAttendance().catch(() => []),
                 ]);
 
+                const classRows = toList<AcademicClass>(classesRaw);
                 const subjects = toList<Subject>(subjectsRaw);
                 const students = toList<Student>(studentsRaw);
                 const assessments = toList<Assessment>(assessmentsRaw);
                 const results = toList<Result>(resultsRaw);
                 const attendance = toList<Attendance>(attendanceRaw);
+                const classIds = new Set(classRows.map((item) => Number(item.id)));
+                const scopedSubjects = subjects.filter((subject) => classIds.has(Number(subject.academic_class)));
 
                 const assessmentById = new Map<string, Assessment>();
                 assessments.forEach((assessment) => {
@@ -69,15 +75,27 @@ export default function ClassManagementPage() {
                 const previousFrom = new Date(now);
                 previousFrom.setDate(now.getDate() - 28);
 
-                const enriched = subjects.map((subject) => {
-                    const classStudents = students.filter((student) => Number(student.academic_class) === Number(subject.academic_class));
+                const enriched = classRows.map((academicClass) => {
+                    const classStudents = students.filter(
+                        (student) => Number(student.academic_class) === Number(academicClass.id)
+                    );
                     const studentIds = new Set(classStudents.map((student) => String(student.id || student.student_id || '')));
 
-                    const subjectAssessments = assessments.filter((assessment) => Number(assessment.subject) === Number(subject.id));
-                    const subjectAssessmentIds = new Set(subjectAssessments.map((assessment) => String(assessment.assessment_id)));
+                    const classSubjects = scopedSubjects.filter(
+                        (subject) => Number(subject.academic_class) === Number(academicClass.id)
+                    );
+                    const subjectIds = new Set(classSubjects.map((subject) => Number(subject.id)));
 
-                    const subjectResults = results.filter((result) => subjectAssessmentIds.has(String(result.assessment)));
-                    const normalizedScores = subjectResults
+                    const classAssessments = assessments.filter((assessment) =>
+                        subjectIds.has(Number(assessment.subject))
+                    );
+                    const classAssessmentIds = new Set(classAssessments.map((assessment) => String(assessment.assessment_id)));
+
+                    const classResults = results.filter((result) =>
+                        classAssessmentIds.has(String(result.assessment))
+                        && studentIds.has(String(result.student))
+                    );
+                    const normalizedScores = classResults
                         .map((result) => {
                             const linkedAssessment = assessmentById.get(String(result.assessment));
                             const totalMarks = Number(linkedAssessment?.total_marks || 0);
@@ -91,27 +109,87 @@ export default function ClassManagementPage() {
                         ? Math.round(normalizedScores.reduce((sum, value) => sum + value, 0) / normalizedScores.length)
                         : 0;
 
+                    const assignmentAssessmentIds = new Set(
+                        classAssessments
+                            .filter((assessment) => assessment.type === 'assignment')
+                            .map((assessment) => String(assessment.assessment_id))
+                    );
+                    const studentScores = new Map<string, number[]>();
+                    const completedAssignmentsByStudent = new Map<string, number>();
+                    classResults.forEach((result) => {
+                        const studentId = String(result.student);
+                        const linkedAssessment = assessmentById.get(String(result.assessment));
+                        const totalMarks = Number(linkedAssessment?.total_marks || 0);
+                        if (totalMarks > 0) {
+                            const existingScores = studentScores.get(studentId) || [];
+                            existingScores.push((Number(result.score || 0) / totalMarks) * 100);
+                            studentScores.set(studentId, existingScores);
+                        }
+                        if (assignmentAssessmentIds.has(String(result.assessment))) {
+                            completedAssignmentsByStudent.set(studentId, (completedAssignmentsByStudent.get(studentId) || 0) + 1);
+                        }
+                    });
+
                     const classAttendance = attendance.filter((record) => studentIds.has(String(record.student)));
                     const currentRate = rateForRange(classAttendance, currentFrom, now);
                     const previousRate = rateForRange(classAttendance, previousFrom, currentFrom);
                     const delta = currentRate - previousRate;
 
-                    let attendanceTrend: EnrichedCourse['attendanceTrend'] = 'stable';
+                    let attendanceTrend: EnrichedClass['attendanceTrend'] = 'stable';
                     if (delta >= 2) attendanceTrend = 'up';
                     else if (delta <= -2) attendanceTrend = 'down';
 
-                    let status: EnrichedCourse['status'] = 'on-track';
-                    if ((hasPerformanceData && avgPerformance < 60) || (attendanceTrend === 'down' && avgPerformance < 70)) {
+                    const attendanceByStudent = new Map<string, { total: number; presentLike: number }>();
+                    classAttendance.forEach((record) => {
+                        const studentId = String(record.student);
+                        const current = attendanceByStudent.get(studentId) || { total: 0, presentLike: 0 };
+                        current.total += 1;
+                        if (record.status === 'present' || record.status === 'late') current.presentLike += 1;
+                        attendanceByStudent.set(studentId, current);
+                    });
+
+                    let atRiskCount = 0;
+                    classStudents.forEach((student) => {
+                        const studentId = String(student.id || student.student_id || '');
+                        const scores = studentScores.get(studentId) || [];
+                        const avgScore = scores.length > 0
+                            ? scores.reduce((sum, score) => sum + score, 0) / scores.length
+                            : null;
+                        const attendanceStats = attendanceByStudent.get(studentId);
+                        const attendancePct = attendanceStats && attendanceStats.total > 0
+                            ? (attendanceStats.presentLike / attendanceStats.total) * 100
+                            : 100;
+                        const assignmentCompletion = assignmentAssessmentIds.size > 0
+                            ? (completedAssignmentsByStudent.get(studentId) || 0) / assignmentAssessmentIds.size
+                            : 1;
+
+                        if (
+                            (avgScore !== null && avgScore < 60)
+                            || attendancePct < 75
+                            || assignmentCompletion < 0.5
+                        ) {
+                            atRiskCount += 1;
+                        }
+                    });
+
+                    let status: EnrichedClass['status'] = 'on-track';
+                    if (
+                        (hasPerformanceData && avgPerformance < 60)
+                        || atRiskCount > Math.max(1, Math.round(classStudents.length * 0.25))
+                    ) {
                         status = 'intervention';
-                    } else if ((hasPerformanceData && avgPerformance < 75) || attendanceTrend === 'down') {
+                    } else if ((hasPerformanceData && avgPerformance < 75) || attendanceTrend === 'down' || atRiskCount > 0) {
                         status = 'needs-attention';
                     }
 
                     return {
-                        ...subject,
+                        ...academicClass,
                         studentCount: classStudents.length,
+                        assignmentCount: classAssessments.filter((assessment) => assessment.type === 'assignment').length,
+                        assessmentCount: classAssessments.length,
                         avgPerformance,
                         hasPerformanceData,
+                        atRiskCount,
                         attendanceTrend,
                         status,
                     };
@@ -129,10 +207,9 @@ export default function ClassManagementPage() {
     }, []);
 
     const filteredClasses = useMemo(
-        () => classes.filter((course) =>
-            course.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            String(course.academic_class).toLowerCase().includes(searchTerm.toLowerCase()) ||
-            String(course.code || '').toLowerCase().includes(searchTerm.toLowerCase())
+        () => classes.filter((academicClass) =>
+            academicClass.name.toLowerCase().includes(searchTerm.toLowerCase())
+            || String(academicClass.order).toLowerCase().includes(searchTerm.toLowerCase())
         ),
         [classes, searchTerm]
     );
@@ -144,21 +221,14 @@ export default function ClassManagementPage() {
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                 <div>
                     <h1 className="text-3xl font-bold tracking-tight text-gray-900">Class Management</h1>
-                    <p className="text-muted-foreground">Manage your classes, students, and performance insights.</p>
-                </div>
-                <div className="flex items-center gap-2">
-                    <Link href="/admin/academic/classes">
-                        <Button className="bg-indigo-600 hover:bg-indigo-700">
-                            <Plus className="mr-2 h-4 w-4" /> Add Class
-                        </Button>
-                    </Link>
+                    <p className="text-muted-foreground">Only your assigned classes are shown with progress, risk, and workload overview.</p>
                 </div>
             </div>
 
             <div className="relative max-w-md">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
-                    placeholder="Search classes or subjects..."
+                    placeholder="Search assigned classes..."
                     className="pl-10 bg-white"
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
@@ -173,10 +243,10 @@ export default function ClassManagementPage() {
                                 <div className="flex justify-between items-start">
                                     <div>
                                         <Badge variant="outline" className="mb-2 bg-slate-50 text-slate-600 font-normal">
-                                            Class {cls.academic_class}
+                                            Class {cls.name}
                                         </Badge>
                                         <CardTitle className="text-lg text-gray-900 group-hover:text-indigo-700 transition-colors">
-                                            {cls.name}
+                                            Grade Order {cls.order}
                                         </CardTitle>
                                     </div>
                                     {cls.status === 'on-track' && <Badge className="bg-green-100 text-green-700 hover:bg-green-200">On Track</Badge>}
@@ -200,6 +270,18 @@ export default function ClassManagementPage() {
                                             {cls.hasPerformanceData ? `${cls.avgPerformance}%` : 'No scores'}
                                         </span>
                                     </div>
+                                    <div className="flex flex-col gap-1">
+                                        <span className="text-muted-foreground flex items-center gap-1">
+                                            <BookOpenCheck className="h-3 w-3" /> Assessments
+                                        </span>
+                                        <span className="font-semibold text-gray-900">{cls.assessmentCount}</span>
+                                    </div>
+                                    <div className="flex flex-col gap-1">
+                                        <span className="text-muted-foreground flex items-center gap-1">
+                                            <ClipboardList className="h-3 w-3" /> Assignments
+                                        </span>
+                                        <span className="font-semibold text-gray-900">{cls.assignmentCount}</span>
+                                    </div>
                                 </div>
 
                                 <div className="p-3 bg-slate-50 rounded-lg flex items-center justify-between text-xs text-slate-600">
@@ -211,6 +293,12 @@ export default function ClassManagementPage() {
                                         {cls.attendanceTrend === 'up' ? 'Improving' : cls.attendanceTrend === 'down' ? 'Declining' : 'Stable'}
                                     </span>
                                 </div>
+                                <div className="p-3 bg-amber-50 rounded-lg flex items-center justify-between text-xs text-amber-700">
+                                    <span className="flex items-center gap-1">
+                                        <AlertTriangle className="h-3 w-3" /> At-risk students
+                                    </span>
+                                    <span className="font-semibold">{cls.atRiskCount}</span>
+                                </div>
                             </CardContent>
                             <CardFooter className="pt-0 pb-4">
                                 <div className="text-xs text-indigo-600 font-medium flex items-center opacity-0 group-hover:opacity-100 transition-opacity">
@@ -220,6 +308,11 @@ export default function ClassManagementPage() {
                         </Card>
                     </Link>
                 ))}
+                {filteredClasses.length === 0 && (
+                    <div className="col-span-full border rounded-lg border-dashed bg-white p-8 text-center text-muted-foreground">
+                        No assigned classes found.
+                    </div>
+                )}
             </div>
         </div>
     );

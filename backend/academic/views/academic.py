@@ -1,10 +1,11 @@
+from django.db.models import Q
 from django.utils.dateparse import parse_date
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
-from ..models import AcademicYear, AcademicClass, Section, Subject
+from ..models import AcademicYear, AcademicClass, Section, Subject, Teacher
 from ..serializers import AcademicYearSerializer, AcademicClassSerializer, SectionSerializer, SubjectSerializer
 from ..services.academic_year_service import (
     build_rollover_preview,
@@ -232,6 +233,19 @@ class AcademicClassViewSet(viewsets.ModelViewSet):
     serializer_class = AcademicClassSerializer
     permission_classes = [IsAuthenticated]
 
+    def get_queryset(self):
+        queryset = AcademicClass.objects.prefetch_related('sections', 'subjects').all()
+        user = getattr(self.request, 'user', None)
+        role = getattr(user, 'role', None)
+        if role == 'teacher':
+            teacher_profile = Teacher.objects.prefetch_related('assigned_classes').filter(user=user).first()
+            if not teacher_profile:
+                return queryset.none()
+            return queryset.filter(
+                id__in=teacher_profile.assigned_classes.values_list('id', flat=True)
+            ).distinct()
+        return queryset
+
 class SectionViewSet(viewsets.ModelViewSet):
     queryset = Section.objects.all()
     serializer_class = SectionSerializer
@@ -250,6 +264,19 @@ class SubjectViewSet(viewsets.ModelViewSet):
             'additional_teachers',
             'additional_teachers__user',
         )
+        user = getattr(self.request, 'user', None)
+        role = getattr(user, 'role', None)
+        if role == 'teacher':
+            teacher_profile = Teacher.objects.prefetch_related('assigned_classes').filter(user=user).first()
+            if not teacher_profile:
+                return queryset.none()
+            assigned_class_ids = teacher_profile.assigned_classes.values_list('id', flat=True)
+            queryset = queryset.filter(
+                Q(teacher=teacher_profile)
+                | Q(additional_teachers=teacher_profile)
+                | Q(academic_class_id__in=assigned_class_ids)
+            ).distinct()
+
         academic_year_param = self.request.query_params.get('academic_year')
         if academic_year_param:
             if str(academic_year_param).isdigit():

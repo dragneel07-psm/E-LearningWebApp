@@ -8,20 +8,36 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ChevronLeft, Users, BookOpen, ClipboardList, BarChart2, Plus, BrainCircuit, AlertCircle, FileText, TrendingUp } from 'lucide-react';
 import Link from 'next/link';
-import { academicAPI, Subject, Student, Assessment, Lesson, Attendance, Result } from '@/lib/api';
+import { academicAPI, AcademicClass, Subject, Student, Assessment, Lesson, Attendance, Result } from '@/lib/api';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, LineChart, Line } from 'recharts';
 import { SafeResponsiveContainer } from '@/components/ui/safe-responsive-container';
 
 type StudentRow = {
     student: Student;
     attendancePct: number;
+    averageScorePct: number | null;
+    completedAssignments: number;
+    totalAssignments: number;
     risk: 'high' | 'medium' | 'low';
+};
+
+type LessonRow = Lesson & {
+    subjectId: number;
+    subjectName: string;
+};
+
+type MetricsState = {
+    classAverage: number;
+    highestScore: number;
+    atRiskCount: number;
+    distribution: { range: string; count: number; fill: string }[];
+    trend: { name: string; avg: number }[];
 };
 
 function toList<T>(payload: unknown): T[] {
     if (Array.isArray(payload)) return payload as T[];
-    if (payload && typeof payload === 'object' && Array.isArray((payload as any).results)) {
-        return (payload as any).results as T[];
+    if (payload && typeof payload === 'object' && Array.isArray((payload as { results?: unknown[] }).results)) {
+        return (payload as { results: T[] }).results;
     }
     return [];
 }
@@ -29,26 +45,36 @@ function toList<T>(payload: unknown): T[] {
 export default function ClassDetailPage() {
     const params = useParams();
     const id = params.id as string;
+    const classId = Number(id);
+
     const [loading, setLoading] = useState(true);
-    const [course, setCourse] = useState<Subject | null>(null);
+    const [classroom, setClassroom] = useState<AcademicClass | null>(null);
+    const [subjects, setSubjects] = useState<Subject[]>([]);
     const [students, setStudents] = useState<Student[]>([]);
     const [studentRows, setStudentRows] = useState<StudentRow[]>([]);
-    const [lessons, setLessons] = useState<Lesson[]>([]);
-    const [assignments, setAssignments] = useState<Assessment[]>([]);
-    const [metrics, setMetrics] = useState({
+    const [lessons, setLessons] = useState<LessonRow[]>([]);
+    const [assessments, setAssessments] = useState<Assessment[]>([]);
+    const [metrics, setMetrics] = useState<MetricsState>({
         classAverage: 0,
         highestScore: 0,
         atRiskCount: 0,
-        distribution: [] as { range: string; count: number; fill: string }[],
-        trend: [] as { name: string; avg: number }[]
+        distribution: [],
+        trend: [],
     });
 
     useEffect(() => {
         async function loadData() {
+            if (Number.isNaN(classId)) {
+                setClassroom(null);
+                setLoading(false);
+                return;
+            }
+
             try {
                 setLoading(true);
 
-                const [allSubjectsRaw, allStudentsRaw, allAssessmentsRaw, allResultsRaw, allAttendanceRaw] = await Promise.all([
+                const [classRaw, allSubjectsRaw, allStudentsRaw, allAssessmentsRaw, allResultsRaw, allAttendanceRaw] = await Promise.all([
+                    academicAPI.getClass(classId).catch(() => null),
                     academicAPI.getSubjects().catch(() => []),
                     academicAPI.getStudents().catch(() => []),
                     academicAPI.getAssessments().catch(() => []),
@@ -56,121 +82,175 @@ export default function ClassDetailPage() {
                     academicAPI.getAttendance().catch(() => []),
                 ]);
 
-                const allSubjects = toList<Subject>(allSubjectsRaw);
-                const allStudents = toList<Student>(allStudentsRaw);
-                const allAssessments = toList<Assessment>(allAssessmentsRaw);
-                const allResults = toList<Result>(allResultsRaw);
-                const allAttendance = toList<Attendance>(allAttendanceRaw);
-
-                const resolvedCourse =
-                    allSubjects.find((subject) => String(subject.id) === id)
-                    || allSubjects.find((subject) => String(subject.academic_class) === id)
-                    || null;
-
-                setCourse(resolvedCourse);
-                if (!resolvedCourse) {
+                if (!classRaw) {
+                    setClassroom(null);
+                    setSubjects([]);
                     setStudents([]);
-                    setAssignments([]);
+                    setAssessments([]);
                     setLessons([]);
                     setStudentRows([]);
                     setMetrics({ classAverage: 0, highestScore: 0, atRiskCount: 0, distribution: [], trend: [] });
                     return;
                 }
 
-                const classStudents = allStudents.filter(
-                    (student) => Number(student.academic_class) === Number(resolvedCourse.academic_class)
-                );
+                const classData = classRaw as AcademicClass;
+                setClassroom(classData);
+
+                const allSubjects = toList<Subject>(allSubjectsRaw);
+                const classSubjects = (classData.subjects && classData.subjects.length > 0)
+                    ? classData.subjects
+                    : allSubjects.filter((subject) => Number(subject.academic_class) === classId);
+                setSubjects(classSubjects);
+
+                const allStudents = toList<Student>(allStudentsRaw);
+                const classStudents = allStudents.filter((student) => Number(student.academic_class) === classId);
                 setStudents(classStudents);
-                const classStudentIds = new Set(classStudents.map((student) => String(student.id || student.student_id || '')));
+                const studentIdSet = new Set(classStudents.map((student) => String(student.id || student.student_id || '')));
 
-                const subjectAssessments = allAssessments.filter(
-                    (assessment) => Number(assessment.subject) === Number(resolvedCourse.id)
+                const subjectIdSet = new Set(classSubjects.map((subject) => Number(subject.id)));
+                const allAssessments = toList<Assessment>(allAssessmentsRaw);
+                const classAssessments = allAssessments.filter((assessment) => subjectIdSet.has(Number(assessment.subject)));
+                setAssessments(classAssessments);
+
+                const assessmentById = new Map<string, Assessment>();
+                classAssessments.forEach((assessment) => assessmentById.set(String(assessment.assessment_id), assessment));
+                const assessmentIdSet = new Set(classAssessments.map((assessment) => String(assessment.assessment_id)));
+                const assignmentIdSet = new Set(
+                    classAssessments
+                        .filter((assessment) => assessment.type === 'assignment')
+                        .map((assessment) => String(assessment.assessment_id))
                 );
-                setAssignments(subjectAssessments);
-                const assessmentById = new Map<string, Assessment>(
-                    subjectAssessments.map((assessment) => [String(assessment.assessment_id), assessment])
+
+                const allResults = toList<Result>(allResultsRaw);
+                const classResults = allResults.filter((result) =>
+                    assessmentIdSet.has(String(result.assessment))
+                    && studentIdSet.has(String(result.student))
                 );
 
-                const subjectResults = allResults.filter((result) => assessmentById.has(String(result.assessment)));
+                const scoresByStudent = new Map<string, number[]>();
+                const completedAssignmentsByStudent = new Map<string, Set<string>>();
+                const normalizedScores: number[] = [];
 
-                const studentAttendanceMap = new Map<string, { total: number; presentLike: number }>();
-                for (const record of allAttendance) {
+                classResults.forEach((result) => {
+                    const studentId = String(result.student);
+                    const linkedAssessment = assessmentById.get(String(result.assessment));
+                    const totalMarks = Number(linkedAssessment?.total_marks || 0);
+                    if (totalMarks > 0) {
+                        const normalized = (Number(result.score || 0) / totalMarks) * 100;
+                        normalizedScores.push(normalized);
+                        const currentScores = scoresByStudent.get(studentId) || [];
+                        currentScores.push(normalized);
+                        scoresByStudent.set(studentId, currentScores);
+                    }
+
+                    if (assignmentIdSet.has(String(result.assessment))) {
+                        const completed = completedAssignmentsByStudent.get(studentId) || new Set<string>();
+                        completed.add(String(result.assessment));
+                        completedAssignmentsByStudent.set(studentId, completed);
+                    }
+                });
+
+                const allAttendance = toList<Attendance>(allAttendanceRaw);
+                const classAttendance = allAttendance.filter((record) => studentIdSet.has(String(record.student)));
+                const attendanceByStudent = new Map<string, { total: number; presentLike: number }>();
+                classAttendance.forEach((record) => {
                     const studentId = String(record.student);
-                    if (!classStudentIds.has(studentId)) continue;
-                    const current = studentAttendanceMap.get(studentId) || { total: 0, presentLike: 0 };
+                    const current = attendanceByStudent.get(studentId) || { total: 0, presentLike: 0 };
                     current.total += 1;
                     if (record.status === 'present' || record.status === 'late') current.presentLike += 1;
-                    studentAttendanceMap.set(studentId, current);
-                }
-
-                const studentScoreMap = new Map<string, number[]>();
-                const normalizedScores: number[] = [];
-                for (const result of subjectResults) {
-                    const studentId = String(result.student);
-                    const assessment = assessmentById.get(String(result.assessment));
-                    const total = Number(assessment?.total_marks || 0);
-                    if (!total) continue;
-                    const normalized = (Number(result.score || 0) / total) * 100;
-                    normalizedScores.push(normalized);
-                    const existing = studentScoreMap.get(studentId) || [];
-                    existing.push(normalized);
-                    studentScoreMap.set(studentId, existing);
-                }
+                    attendanceByStudent.set(studentId, current);
+                });
 
                 const rows: StudentRow[] = classStudents.map((student) => {
                     const studentId = String(student.id || student.student_id || '');
-                    const attendanceStats = studentAttendanceMap.get(studentId);
+                    const attendanceStats = attendanceByStudent.get(studentId);
                     const attendancePct = attendanceStats && attendanceStats.total > 0
                         ? Math.round((attendanceStats.presentLike / attendanceStats.total) * 100)
                         : 0;
 
-                    const scores = studentScoreMap.get(studentId) || [];
-                    const avgScore = scores.length > 0
-                        ? scores.reduce((sum, score) => sum + score, 0) / scores.length
-                        : 0;
+                    const scores = scoresByStudent.get(studentId) || [];
+                    const averageScorePct = scores.length > 0
+                        ? Math.round(scores.reduce((sum, score) => sum + score, 0) / scores.length)
+                        : null;
+
+                    const completedAssignments = completedAssignmentsByStudent.get(studentId)?.size || 0;
+                    const totalAssignments = assignmentIdSet.size;
+                    const completionRatio = totalAssignments > 0 ? completedAssignments / totalAssignments : 1;
 
                     let risk: StudentRow['risk'] = 'low';
-                    if ((scores.length > 0 && avgScore < 60) || (attendanceStats && attendancePct < 75)) risk = 'high';
-                    else if ((scores.length > 0 && avgScore < 75) || (attendanceStats && attendancePct < 85)) risk = 'medium';
+                    if (
+                        (averageScorePct !== null && averageScorePct < 60)
+                        || attendancePct < 75
+                        || completionRatio < 0.5
+                    ) {
+                        risk = 'high';
+                    } else if (
+                        (averageScorePct !== null && averageScorePct < 75)
+                        || attendancePct < 85
+                        || completionRatio < 0.8
+                    ) {
+                        risk = 'medium';
+                    }
 
-                    return { student, attendancePct, risk };
+                    return {
+                        student,
+                        attendancePct,
+                        averageScorePct,
+                        completedAssignments,
+                        totalAssignments,
+                        risk,
+                    };
                 });
                 setStudentRows(rows);
 
-                const lessonsData = await academicAPI.getLessons(undefined, Number(resolvedCourse.id)).catch(() => []);
-                setLessons(toList<Lesson>(lessonsData));
+                const lessonBatches = await Promise.all(
+                    classSubjects.map(async (subject) => {
+                        const subjectLessons = toList<Lesson>(
+                            await academicAPI.getLessons(undefined, Number(subject.id)).catch(() => [])
+                        );
+                        return subjectLessons.map((lesson) => ({
+                            ...lesson,
+                            subjectId: Number(subject.id),
+                            subjectName: subject.name,
+                        }));
+                    })
+                );
+                const lessonMap = new Map<number, LessonRow>();
+                lessonBatches.flat().forEach((lesson) => lessonMap.set(lesson.id, lesson));
+                setLessons(Array.from(lessonMap.values()));
 
                 if (normalizedScores.length > 0) {
-                    const avg = Math.round(normalizedScores.reduce((sum, score) => sum + score, 0) / normalizedScores.length);
-                    const max = Math.round(Math.max(...normalizedScores));
-                    const atRisk = rows.filter((row) => row.risk === 'high').length;
+                    const classAverage = Math.round(normalizedScores.reduce((sum, score) => sum + score, 0) / normalizedScores.length);
+                    const highestScore = Math.round(Math.max(...normalizedScores));
+                    const atRiskCount = rows.filter((row) => row.risk === 'high').length;
 
-                    const dist = [
+                    const distribution = [
                         { range: 'A (90-100)', count: normalizedScores.filter((score) => score >= 90).length, fill: '#4ade80' },
                         { range: 'B (80-89)', count: normalizedScores.filter((score) => score >= 80 && score < 90).length, fill: '#60a5fa' },
                         { range: 'C (70-79)', count: normalizedScores.filter((score) => score >= 70 && score < 80).length, fill: '#facc15' },
                         { range: 'D (60-69)', count: normalizedScores.filter((score) => score >= 60 && score < 70).length, fill: '#fb923c' },
-                        { range: 'F (<60)', count: normalizedScores.filter((score) => score < 60).length, fill: '#f87171' }
+                        { range: 'F (<60)', count: normalizedScores.filter((score) => score < 60).length, fill: '#f87171' },
                     ];
 
-                    const trendMap = new Map<string, number[]>();
-                    for (const result of subjectResults) {
-                        const assessment = assessmentById.get(String(result.assessment));
-                        if (!assessment) continue;
-                        const total = Number(assessment.total_marks || 0);
-                        if (!total) continue;
-                        const key = assessment.title || 'Assessment';
-                        const bucket = trendMap.get(key) || [];
-                        bucket.push((Number(result.score || 0) / total) * 100);
-                        trendMap.set(key, bucket);
-                    }
+                    const trend = classAssessments
+                        .map((assessment) => {
+                            const scores = classResults
+                                .filter((result) => String(result.assessment) === String(assessment.assessment_id))
+                                .map((result) => {
+                                    const total = Number(assessment.total_marks || 0);
+                                    return total > 0 ? (Number(result.score || 0) / total) * 100 : null;
+                                })
+                                .filter((score): score is number => typeof score === 'number' && Number.isFinite(score));
+                            if (scores.length === 0) return null;
+                            return {
+                                name: assessment.title,
+                                avg: Math.round(scores.reduce((sum, score) => sum + score, 0) / scores.length),
+                            };
+                        })
+                        .filter((item): item is { name: string; avg: number } => item !== null)
+                        .slice(0, 8);
 
-                    const trend = Array.from(trendMap.entries()).map(([name, scores]) => ({
-                        name,
-                        avg: Math.round(scores.reduce((sum, score) => sum + score, 0) / scores.length)
-                    })).slice(0, 8);
-
-                    setMetrics({ classAverage: avg, highestScore: max, atRiskCount: atRisk, distribution: dist, trend });
+                    setMetrics({ classAverage, highestScore, atRiskCount, distribution, trend });
                 } else {
                     setMetrics({
                         classAverage: 0,
@@ -188,12 +268,13 @@ export default function ClassDetailPage() {
         }
 
         loadData();
-    }, [id]);
+    }, [classId]);
 
     const activeLessons = useMemo(() => lessons.filter((lesson) => lesson.is_published).length, [lessons]);
+    const subjectMap = useMemo(() => new Map(subjects.map((subject) => [Number(subject.id), subject.name])), [subjects]);
 
     if (loading) return <div className="p-8 text-center text-muted-foreground">Loading class details...</div>;
-    if (!course) return <div className="p-8">Class not found</div>;
+    if (!classroom) return <div className="p-8">Class not found or not assigned to you.</div>;
 
     return (
         <div className="p-6 md:p-8 min-h-screen bg-gray-50/50">
@@ -204,19 +285,16 @@ export default function ClassDetailPage() {
             <header className="flex justify-between items-start mb-8">
                 <div>
                     <Badge variant="outline" className="mb-2 bg-white text-slate-600 font-normal border-slate-200">
-                        Class {course.academic_class}
+                        Assigned Class
                     </Badge>
-                    <h1 className="text-3xl font-bold text-gray-900">{course.name}</h1>
+                    <h1 className="text-3xl font-bold text-gray-900">{classroom.name}</h1>
                     <p className="text-muted-foreground mt-1">
-                        {course.code ? `Code: ${course.code}` : 'No course code'} • {students.length} students • {activeLessons}/{lessons.length} lessons published
+                        {students.length} students • {subjects.length} subjects • {activeLessons}/{lessons.length} lessons published
                     </p>
                 </div>
                 <div className="flex gap-2">
                     <Link href="/teacher/analytics">
                         <Button variant="outline"><BrainCircuit className="h-4 w-4 mr-2" /> AI Analytics</Button>
-                    </Link>
-                    <Link href={`/teacher/courses/${course.id}/settings`}>
-                        <Button className="bg-indigo-600 hover:bg-indigo-700">Manage Settings</Button>
                     </Link>
                 </div>
             </header>
@@ -230,7 +308,7 @@ export default function ClassDetailPage() {
                         <BookOpen className="h-4 w-4 mr-2" /> Lessons
                     </TabsTrigger>
                     <TabsTrigger value="assignments" className="px-4 py-2 text-sm data-[state=active]:bg-indigo-50 data-[state=active]:text-indigo-700">
-                        <ClipboardList className="h-4 w-4 mr-2" /> Assignments
+                        <ClipboardList className="h-4 w-4 mr-2" /> Work & Assessments
                     </TabsTrigger>
                     <TabsTrigger value="analytics" className="px-4 py-2 text-sm data-[state=active]:bg-indigo-50 data-[state=active]:text-indigo-700">
                         <BarChart2 className="h-4 w-4 mr-2" /> Analytics
@@ -241,9 +319,6 @@ export default function ClassDetailPage() {
                     <Card>
                         <CardHeader className="flex flex-row items-center justify-between">
                             <CardTitle className="text-lg">Class Roster ({studentRows.length})</CardTitle>
-                            <Link href="/admin/academic/students">
-                                <Button size="sm" variant="outline"><Plus className="h-4 w-4 mr-2" /> Add Student</Button>
-                            </Link>
                         </CardHeader>
                         <CardContent>
                             <div className="rounded-md border">
@@ -252,7 +327,8 @@ export default function ClassDetailPage() {
                                         <tr>
                                             <th className="p-4 font-medium">Student Name</th>
                                             <th className="p-4 font-medium">Attendance</th>
-                                            <th className="p-4 font-medium">Status</th>
+                                            <th className="p-4 font-medium">Avg Score</th>
+                                            <th className="p-4 font-medium">Assignments</th>
                                             <th className="p-4 font-medium">Risk Level</th>
                                             <th className="p-4 font-medium text-right">Actions</th>
                                         </tr>
@@ -262,10 +338,13 @@ export default function ClassDetailPage() {
                                             <tr key={row.student.id} className="hover:bg-slate-50/50">
                                                 <td className="p-4 font-medium text-gray-900">{row.student.first_name} {row.student.last_name}</td>
                                                 <td className="p-4 text-slate-600">{row.attendancePct > 0 ? `${row.attendancePct}%` : '-'}</td>
-                                                <td className="p-4">
-                                                    <Badge variant="secondary" className={row.student.is_active === false ? 'bg-slate-100 text-slate-600 hover:bg-slate-100' : 'bg-green-100 text-green-700 hover:bg-green-100'}>
-                                                        {row.student.is_active === false ? 'Inactive' : 'Active'}
-                                                    </Badge>
+                                                <td className="p-4 text-slate-600">
+                                                    {row.averageScorePct !== null ? `${row.averageScorePct}%` : '-'}
+                                                </td>
+                                                <td className="p-4 text-slate-600">
+                                                    {row.totalAssignments > 0
+                                                        ? `${row.completedAssignments}/${row.totalAssignments}`
+                                                        : '-'}
                                                 </td>
                                                 <td className="p-4">
                                                     {row.risk === 'high' ? (
@@ -289,7 +368,7 @@ export default function ClassDetailPage() {
                                         ))}
                                         {studentRows.length === 0 && (
                                             <tr>
-                                                <td colSpan={5} className="p-8 text-center text-slate-500">No students assigned to this class.</td>
+                                                <td colSpan={6} className="p-8 text-center text-slate-500">No students assigned to this class.</td>
                                             </tr>
                                         )}
                                     </tbody>
@@ -320,14 +399,16 @@ export default function ClassDetailPage() {
                                             </div>
                                             <div>
                                                 <h4 className="font-semibold text-gray-900">{lesson.title}</h4>
-                                                <p className="text-xs text-muted-foreground">Updated {new Date(lesson.updated_at || lesson.created_at || '').toLocaleDateString()}</p>
+                                                <p className="text-xs text-muted-foreground">
+                                                    {lesson.subjectName} • Updated {new Date(lesson.updated_at || lesson.created_at || '').toLocaleDateString()}
+                                                </p>
                                             </div>
                                         </div>
                                         <div className="flex items-center gap-4">
                                             <Badge variant={lesson.is_published ? 'default' : 'secondary'}>
                                                 {lesson.is_published ? 'Published' : 'Draft'}
                                             </Badge>
-                                            <Link href={`/teacher/courses/${course.id}/lessons/${lesson.id}`}>
+                                            <Link href={`/teacher/courses/${lesson.subjectId}/lessons/${lesson.id}`}>
                                                 <Button variant="ghost" size="sm">Edit</Button>
                                             </Link>
                                         </div>
@@ -335,7 +416,7 @@ export default function ClassDetailPage() {
                                 ))}
                                 {lessons.length === 0 && (
                                     <div className="p-8 text-center text-muted-foreground border rounded-lg border-dashed">
-                                        No lessons created for this subject yet.
+                                        No lessons created for this class yet.
                                     </div>
                                 )}
                             </div>
@@ -344,9 +425,9 @@ export default function ClassDetailPage() {
                 </TabsContent>
 
                 <TabsContent value="assignments">
-                    {assignments.length === 0 ? (
+                    {assessments.length === 0 ? (
                         <div className="p-8 text-center text-muted-foreground border rounded-lg border-dashed">
-                            <p className="mb-4">No assignments active.</p>
+                            <p className="mb-4">No assessments or assignments published for this class.</p>
                             <Link href={`/teacher/classes/${id}/assignments/new`}>
                                 <Button className="bg-indigo-600 hover:bg-indigo-700">
                                     <Plus className="h-4 w-4 mr-2" /> Create Assignment
@@ -356,14 +437,14 @@ export default function ClassDetailPage() {
                     ) : (
                         <Card>
                             <CardHeader className="flex flex-row items-center justify-between">
-                                <CardTitle className="text-lg">Assignments</CardTitle>
+                                <CardTitle className="text-lg">Assigned Work & Assessments</CardTitle>
                                 <Link href={`/teacher/classes/${id}/assignments/new`}>
                                     <Button size="sm"><Plus className="h-4 w-4 mr-2" /> Create Assignment</Button>
                                 </Link>
                             </CardHeader>
                             <CardContent>
                                 <div className="space-y-4">
-                                    {assignments.map((assessment) => (
+                                    {assessments.map((assessment) => (
                                         <div key={assessment.id} className="flex items-center justify-between p-4 border rounded-lg hover:border-indigo-300 transition-colors bg-white">
                                             <div className="flex items-center gap-4">
                                                 <div className="h-10 w-10 bg-indigo-50 rounded-lg flex items-center justify-center text-indigo-600">
@@ -371,11 +452,13 @@ export default function ClassDetailPage() {
                                                 </div>
                                                 <div>
                                                     <h4 className="font-semibold text-gray-900">{assessment.title}</h4>
-                                                    <p className="text-xs text-muted-foreground">Type: {assessment.type} • Marks: {assessment.total_marks}</p>
+                                                    <p className="text-xs text-muted-foreground">
+                                                        {subjectMap.get(Number(assessment.subject)) || 'Subject'} • {assessment.type} • Marks: {assessment.total_marks}
+                                                    </p>
                                                 </div>
                                             </div>
                                             <div className="flex items-center gap-4">
-                                                <Badge variant="outline">Active</Badge>
+                                                <Badge variant="outline" className="capitalize">{assessment.type}</Badge>
                                                 <Link href={`/teacher/grading/list?assessmentId=${assessment.assessment_id}`}>
                                                     <Button variant="ghost" size="sm">Grade</Button>
                                                 </Link>
@@ -393,11 +476,11 @@ export default function ClassDetailPage() {
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                             <Card>
                                 <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">Class Average</CardTitle></CardHeader>
-                                <CardContent><div className="text-2xl font-bold">{metrics.classAverage}%</div><p className="text-xs text-green-600 flex items-center mt-1"><TrendingUp className="h-3 w-3 mr-1" /> Based on {assignments.length} assignments</p></CardContent>
+                                <CardContent><div className="text-2xl font-bold">{metrics.classAverage}%</div><p className="text-xs text-green-600 flex items-center mt-1"><TrendingUp className="h-3 w-3 mr-1" /> Across {assessments.length} items</p></CardContent>
                             </Card>
                             <Card>
                                 <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">Highest Score</CardTitle></CardHeader>
-                                <CardContent><div className="text-2xl font-bold">{metrics.highestScore}%</div><p className="text-xs text-muted-foreground mt-1">Best Performance</p></CardContent>
+                                <CardContent><div className="text-2xl font-bold">{metrics.highestScore}%</div><p className="text-xs text-muted-foreground mt-1">Best class performance</p></CardContent>
                             </Card>
                             <Card>
                                 <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-muted-foreground">At Risk Students</CardTitle></CardHeader>
