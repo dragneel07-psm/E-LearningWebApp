@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { getTenantFromSubdomain } from '@/lib/tenant';
+import { getTenantFromSubdomain, isTenantHost } from '@/lib/tenant';
 
 type TenantIdentity = {
     tenantName: string | null;
@@ -35,22 +35,33 @@ export function useTenantIdentity(): TenantIdentity {
         return getTenantFromSubdomain(window.location.hostname);
     }, []);
 
-    const isTenantContext = Boolean(tenantSubdomain && tenantSubdomain !== 'localhost');
+    const isTenantContext = useMemo(() => {
+        if (typeof window === 'undefined') return false;
+        return isTenantHost(window.location.hostname);
+    }, []);
 
     useEffect(() => {
-        if (!isTenantContext || !tenantSubdomain) return;
+        if (!isTenantContext) return;
 
+        const cachedSchema = typeof window !== 'undefined' ? localStorage.getItem('tenant_id') : null;
         const cachedName = typeof window !== 'undefined' ? localStorage.getItem('tenant_name') : null;
-        setTenantSchema(tenantSubdomain);
-        setTenantName(cachedName || formatTenantNameFromSlug(tenantSubdomain));
+        const initialSchema = (cachedSchema || tenantSubdomain || '').trim().toLowerCase();
+        if (initialSchema) {
+            setTenantSchema(initialSchema);
+            setTenantName(cachedName || formatTenantNameFromSlug(initialSchema));
+        }
 
         const controller = new AbortController();
         const fetchTenant = async () => {
             setIsLoading(true);
             try {
+                const headers: HeadersInit = {};
+                if (initialSchema) {
+                    headers['x-tenant-id'] = initialSchema;
+                }
                 const response = await fetch('/api/core/tenant-check/', {
                     method: 'GET',
-                    headers: { 'x-tenant-id': tenantSubdomain },
+                    headers,
                     cache: 'no-store',
                     signal: controller.signal,
                 });
@@ -65,6 +76,9 @@ export function useTenantIdentity(): TenantIdentity {
 
                 if (resolvedSchema) {
                     setTenantSchema(resolvedSchema);
+                    if (typeof window !== 'undefined') {
+                        localStorage.setItem('tenant_id', resolvedSchema);
+                    }
                 }
                 if (resolvedName) {
                     setTenantName(resolvedName);
@@ -86,4 +100,3 @@ export function useTenantIdentity(): TenantIdentity {
 
     return { tenantName, tenantSchema, isTenantContext, isLoading };
 }
-

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { decodeJwt, jwtVerify } from 'jose';
+import { getTenantFromSubdomain, isTenantHost } from './lib/tenant';
 
 interface UserPayload {
     user_id: string;
@@ -36,38 +37,6 @@ function clearAuthCookies(response: NextResponse): void {
     response.cookies.set('access_token', '', { ...baseOptions, domain: sharedDomain });
     response.cookies.set('refresh_token', '', { ...baseOptions, domain: sharedDomain });
     response.cookies.set('tenant_id', '', { ...baseOptions, domain: sharedDomain });
-}
-
-function getTenantFromHostname(hostname: string): string | null {
-    const normalizedHost = (hostname || '').trim().toLowerCase();
-    const parts = normalizedHost.split('.').filter(Boolean);
-
-    if (!normalizedHost) return null;
-
-    if (normalizedHost === 'localhost' || normalizedHost === '127.0.0.1') {
-        return 'localhost';
-    }
-
-    if (parts.length > 1 && parts[parts.length - 1] === 'localhost') {
-        return parts[0] === 'localhost' ? 'localhost' : parts[0];
-    }
-
-    const managedHostSuffixes = [
-        '.vercel.app',
-        '.railway.app',
-        '.up.railway.app',
-    ];
-    if (managedHostSuffixes.some((suffix) => normalizedHost.endsWith(suffix))) {
-        return null;
-    }
-
-    if (parts.length > 2) {
-        const label = parts[0];
-        if (label === 'www') return null;
-        return label;
-    }
-
-    return null;
 }
 
 function getUserFromToken(token: string): UserPayload | null {
@@ -141,8 +110,8 @@ export async function proxy(request: NextRequest) {
 
     // 1. Tenant Handling (Pass subdomain to headers)
     const requestHeaders = new Headers(request.headers);
-    const tenantSubdomain = getTenantFromHostname(hostname);
-    requestHeaders.set('x-tenant-id', tenantSubdomain || 'public');
+    const tenantSubdomain = getTenantFromSubdomain(hostname);
+    requestHeaders.set('x-tenant-id', (tenantSubdomain && tenantSubdomain !== 'localhost') ? tenantSubdomain : 'public');
 
     // 2. Auth Handling
     const token = getLatestAccessToken(request);
@@ -151,8 +120,8 @@ export async function proxy(request: NextRequest) {
     // Allow access to public paths
     if (pathname === '/' || PUBLIC_PATHS.some(path => pathname.startsWith(path))) {
         if (pathname === '/' && !token) {
-            if (tenantSubdomain && tenantSubdomain !== 'localhost') {
-                // Tenant subdomain root → show school landing page
+            if (isTenantHost(hostname)) {
+                // Tenant root (subdomain or custom domain) → show school landing page
                 const url = request.nextUrl.clone();
                 url.pathname = '/school';
                 return NextResponse.rewrite(url);

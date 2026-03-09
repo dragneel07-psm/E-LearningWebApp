@@ -44,7 +44,10 @@ export const authService = {
         // Determine tenant: explicit school_code > subdomain detection > 'public'
         const tenantId = school_code?.trim() ||
             (typeof window !== 'undefined'
-                ? getTenantFromSubdomain(window.location.hostname)
+                ? (
+                    (localStorage.getItem('tenant_id') || '').trim()
+                    || getTenantFromSubdomain(window.location.hostname)
+                )
                 : null) ||
             'public';
 

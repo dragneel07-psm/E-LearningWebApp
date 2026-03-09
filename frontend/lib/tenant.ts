@@ -1,7 +1,42 @@
 // lib/tenant.ts
 
+const MANAGED_HOST_SUFFIXES = [
+    '.vercel.app',
+    '.railway.app',
+    '.up.railway.app',
+];
+
+const DEFAULT_PUBLIC_HOSTS = [
+    'manyaltech.com',
+    'www.manyaltech.com',
+];
+
+function normalizeHostname(hostname: string): string {
+    return (hostname || '').trim().toLowerCase();
+}
+
+function getConfiguredPublicHosts(): Set<string> {
+    const configured = (process.env.NEXT_PUBLIC_PUBLIC_HOSTS || process.env.NEXT_PUBLIC_APP_HOSTS || '')
+        .split(',')
+        .map((item) => normalizeHostname(item))
+        .filter(Boolean);
+    return new Set([...DEFAULT_PUBLIC_HOSTS, ...configured]);
+}
+
+export function isManagedHost(hostname: string): boolean {
+    const normalizedHost = normalizeHostname(hostname);
+    return MANAGED_HOST_SUFFIXES.some((suffix) => normalizedHost.endsWith(suffix));
+}
+
+export function isPublicHost(hostname: string): boolean {
+    const normalizedHost = normalizeHostname(hostname);
+    if (!normalizedHost) return false;
+    if (normalizedHost === 'localhost' || normalizedHost === '127.0.0.1') return true;
+    return getConfiguredPublicHosts().has(normalizedHost);
+}
+
 export const getTenantFromSubdomain = (hostname: string): string | null => {
-    const normalizedHost = (hostname || '').trim().toLowerCase();
+    const normalizedHost = normalizeHostname(hostname);
     const parts = normalizedHost.split('.').filter(Boolean);
 
     if (!normalizedHost) return null;
@@ -16,12 +51,7 @@ export const getTenantFromSubdomain = (hostname: string): string | null => {
     }
 
     // Ignore platform-managed hosts where first label is app name, not tenant.
-    const managedHostSuffixes = [
-        '.vercel.app',
-        '.railway.app',
-        '.up.railway.app',
-    ];
-    if (managedHostSuffixes.some((suffix) => normalizedHost.endsWith(suffix))) {
+    if (isManagedHost(normalizedHost)) {
         return null;
     }
 
@@ -32,12 +62,29 @@ export const getTenantFromSubdomain = (hostname: string): string | null => {
         return label;
     }
 
-    // Root domains like example.com do not imply a tenant.
     return null;
 };
 
+export function isTenantHost(hostname: string): boolean {
+    const normalizedHost = normalizeHostname(hostname);
+    const parts = normalizedHost.split('.').filter(Boolean);
+
+    if (!normalizedHost) return false;
+    if (isPublicHost(normalizedHost)) return false;
+    if (isManagedHost(normalizedHost)) return false;
+
+    // demo.localhost or tenant.example.com
+    if (getTenantFromSubdomain(normalizedHost)) {
+        const tenantSlug = getTenantFromSubdomain(normalizedHost);
+        return Boolean(tenantSlug && tenantSlug !== 'localhost');
+    }
+
+    // Custom tenant domains like school.edu or demo-school.org.
+    return parts.length >= 2;
+}
+
 export const isLocalHost = (hostname: string): boolean => {
-    const normalizedHost = (hostname || '').trim().toLowerCase();
+    const normalizedHost = normalizeHostname(hostname);
     if (!normalizedHost) return false;
     if (normalizedHost === 'localhost' || normalizedHost === '127.0.0.1') return true;
     return normalizedHost.endsWith('.localhost') || normalizedHost.endsWith('.local');
@@ -47,7 +94,7 @@ export type LoginPortalContext = 'public' | 'tenant' | 'local';
 
 export const getLoginPortalContext = (hostname: string): LoginPortalContext => {
     if (isLocalHost(hostname)) return 'local';
-    return getTenantFromSubdomain(hostname) ? 'tenant' : 'public';
+    return isTenantHost(hostname) ? 'tenant' : 'public';
 };
 
 type TenantInfo = {
@@ -80,7 +127,9 @@ export const getTenantInfo = () => {
     if (typeof window === 'undefined') return defaultTenant;
 
     const hostname = window.location.hostname;
-    const tenantId = getTenantFromSubdomain(hostname) || 'localhost';
+    const tenantId = (localStorage.getItem('tenant_id') || '').trim()
+        || getTenantFromSubdomain(hostname)
+        || (isTenantHost(hostname) ? 'tenant' : 'localhost');
     const cached = readCachedTenantInfo();
 
     const derivedName = tenantId === 'localhost'

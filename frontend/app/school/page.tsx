@@ -10,8 +10,7 @@ import {
     Clock, Star, Building2, Lock,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { getTenantFromSubdomain } from '@/lib/tenant';
-import { getApiBaseUrl } from '@/lib/api';
+import { getTenantFromSubdomain, isTenantHost } from '@/lib/tenant';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -41,7 +40,8 @@ interface Notice {
 function getTenantIdFromHost(): string {
     if (typeof window === 'undefined') return 'school';
     const host = window.location.hostname;
-    return getTenantFromSubdomain(host) || 'school';
+    const cachedTenant = (localStorage.getItem('tenant_id') || '').trim().toLowerCase();
+    return cachedTenant || getTenantFromSubdomain(host) || (isTenantHost(host) ? 'tenant' : 'school');
 }
 
 function formatSchoolName(id: string): string {
@@ -126,21 +126,27 @@ export default function SchoolLandingPage() {
         const tid = getTenantIdFromHost();
         setTenantId(tid);
 
-        const base = getApiBaseUrl();
-
         // Fetch school info from public tenant-check endpoint
-        fetch(`${base}/core/tenant-check/`, {
-            headers: { 'Content-Type': 'application/json' },
+        fetch('/api/core/tenant-check/', {
+            headers: tid && tid !== 'tenant' ? { 'Content-Type': 'application/json', 'x-tenant-id': tid } : { 'Content-Type': 'application/json' },
+            cache: 'no-store',
         })
             .then(r => r.ok ? r.json() : null)
             .then(data => {
                 if (data?.exists) {
+                    const resolvedSchema = String(data.schema_name || tid || '').trim().toLowerCase();
+                    const resolvedName = String(data.name || formatSchoolName(tid)).trim();
+                    localStorage.setItem('tenant_id', resolvedSchema);
+                    localStorage.setItem('tenant_name', resolvedName);
                     setSchool({
-                        id: tid,
-                        name: data.name || formatSchoolName(tid),
+                        id: resolvedSchema || tid,
+                        name: resolvedName,
                         logo: localStorage.getItem('tenant_logo') || undefined,
                         primaryColor: localStorage.getItem('tenant_primary_color') || undefined,
                     });
+                    if (resolvedSchema) {
+                        setTenantId(resolvedSchema);
+                    }
                 } else {
                     setSchool({ id: tid, name: formatSchoolName(tid) });
                 }
@@ -149,8 +155,9 @@ export default function SchoolLandingPage() {
             .finally(() => setLoading(false));
 
         // Try to fetch public notices (may fail, graceful fallback)
-        fetch(`${base}/academic/notices/?limit=3`, {
-            headers: { 'Content-Type': 'application/json' },
+        fetch('/api/academic/notices/?limit=3', {
+            headers: tid && tid !== 'tenant' ? { 'Content-Type': 'application/json', 'x-tenant-id': tid } : { 'Content-Type': 'application/json' },
+            cache: 'no-store',
         })
             .then(r => r.ok ? r.json() : null)
             .then(data => {
