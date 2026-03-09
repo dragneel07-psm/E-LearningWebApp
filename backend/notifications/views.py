@@ -1,3 +1,4 @@
+from django.contrib.auth import get_user_model
 from rest_framework import viewsets, permissions
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -6,6 +7,8 @@ from .models import Notification
 from .serializers import NotificationSerializer
 from core.async_jobs import enqueue_job
 from notifications.tasks import send_notification_task
+
+User = get_user_model()
 
 class NotificationViewSet(viewsets.ModelViewSet):
     serializer_class = NotificationSerializer
@@ -60,6 +63,51 @@ class NotificationViewSet(viewsets.ModelViewSet):
             job_tenant_schema=tenant_schema,
         )
         return Response(job, status=status.HTTP_202_ACCEPTED)
+
+    @action(detail=False, methods=['POST'], url_path='broadcast')
+    def broadcast(self, request):
+        """
+        Bulk notify users by role or class.
+        Body: { title, message, target: 'all'|'role'|'class', role?, class_id?, link? }
+        Returns: { sent_count }
+        """
+        title = str(request.data.get('title') or '').strip()
+        message = str(request.data.get('message') or '').strip()
+        target = request.data.get('target', 'all')
+        role = request.data.get('role', '')
+        class_id = request.data.get('class_id', '')
+        link = request.data.get('link', '')
+
+        if not title or not message:
+            return Response({'detail': 'title and message are required'}, status=status.HTTP_400_BAD_REQUEST)
+
+        tenant = getattr(request, 'tenant', None)
+        qs = User.objects.filter(is_active=True)
+        if tenant:
+            qs = qs.filter(tenant=tenant)
+
+        if target == 'role' and role:
+            qs = qs.filter(role=role)
+        elif target == 'class' and class_id:
+            # Notify students in the class and their parents + the class teacher
+            qs = qs.filter(
+                student_profile__academic_class_id=class_id
+            ) | qs.filter(
+                parent_profile__children__academic_class_id=class_id
+            )
+
+        bulk = [
+            Notification(
+                recipient=user,
+                tenant=tenant,
+                title=title,
+                message=message,
+                link=link or None,
+            )
+            for user in qs.distinct()
+        ]
+        Notification.objects.bulk_create(bulk, ignore_conflicts=True)
+        return Response({'sent_count': len(bulk)}, status=status.HTTP_200_OK)
 
 from .models import NotificationTemplate
 from .serializers import NotificationTemplateSerializer

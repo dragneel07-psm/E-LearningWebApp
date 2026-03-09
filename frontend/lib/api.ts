@@ -3882,4 +3882,60 @@ export const sisAPI = {
         apiRequest<StudentDocument>(`/academic/sis/documents/${id}/cancel/`, { method: 'POST', body: JSON.stringify({ reason: reason ?? '' }) }),
 };
 
+// ── Communication / Notification interfaces ──────────────────────────────────
+
+export interface NotificationItem {
+    id: number;
+    title: string;
+    message: string;
+    link?: string;
+    is_read: boolean;
+    created_at: string;
+}
+
+export interface NotificationTemplate {
+    id: number;
+    name: string;
+    subject_template: string;
+    body_template: string;
+    type: 'email' | 'sms' | 'app';
+    is_active: boolean;
+    created_at: string;
+}
+
+export interface BroadcastPayload {
+    title: string;
+    message: string;
+    target: 'all' | 'role' | 'class';
+    role?: string;
+    class_id?: string;
+    link?: string;
+}
+
+export const communicationAPI = {
+    // In-app notifications for the logged-in user
+    getMyNotifications: () => apiRequest<NotificationItem[]>('/notifications/notifications/'),
+    getUnreadCount: () => apiRequest<{ count: number }>('/notifications/notifications/unread_count/'),
+    markRead: (id: number) =>
+        apiRequest<void>(`/notifications/notifications/${id}/mark_as_read/`, { method: 'POST' }),
+    markAllRead: () =>
+        apiRequest<void>('/notifications/notifications/mark_all_as_read/', { method: 'POST' }),
+
+    // Broadcast bulk notification
+    broadcast: (payload: BroadcastPayload) =>
+        apiRequest<{ sent_count: number }>('/notifications/notifications/broadcast/', {
+            method: 'POST',
+            body: JSON.stringify(payload),
+        }),
+
+    // Notification templates
+    getTemplates: () => apiRequest<NotificationTemplate[]>('/notifications/templates/'),
+    createTemplate: (data: Partial<NotificationTemplate>) =>
+        apiRequest<NotificationTemplate>('/notifications/templates/', { method: 'POST', body: JSON.stringify(data) }),
+    updateTemplate: (id: number, data: Partial<NotificationTemplate>) =>
+        apiRequest<NotificationTemplate>(`/notifications/templates/${id}/`, { method: 'PATCH', body: JSON.stringify(data) }),
+    deleteTemplate: (id: number) =>
+        apiRequest<void>(`/notifications/templates/${id}/`, { method: 'DELETE' }),
+};
+
 export default api;
