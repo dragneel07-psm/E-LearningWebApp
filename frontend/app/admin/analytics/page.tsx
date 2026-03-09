@@ -158,7 +158,7 @@ export default function AnalyticsPage() {
                 <Card className="lg:col-span-2 border-slate-200 shadow-sm">
                     <CardHeader className="pb-2">
                         <div className="flex items-center justify-between">
-                            <CardTitle className="text-sm font-bold text-slate-700">Attendance Trend (last {window} days)</CardTitle>
+                            <CardTitle className="text-sm font-bold text-slate-700">Attendance Trend (last {days} days)</CardTitle>
                             <div className="flex items-center gap-3 text-[10px] font-bold text-slate-400">
                                 <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-emerald-500 inline-block" />Present</span>
                                 <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-amber-400 inline-block" />Late</span>
