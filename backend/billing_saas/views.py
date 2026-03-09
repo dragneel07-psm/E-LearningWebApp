@@ -1,6 +1,6 @@
 from datetime import date, timedelta
 
-from django.db.models import Count, Q, Sum
+from django.db.models import Count, Sum
 from django.db.models.functions import TruncMonth
 from rest_framework import permissions, status, viewsets
 from rest_framework.decorators import action
@@ -210,12 +210,6 @@ class SaasGrowthAnalyticsView(APIView):
         ]
 
         # ── Plan distribution ─────────────────────────────────────────────────
-        plan_dist = (
-            Subscription.objects.select_related('plan')
-            .values(plan_name=Q() or 'plan__name')
-            .annotate(count=Count('subscription_id'))
-        )
-        # Simpler approach:
         plan_dist_raw = (
             Subscription.objects
             .values('plan__name')
@@ -239,12 +233,12 @@ class SaasGrowthAnalyticsView(APIView):
         revenue_by_plan = (
             Invoice.objects
             .filter(status='paid')
-            .values('plan_name')
+            .values('subscription__plan__name')
             .annotate(total=Sum('amount'))
             .order_by('-total')
         )
         revenue_data = [
-            {'plan': row['plan_name'] or 'Unknown', 'total': float(row['total'] or 0)}
+            {'plan': row['subscription__plan__name'] or 'Unknown', 'total': float(row['total'] or 0)}
             for row in revenue_by_plan
         ]
 
@@ -334,7 +328,7 @@ class SaasHealthMonitorView(APIView):
         failed_list = [
             {
                 'invoice_id': str(inv.invoice_id),
-                'tenant_name': inv.tenant_name or (inv.tenant.name if inv.tenant else 'Unknown'),
+                'tenant_name': inv.tenant.name if inv.tenant else 'Unknown',
                 'amount': float(inv.amount),
                 'issued_date': str(inv.issued_date.date()),
             }
