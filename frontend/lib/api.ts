@@ -3177,6 +3177,26 @@ export const saasApi = {
             })
         }),
     helpers: helpers,
+
+    // Growth & Health Analytics
+    getGrowthAnalytics: () =>
+        apiRequest<{
+            summary: { total_tenants: number; total_revenue: number; active_subscriptions: number; trial_subscriptions: number };
+            monthly_signups: Array<{ month: string; label: string; count: number }>;
+            plan_distribution: Array<{ plan: string; count: number }>;
+            status_breakdown: Array<{ status: string; count: number }>;
+            revenue_by_plan: Array<{ plan: string; total: number }>;
+            billing_cycles: Array<{ cycle: string; count: number }>;
+        }>(`${BILLING_SAAS_BASE}/analytics/growth/`),
+
+    getHealthMonitor: () =>
+        apiRequest<{
+            total_alerts: number;
+            expiring_trials: Array<{ tenant_id: string; tenant_name: string; plan: string; end_date: string; days_left: number }>;
+            past_due: Array<{ tenant_id: string; tenant_name: string; plan: string; end_date: string | null }>;
+            failed_payments: Array<{ invoice_id: string; tenant_name: string; amount: number; issued_date: string }>;
+            suspended_tenants: Array<{ tenant_id: string; tenant_name: string; subdomain: string }>;
+        }>(`${BILLING_SAAS_BASE}/analytics/health/`),
 };
 
 export const api = {

@@ -10,7 +10,10 @@ import {
     BrainCircuit,
     Settings,
     ShieldCheck,
-    LogOut
+    LogOut,
+    TrendingUp,
+    HeartPulse,
+    ClipboardList,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { removeTokens } from '@/lib/auth';
@@ -32,6 +35,18 @@ export function SaasSidebar() {
             color: 'text-violet-500',
         },
         {
+            label: 'Growth Analytics',
+            icon: TrendingUp,
+            href: '/saas/growth',
+            color: 'text-indigo-500',
+        },
+        {
+            label: 'Health Monitor',
+            icon: HeartPulse,
+            href: '/saas/health',
+            color: 'text-red-500',
+        },
+        {
             label: 'Subscription Plans',
             icon: CreditCard,
             href: '/saas/plans',
@@ -48,6 +63,12 @@ export function SaasSidebar() {
             icon: BrainCircuit,
             href: '/saas/ai',
             color: 'text-emerald-500',
+        },
+        {
+            label: 'Audit Log',
+            icon: ClipboardList,
+            href: '/saas/audit',
+            color: 'text-slate-500',
         },
         {
             label: 'System Settings',
