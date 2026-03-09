@@ -9,3 +9,9 @@ from .notice import NoticeViewSet
 from .reports import ReportViewSet
 from .admission import AdmissionEnquiryViewSet
 from .erp import SchoolERPOverviewView
+from .sis import (
+    StudentHealthRecordViewSet,
+    DisciplinaryIncidentViewSet,
+    StudentDocumentViewSet,
+    SISDashboardViewSet,
+)

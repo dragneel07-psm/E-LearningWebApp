@@ -19,3 +19,6 @@ from .exam import Exam, ExamSeating
 from .admission import AdmissionEnquiry
 from .submission import Submission
 from .meeting import ParentTeacherMeeting
+from .health import StudentHealthRecord, ImmunizationRecord
+from .discipline import DisciplinaryIncident
+from .documents import StudentDocument

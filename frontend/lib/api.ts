@@ -3546,4 +3546,129 @@ export const hrAPI = {
         apiRequest<HRSalarySlip>(`/hr/salary-slips/${id}/mark-paid/`, { method: 'POST', body: JSON.stringify(data) }),
 };
 
+// ─── SIS API ─────────────────────────────────────────────────────────────────
+
+export interface SISDashboardStats {
+    health_records: number;
+    open_incidents: number;
+    total_incidents: number;
+    documents_issued: number;
+    transfer_certificates: number;
+    incident_by_type: Array<{ incident_type: string; count: number }>;
+    incident_by_severity: Array<{ severity: string; count: number }>;
+}
+
+export interface StudentHealthRecord {
+    health_id: string;
+    student: string;
+    student_name: string;
+    blood_group: string;
+    height_cm: number | null;
+    weight_kg: number | null;
+    allergies: string;
+    chronic_conditions: string;
+    current_medications: string;
+    emergency_contact_name: string;
+    emergency_contact_phone: string;
+    emergency_contact_relation: string;
+    doctor_name: string;
+    doctor_phone: string;
+    insurance_provider: string;
+    insurance_number: string;
+    notes: string;
+    immunizations: Array<{
+        immunization_id: string;
+        vaccine_name: string;
+        date_administered: string | null;
+        next_due_date: string | null;
+        administered_by: string;
+        remarks: string;
+    }>;
+}
+
+export interface DisciplinaryIncident {
+    incident_id: string;
+    student: string;
+    student_name: string;
+    reported_by_name: string | null;
+    incident_date: string;
+    incident_type: string;
+    severity: 'low' | 'medium' | 'high';
+    description: string;
+    action_taken: string;
+    status: 'open' | 'resolved' | 'escalated';
+    parent_notified: boolean;
+    parent_notified_at: string | null;
+    follow_up_date: string | null;
+    follow_up_notes: string;
+    created_at: string;
+}
+
+export interface StudentDocument {
+    document_id: string;
+    student: string;
+    student_name: string;
+    issued_by_name: string | null;
+    document_type: string;
+    document_type_display: string;
+    document_number: string;
+    issued_date: string;
+    reason: string;
+    remarks: string;
+    marks_as_transferred: boolean;
+    metadata: Record<string, any>;
+    is_cancelled: boolean;
+    created_at: string;
+}
+
+export const sisAPI = {
+    // Dashboard
+    getStats: () => apiRequest<SISDashboardStats>('/academic/sis/dashboard/stats/'),
+
+    // Health Records
+    getHealthRecords: (studentId?: string) => {
+        const q = studentId ? `?student=${studentId}` : '';
+        return apiRequest<StudentHealthRecord[]>(`/academic/sis/health/${q}`);
+    },
+    getHealthRecord: (id: string) => apiRequest<StudentHealthRecord>(`/academic/sis/health/${id}/`),
+    createHealthRecord: (data: Partial<StudentHealthRecord>) =>
+        apiRequest<StudentHealthRecord>('/academic/sis/health/', { method: 'POST', body: JSON.stringify(data) }),
+    updateHealthRecord: (id: string, data: Partial<StudentHealthRecord>) =>
+        apiRequest<StudentHealthRecord>(`/academic/sis/health/${id}/`, { method: 'PATCH', body: JSON.stringify(data) }),
+    addImmunization: (healthId: string, data: any) =>
+        apiRequest<any>(`/academic/sis/health/${healthId}/immunizations/`, { method: 'POST', body: JSON.stringify(data) }),
+    deleteImmunization: (healthId: string, immId: string) =>
+        apiRequest<void>(`/academic/sis/health/${healthId}/immunizations/${immId}/`, { method: 'DELETE' }),
+
+    // Disciplinary Incidents
+    getIncidents: (params?: { student?: string; status?: string; severity?: string }) => {
+        const q = params ? '?' + new URLSearchParams(
+            Object.entries(params).filter(([, v]) => v !== undefined) as [string, string][]
+        ).toString() : '';
+        return apiRequest<DisciplinaryIncident[]>(`/academic/sis/incidents/${q}`);
+    },
+    createIncident: (data: Partial<DisciplinaryIncident>) =>
+        apiRequest<DisciplinaryIncident>('/academic/sis/incidents/', { method: 'POST', body: JSON.stringify(data) }),
+    updateIncident: (id: string, data: Partial<DisciplinaryIncident>) =>
+        apiRequest<DisciplinaryIncident>(`/academic/sis/incidents/${id}/`, { method: 'PATCH', body: JSON.stringify(data) }),
+    resolveIncident: (id: string, data: { action_taken?: string; follow_up_notes?: string }) =>
+        apiRequest<DisciplinaryIncident>(`/academic/sis/incidents/${id}/resolve/`, { method: 'POST', body: JSON.stringify(data) }),
+    notifyParent: (id: string) =>
+        apiRequest<{ message: string }>(`/academic/sis/incidents/${id}/notify-parent/`, { method: 'POST' }),
+
+    // Documents
+    getDocuments: (params?: { student?: string; document_type?: string }) => {
+        const q = params ? '?' + new URLSearchParams(
+            Object.entries(params).filter(([, v]) => v !== undefined) as [string, string][]
+        ).toString() : '';
+        return apiRequest<StudentDocument[]>(`/academic/sis/documents/${q}`);
+    },
+    issueDocument: (data: Partial<StudentDocument>) =>
+        apiRequest<StudentDocument>('/academic/sis/documents/', { method: 'POST', body: JSON.stringify(data) }),
+    previewDocument: (id: string) =>
+        apiRequest<any>(`/academic/sis/documents/${id}/preview/`),
+    cancelDocument: (id: string, reason?: string) =>
+        apiRequest<StudentDocument>(`/academic/sis/documents/${id}/cancel/`, { method: 'POST', body: JSON.stringify({ reason: reason ?? '' }) }),
+};
+
 export default api;
