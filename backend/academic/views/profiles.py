@@ -752,3 +752,213 @@ class ParentViewSet(TenantScopedQuerysetMixin, viewsets.ReadOnlyModelViewSet):
         parent = get_object_or_404(Parent, user=request.user)
         serializer = self.get_serializer(parent)
         return Response(serializer.data)
+
+    def _verify_child(self, request, student_id):
+        """Return (parent, student) or raise 403 if not linked."""
+        parent = get_object_or_404(Parent, user=request.user)
+        if not parent.students.filter(student_id=student_id).exists():
+            from rest_framework.exceptions import PermissionDenied
+            raise PermissionDenied("You are not linked to this student.")
+        from ..models import Student as _Student
+        student = get_object_or_404(_Student, student_id=student_id)
+        return parent, student
+
+    @action(detail=False, methods=['get'], url_path=r'child/(?P<student_id>[^/.]+)/attendance')
+    def child_attendance(self, request, student_id=None):
+        """Monthly attendance records for a linked child."""
+        _parent, student = self._verify_child(request, student_id)
+        from ..models.attendance import Attendance
+        qs = Attendance.objects.filter(student=student).select_related('subject')
+        month = request.query_params.get('month')
+        year = request.query_params.get('year')
+        if month:
+            qs = qs.filter(date__month=month)
+        if year:
+            qs = qs.filter(date__year=year)
+        data = [
+            {
+                'attendance_id': a.attendance_id,
+                'date': str(a.date),
+                'subject': a.subject.name if a.subject else None,
+                'status': a.status,
+                'remarks': a.remarks or '',
+            }
+            for a in qs.order_by('date')
+        ]
+        summary = {
+            'present': sum(1 for d in data if d['status'] == 'present'),
+            'absent': sum(1 for d in data if d['status'] == 'absent'),
+            'late': sum(1 for d in data if d['status'] == 'late'),
+            'excused': sum(1 for d in data if d['status'] == 'excused'),
+            'total': len(data),
+        }
+        if summary['total']:
+            summary['percentage'] = round((summary['present'] + summary['late']) / summary['total'] * 100, 1)
+        else:
+            summary['percentage'] = 0.0
+        return Response({'records': data, 'summary': summary})
+
+    @action(detail=False, methods=['get'], url_path=r'child/(?P<student_id>[^/.]+)/results')
+    def child_results(self, request, student_id=None):
+        """Full result history for a linked child."""
+        _parent, student = self._verify_child(request, student_id)
+        from ..models.assessment import Result
+        qs = (
+            Result.objects
+            .filter(student=student)
+            .select_related('assessment', 'assessment__subject')
+            .order_by('-submitted_at')
+        )
+        data = [
+            {
+                'result_id': str(r.result_id),
+                'assessment_title': r.assessment.title,
+                'subject': r.assessment.subject.name if r.assessment.subject else None,
+                'assessment_type': r.assessment.assessment_type,
+                'score': r.score,
+                'total_marks': r.assessment.total_marks,
+                'percentage': round(r.score / r.assessment.total_marks * 100, 1) if r.assessment.total_marks else 0,
+                'submitted_at': r.submitted_at.isoformat(),
+                'teacher_feedback': r.teacher_feedback or '',
+            }
+            for r in qs
+        ]
+        return Response(data)
+
+    @action(detail=False, methods=['get'], url_path=r'child/(?P<student_id>[^/.]+)/fees')
+    def child_fees(self, request, student_id=None):
+        """Fee records and payment history for a linked child."""
+        _parent, student = self._verify_child(request, student_id)
+        from billing.models import StudentFee, Payment
+        fees = StudentFee.objects.filter(student=student).select_related('fee_structure').order_by('-due_date')
+        payments = Payment.objects.filter(student_fee__student=student).order_by('-payment_date')
+        fees_data = [
+            {
+                'student_fee_id': str(f.student_fee_id),
+                'fee_name': f.fee_structure.name if f.fee_structure else '',
+                'amount_due': str(f.amount_due),
+                'amount_paid': str(f.amount_paid),
+                'balance': str(float(f.amount_due or 0) - float(f.amount_paid or 0)),
+                'status': f.status,
+                'due_date': str(f.due_date) if f.due_date else None,
+            }
+            for f in fees
+        ]
+        payments_data = [
+            {
+                'payment_id': str(p.payment_id),
+                'amount': str(p.amount),
+                'method': p.method,
+                'payment_date': str(p.payment_date),
+                'transaction_id': p.transaction_id or '',
+                'remarks': p.remarks or '',
+            }
+            for p in payments
+        ]
+        total_due = sum(float(f['amount_due']) for f in fees_data)
+        total_paid = sum(float(f['amount_paid']) for f in fees_data)
+        return Response({
+            'fees': fees_data,
+            'payments': payments_data,
+            'summary': {
+                'total_due': total_due,
+                'total_paid': total_paid,
+                'outstanding': round(total_due - total_paid, 2),
+            },
+        })
+
+
+class ParentTeacherMeetingViewSet(TenantScopedQuerysetMixin, viewsets.ModelViewSet):
+    """
+    Parents can create and view their meeting requests.
+    Teachers / admin can confirm, cancel, or complete.
+    """
+    from ..models.meeting import ParentTeacherMeeting as _PTM
+
+    queryset = _PTM.objects.select_related(
+        'parent__user', 'student__user', 'teacher__user'
+    ).all()
+    permission_classes = [IsAuthenticated]
+    tenant_field = 'parent__user__tenant'
+
+    def get_serializer_class(self):
+        from rest_framework import serializers
+        from ..models.meeting import ParentTeacherMeeting as PTM
+
+        class PTMSerializer(serializers.ModelSerializer):
+            parent_name = serializers.CharField(source='parent.user.get_full_name', read_only=True)
+            student_name = serializers.CharField(source='student.user.get_full_name', read_only=True)
+            teacher_name = serializers.CharField(source='teacher.user.get_full_name', read_only=True)
+
+            class Meta:
+                model = PTM
+                fields = '__all__'
+                read_only_fields = [
+                    'status', 'confirmed_datetime', 'meeting_notes',
+                    'cancellation_reason', 'cancelled_by', 'created_at', 'updated_at',
+                ]
+
+        return PTMSerializer
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        user = self.request.user
+        role = (getattr(user, 'role', '') or '').lower()
+        if role == 'parent':
+            parent = Parent.objects.filter(user=user).first()
+            return qs.filter(parent=parent) if parent else qs.none()
+        if role == 'teacher':
+            teacher = Teacher.objects.filter(user=user).first()
+            return qs.filter(teacher=teacher) if teacher else qs.none()
+        # admin / staff see all
+        return qs
+
+    def perform_create(self, serializer):
+        from ..models.meeting import ParentTeacherMeeting as PTM
+        user = self.request.user
+        parent = get_object_or_404(Parent, user=user)
+        serializer.save(parent=parent)
+
+    @action(detail=True, methods=['post'], url_path='confirm')
+    def confirm(self, request, pk=None):
+        from ..models.meeting import ParentTeacherMeeting as PTM
+        meeting = self.get_object()
+        if meeting.status != PTM.STATUS_PENDING:
+            return Response({'detail': 'Only pending meetings can be confirmed.'}, status=status.HTTP_400_BAD_REQUEST)
+        confirmed_dt = request.data.get('confirmed_datetime')
+        meeting_link = request.data.get('meeting_link', '')
+        meeting.status = PTM.STATUS_CONFIRMED
+        if confirmed_dt:
+            from django.utils.dateparse import parse_datetime
+            meeting.confirmed_datetime = parse_datetime(confirmed_dt)
+        meeting.meeting_link = meeting_link
+        meeting.save(update_fields=['status', 'confirmed_datetime', 'meeting_link'])
+        serializer = self.get_serializer(meeting)
+        return Response(serializer.data)
+
+    @action(detail=True, methods=['post'], url_path='cancel')
+    def cancel(self, request, pk=None):
+        from ..models.meeting import ParentTeacherMeeting as PTM
+        meeting = self.get_object()
+        if meeting.status in {PTM.STATUS_CANCELLED, PTM.STATUS_COMPLETED}:
+            return Response({'detail': 'Meeting cannot be cancelled.'}, status=status.HTTP_400_BAD_REQUEST)
+        reason = request.data.get('reason', '')
+        meeting.status = PTM.STATUS_CANCELLED
+        meeting.cancellation_reason = reason
+        meeting.cancelled_by = request.user
+        meeting.save(update_fields=['status', 'cancellation_reason', 'cancelled_by'])
+        serializer = self.get_serializer(meeting)
+        return Response(serializer.data)
+
+    @action(detail=True, methods=['post'], url_path='complete')
+    def complete(self, request, pk=None):
+        from ..models.meeting import ParentTeacherMeeting as PTM
+        meeting = self.get_object()
+        if meeting.status != PTM.STATUS_CONFIRMED:
+            return Response({'detail': 'Only confirmed meetings can be marked complete.'}, status=status.HTTP_400_BAD_REQUEST)
+        notes = request.data.get('meeting_notes', '')
+        meeting.status = PTM.STATUS_COMPLETED
+        meeting.meeting_notes = notes
+        meeting.save(update_fields=['status', 'meeting_notes'])
+        serializer = self.get_serializer(meeting)
+        return Response(serializer.data)

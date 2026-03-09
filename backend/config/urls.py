@@ -31,6 +31,7 @@ urlpatterns = [
     path('api/library/', include('library.urls')),
     path('api/gamification/', include('gamification.urls')),
     path('api/conversations/', include('conversations.urls')),
+    path('api/hr/', include('hr_payroll.urls')),
 
     # Versioned aliases (v1)
     path('api/v1/core/', include('core.urls')),
@@ -44,7 +45,8 @@ urlpatterns = [
     path('api/v1/library/', include('library.urls')),
     path('api/v1/gamification/', include('gamification.urls')),
     path('api/v1/conversations/', include('conversations.urls')),
-    
+    path('api/v1/hr/', include('hr_payroll.urls')),
+
     # JWT Auth
     path('api/token/', CustomTokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('api/token/refresh/', CustomTokenRefreshView.as_view(), name='token_refresh'),

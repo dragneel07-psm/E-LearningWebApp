@@ -1,5 +1,5 @@
 from .academic import AcademicYearViewSet, AcademicClassViewSet, SectionViewSet, SubjectViewSet
-from .profiles import TeacherViewSet, StudentViewSet, ParentViewSet
+from .profiles import TeacherViewSet, StudentViewSet, ParentViewSet, ParentTeacherMeetingViewSet
 from .lesson import ChapterViewSet, LessonViewSet, LessonMaterialViewSet
 from .assessment import AssessmentViewSet, QuestionViewSet, SubmissionViewSet, ResultViewSet
 from .attendance import AttendanceViewSet

@@ -1,418 +1,301 @@
-// app/parent/page.tsx
 'use client';
 
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
-import { User, AlertCircle, Loader2, Brain, FileText, CheckCircle, Target, HelpCircle, Calendar, Clock, MapPin } from 'lucide-react';
-import { academicAPI, aiAPI, Parent, Student, Timetable } from '@/lib/api';
+import {
+    Loader2, Brain, FileText, CheckCircle, Target, HelpCircle,
+    GraduationCap, Wallet, CalendarDays, CalendarClock,
+    AlertCircle, ChevronRight, TrendingUp, Activity
+} from 'lucide-react';
+import { academicAPI, aiAPI, Parent, Student } from '@/lib/api';
 import { useToast } from '@/hooks/use-toast';
 import {
-    Dialog,
-    DialogContent,
-    DialogDescription,
-    DialogHeader,
-    DialogTitle,
-    DialogTrigger,
-} from "@/components/ui/dialog";
+    Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle,
+} from '@/components/ui/dialog';
 
 export default function ParentDashboard() {
-    const weekDays = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
     const [parentData, setParentData] = useState<Parent | null>(null);
     const [loading, setLoading] = useState(true);
     const [reportLoading, setReportLoading] = useState<string | null>(null);
     const [selectedReport, setSelectedReport] = useState<any>(null);
-    const [timetableOpen, setTimetableOpen] = useState(false);
-    const [selectedChild, setSelectedChild] = useState<Student | null>(null);
-    const [childTimetable, setChildTimetable] = useState<Timetable[]>([]);
-    const [timetableLoading, setTimetableLoading] = useState(false);
+    const [reportOpen, setReportOpen] = useState(false);
     const { toast } = useToast();
 
     useEffect(() => {
-        const fetchParentData = async () => {
-            try {
-                const data = await academicAPI.getMyParent();
-                setParentData(data);
-            } catch (error) {
-                console.error('Failed to fetch parent data:', error);
-                toast({
-                    title: 'Error',
-                    description: 'Failed to load dashboard data. Please try again later.',
-                    variant: 'destructive',
-                });
-            } finally {
-                setLoading(false);
-            }
-        };
-
-        fetchParentData();
+        academicAPI.getMyParent()
+            .then(setParentData)
+            .catch(() => toast({ title: 'Error', description: 'Failed to load dashboard.', variant: 'destructive' }))
+            .finally(() => setLoading(false));
     }, [toast]);
 
     const fetchReport = async (studentId: string) => {
+        setReportLoading(studentId);
+        setReportOpen(true);
+        setSelectedReport(null);
         try {
-            setReportLoading(studentId);
             const report = await aiAPI.getStudentReport(studentId);
             setSelectedReport(report);
-        } catch (error) {
-            console.error('Failed to fetch student report:', error);
-            toast({
-                title: 'Error',
-                description: 'Failed to generate AI report. Please try again.',
-                variant: 'destructive',
-            });
+        } catch {
+            toast({ title: 'Error', description: 'Failed to generate AI report.', variant: 'destructive' });
+            setReportOpen(false);
         } finally {
             setReportLoading(null);
-        }
-    };
-
-    const fetchChildTimetable = async (child: Student) => {
-        setSelectedChild(child);
-        setTimetableOpen(true);
-        setTimetableLoading(true);
-        try {
-            if (!child.academic_class) {
-                setChildTimetable([]);
-                return;
-            }
-            const timetable = await academicAPI.getTimetable({
-                academic_class: child.academic_class,
-                status: 'approved',
-            });
-            setChildTimetable(Array.isArray(timetable) ? timetable : []);
-        } catch (error) {
-            console.error('Failed to fetch child timetable:', error);
-            setChildTimetable([]);
-            toast({
-                title: 'Error',
-                description: 'Failed to load class timetable.',
-                variant: 'destructive',
-            });
-        } finally {
-            setTimetableLoading(false);
         }
     };
 
     if (loading) {
         return (
             <div className="flex items-center justify-center min-h-screen">
-                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                <Loader2 className="h-8 w-8 animate-spin text-violet-500" />
             </div>
         );
     }
 
     if (!parentData) {
         return (
-            <div className="p-6 text-center">
-                <h1 className="text-2xl font-bold">No profile found</h1>
-                <p className="text-muted-foreground">We couldn&apos;t find a parent profile associated with your account.</p>
+            <div className="p-8 text-center">
+                <AlertCircle className="h-12 w-12 text-slate-300 mx-auto mb-4" />
+                <h2 className="text-xl font-bold text-slate-700">No profile found</h2>
+                <p className="text-slate-400 mt-1">No parent profile is linked to your account.</p>
             </div>
         );
     }
 
     return (
-        <div className="p-6 space-y-8 bg-gray-50 min-h-screen dark:bg-gray-900">
-            <header className="flex items-center justify-between">
+        <div className="p-6 md:p-8 space-y-8 max-w-6xl">
+            {/* Header */}
+            <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
                 <div>
-                    <h1 className="text-3xl font-bold tracking-tight">Parent Portal</h1>
-                    <p className="text-muted-foreground">Monitor progress for {parentData.user.first_name}&apos;s children.</p>
+                    <div className="flex items-center gap-2 text-violet-600 font-bold mb-1">
+                        <span className="text-[10px] uppercase tracking-[0.2em]">Parent Portal</span>
+                    </div>
+                    <h1 className="text-3xl font-black text-slate-900 tracking-tight">
+                        Welcome, {parentData.user.first_name}
+                    </h1>
+                    <p className="text-slate-500 font-medium">
+                        {parentData.students.length} child{parentData.students.length !== 1 ? 'ren' : ''} linked to your account
+                    </p>
                 </div>
-            </header>
+                <div className="flex items-center gap-3">
+                    <Link href="/parent/meetings">
+                        <Button variant="outline" className="gap-2 rounded-xl border-violet-200 text-violet-700 hover:bg-violet-50 text-xs font-bold h-9">
+                            <CalendarClock className="h-4 w-4" /> Request Meeting
+                        </Button>
+                    </Link>
+                </div>
+            </div>
 
-            {/* Children Overview */}
-            <div className="grid gap-6 md:grid-cols-2">
-                {parentData.students.map((child: Student) => (
-                    <Card key={child.id} className="border-t-4 border-t-primary">
-                        <CardHeader>
-                            <CardTitle className="flex justify-between items-center">
-                                <div className="flex items-center space-x-2">
-                                    <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
-                                        <User className="h-5 w-5 text-primary" />
-                                    </div>
-                                    <div>
-                                        <div className="font-bold">{child.first_name} {child.last_name}</div>
-                                        <div className="text-xs text-muted-foreground font-normal">{child.email}</div>
-                                    </div>
+            {/* Quick links */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                {[
+                    { href: '/parent/attendance', icon: CalendarDays, label: 'Attendance', color: 'bg-blue-50 text-blue-600' },
+                    { href: '/parent/grades', icon: GraduationCap, label: 'Grades', color: 'bg-emerald-50 text-emerald-600' },
+                    { href: '/parent/fees', icon: Wallet, label: 'Fees', color: 'bg-amber-50 text-amber-600' },
+                    { href: '/parent/meetings', icon: CalendarClock, label: 'Meetings', color: 'bg-violet-50 text-violet-600' },
+                ].map(({ href, icon: Icon, label, color }) => (
+                    <Link key={href} href={href}>
+                        <Card className="border-slate-200 hover:shadow-md transition-all cursor-pointer">
+                            <CardContent className="p-4 flex items-center gap-3">
+                                <div className={`h-10 w-10 rounded-xl ${color} flex items-center justify-center flex-shrink-0`}>
+                                    <Icon className="h-5 w-5" />
                                 </div>
-                                <Badge variant="secondary">
-                                    {(child as any).class_name || 'No Class'}
-                                </Badge>
-                            </CardTitle>
-                        </CardHeader>
-                        <CardContent className="space-y-6">
-                            <div className="grid grid-cols-2 gap-4">
-                                <div className="bg-muted p-3 rounded-lg text-center">
-                                    <span className="text-xs text-muted-foreground block">Focus Score</span>
-                                    <span className="text-xl font-bold text-primary">{child.focus_score || 0}%</span>
-                                </div>
-                                <div className="bg-muted p-3 rounded-lg text-center">
-                                    <span className="text-xs text-muted-foreground block">Learning Streak</span>
-                                    <span className="text-xl font-bold text-orange-500">{child.current_streak || 0} Days</span>
-                                </div>
-                            </div>
+                                <span className="text-sm font-bold text-slate-700">{label}</span>
+                                <ChevronRight className="h-4 w-4 text-slate-300 ml-auto" />
+                            </CardContent>
+                        </Card>
+                    </Link>
+                ))}
+            </div>
 
-                            {parentData.user.tenant_features?.parent_attendance !== false && (
-                                <div className="space-y-2">
-                                    <div className="flex justify-between text-sm">
-                                        <span>Attendance (Last 30 Days)</span>
-                                        <span className="font-medium">{(child as any).attendance_percentage || 0}%</span>
+            {/* Children cards */}
+            {parentData.students.length === 0 ? (
+                <Card className="border-dashed border-2 border-slate-200">
+                    <CardContent className="py-16 text-center">
+                        <AlertCircle className="h-10 w-10 text-slate-200 mx-auto mb-3" />
+                        <p className="text-slate-400 font-medium">No students linked yet.</p>
+                    </CardContent>
+                </Card>
+            ) : (
+                <div className="grid gap-6 md:grid-cols-2">
+                    {parentData.students.map((child: Student) => (
+                        <Card key={child.student_id} className="border-slate-200 shadow-sm hover:shadow-md transition-all">
+                            <CardHeader className="pb-3 border-b border-slate-50">
+                                <CardTitle className="flex items-center justify-between">
+                                    <div className="flex items-center gap-3">
+                                        <div className="h-11 w-11 rounded-full bg-violet-100 flex items-center justify-center font-black text-violet-700 text-base">
+                                            {child.first_name?.charAt(0).toUpperCase()}
+                                        </div>
+                                        <div>
+                                            <p className="font-black text-slate-900">{child.first_name} {child.last_name}</p>
+                                            <p className="text-xs text-slate-400 font-normal">{child.email}</p>
+                                        </div>
                                     </div>
-                                    <Progress value={(child as any).attendance_percentage || 0} className="h-2" />
+                                    <Badge className="bg-violet-50 text-violet-700 border-violet-200 text-xs font-bold">
+                                        {(child as any).class_name || 'No Class'}
+                                    </Badge>
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent className="pt-4 space-y-5">
+                                {/* Stats */}
+                                <div className="grid grid-cols-3 gap-2">
+                                    {[
+                                        { icon: <Activity className="h-4 w-4 text-indigo-500" />, label: 'Focus', value: `${child.focus_score || 0}%`, color: 'bg-indigo-50' },
+                                        { icon: <TrendingUp className="h-4 w-4 text-orange-500" />, label: 'Streak', value: `${child.current_streak || 0}d`, color: 'bg-orange-50' },
+                                        { icon: <CalendarDays className="h-4 w-4 text-emerald-500" />, label: 'Attendance', value: `${(child as any).attendance_percentage || 0}%`, color: 'bg-emerald-50' },
+                                    ].map((s, i) => (
+                                        <div key={i} className={`${s.color} rounded-xl p-2.5 text-center`}>
+                                            <div className="flex justify-center mb-1">{s.icon}</div>
+                                            <p className="text-[10px] text-slate-500 uppercase tracking-wide">{s.label}</p>
+                                            <p className="text-sm font-black text-slate-800">{s.value}</p>
+                                        </div>
+                                    ))}
                                 </div>
-                            )}
 
-                            <div className="space-y-3 pt-4 border-t">
-                                <h4 className="text-sm font-semibold flex items-center mb-2">
-                                    <FileText className="mr-2 h-4 w-4 text-primary" />
-                                    Recent Performance
-                                </h4>
-                                {((child as any).recent_grades || []).length > 0 ? (
+                                {/* Attendance progress */}
+                                {(parentData.user as any).tenant_features?.parent_attendance !== false && (
+                                    <div className="space-y-1.5">
+                                        <div className="flex justify-between text-xs font-bold">
+                                            <span className="text-slate-500">Attendance (Last 30 days)</span>
+                                            <span className="text-slate-700">{(child as any).attendance_percentage || 0}%</span>
+                                        </div>
+                                        <Progress value={(child as any).attendance_percentage || 0} className="h-2" />
+                                    </div>
+                                )}
+
+                                {/* Recent grades */}
+                                {((child as any).recent_grades || []).length > 0 && (
                                     <div className="space-y-2">
-                                        {((child as any).recent_grades).map((grade: any, i: number) => (
-                                            <div key={i} className="flex justify-between items-center bg-slate-50 p-2 rounded-md border border-slate-100">
+                                        <p className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
+                                            <FileText className="h-3.5 w-3.5" /> Recent Results
+                                        </p>
+                                        {((child as any).recent_grades as any[]).slice(0, 3).map((g, i) => (
+                                            <div key={i} className="flex justify-between items-center bg-slate-50 px-3 py-2 rounded-lg border border-slate-100">
                                                 <div>
-                                                    <div className="text-xs font-bold text-slate-900">{grade.assessment_title}</div>
-                                                    <div className="text-[10px] text-slate-500">{grade.subject}</div>
+                                                    <p className="text-xs font-bold text-slate-900 leading-tight">{g.assessment_title}</p>
+                                                    <p className="text-[10px] text-slate-400">{g.subject}</p>
                                                 </div>
                                                 <div className="text-right">
-                                                    <div className="text-xs font-bold text-primary">{grade.score}/{grade.total_marks}</div>
-                                                    <div className={`text-[10px] font-medium ${grade.percentage >= 60 ? 'text-emerald-500' : 'text-orange-500'}`}>
-                                                        {grade.percentage}%
-                                                    </div>
+                                                    <p className="text-xs font-black text-violet-700">{g.score}/{g.total_marks}</p>
+                                                    <p className={`text-[10px] font-bold ${g.percentage >= 60 ? 'text-emerald-600' : 'text-red-500'}`}>{g.percentage}%</p>
                                                 </div>
                                             </div>
                                         ))}
                                     </div>
-                                ) : (
-                                    <p className="text-xs text-muted-foreground italic text-center py-2">No recent scores available.</p>
                                 )}
-                            </div>
 
-                            <div className="space-y-3 pt-4 border-t">
-                                <h4 className="text-sm font-semibold flex items-center mb-2">
-                                    <Target className="mr-2 h-4 w-4 text-orange-500" />
-                                    Upcoming Assessments
-                                </h4>
-                                {((child as any).upcoming_assessments || []).length > 0 ? (
+                                {/* Upcoming assessments */}
+                                {((child as any).upcoming_assessments || []).length > 0 && (
                                     <div className="space-y-2">
-                                        {((child as any).upcoming_assessments).map((exam: any, i: number) => (
-                                            <div key={i} className="flex justify-between items-center bg-orange-50/50 p-2 rounded-md border border-orange-100">
+                                        <p className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
+                                            <Target className="h-3.5 w-3.5" /> Upcoming
+                                        </p>
+                                        {((child as any).upcoming_assessments as any[]).slice(0, 2).map((a, i) => (
+                                            <div key={i} className="flex justify-between items-center bg-amber-50/60 px-3 py-2 rounded-lg border border-amber-100">
                                                 <div>
-                                                    <div className="text-xs font-bold text-slate-900">{exam.title}</div>
-                                                    <div className="text-[10px] text-slate-500">{exam.subject}</div>
+                                                    <p className="text-xs font-bold text-slate-900 leading-tight">{a.title}</p>
+                                                    <p className="text-[10px] text-slate-400">{a.subject}</p>
                                                 </div>
                                                 <div className="text-right">
-                                                    <div className="text-xs font-bold text-orange-600">
-                                                        {new Date(exam.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
-                                                    </div>
-                                                    <Badge variant="outline" className="text-[8px] h-4 px-1 uppercase bg-white">
-                                                        {exam.type}
-                                                    </Badge>
+                                                    <p className="text-xs font-bold text-amber-700">
+                                                        {new Date(a.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                                                    </p>
+                                                    <Badge variant="outline" className="text-[9px] px-1.5 h-4 uppercase">{a.type}</Badge>
                                                 </div>
                                             </div>
                                         ))}
                                     </div>
-                                ) : (
-                                    <p className="text-xs text-muted-foreground italic text-center py-2">No upcoming assessments.</p>
                                 )}
-                            </div>
 
-                            <div className="space-y-2 border-t pt-4">
-                                <h4 className="text-sm font-semibold flex items-center mb-2">
-                                    <AlertCircle className="mr-2 h-4 w-4 text-primary" />
-                                    Quick Insights
-                                </h4>
-                                <ul className="text-xs space-y-2 text-muted-foreground">
-                                    <li className="flex items-start">
-                                        <span className="mr-2">•</span>
-                                        <span>Currently maintaining a {child.current_streak || 0} day learning streak!</span>
-                                    </li>
-                                    <li className="flex items-start">
-                                        <span className="mr-2">•</span>
-                                        <span>Recent focus score of {child.focus_score || 0}% indicates good concentration.</span>
-                                    </li>
-                                </ul>
-                            </div>
-
-                            <Button
-                                className="w-full"
-                                variant="secondary"
-                                onClick={() => fetchChildTimetable(child)}
-                            >
-                                <Calendar className="mr-2 h-4 w-4" /> View Timetable
-                            </Button>
-
-                            <Dialog>
-                                <DialogTrigger asChild>
+                                {/* Actions */}
+                                <div className="grid grid-cols-2 gap-2 pt-1 border-t border-slate-50">
+                                    <Link href={`/parent/children/${child.student_id}`}>
+                                        <Button variant="outline" className="w-full h-9 text-xs font-bold rounded-xl border-violet-200 text-violet-700 hover:bg-violet-50 gap-1.5">
+                                            <GraduationCap className="h-3.5 w-3.5" /> Details
+                                        </Button>
+                                    </Link>
                                     <Button
-                                        className="w-full"
                                         variant="outline"
+                                        className="h-9 text-xs font-bold rounded-xl border-slate-200 text-slate-700 hover:bg-slate-50 gap-1.5"
                                         onClick={() => fetchReport(child.student_id)}
                                         disabled={reportLoading === child.student_id}
                                     >
-                                        {reportLoading === child.student_id ? (
-                                            <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Generating...</>
-                                        ) : (
-                                            <><Brain className="mr-2 h-4 w-4" /> View AI Progress Report</>
-                                        )}
+                                        {reportLoading === child.student_id
+                                            ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Generating...</>
+                                            : <><Brain className="h-3.5 w-3.5" /> AI Report</>
+                                        }
                                     </Button>
-                                </DialogTrigger>
-                                <DialogContent className="sm:max-w-[600px] max-h-[80vh] overflow-y-auto">
-                                    {selectedReport ? (
-                                        <div className="space-y-6">
-                                            <DialogHeader>
-                                                <DialogTitle className="flex items-center gap-2 text-2xl font-bold">
-                                                    <FileText className="h-6 w-6 text-primary" />
-                                                    Academic Progress Report
-                                                </DialogTitle>
-                                                <DialogDescription>
-                                                    AI-generated analysis for {selectedReport.student_name}
-                                                </DialogDescription>
-                                            </DialogHeader>
+                                </div>
+                            </CardContent>
+                        </Card>
+                    ))}
+                </div>
+            )}
 
-                                            <div className="space-y-6 py-4">
-                                                <div className="bg-primary/5 p-4 rounded-xl border border-primary/10">
-                                                    <h4 className="font-bold text-primary flex items-center gap-2 mb-2">
-                                                        <CheckCircle className="h-4 w-4" />
-                                                        Executive Summary
-                                                    </h4>
-                                                    <p className="text-sm leading-relaxed text-slate-700">
-                                                        {selectedReport.ai_report.summary}
-                                                    </p>
-                                                </div>
-
-                                                <div className="grid grid-cols-2 gap-4">
-                                                    <div className="space-y-2">
-                                                        <h4 className="text-sm font-bold flex items-center gap-1 text-emerald-600">
-                                                            <Target className="h-4 w-4" />
-                                                            Strengths
-                                                        </h4>
-                                                        <ul className="text-xs space-y-1 text-slate-600">
-                                                            {selectedReport.ai_report.strengths.map((s: string, i: number) => (
-                                                                <li key={i} className="flex gap-2">
-                                                                    <span className="text-emerald-500 font-bold">•</span>
-                                                                    {s}
-                                                                </li>
-                                                            ))}
-                                                        </ul>
-                                                    </div>
-                                                    <div className="space-y-2">
-                                                        <h4 className="text-sm font-bold flex items-center gap-1 text-orange-600">
-                                                            <HelpCircle className="h-4 w-4" />
-                                                            Areas for Growth
-                                                        </h4>
-                                                        <ul className="text-xs space-y-1 text-slate-600">
-                                                            {selectedReport.ai_report.weaknesses.map((w: string, i: number) => (
-                                                                <li key={i} className="flex gap-2">
-                                                                    <span className="text-orange-500 font-bold">•</span>
-                                                                    {w}
-                                                                </li>
-                                                            ))}
-                                                        </ul>
-                                                    </div>
-                                                </div>
-
-                                                <div className="border-t pt-4">
-                                                    <h4 className="font-bold text-slate-900 mb-3">Recommendations for Success</h4>
-                                                    <div className="space-y-2">
-                                                        {selectedReport.ai_report.recommendations.map((r: string, i: number) => (
-                                                            <div key={i} className="p-3 bg-slate-50 rounded-lg text-xs border border-slate-100 italic text-slate-600">
-                                                                &quot;{r}&quot;
-                                                            </div>
-                                                        ))}
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    ) : (
-                                        <div className="py-20 flex flex-col items-center justify-center space-y-4">
-                                            <Loader2 className="h-10 w-10 animate-spin text-primary" />
-                                            <p className="text-slate-500 font-medium">Analyzing student performance data...</p>
-                                        </div>
-                                    )}
-                                </DialogContent>
-                            </Dialog>
-                        </CardContent>
-                    </Card>
-                ))}
-
-                {parentData.students.length === 0 && (
-                    <Card className="col-span-full">
-                        <CardContent className="p-12 text-center">
-                            <User className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-                            <h3 className="font-semibold text-lg">No students linked</h3>
-                            <p className="text-muted-foreground">There are no students associated with your parent account yet.</p>
-                        </CardContent>
-                    </Card>
-                )}
-            </div>
-
-            <Dialog
-                open={timetableOpen}
-                onOpenChange={(open) => {
-                    setTimetableOpen(open);
-                    if (!open) {
-                        setSelectedChild(null);
-                        setChildTimetable([]);
-                    }
-                }}
-            >
-                <DialogContent className="sm:max-w-[700px] max-h-[80vh] overflow-y-auto">
-                    <DialogHeader>
-                        <DialogTitle className="flex items-center gap-2">
-                            <Calendar className="h-5 w-5 text-primary" />
-                            {selectedChild ? `${selectedChild.first_name} ${selectedChild.last_name} - Class Timetable` : 'Class Timetable'}
-                        </DialogTitle>
-                        <DialogDescription>
-                            Weekly subject periods including approved extra classes.
-                        </DialogDescription>
-                    </DialogHeader>
-
-                    {timetableLoading ? (
-                        <div className="py-16 flex items-center justify-center">
-                            <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                        </div>
-                    ) : childTimetable.length === 0 ? (
-                        <div className="py-10 text-center text-sm text-muted-foreground">
-                            No timetable entries found for this class.
+            {/* AI Report Dialog */}
+            <Dialog open={reportOpen} onOpenChange={setReportOpen}>
+                <DialogContent className="sm:max-w-[620px] max-h-[85vh] overflow-y-auto">
+                    {!selectedReport ? (
+                        <div className="py-20 flex flex-col items-center gap-4">
+                            <Loader2 className="h-10 w-10 animate-spin text-violet-500" />
+                            <p className="text-slate-500 font-medium">Analysing student data...</p>
                         </div>
                     ) : (
-                        <div className="space-y-4">
-                            {weekDays.map((day) => {
-                                const daySlots = childTimetable
-                                    .filter((slot) => slot.day_of_week === day)
-                                    .sort((a, b) => a.start_time.localeCompare(b.start_time));
-                                if (daySlots.length === 0) return null;
+                        <div className="space-y-6">
+                            <DialogHeader>
+                                <DialogTitle className="flex items-center gap-2 text-xl font-black">
+                                    <Brain className="h-5 w-5 text-violet-600" /> AI Progress Report
+                                </DialogTitle>
+                                <DialogDescription>
+                                    AI-generated analysis for {selectedReport.student_name}
+                                </DialogDescription>
+                            </DialogHeader>
 
-                                return (
-                                    <div key={day} className="border rounded-lg p-3">
-                                        <h4 className="font-semibold text-sm text-primary mb-2">{day}</h4>
-                                        <div className="space-y-2">
-                                            {daySlots.map((slot) => (
-                                                <div key={slot.timetable_id} className="rounded-md border bg-slate-50 p-3 text-xs">
-                                                    <div className="font-semibold text-slate-800">{slot.subject_name}</div>
-                                                    <div className="mt-1 flex flex-wrap items-center gap-3 text-slate-600">
-                                                        <span className="flex items-center gap-1">
-                                                            <Clock className="h-3 w-3" />
-                                                            {slot.start_time.slice(0, 5)} - {slot.end_time.slice(0, 5)}
-                                                        </span>
-                                                        {slot.room_number && (
-                                                            <span className="flex items-center gap-1">
-                                                                <MapPin className="h-3 w-3" />
-                                                                Room {slot.room_number}
-                                                            </span>
-                                                        )}
-                                                        <Badge variant={slot.entry_type === 'extra' ? 'secondary' : 'outline'}>
-                                                            {slot.entry_type === 'extra' ? 'Extra' : 'Main'}
-                                                        </Badge>
-                                                    </div>
-                                                </div>
-                                            ))}
-                                        </div>
+                            <div className="bg-violet-50 p-4 rounded-xl border border-violet-100">
+                                <h4 className="font-bold text-violet-700 flex items-center gap-2 mb-2 text-sm">
+                                    <CheckCircle className="h-4 w-4" /> Executive Summary
+                                </h4>
+                                <p className="text-sm leading-relaxed text-slate-700">{selectedReport.ai_report.summary}</p>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                    <h4 className="text-xs font-bold text-emerald-600 uppercase tracking-wider flex items-center gap-1">
+                                        <Target className="h-3.5 w-3.5" /> Strengths
+                                    </h4>
+                                    <ul className="space-y-1">
+                                        {(selectedReport.ai_report.strengths || []).map((s: string, i: number) => (
+                                            <li key={i} className="text-xs text-slate-600 flex gap-2">
+                                                <span className="text-emerald-500 font-bold mt-0.5">•</span> {s}
+                                            </li>
+                                        ))}
+                                    </ul>
+                                </div>
+                                <div className="space-y-2">
+                                    <h4 className="text-xs font-bold text-orange-600 uppercase tracking-wider flex items-center gap-1">
+                                        <HelpCircle className="h-3.5 w-3.5" /> Areas for Growth
+                                    </h4>
+                                    <ul className="space-y-1">
+                                        {(selectedReport.ai_report.weaknesses || []).map((w: string, i: number) => (
+                                            <li key={i} className="text-xs text-slate-600 flex gap-2">
+                                                <span className="text-orange-500 font-bold mt-0.5">•</span> {w}
+                                            </li>
+                                        ))}
+                                    </ul>
+                                </div>
+                            </div>
+
+                            <div className="border-t pt-4 space-y-2">
+                                <h4 className="text-sm font-bold text-slate-700">Recommendations</h4>
+                                {(selectedReport.ai_report.recommendations || []).map((r: string, i: number) => (
+                                    <div key={i} className="p-3 bg-slate-50 rounded-xl text-xs text-slate-600 border border-slate-100 italic">
+                                        &ldquo;{r}&rdquo;
                                     </div>
-                                );
-                            })}
+                                ))}
+                            </div>
                         </div>
                     )}
                 </DialogContent>

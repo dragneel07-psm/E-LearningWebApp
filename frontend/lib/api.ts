@@ -2432,6 +2432,24 @@ export const academicAPI = {
 
     // Parent Profiles
     getMyParent: () => apiRequest<Parent>('/academic/parents/me/'),
+    getChildAttendance: (studentId: string, month?: number, year?: number) => {
+        const params = new URLSearchParams();
+        if (month) params.set('month', String(month));
+        if (year) params.set('year', String(year));
+        const q = params.toString() ? `?${params}` : '';
+        return apiRequest<{ records: any[]; summary: any }>(`/academic/parents/child/${studentId}/attendance/${q}`);
+    },
+    getChildResults: (studentId: string) =>
+        apiRequest<any[]>(`/academic/parents/child/${studentId}/results/`),
+    getChildFees: (studentId: string) =>
+        apiRequest<{ fees: any[]; payments: any[]; summary: any }>(`/academic/parents/child/${studentId}/fees/`),
+
+    // Parent-Teacher Meetings
+    getMeetings: () => apiRequest<any[]>('/academic/parent-meetings/'),
+    requestMeeting: (data: { student: string; teacher: string; requested_date: string; preferred_slot: string; purpose: string }) =>
+        apiRequest<any>('/academic/parent-meetings/', { method: 'POST', body: JSON.stringify(data) }),
+    cancelMeeting: (id: string, reason?: string) =>
+        apiRequest<any>(`/academic/parent-meetings/${id}/cancel/`, { method: 'POST', body: JSON.stringify({ reason: reason ?? '' }) }),
 
     // Notices
     getNotices: async () => {
@@ -3321,5 +3339,211 @@ export const api = {
 export const learningPathsAPI = api.learningPaths;
 export const gamificationAPI = api.gamification;
 export const reportsAPI = api.reports;
+
+// ─── HR & Payroll API ────────────────────────────────────────────────────────
+
+export interface HREmployee {
+    employee_id: string;
+    employee_code: string;
+    full_name: string;
+    email: string;
+    designation: string;
+    department_name: string | null;
+    contract_type: string;
+    join_date: string;
+    basic_salary: number;
+    is_active: boolean;
+    user?: string;
+    department?: string;
+    salary_grade?: string;
+    bank_account_number?: string;
+    bank_name?: string;
+    bank_ifsc?: string;
+    emergency_contact_name?: string;
+    emergency_contact_phone?: string;
+}
+
+export interface HRDepartment {
+    dept_id: string;
+    name: string;
+    code: string;
+    description: string;
+    head: string | null;
+    head_name: string | null;
+    employee_count: number;
+    tenant?: string;
+}
+
+export interface HRLeaveType {
+    leave_type_id: string;
+    name: string;
+    code: string;
+    max_days_per_year: number;
+    is_paid: boolean;
+    carry_forward: boolean;
+    carry_forward_max_days: number;
+}
+
+export interface HRLeaveApplication {
+    leave_id: string;
+    employee: string;
+    employee_name: string;
+    leave_type: string;
+    leave_type_name: string;
+    leave_type_code: string;
+    start_date: string;
+    end_date: string;
+    total_days: number;
+    reason: string;
+    status: 'pending' | 'approved' | 'rejected' | 'cancelled';
+    applied_at: string;
+    reviewed_by: string | null;
+    reviewed_by_name: string | null;
+    reviewed_at: string | null;
+    review_remarks: string;
+}
+
+export interface HRPayrollPeriod {
+    period_id: string;
+    name: string;
+    month: number;
+    year: number;
+    start_date: string;
+    end_date: string;
+    working_days: number;
+    status: 'draft' | 'processing' | 'finalized' | 'paid';
+    finalized_at: string | null;
+    finalized_by: string | null;
+    finalized_by_name: string | null;
+    slip_count: number;
+    notes: string;
+}
+
+export interface HRSalarySlip {
+    slip_id: string;
+    employee: string;
+    employee_name: string;
+    employee_code: string;
+    department_name: string | null;
+    payroll_period: string;
+    period_name: string;
+    working_days: number;
+    paid_days: number;
+    absent_days: number;
+    lop_days: number;
+    basic_salary: number;
+    hra: number;
+    da: number;
+    transport_allowance: number;
+    medical_allowance: number;
+    other_allowance: number;
+    gross_salary: number;
+    pf_employee: number;
+    pf_employer: number;
+    esi_employee: number;
+    tds: number;
+    professional_tax: number;
+    other_deduction: number;
+    total_deductions: number;
+    net_salary: number;
+    status: 'draft' | 'finalized' | 'paid';
+    payment_date: string | null;
+    payment_method: string;
+    transaction_reference: string;
+}
+
+export interface HRDashboardStats {
+    total_employees: number;
+    total_departments: number;
+    pending_leave_requests: number;
+    open_payroll_periods: number;
+    contract_breakdown: Array<{ contract_type: string; count: number }>;
+    department_headcount: Array<{ department__name: string; count: number }>;
+}
+
+export const hrAPI = {
+    // Dashboard
+    getDashboardStats: () => apiRequest<HRDashboardStats>('/hr/dashboard/stats/'),
+
+    // Departments
+    getDepartments: () => apiRequest<HRDepartment[]>('/hr/departments/'),
+    createDepartment: (data: Partial<HRDepartment>) =>
+        apiRequest<HRDepartment>('/hr/departments/', { method: 'POST', body: JSON.stringify(data) }),
+    updateDepartment: (id: string, data: Partial<HRDepartment>) =>
+        apiRequest<HRDepartment>(`/hr/departments/${id}/`, { method: 'PATCH', body: JSON.stringify(data) }),
+    deleteDepartment: (id: string) =>
+        apiRequest<void>(`/hr/departments/${id}/`, { method: 'DELETE' }),
+
+    // Employees
+    getEmployees: (params?: { department?: string; contract_type?: string; is_active?: boolean }) => {
+        const q = params ? '?' + new URLSearchParams(
+            Object.entries(params).filter(([, v]) => v !== undefined).map(([k, v]) => [k, String(v)])
+        ).toString() : '';
+        return apiRequest<HREmployee[]>(`/hr/employees/${q}`);
+    },
+    getEmployee: (id: string) => apiRequest<HREmployee>(`/hr/employees/${id}/`),
+    createEmployee: (data: Partial<HREmployee>) =>
+        apiRequest<HREmployee>('/hr/employees/', { method: 'POST', body: JSON.stringify(data) }),
+    updateEmployee: (id: string, data: Partial<HREmployee>) =>
+        apiRequest<HREmployee>(`/hr/employees/${id}/`, { method: 'PATCH', body: JSON.stringify(data) }),
+    deleteEmployee: (id: string) =>
+        apiRequest<void>(`/hr/employees/${id}/`, { method: 'DELETE' }),
+    deactivateEmployee: (id: string) =>
+        apiRequest<{ message: string }>(`/hr/employees/${id}/deactivate/`, { method: 'POST' }),
+    reactivateEmployee: (id: string) =>
+        apiRequest<{ message: string }>(`/hr/employees/${id}/reactivate/`, { method: 'POST' }),
+
+    // Leave Types
+    getLeaveTypes: () => apiRequest<HRLeaveType[]>('/hr/leave-types/'),
+    createLeaveType: (data: Partial<HRLeaveType>) =>
+        apiRequest<HRLeaveType>('/hr/leave-types/', { method: 'POST', body: JSON.stringify(data) }),
+
+    // Leave Applications
+    getLeaves: (params?: { status?: string; employee?: string }) => {
+        const q = params ? '?' + new URLSearchParams(
+            Object.entries(params).filter(([, v]) => v !== undefined) as [string, string][]
+        ).toString() : '';
+        return apiRequest<HRLeaveApplication[]>(`/hr/leaves/${q}`);
+    },
+    applyLeave: (data: { employee: string; leave_type: string; start_date: string; end_date: string; total_days: number; reason: string }) =>
+        apiRequest<HRLeaveApplication>('/hr/leaves/', { method: 'POST', body: JSON.stringify(data) }),
+    approveLeave: (id: string, remarks?: string) =>
+        apiRequest<HRLeaveApplication>(`/hr/leaves/${id}/approve/`, { method: 'POST', body: JSON.stringify({ remarks: remarks ?? '' }) }),
+    rejectLeave: (id: string, remarks: string) =>
+        apiRequest<HRLeaveApplication>(`/hr/leaves/${id}/reject/`, { method: 'POST', body: JSON.stringify({ remarks }) }),
+    cancelLeave: (id: string) =>
+        apiRequest<HRLeaveApplication>(`/hr/leaves/${id}/cancel/`, { method: 'POST' }),
+
+    // Staff Attendance
+    getAttendance: (params?: { date?: string; employee?: string; month?: number; year?: number }) => {
+        const q = params ? '?' + new URLSearchParams(
+            Object.entries(params).filter(([, v]) => v !== undefined).map(([k, v]) => [k, String(v)])
+        ).toString() : '';
+        return apiRequest<any[]>(`/hr/attendance/${q}`);
+    },
+    bulkMarkAttendance: (date: string, records: Array<{ employee_id: string; status: string; check_in_time?: string; check_out_time?: string; remarks?: string }>) =>
+        apiRequest<{ message: string; created: number; updated: number }>('/hr/attendance/bulk-mark/', { method: 'POST', body: JSON.stringify({ date, records }) }),
+
+    // Payroll Periods
+    getPayrollPeriods: () => apiRequest<HRPayrollPeriod[]>('/hr/payroll-periods/'),
+    createPayrollPeriod: (data: Partial<HRPayrollPeriod>) =>
+        apiRequest<HRPayrollPeriod>('/hr/payroll-periods/', { method: 'POST', body: JSON.stringify(data) }),
+    finalizePayrollPeriod: (id: string) =>
+        apiRequest<HRPayrollPeriod>(`/hr/payroll-periods/${id}/finalize/`, { method: 'POST' }),
+    generateSlips: (id: string) =>
+        apiRequest<{ message: string; created: number; skipped: number }>(`/hr/payroll-periods/${id}/generate-slips/`, { method: 'POST' }),
+
+    // Salary Slips
+    getSalarySlips: (params?: { payroll_period?: string; employee?: string; status?: string }) => {
+        const q = params ? '?' + new URLSearchParams(
+            Object.entries(params).filter(([, v]) => v !== undefined) as [string, string][]
+        ).toString() : '';
+        return apiRequest<HRSalarySlip[]>(`/hr/salary-slips/${q}`);
+    },
+    updateSalarySlip: (id: string, data: Partial<HRSalarySlip>) =>
+        apiRequest<HRSalarySlip>(`/hr/salary-slips/${id}/`, { method: 'PATCH', body: JSON.stringify(data) }),
+    markSlipPaid: (id: string, data: { payment_date: string; payment_method?: string; transaction_reference?: string }) =>
+        apiRequest<HRSalarySlip>(`/hr/salary-slips/${id}/mark-paid/`, { method: 'POST', body: JSON.stringify(data) }),
+};
 
 export default api;

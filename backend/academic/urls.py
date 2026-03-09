@@ -6,7 +6,7 @@ from .views import (
     ChapterViewSet, LessonViewSet, LessonMaterialViewSet,
     AssessmentViewSet, QuestionViewSet, SubmissionViewSet, ResultViewSet, ParentViewSet,
     AttendanceViewSet, TimetableViewSet, ExamViewSet, ExamSeatingViewSet, NoticeViewSet, ReportViewSet,
-    AdmissionEnquiryViewSet, SchoolERPOverviewView,
+    AdmissionEnquiryViewSet, SchoolERPOverviewView, ParentTeacherMeetingViewSet,
 )
 from .views.stats import AcademicStatsView
 
@@ -32,6 +32,7 @@ router.register(r'exam-seating', ExamSeatingViewSet)
 router.register(r'notices', NoticeViewSet)
 router.register(r'reports', ReportViewSet, basename='reports')
 router.register(r'admissions', AdmissionEnquiryViewSet, basename='admissions')
+router.register(r'parent-meetings', ParentTeacherMeetingViewSet, basename='parent-meetings')
 
 urlpatterns = [
     path('stats/', AcademicStatsView.as_view(), name='academic-stats'),
