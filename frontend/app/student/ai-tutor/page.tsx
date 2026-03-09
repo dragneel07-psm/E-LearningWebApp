@@ -5,59 +5,60 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Send, Sparkles, Trash2, Loader2 } from 'lucide-react';
-import { aiAPI, ChatMessage, TutorChatSource, TutorChatUsage, usersAPI } from '@/lib/api';
+import { Badge } from '@/components/ui/badge';
+import { Send, Sparkles, Trash2, Loader2, Wifi, WifiOff, AlertTriangle } from 'lucide-react';
+import { TutorChatSource, TutorChatUsage } from '@/lib/api';
 import { toast } from 'sonner';
 import ReactMarkdown from 'react-markdown';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
+import { useTutorWebSocket, TutorDonePayload } from '@/hooks/useTutorWebSocket';
 
 interface Message {
     role: 'user' | 'assistant';
     content: string;
-    sources?: TutorChatSource[];
+    sources?: TutorDonePayload['sources'];
     usage?: TutorChatUsage;
+    confidence?: number;
+    confidence_label?: string;
+    is_demo?: boolean;
 }
 
 export default function AITutorPage() {
     const [messages, setMessages] = useState<Message[]>([]);
     const [input, setInput] = useState('');
-    const [loading, setLoading] = useState(false);
-    const [studentId, setStudentId] = useState<string>('');
+    const [conversationId, setConversationId] = useState<string | null>(null);
     const scrollRef = useRef<HTMLDivElement>(null);
 
+    const { sendMessage, status, streamingContent, budgetError } = useTutorWebSocket();
+    const isStreaming = streamingContent.length > 0;
+    const isLoading = status === 'connecting' || isStreaming;
+
     useEffect(() => {
-        loadUser();
         loadConversation();
     }, []);
 
     useEffect(() => {
         scrollToBottom();
-    }, [messages]);
-
-    const loadUser = async () => {
-        try {
-            const user = await usersAPI.getMe();
-            setStudentId(user.user_id);
-        } catch (error) {
-            console.error('Failed to load user:', error);
-        }
-    };
+    }, [messages, streamingContent]);
 
     const loadConversation = () => {
         const saved = localStorage.getItem('ai-tutor-conversation');
         if (saved) {
             try {
                 const parsed = JSON.parse(saved);
-                setMessages(Array.isArray(parsed) ? parsed : []);
+                if (parsed?.messages) {
+                    setMessages(Array.isArray(parsed.messages) ? parsed.messages : []);
+                    setConversationId(parsed.conversationId ?? null);
+                }
             } catch {
                 setMessages([]);
             }
         }
     };
 
-    const saveConversation = (msgs: Message[]) => {
-        localStorage.setItem('ai-tutor-conversation', JSON.stringify(msgs));
+    const saveConversation = (msgs: Message[], convId: string | null) => {
+        localStorage.setItem('ai-tutor-conversation', JSON.stringify({ messages: msgs, conversationId: convId }));
     };
 
     const scrollToBottom = () => {
@@ -66,53 +67,71 @@ export default function AITutorPage() {
         }
     };
 
-    const handleSend = async () => {
-        if (!input.trim() || !studentId) return;
+    const handleSend = () => {
+        if (!input.trim() || isLoading) return;
 
         const userMessage: Message = { role: 'user', content: input };
         const newMessages = [...messages, userMessage];
         setMessages(newMessages);
         setInput('');
-        setLoading(true);
 
-        try {
-            const response = await aiAPI.chat(input, studentId, newMessages as ChatMessage[]);
+        sendMessage(
+            { message: input, conversationId },
+            {
+                onDone: (payload: TutorDonePayload) => {
+                    const assistantMessage: Message = {
+                        role: 'assistant',
+                        content: payload.answer,
+                        sources: payload.sources,
+                        usage: {
+                            model: 'gpt-4o-mini',
+                            prompt_tokens: payload.usage.prompt_tokens,
+                            completion_tokens: payload.usage.completion_tokens,
+                        },
+                        confidence: payload.confidence,
+                        confidence_label: payload.confidence_label,
+                        is_demo: payload.is_demo,
+                    };
+                    const updated = [...newMessages, assistantMessage];
+                    setMessages(updated);
+                    setConversationId(payload.conversation_id);
+                    saveConversation(updated, payload.conversation_id);
 
-            const assistantMessage: Message = {
-                role: 'assistant',
-                content: response.answer,
-                sources: response.sources,
-                usage: response.usage,
-            };
-
-            const updatedMessages = [...newMessages, assistantMessage];
-            setMessages(updatedMessages);
-            saveConversation(updatedMessages);
-
-            if (response.is_demo) {
-                toast.info('Fallback AI response mode is active. Configure provider key/model for full quality.');
+                    if (payload.is_demo) {
+                        toast.info('Fallback AI mode active. Configure provider key for full quality.');
+                    }
+                    if (payload.budget && payload.budget.daily_limit > 0) {
+                        const pct = Math.round((payload.budget.used_today / payload.budget.daily_limit) * 100);
+                        if (pct >= 90) toast.warning(`AI budget at ${pct}% — resets at midnight UTC.`);
+                    }
+                },
+                onError: (detail: string) => {
+                    toast.error(detail || 'Failed to get AI response');
+                    const failureReply: Message = {
+                        role: 'assistant',
+                        content: 'I could not process that right now. Please try again in a moment.',
+                    };
+                    const updated = [...newMessages, failureReply];
+                    setMessages(updated);
+                    saveConversation(updated, conversationId);
+                },
             }
-        } catch (error) {
-            console.error('AI chat error:', error);
-            toast.error('Failed to get AI response');
-            const failureReply: Message = {
-                role: 'assistant',
-                content: 'I could not process that right now. Please try again in a moment.',
-            };
-            const updatedMessages = [...newMessages, failureReply];
-            setMessages(updatedMessages);
-            saveConversation(updatedMessages);
-        } finally {
-            setLoading(false);
-        }
+        );
     };
 
     const handleClearConversation = () => {
         if (confirm('Are you sure you want to clear the conversation?')) {
             setMessages([]);
+            setConversationId(null);
             localStorage.removeItem('ai-tutor-conversation');
             toast.success('Conversation cleared');
         }
+    };
+
+    const confidenceBadgeVariant = (label?: string) => {
+        if (label === 'high') return 'default';
+        if (label === 'moderate') return 'secondary';
+        return 'outline';
     };
 
     const exampleQuestions = [
@@ -134,24 +153,47 @@ export default function AITutorPage() {
                         </h1>
                         <p className="text-muted-foreground">Your personal learning assistant</p>
                     </div>
-                    {messages.length > 0 && (
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={handleClearConversation}
-                            className="gap-2"
-                        >
-                            <Trash2 className="h-4 w-4" />
-                            Clear Chat
-                        </Button>
-                    )}
+                    <div className="flex items-center gap-2">
+                        {/* WebSocket status indicator */}
+                        <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                            {status === 'open' ? (
+                                <><Wifi className="h-3 w-3 text-green-500" /><span className="hidden sm:inline">Live</span></>
+                            ) : status === 'connecting' ? (
+                                <><Loader2 className="h-3 w-3 animate-spin text-yellow-500" /><span className="hidden sm:inline">Connecting</span></>
+                            ) : (
+                                <><WifiOff className="h-3 w-3 text-slate-400" /><span className="hidden sm:inline">Offline</span></>
+                            )}
+                        </div>
+                        {messages.length > 0 && (
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={handleClearConversation}
+                                className="gap-2"
+                            >
+                                <Trash2 className="h-4 w-4" />
+                                Clear Chat
+                            </Button>
+                        )}
+                    </div>
                 </div>
             </div>
+
+            {/* Budget exceeded banner */}
+            {budgetError && (
+                <div className="mb-3 flex items-start gap-2 rounded-lg border border-orange-200 bg-orange-50 px-4 py-3 text-sm text-orange-800">
+                    <AlertTriangle className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                    <div>
+                        <span className="font-medium">Daily AI limit reached.</span>{' '}
+                        {budgetError.detail} Resets at {new Date(budgetError.resets_at).toLocaleTimeString()}.
+                    </div>
+                </div>
+            )}
 
             {/* Chat Area */}
             <Card className="flex-1 flex flex-col overflow-hidden">
                 <ScrollArea className="flex-1 p-6" ref={scrollRef}>
-                    {messages.length === 0 ? (
+                    {messages.length === 0 && !isStreaming ? (
                         <div className="flex flex-col items-center justify-center h-full text-center">
                             <Sparkles className="h-16 w-16 text-indigo-600 mb-4 opacity-20" />
                             <h3 className="text-lg font-semibold mb-2">Start a conversation</h3>
@@ -209,6 +251,18 @@ export default function AITutorPage() {
                                                 >
                                                     {message.content}
                                                 </ReactMarkdown>
+
+                                                {/* Confidence badge */}
+                                                {message.confidence_label && (
+                                                    <div className="mt-2 flex items-center gap-2">
+                                                        <Badge variant={confidenceBadgeVariant(message.confidence_label)} className="text-[10px]">
+                                                            {message.confidence_label} confidence
+                                                            {message.confidence !== undefined && ` (${Math.round(message.confidence * 100)}%)`}
+                                                        </Badge>
+                                                    </div>
+                                                )}
+
+                                                {/* Sources */}
                                                 {Array.isArray(message.sources) && message.sources.length > 0 && (
                                                     <div className="mt-3 border-t border-slate-200 pt-2">
                                                         <p className="text-[11px] font-semibold text-slate-600 mb-2">Sources</p>
@@ -217,14 +271,17 @@ export default function AITutorPage() {
                                                                 <div key={`${source.source_type}-${source.source_id}-${sourceIndex}`} className="rounded border border-slate-200 bg-white px-2 py-1">
                                                                     <p className="text-[11px] font-medium text-slate-700">
                                                                         {source.source_type} • {source.source_id}
+                                                                        {source.similarity !== undefined && (
+                                                                            <span className="ml-1 text-slate-400">({Math.round(source.similarity * 100)}%)</span>
+                                                                        )}
                                                                     </p>
-                                                                    <p className="text-[11px] text-slate-600">{source.snippet}</p>
+                                                                    <p className="text-[11px] text-slate-600">{source.text_span || source.snippet}</p>
                                                                 </div>
                                                             ))}
                                                         </div>
                                                         {message.usage && (
                                                             <p className="mt-2 text-[10px] text-slate-500">
-                                                                Model: {message.usage.model} • Prompt: {message.usage.prompt_tokens} • Completion: {message.usage.completion_tokens}
+                                                                Prompt: {message.usage.prompt_tokens} • Completion: {message.usage.completion_tokens} tokens
                                                             </p>
                                                         )}
                                                     </div>
@@ -236,7 +293,21 @@ export default function AITutorPage() {
                                     </div>
                                 </div>
                             ))}
-                            {loading && (
+
+                            {/* Streaming in-flight response */}
+                            {isStreaming && (
+                                <div className="flex justify-start">
+                                    <div className="max-w-[80%] rounded-lg p-4 bg-slate-100 text-slate-900">
+                                        <div className="prose prose-sm max-w-none">
+                                            <ReactMarkdown>{streamingContent}</ReactMarkdown>
+                                        </div>
+                                        <span className="inline-block w-1.5 h-4 bg-indigo-500 animate-pulse ml-0.5 align-middle" />
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Waiting for first token */}
+                            {isLoading && !isStreaming && (
                                 <div className="flex justify-start">
                                     <div className="bg-slate-100 rounded-lg p-4 flex items-center gap-2">
                                         <Loader2 className="h-4 w-4 animate-spin" />
@@ -255,12 +326,12 @@ export default function AITutorPage() {
                             placeholder="Ask me anything..."
                             value={input}
                             onChange={(e) => setInput(e.target.value)}
-                            onKeyPress={(e) => e.key === 'Enter' && !e.shiftKey && handleSend()}
-                            disabled={loading}
+                            onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && handleSend()}
+                            disabled={isLoading || !!budgetError}
                             className="flex-1"
                         />
-                        <Button onClick={handleSend} disabled={loading || !input.trim()}>
-                            {loading ? (
+                        <Button onClick={handleSend} disabled={isLoading || !input.trim() || !!budgetError}>
+                            {isLoading ? (
                                 <Loader2 className="h-4 w-4 animate-spin" />
                             ) : (
                                 <Send className="h-4 w-4" />

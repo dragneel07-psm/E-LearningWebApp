@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { Bell } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -15,6 +15,7 @@ import { Badge } from '@/components/ui/badge';
 import { notificationsAPI, Notification } from '@/lib/api';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useNotificationWebSocket } from '@/hooks/useNotificationWebSocket';
 
 export function NotificationBell() {
     const [notifications, setNotifications] = useState<Notification[]>([]);
@@ -23,38 +24,51 @@ export function NotificationBell() {
     const [mounted, setMounted] = useState(false);
     const pathname = usePathname();
 
-    // Determine the role from the current path
     const role = pathname.split('/')[1] || 'admin';
 
-    useEffect(() => {
-        setMounted(true);
-        loadNotifications();
-
-        // Auto-refresh every 30 seconds
-        const interval = setInterval(loadNotifications, 30000);
-        return () => clearInterval(interval);
-    }, []);
-
-    if (!mounted) {
-        return <Button variant="ghost" size="icon" className="relative"><Bell className="h-5 w-5 text-slate-600" /></Button>;
-    }
-
-    async function loadNotifications() {
+    const loadNotifications = useCallback(async () => {
         try {
             const [notifs, countData] = await Promise.all([
                 notificationsAPI.getNotifications(),
                 notificationsAPI.getUnreadCount()
             ]);
-
-            // Get recent 5 notifications
             setNotifications(notifs.slice(0, 5));
             setUnreadCount(countData.count);
-        } catch (error) {
-            // Silently fail - notifications are not critical
-            // Set empty state to prevent UI errors
+        } catch {
             setNotifications([]);
             setUnreadCount(0);
         }
+    }, []);
+
+    // Live WebSocket push — prepend new notification and bump count
+    useNotificationWebSocket({
+        onNotification: (live) => {
+            setUnreadCount((c) => c + 1);
+            setNotifications((prev) => {
+                const newNotif: Notification = {
+                    id: live.id as unknown as number,
+                    recipient: '',
+                    title: live.title,
+                    message: live.message,
+                    link: live.link,
+                    is_read: false,
+                    created_at: live.created_at,
+                };
+                return [newNotif, ...prev].slice(0, 5);
+            });
+        },
+    });
+
+    useEffect(() => {
+        setMounted(true);
+        loadNotifications();
+        // Fallback polling every 5 minutes (WebSocket handles the real-time updates)
+        const interval = setInterval(loadNotifications, 5 * 60 * 1000);
+        return () => clearInterval(interval);
+    }, [loadNotifications]);
+
+    if (!mounted) {
+        return <Button variant="ghost" size="icon" className="relative"><Bell className="h-5 w-5 text-slate-600" /></Button>;
     }
 
     async function handleMarkAsRead(id: number) {
@@ -130,8 +144,7 @@ export function NotificationBell() {
                         {notifications.map((notif) => (
                             <DropdownMenuItem
                                 key={notif.id}
-                                className={`flex flex-col items-start p-3 cursor-pointer ${!notif.is_read ? 'bg-indigo-50/50' : ''
-                                    }`}
+                                className={`flex flex-col items-start p-3 cursor-pointer ${!notif.is_read ? 'bg-indigo-50/50' : ''}`}
                                 onClick={() => !notif.is_read && handleMarkAsRead(notif.id)}
                             >
                                 <div className="flex justify-between items-start w-full mb-1">
