@@ -59,6 +59,11 @@ from .services.token_budget_service import TokenBudgetService, TokenBudgetExceed
 class StudyEventViewSet(TenantScopedQuerysetMixin, viewsets.ModelViewSet):
     """
     Manage student study schedule.
+
+    Extra actions:
+      POST  study-schedule/generate/      — AI-powered plan (creates DB events)
+      GET   study-schedule/summary/       — Plan preview without creating events
+      PATCH study-schedule/<id>/complete/ — Mark event completed
     """
     queryset = StudyEvent.objects.all()
     serializer_class = StudyEventSerializer
@@ -67,24 +72,61 @@ class StudyEventViewSet(TenantScopedQuerysetMixin, viewsets.ModelViewSet):
 
     def get_queryset(self):
         qs = super().get_queryset()
-        # If student, only see own
         if hasattr(self.request.user, 'student_profile'):
-             qs = qs.filter(student=self.request.user.student_profile)
+            qs = qs.filter(student=self.request.user.student_profile)
+        # Optional date-range filters
+        date_from = self.request.query_params.get('from')
+        date_to = self.request.query_params.get('to')
+        if date_from:
+            qs = qs.filter(start_time__date__gte=date_from)
+        if date_to:
+            qs = qs.filter(start_time__date__lte=date_to)
         return qs.order_by('start_time')
 
     @action(detail=False, methods=['post'])
     def generate(self, request):
+        """Generate an AI-powered personalised study plan for the next N days."""
+        from ai_engine.services.study_planner_service import StudyPlannerService
         db_alias = getattr(request, 'db_alias', 'default')
+        days = int(request.data.get('days', 7))
+        days = max(1, min(days, 30))
+        replace = request.data.get('replace_existing', True)
         try:
             student = Student.objects.using(db_alias).get(user=request.user)
-            service = ScheduleService()
-            events = service.generate_study_schedule(student, using=db_alias)
+            service = StudyPlannerService(db_alias=db_alias)
+            events = service.generate_plan(student, days=days, replace_existing=replace)
             serializer = self.get_serializer(events, many=True)
-            return Response(serializer.data)
+            return Response({
+                'count': len(events),
+                'days': days,
+                'events': serializer.data,
+            })
         except Student.DoesNotExist:
-             return Response({'error': 'Student profile not found'}, status=404)
+            return Response({'error': 'Student profile not found'}, status=404)
         except Exception as e:
+            logger.exception('study planner generate error')
             return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    @action(detail=False, methods=['get'])
+    def summary(self, request):
+        """Return a preview of what the AI planner found — without creating events."""
+        from ai_engine.services.study_planner_service import StudyPlannerService
+        db_alias = getattr(request, 'db_alias', 'default')
+        days = int(request.query_params.get('days', 7))
+        try:
+            student = Student.objects.using(db_alias).get(user=request.user)
+            service = StudyPlannerService(db_alias=db_alias)
+            return Response(service.get_plan_summary(student, days=days))
+        except Student.DoesNotExist:
+            return Response({'error': 'Student profile not found'}, status=404)
+
+    @action(detail=True, methods=['patch'])
+    def complete(self, request, pk=None):
+        """Mark a study event as completed."""
+        event = self.get_object()
+        event.is_completed = True
+        event.save(update_fields=['is_completed'])
+        return Response(self.get_serializer(event).data)
 
 
 class AIInteractionLogViewSet(TenantScopedQuerysetMixin, viewsets.ReadOnlyModelViewSet):

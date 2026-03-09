@@ -94,8 +94,14 @@ class StudyEvent(models.Model):
         ('study', 'Self Study'),
         ('assignment', 'Assignment due'),
         ('exam', 'Exam Prep'),
-        ('break', 'Break')
+        ('break', 'Break'),
+        ('review', 'Spaced Review'),
+        ('skill_practice', 'Skill Practice'),
     ], default='study')
+    # Extra metadata set by the AI planner (not persisted to DB — used for response enrichment)
+    node_id = models.UUIDField(null=True, blank=True, help_text='Learning node linked to this session')
+    skill_tag_id = models.UUIDField(null=True, blank=True, help_text='Skill gap linked to this session')
+    estimated_minutes = models.PositiveIntegerField(default=60)
     subject = models.ForeignKey('academic.Subject', on_delete=models.SET_NULL, null=True, blank=True)
     is_completed = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)

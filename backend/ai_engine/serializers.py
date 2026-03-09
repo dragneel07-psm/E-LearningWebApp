@@ -93,10 +93,19 @@ class TutorConversationDetailSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
 class StudyEventSerializer(serializers.ModelSerializer):
+    subject_name = serializers.SerializerMethodField()
+
     class Meta:
         model = StudyEvent
-        fields = '__all__'
-        read_only_fields = ['id', 'created_at']
+        fields = [
+            'id', 'title', 'description', 'event_type', 'subject', 'subject_name',
+            'start_time', 'end_time', 'estimated_minutes', 'is_completed',
+            'node_id', 'skill_tag_id', 'tenant', 'student', 'created_at',
+        ]
+        read_only_fields = ['id', 'created_at', 'subject_name']
+
+    def get_subject_name(self, obj) -> str | None:
+        return obj.subject.name if obj.subject else None
 
 class AIInteractionLogSerializer(serializers.ModelSerializer):
     class Meta:

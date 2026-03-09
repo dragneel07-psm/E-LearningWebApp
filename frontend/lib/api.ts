@@ -3140,8 +3140,25 @@ export const api = {
         }) => aiAPI.gradeSubmissionWithRubric(data),
         listGradingDrafts: (submissionId?: string) => aiAPI.listGradingDrafts(submissionId),
         approveGradingDraft: (draftId: string) => aiAPI.approveGradingDraft(draftId),
-        getStudySchedule: () => apiRequest<any[]>('/ai/study-schedule/'),
-        generateStudySchedule: () => apiRequest<any[]>('/ai/study-schedule/generate/', { method: 'POST' }),
+        getStudySchedule: (params?: { from?: string; to?: string }) => {
+            const qs = params ? '?' + new URLSearchParams(params as Record<string, string>).toString() : '';
+            return apiRequest<any[]>(`/ai/study-schedule/${qs}`);
+        },
+        generateStudySchedule: (days = 7, replaceExisting = true) =>
+            apiRequest<{ count: number; days: number; events: any[] }>('/ai/study-schedule/generate/', {
+                method: 'POST',
+                body: JSON.stringify({ days, replace_existing: replaceExisting }),
+            }),
+        getStudyPlanSummary: (days = 7) =>
+            apiRequest<{
+                due_reviews: number;
+                skill_gaps: Array<{ skill: string; p_mastery: number; subject: string | null }>;
+                upcoming_exams: Array<{ title: string; scheduled_at: string; subject: string | null }>;
+                new_content_nodes: number;
+                daily_goal_minutes: number;
+            }>(`/ai/study-schedule/summary/?days=${days}`),
+        markStudyEventComplete: (id: string) =>
+            apiRequest<any>(`/ai/study-schedule/${id}/complete/`, { method: 'PATCH' }),
         updateStudyEvent: (id: string, updates: any) =>
             apiRequest<any>(`/ai/study-schedule/${id}/`, {
                 method: 'PATCH',
