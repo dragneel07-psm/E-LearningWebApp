@@ -19,9 +19,16 @@ class AIInteractionLog(models.Model):
         return f"{self.tenant.name} - {self.feature_used}"
 
 class StudentAIReport(models.Model):
+    REPORT_TYPE_CHOICES = [
+        ('student', 'Student Report'),
+        ('parent', 'Parent Report'),
+        ('teacher', 'Teacher Report'),
+        ('class', 'Class Summary'),
+    ]
     report_id = models.UUIDField(primary_key=True, default=uuid_lib.uuid4, editable=False)
     tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE, db_constraint=False)
     student = models.ForeignKey('academic.Student', on_delete=models.CASCADE, related_name='ai_reports')
+    report_type = models.CharField(max_length=20, choices=REPORT_TYPE_CHOICES, default='student')
     report_data = models.JSONField()
     generated_at = models.DateTimeField(auto_now_add=True)
     is_automated = models.BooleanField(default=False)

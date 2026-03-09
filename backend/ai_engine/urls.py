@@ -35,4 +35,9 @@ urlpatterns = [
     path('personalization/recommendations/', views.student_recommendations, name='student_recommendations'),
     path('reports/student/<uuid:student_id>/', views.student_report, name='student_report_generate'),
     path('reports/student/<uuid:student_id>/history/', views.student_past_reports, name='student_report_history'),
+    # Phase 9 – AI Progress Reports
+    path('reports/me/', views.my_progress_report, name='my_progress_report'),
+    path('reports/me/generate/', views.generate_my_progress_report, name='generate_my_progress_report'),
+    path('reports/me/history/', views.my_report_history, name='my_report_history'),
+    path('reports/class/<int:class_id>/', views.class_progress_report, name='class_progress_report'),
 ]

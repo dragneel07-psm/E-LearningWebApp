@@ -1387,6 +1387,45 @@ export interface SchoolERPOverview {
     };
 }
 
+// Phase 9 – Progress Report types
+export interface ProgressReportMetrics {
+    student_id: string;
+    student_name: string;
+    avg_score: number;
+    attendance_rate: number;
+    sm2_nodes: Array<{ title: string; ease_factor: number; interval_days: number; last_quality: number }>;
+    top_gaps: Array<{ skill: string; p_mastery: number }>;
+    top_strengths: Array<{ skill: string; p_mastery: number }>;
+    tutor_conversations: number;
+    tutor_messages: number;
+    token_budget_pct_used: number;
+    study_plan_completion_pct: number;
+    report_period_days: number;
+    generated_at: string;
+}
+
+export interface ProgressReport {
+    cached: boolean;
+    generated_at: string;
+    report: {
+        report_type: 'student' | 'parent' | 'teacher';
+        student_name: string;
+        class_name: string;
+        generated_at: string;
+        metrics: ProgressReportMetrics;
+        /** LLM-generated section — key varies by report_type */
+        ai: Record<string, any>;
+    };
+}
+
+export interface ProgressReportHistoryItem {
+    report_id: string;
+    report_type: 'student' | 'parent' | 'teacher';
+    generated_at: string;
+    is_automated: boolean;
+    report: ProgressReport['report'];
+}
+
 // Helper function to get auth token
 function getAuthToken(): string | null {
     if (typeof window !== 'undefined') {
@@ -3168,6 +3207,20 @@ export const api = {
             apiRequest<any>(`/ai/reports/student/${studentId}/`, {
                 method: 'POST'
             }),
+        // Phase 9 – Progress Reports
+        getMyProgressReport: (type: 'student' | 'parent' | 'teacher' = 'student') =>
+            apiRequest<ProgressReport>(`/ai/reports/me/?type=${type}`),
+        generateMyProgressReport: (type: 'student' | 'parent' | 'teacher' = 'student') =>
+            apiRequest<ProgressReport>(`/ai/reports/me/generate/`, {
+                method: 'POST',
+                body: JSON.stringify({ type }),
+            }),
+        getMyReportHistory: (type: 'student' | 'parent' | 'teacher' = 'student', limit = 10) =>
+            apiRequest<ProgressReportHistoryItem[]>(`/ai/reports/me/history/?type=${type}&limit=${limit}`),
+        getClassProgressReport: (classId: number, type: 'student' | 'parent' | 'teacher' = 'teacher') =>
+            apiRequest<{ class_id: number; report_type: string; reports: ProgressReport[] }>(
+                `/ai/reports/class/${classId}/?type=${type}`
+            ),
     },
     notifications: notificationsAPI,
     conversations: conversationsAPI,

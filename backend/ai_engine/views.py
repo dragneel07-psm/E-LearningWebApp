@@ -425,6 +425,158 @@ def student_past_reports(request, student_id):
     except Exception as e:
         return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+
+# ── Phase 9: AI Progress Reports ──────────────────────────────────────────────
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def my_progress_report(request):
+    """
+    GET /api/ai/reports/me/?type=student|parent|teacher
+    Returns cached report (≤7 days) or triggers fresh generation.
+    """
+    tenant = getattr(request, "tenant", None) or getattr(request.user, "tenant", None)
+    if tenant is None:
+        return Response({"error": "tenant context is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+    db = getattr(request, 'db_alias', 'default')
+    try:
+        student = Student.objects.using(db).get(user=request.user)
+    except Student.DoesNotExist:
+        return Response({"error": "Student profile not found"}, status=status.HTTP_404_NOT_FOUND)
+
+    report_type = str(request.query_params.get("type") or "student").strip().lower()
+    if report_type not in ("student", "parent", "teacher"):
+        return Response({"error": "type must be student, parent, or teacher"}, status=status.HTTP_400_BAD_REQUEST)
+
+    from .services.progress_report_service import ProgressReportService
+    service = ProgressReportService(tenant=tenant, db_alias=db)
+    try:
+        report = service.get_or_generate(student, report_type=report_type, force=False)
+        return Response(report, status=status.HTTP_200_OK)
+    except Exception as exc:
+        import traceback
+        traceback.print_exc()
+        return Response({"error": str(exc)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def generate_my_progress_report(request):
+    """
+    POST /api/ai/reports/me/generate/
+    Body (optional): {"type": "student"}
+    Force-generates a fresh AI progress report (ignores cache).
+    """
+    tenant = getattr(request, "tenant", None) or getattr(request.user, "tenant", None)
+    if tenant is None:
+        return Response({"error": "tenant context is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+    db = getattr(request, 'db_alias', 'default')
+    try:
+        student = Student.objects.using(db).get(user=request.user)
+    except Student.DoesNotExist:
+        return Response({"error": "Student profile not found"}, status=status.HTTP_404_NOT_FOUND)
+
+    report_type = str(request.data.get("type") or "student").strip().lower()
+    if report_type not in ("student", "parent", "teacher"):
+        return Response({"error": "type must be student, parent, or teacher"}, status=status.HTTP_400_BAD_REQUEST)
+
+    from .services.progress_report_service import ProgressReportService
+    service = ProgressReportService(tenant=tenant, db_alias=db)
+    try:
+        report = service.get_or_generate(student, report_type=report_type, force=True)
+        return Response(report, status=status.HTTP_200_OK)
+    except Exception as exc:
+        import traceback
+        traceback.print_exc()
+        return Response({"error": str(exc)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def my_report_history(request):
+    """
+    GET /api/ai/reports/me/history/?type=student&limit=10
+    List the student's past reports of the given type.
+    """
+    tenant = getattr(request, "tenant", None) or getattr(request.user, "tenant", None)
+    if tenant is None:
+        return Response({"error": "tenant context is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+    db = getattr(request, 'db_alias', 'default')
+    try:
+        student = Student.objects.using(db).get(user=request.user)
+    except Student.DoesNotExist:
+        return Response({"error": "Student profile not found"}, status=status.HTTP_404_NOT_FOUND)
+
+    report_type = str(request.query_params.get("type") or "student").strip().lower()
+    try:
+        limit = max(1, min(50, int(request.query_params.get("limit", 10))))
+    except (TypeError, ValueError):
+        return Response({"error": "limit must be an integer"}, status=status.HTTP_400_BAD_REQUEST)
+
+    from .services.progress_report_service import ProgressReportService
+    service = ProgressReportService(tenant=tenant, db_alias=db)
+    try:
+        history = service.list_history(student, report_type=report_type, limit=limit)
+        return Response(history, status=status.HTTP_200_OK)
+    except Exception as exc:
+        return Response({"error": str(exc)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def class_progress_report(request, class_id):
+    """
+    GET /api/ai/reports/class/<class_id>/
+    Teacher/admin view: list latest student reports for a class.
+    """
+    if not _is_teacher_or_admin(request.user):
+        return Response({"detail": "Only Teacher/Admin can view class reports."}, status=status.HTTP_403_FORBIDDEN)
+
+    tenant = getattr(request, "tenant", None) or getattr(request.user, "tenant", None)
+    if tenant is None:
+        return Response({"error": "tenant context is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+    db = getattr(request, 'db_alias', 'default')
+    from academic.models import ClassSection
+    try:
+        cls = ClassSection.objects.using(db).get(pk=class_id, tenant=tenant)
+    except ClassSection.DoesNotExist:
+        return Response({"error": "Class not found"}, status=status.HTTP_404_NOT_FOUND)
+
+    # Teachers may only view their own classes
+    role = str(getattr(request.user, "role", "") or "").strip().lower()
+    if role == "teacher":
+        try:
+            teacher = Teacher.objects.using(db).get(user=request.user)
+        except Teacher.DoesNotExist:
+            return Response({"detail": "Teacher profile not found"}, status=status.HTTP_403_FORBIDDEN)
+        if not cls.teachers.filter(pk=teacher.pk).exists():
+            return Response({"detail": "You are not assigned to this class."}, status=status.HTTP_403_FORBIDDEN)
+
+    from .services.progress_report_service import ProgressReportService
+    service = ProgressReportService(tenant=tenant, db_alias=db)
+
+    students = Student.objects.using(db).filter(academic_class=cls, tenant=tenant)
+    report_type = str(request.query_params.get("type") or "teacher").strip().lower()
+    if report_type not in ("student", "parent", "teacher"):
+        report_type = "teacher"
+
+    results = []
+    for student in students:
+        try:
+            report = service.get_or_generate(student, report_type=report_type, force=False)
+            results.append(report)
+        except Exception as exc:
+            results.append({
+                "student_id": str(getattr(student, 'student_id', student.pk)),
+                "error": str(exc),
+            })
+
+    return Response({"class_id": class_id, "report_type": report_type, "reports": results}, status=status.HTTP_200_OK)
+
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def student_recommendations(request):
