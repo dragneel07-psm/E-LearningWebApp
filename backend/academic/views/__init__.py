@@ -15,3 +15,4 @@ from .sis import (
     StudentDocumentViewSet,
     SISDashboardViewSet,
 )
+from .events import SchoolEventViewSet

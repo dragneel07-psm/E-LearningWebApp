@@ -22,3 +22,4 @@ from .meeting import ParentTeacherMeeting
 from .health import StudentHealthRecord, ImmunizationRecord
 from .discipline import DisciplinaryIncident
 from .documents import StudentDocument
+from .event import SchoolEvent

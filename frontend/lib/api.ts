@@ -3637,6 +3637,46 @@ export interface StudentDocument {
     created_at: string;
 }
 
+// ─── Events / Calendar API ────────────────────────────────────────────────────
+
+export interface SchoolEvent {
+    event_id: string;
+    title: string;
+    description: string;
+    event_type: 'holiday' | 'exam' | 'sports' | 'cultural' | 'ptm' | 'academic' | 'meeting' | 'other';
+    event_type_display: string;
+    audience: 'all' | 'students' | 'teachers' | 'parents' | 'staff';
+    audience_display: string;
+    start_date: string;
+    end_date: string;
+    start_time: string | null;
+    end_time: string | null;
+    is_all_day: boolean;
+    location: string;
+    is_holiday: boolean;
+    color: string;
+    created_by_name: string | null;
+    created_at: string;
+    updated_at: string;
+}
+
+export const eventsAPI = {
+    getEvents: (params?: { event_type?: string; month?: string; year?: string; audience?: string }) => {
+        const q = params ? '?' + new URLSearchParams(
+            Object.entries(params).filter(([, v]) => v !== undefined) as [string, string][]
+        ).toString() : '';
+        return apiRequest<SchoolEvent[]>(`/academic/events/${q}`);
+    },
+    getUpcoming: () => apiRequest<SchoolEvent[]>('/academic/events/upcoming/'),
+    getHolidays: () => apiRequest<SchoolEvent[]>('/academic/events/holidays/'),
+    createEvent: (data: Partial<SchoolEvent>) =>
+        apiRequest<SchoolEvent>('/academic/events/', { method: 'POST', body: JSON.stringify(data) }),
+    updateEvent: (id: string, data: Partial<SchoolEvent>) =>
+        apiRequest<SchoolEvent>(`/academic/events/${id}/`, { method: 'PATCH', body: JSON.stringify(data) }),
+    deleteEvent: (id: string) =>
+        apiRequest<void>(`/academic/events/${id}/`, { method: 'DELETE' }),
+};
+
 export const sisAPI = {
     // Dashboard
     getStats: () => apiRequest<SISDashboardStats>('/academic/sis/dashboard/stats/'),

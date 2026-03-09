@@ -1,14 +1,15 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from .views import (
-    AcademicYearViewSet, AcademicClassViewSet, SectionViewSet, 
-    SubjectViewSet, TeacherViewSet, StudentViewSet, 
+    AcademicYearViewSet, AcademicClassViewSet, SectionViewSet,
+    SubjectViewSet, TeacherViewSet, StudentViewSet,
     ChapterViewSet, LessonViewSet, LessonMaterialViewSet,
     AssessmentViewSet, QuestionViewSet, SubmissionViewSet, ResultViewSet, ParentViewSet,
     AttendanceViewSet, TimetableViewSet, ExamViewSet, ExamSeatingViewSet, NoticeViewSet, ReportViewSet,
     AdmissionEnquiryViewSet, SchoolERPOverviewView, ParentTeacherMeetingViewSet,
     StudentHealthRecordViewSet, DisciplinaryIncidentViewSet,
     StudentDocumentViewSet, SISDashboardViewSet,
+    SchoolEventViewSet,
 )
 from .views.stats import AcademicStatsView
 
@@ -39,6 +40,7 @@ router.register(r'sis/health', StudentHealthRecordViewSet, basename='sis-health'
 router.register(r'sis/incidents', DisciplinaryIncidentViewSet, basename='sis-incidents')
 router.register(r'sis/documents', StudentDocumentViewSet, basename='sis-documents')
 router.register(r'sis/dashboard', SISDashboardViewSet, basename='sis-dashboard')
+router.register(r'events', SchoolEventViewSet, basename='events')
 
 urlpatterns = [
     path('stats/', AcademicStatsView.as_view(), name='academic-stats'),
