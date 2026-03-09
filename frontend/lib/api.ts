@@ -3786,6 +3786,35 @@ export interface SchoolEvent {
     updated_at: string;
 }
 
+// ─── Analytics API ───────────────────────────────────────────────────────────
+
+export interface AnalyticsDashboard {
+    snapshot: {
+        students: number;
+        teachers: number;
+        classes: number;
+        subjects: number;
+        overall_attendance_rate: number;
+        pass_rate: number;
+        total_results: number;
+    };
+    attendance_trend: Array<{ date: string; present: number; absent: number; late: number; total: number; rate: number }>;
+    grade_distribution: Array<{ grade: string; count: number }>;
+    subject_performance: Array<{ subject: string; avg_pct: number; count: number }>;
+    class_performance: Array<{ class: string; avg_pct: number; students: number }>;
+    assessment_activity: Array<{ month: string; label: string; count: number }>;
+    top_students: Array<{ student_id: string; name: string; avg_pct: number; assessments: number }>;
+}
+
+export const analyticsAPI = {
+    getDashboard: (params?: { days?: number; class_id?: string }) => {
+        const q = params ? '?' + new URLSearchParams(
+            Object.entries(params).filter(([, v]) => v !== undefined).map(([k, v]) => [k, String(v)])
+        ).toString() : '';
+        return apiRequest<AnalyticsDashboard>(`/academic/analytics/dashboard/${q}`);
+    },
+};
+
 export const eventsAPI = {
     getEvents: (params?: { event_type?: string; month?: string; year?: string; audience?: string }) => {
         const q = params ? '?' + new URLSearchParams(

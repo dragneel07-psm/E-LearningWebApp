@@ -34,6 +34,7 @@ const navigation: NavigationItem[] = [
     { name: 'HR & Payroll', href: '/admin/hr', icon: Users },
     { name: 'Student Info (SIS)', href: '/admin/sis', icon: ShieldAlert },
     { name: 'Inventory', href: '/admin/inventory', icon: FileText },
+    { name: 'Analytics', href: '/admin/analytics', icon: BarChart3 },
     { name: 'Reports', href: '/admin/reports', icon: BarChart3 },
     { name: 'Communication', href: '/admin/communication', icon: Bell },
     { name: 'Messages', href: '/admin/messages', icon: MessageSquare, indent: true },

@@ -13,6 +13,7 @@ from .views import (
     AssetViewSet, MaintenanceRequestViewSet, ConsumableStockViewSet,
 )
 from .views.stats import AcademicStatsView
+from .views.analytics import SchoolAnalyticsDashboardView
 
 router = DefaultRouter()
 router.register(r'years', AcademicYearViewSet) # /api/academic/years/
@@ -49,5 +50,6 @@ router.register(r'inventory/stock', ConsumableStockViewSet, basename='inventory-
 urlpatterns = [
     path('stats/', AcademicStatsView.as_view(), name='academic-stats'),
     path('erp/overview/', SchoolERPOverviewView.as_view(), name='school-erp-overview'),
+    path('analytics/dashboard/', SchoolAnalyticsDashboardView.as_view(), name='analytics-dashboard'),
     path('', include(router.urls)),
 ]
