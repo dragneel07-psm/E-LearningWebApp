@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        @page { size: A5; margin: 1.5cm; }
+
+        body {
+            font-family: 'Helvetica', 'Arial', sans-serif;
+            color: #1a202c;
+            font-size: 11px;
+            line-height: 1.5;
+        }
+
+        .receipt-wrap {
+            border: 2px solid #2d3748;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        /* ── Header ────────────────────────────────────────────────── */
+        .header {
+            background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+            color: #ffffff;
+            padding: 18px 20px 14px;
+            text-align: center;
+        }
+        .header .school-name {
+            font-size: 18px;
+            font-weight: bold;
+            letter-spacing: 0.5px;
+            margin: 0 0 2px;
+            text-transform: uppercase;
+        }
+        .header .receipt-label {
+            font-size: 11px;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            opacity: 0.85;
+        }
+        .header .receipt-no {
+            display: inline-block;
+            margin-top: 8px;
+            background: rgba(255,255,255,0.2);
+            padding: 3px 12px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: bold;
+            letter-spacing: 1px;
+        }
+
+        /* ── Status banner ─────────────────────────────────────────── */
+        .status-banner {
+            background: #f0fdf4;
+            border-bottom: 1px solid #bbf7d0;
+            text-align: center;
+            padding: 8px;
+            font-size: 11px;
+            font-weight: bold;
+            color: #166534;
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
+        }
+
+        /* ── Body ──────────────────────────────────────────────────── */
+        .body { padding: 16px 20px; }
+
+        /* ── Two-column info blocks ────────────────────────────────── */
+        .info-grid {
+            display: table;
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 14px;
+        }
+        .info-col {
+            display: table-cell;
+            width: 50%;
+            vertical-align: top;
+            padding-right: 10px;
+        }
+        .info-col:last-child { padding-right: 0; padding-left: 10px; }
+
+        .info-block {
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 4px;
+            padding: 10px 12px;
+        }
+        .info-block h4 {
+            margin: 0 0 8px;
+            font-size: 9px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: #6b7280;
+            font-weight: bold;
+            border-bottom: 1px solid #e2e8f0;
+            padding-bottom: 4px;
+        }
+        .info-row { margin: 4px 0; }
+        .info-label { color: #6b7280; }
+        .info-value { font-weight: bold; color: #1a202c; }
+
+        /* ── Amount box ────────────────────────────────────────────── */
+        .amount-box {
+            background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+            border-radius: 4px;
+            padding: 14px;
+            text-align: center;
+            margin-bottom: 14px;
+            color: #ffffff;
+        }
+        .amount-box .label {
+            font-size: 9px;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            opacity: 0.8;
+            margin-bottom: 4px;
+        }
+        .amount-box .amount {
+            font-size: 28px;
+            font-weight: bold;
+            letter-spacing: -0.5px;
+        }
+        .amount-box .method {
+            font-size: 9px;
+            opacity: 0.75;
+            margin-top: 4px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        /* ── Fee detail table ──────────────────────────────────────── */
+        .fee-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 14px;
+            font-size: 10px;
+        }
+        .fee-table th {
+            background: #f1f5f9;
+            font-size: 8px;
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+            color: #64748b;
+            padding: 6px 8px;
+            text-align: left;
+            border-bottom: 1px solid #e2e8f0;
+        }
+        .fee-table td {
+            padding: 7px 8px;
+            border-bottom: 1px solid #f1f5f9;
+            color: #374151;
+        }
+        .fee-table td.amount-col {
+            text-align: right;
+            font-weight: bold;
+            color: #059669;
+        }
+
+        /* ── Balance row ───────────────────────────────────────────── */
+        .balance-row {
+            display: table;
+            width: 100%;
+            background: #fefce8;
+            border: 1px solid #fde68a;
+            border-radius: 4px;
+            padding: 8px 12px;
+            margin-bottom: 14px;
+        }
+        .balance-cell { display: table-cell; vertical-align: middle; }
+        .balance-cell.right { text-align: right; }
+        .balance-label { font-size: 10px; color: #78350f; font-weight: bold; }
+        .balance-amount { font-size: 14px; font-weight: bold; }
+        .balance-amount.zero { color: #059669; }
+        .balance-amount.due  { color: #dc2626; }
+
+        /* ── Footer ────────────────────────────────────────────────── */
+        .footer {
+            text-align: center;
+            color: #9ca3af;
+            font-size: 8.5px;
+            border-top: 1px solid #e2e8f0;
+            padding-top: 10px;
+            margin-top: 4px;
+        }
+
+        /* ── Signature ─────────────────────────────────────────────── */
+        .sig-row {
+            display: table;
+            width: 100%;
+            margin-bottom: 14px;
+        }
+        .sig-cell {
+            display: table-cell;
+            width: 50%;
+            text-align: center;
+            font-size: 9px;
+            color: #6b7280;
+        }
+        .sig-line {
+            border-top: 1px solid #cbd5e1;
+            width: 70%;
+            margin: 26px auto 4px;
+        }
+    </style>
+</head>
+<body>
+<div class="receipt-wrap">
+
+    <!-- Header -->
+    <div class="header">
+        <div class="school-name">{{ school_name }}</div>
+        <div class="receipt-label">Official Payment Receipt</div>
+        <div class="receipt-no">REC-{{ receipt_number }}</div>
+    </div>
+
+    <!-- Status -->
+    <div class="status-banner">&#10003; Payment Confirmed</div>
+
+    <div class="body">
+
+        <!-- Amount -->
+        <div class="amount-box">
+            <div class="label">Amount Paid</div>
+            <div class="amount">{{ currency }}{{ amount }}</div>
+            <div class="method">via {{ method }}</div>
+        </div>
+
+        <!-- Student + Payment info -->
+        <div class="info-grid">
+            <div class="info-col">
+                <div class="info-block">
+                    <h4>Student Details</h4>
+                    <div class="info-row">
+                        <span class="info-label">Name: </span>
+                        <span class="info-value">{{ student_name }}</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">ID: </span>
+                        <span class="info-value">{{ student_id }}</span>
+                    </div>
+                    {% if class_name %}
+                    <div class="info-row">
+                        <span class="info-label">Class: </span>
+                        <span class="info-value">{{ class_name }}</span>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="info-col">
+                <div class="info-block">
+                    <h4>Payment Details</h4>
+                    <div class="info-row">
+                        <span class="info-label">Date: </span>
+                        <span class="info-value">{{ payment_date }}</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Method: </span>
+                        <span class="info-value">{{ method }}</span>
+                    </div>
+                    {% if transaction_id %}
+                    <div class="info-row">
+                        <span class="info-label">Txn ID: </span>
+                        <span class="info-value" style="font-size:9px;">{{ transaction_id }}</span>
+                    </div>
+                    {% endif %}
+                    {% if recorded_by %}
+                    <div class="info-row">
+                        <span class="info-label">Recorded by: </span>
+                        <span class="info-value">{{ recorded_by }}</span>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Fee breakdown -->
+        <table class="fee-table">
+            <thead>
+                <tr>
+                    <th>Description</th>
+                    <th>Fee Period</th>
+                    <th style="text-align:right">Amount</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>{{ fee_title }}</td>
+                    <td>{{ fee_period }}</td>
+                    <td class="amount-col">{{ currency }}{{ amount }}</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <!-- Balance -->
+        <div class="balance-row">
+            <div class="balance-cell">
+                <span class="balance-label">Remaining Balance</span>
+            </div>
+            <div class="balance-cell right">
+                {% if balance_due == "0.00" or balance_due == "0" %}
+                    <span class="balance-amount zero">{{ currency }}0.00 — Cleared</span>
+                {% else %}
+                    <span class="balance-amount due">{{ currency }}{{ balance_due }} outstanding</span>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Signatures -->
+        <div class="sig-row">
+            <div class="sig-cell">
+                <div class="sig-line"></div>
+                Parent / Guardian Signature
+            </div>
+            <div class="sig-cell">
+                <div class="sig-line"></div>
+                Accounts Officer
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="footer">
+            Generated on {{ generated_on }} &nbsp;·&nbsp; {{ school_name }}<br>
+            This is a computer-generated receipt and does not require a physical signature.
+        </div>
+
+    </div><!-- /body -->
+</div><!-- /wrap -->
+</body>
+</html>

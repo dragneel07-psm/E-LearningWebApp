@@ -1,15 +1,11 @@
-import io
 from datetime import date, timedelta
 
 from django.db import transaction
 from django.db.models import Count, Q, Sum
 from django.db.models.functions import TruncMonth
-from django.http import HttpResponse
 from django.utils import timezone
 from django.utils.decorators import method_decorator
 from django.views.decorators.cache import cache_page
-from reportlab.lib.pagesizes import letter
-from reportlab.pdfgen import canvas
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied
@@ -20,6 +16,7 @@ from billing.permissions import IsSchoolFinanceManager
 from billing.serializers import ExpenseSerializer, FeeStructureSerializer, PaymentSerializer, StudentFeeSerializer
 from billing.shared_views import BillingIdempotencyMixin, BillingSchemaGuardMixin
 from core.mixins import TenantScopedQuerysetMixin
+from core.reports import generate_pdf_response
 from core.utils.audit import record_audit_event
 
 
@@ -362,51 +359,39 @@ class PaymentViewSet(BillingIdempotencyMixin, BillingSchemaGuardMixin, TenantSco
     def generate_receipt(self, request, pk=None):
         payment = self.get_object()
 
-        buffer = io.BytesIO()
-        pdf = canvas.Canvas(buffer, pagesize=letter)
-        width, height = letter
+        # Compute remaining balance for this student fee
+        balance_due = "0.00"
+        if payment.student_fee:
+            sf = payment.student_fee
+            total_paid = sf.payments.aggregate(t=Sum("amount"))["t"] or 0
+            remaining = max(0, (sf.fee_structure.amount if sf.fee_structure else 0) - total_paid)
+            balance_due = f"{remaining:.2f}"
 
-        pdf.setFont("Helvetica-Bold", 16)
-        pdf.drawString(100, height - 80, "PAYMENT RECEIPT")
-        pdf.setFont("Helvetica", 12)
-        pdf.drawString(100, height - 100, f"School: {payment.tenant.name}")
-        pdf.drawString(100, height - 120, f"Date: {payment.payment_date.strftime('%Y-%m-%d %H:%M')}")
-        pdf.drawString(100, height - 140, f"Receipt No: REC-{str(payment.payment_id)[:8]}")
+        context = {
+            "school_name": payment.tenant.name,
+            "receipt_number": str(payment.payment_id)[:8].upper(),
+            "student_name": payment.student.user.get_full_name(),
+            "student_id": payment.student.student_id,
+            "class_name": getattr(payment.student, "academic_class", None) and str(payment.student.academic_class) or "",
+            "payment_date": payment.payment_date.strftime("%d %b %Y, %H:%M"),
+            "method": payment.method.capitalize(),
+            "transaction_id": payment.transaction_id or "",
+            "recorded_by": payment.recorded_by.get_full_name() if payment.recorded_by else "Admin",
+            "fee_title": payment.student_fee.fee_structure.name if payment.student_fee else "General Fee",
+            "fee_period": (
+                payment.student_fee.fee_structure.academic_year
+                if payment.student_fee and payment.student_fee.fee_structure
+                else ""
+            ),
+            "amount": f"{payment.amount:.2f}",
+            "balance_due": balance_due,
+            "currency": "$",
+            "generated_on": timezone.now().strftime("%d %b %Y %H:%M"),
+        }
 
-        pdf.line(100, height - 150, width - 100, height - 150)
+        filename = f"receipt_{str(payment.payment_id)[:12]}.pdf"
+        response = generate_pdf_response("reports/payment_receipt.html", context, filename)
 
-        pdf.setFont("Helvetica-Bold", 14)
-        pdf.drawString(100, height - 180, "Student Details")
-        pdf.setFont("Helvetica", 12)
-        pdf.drawString(100, height - 200, f"Name: {payment.student.user.get_full_name()}")
-        pdf.drawString(100, height - 220, f"Student ID: {payment.student.student_id}")
-
-        pdf.setFont("Helvetica-Bold", 14)
-        pdf.drawString(100, height - 260, "Payment Details")
-        pdf.setFont("Helvetica", 12)
-        pdf.drawString(
-            100,
-            height - 280,
-            f"Fee Title: {payment.student_fee.fee_structure.name if payment.student_fee else 'General Fee'}",
-        )
-        pdf.setFont("Helvetica-Bold", 14)
-        pdf.drawString(100, height - 310, f"Amount Paid: ${payment.amount}")
-        pdf.setFont("Helvetica", 12)
-        pdf.drawString(100, height - 330, f"Method: {payment.method.capitalize()}")
-        pdf.drawString(100, height - 350, f"Transaction ID: {payment.transaction_id or 'N/A'}")
-
-        pdf.line(100, height - 380, width - 100, height - 380)
-
-        pdf.setFont("Helvetica-Oblique", 10)
-        pdf.drawString(100, height - 400, "This is a computer generated receipt.")
-        pdf.drawString(100, height - 415, f"Recorded by: {payment.recorded_by.get_full_name() if payment.recorded_by else 'Admin'}")
-
-        pdf.showPage()
-        pdf.save()
-
-        buffer.seek(0)
-        response = HttpResponse(buffer, content_type="application/pdf")
-        response["Content-Disposition"] = f'attachment; filename="receipt_{payment.payment_id}.pdf"'
         record_audit_event(
             action="billing.payment_receipt_downloaded",
             user=request.user,
@@ -418,7 +403,10 @@ class PaymentViewSet(BillingIdempotencyMixin, BillingSchemaGuardMixin, TenantSco
                 "method": payment.method,
             },
         )
-        return response
+
+        if response:
+            return response
+        return Response({"error": "Failed to generate receipt"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 class ExpenseViewSet(BillingIdempotencyMixin, BillingSchemaGuardMixin, TenantScopedQuerysetMixin, viewsets.ModelViewSet):
