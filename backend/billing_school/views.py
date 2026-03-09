@@ -1,8 +1,11 @@
 import io
+from datetime import date, timedelta
 
 from django.db import transaction
-from django.db.models import Sum
+from django.db.models import Count, Q, Sum
+from django.db.models.functions import TruncMonth
 from django.http import HttpResponse
+from django.utils import timezone
 from django.utils.decorators import method_decorator
 from django.views.decorators.cache import cache_page
 from reportlab.lib.pagesizes import letter
@@ -578,6 +581,126 @@ class FinanceDashboardViewSet(BillingSchemaGuardMixin, viewsets.ViewSet):
                 "recent_expenses": ExpenseSerializer(recent_expenses, many=True).data,
             }
         )
+
+
+    @action(detail=False, methods=["get"], url_path="analytics")
+    def analytics(self, request):
+        """
+        Richer analytics for the finance dashboard:
+        - monthly_collections: last 12 months of payment totals
+        - expense_by_category: expenses grouped by category
+        - fee_status_breakdown: count + amounts per status
+        - collection_rate: % of total fees collected
+        - top_defaulters: students with highest outstanding balances
+        """
+        user = request.user
+        tenant = getattr(user, "tenant", None) or getattr(request, "tenant", None)
+        if not tenant:
+            return Response({
+                "monthly_collections": [],
+                "expense_by_category": [],
+                "fee_status_breakdown": [],
+                "collection_rate": 0,
+                "top_defaulters": [],
+            })
+
+        # ── Monthly collections (last 12 months) ────────────────────────────
+        twelve_months_ago = date.today().replace(day=1) - timedelta(days=335)
+        monthly_qs = (
+            Payment.objects
+            .filter(tenant=tenant, payment_date__date__gte=twelve_months_ago)
+            .annotate(month=TruncMonth("payment_date"))
+            .values("month")
+            .annotate(total=Sum("amount"))
+            .order_by("month")
+        )
+        monthly_collections = [
+            {
+                "month": item["month"].strftime("%Y-%m"),
+                "label": item["month"].strftime("%b %Y"),
+                "total": float(item["total"] or 0),
+            }
+            for item in monthly_qs
+        ]
+
+        # ── Expense by category ──────────────────────────────────────────────
+        expense_cats = (
+            Expense.objects
+            .filter(tenant=tenant)
+            .values("category")
+            .annotate(total=Sum("amount"), count=Count("expense_id"))
+            .order_by("-total")
+        )
+        expense_by_category = [
+            {"category": item["category"], "total": float(item["total"] or 0), "count": item["count"]}
+            for item in expense_cats
+        ]
+
+        # ── Fee status breakdown ─────────────────────────────────────────────
+        status_qs = (
+            StudentFee.objects
+            .filter(tenant=tenant)
+            .values("status")
+            .annotate(
+                count=Count("student_fee_id"),
+                total_due=Sum("amount_due"),
+                total_paid=Sum("amount_paid"),
+            )
+        )
+        fee_status_breakdown = [
+            {
+                "status": item["status"],
+                "count": item["count"],
+                "total_due": float(item["total_due"] or 0),
+                "total_paid": float(item["total_paid"] or 0),
+            }
+            for item in status_qs
+        ]
+
+        # ── Collection rate ──────────────────────────────────────────────────
+        all_fees = StudentFee.objects.filter(tenant=tenant).aggregate(
+            total_due=Sum("amount_due"),
+            total_paid=Sum("amount_paid"),
+        )
+        total_due_all = float(all_fees["total_due"] or 0)
+        total_paid_all = float(all_fees["total_paid"] or 0)
+        collection_rate = round((total_paid_all / total_due_all * 100), 1) if total_due_all > 0 else 0.0
+
+        # ── Top defaulters ───────────────────────────────────────────────────
+        from academic.models import Student
+        defaulter_fees = (
+            StudentFee.objects
+            .filter(tenant=tenant, status__in=["pending", "partial", "overdue"])
+            .values("student_id")
+            .annotate(
+                outstanding=Sum("amount_due") - Sum("amount_paid"),
+                fee_count=Count("student_fee_id"),
+            )
+            .filter(outstanding__gt=0)
+            .order_by("-outstanding")[:10]
+        )
+        student_ids = [d["student_id"] for d in defaulter_fees]
+        students_map = {
+            str(s.student_id): s.user.get_full_name()
+            for s in Student.objects.filter(student_id__in=student_ids).select_related("user")
+        }
+        top_defaulters = [
+            {
+                "student_id": str(d["student_id"]),
+                "student_name": students_map.get(str(d["student_id"]), "Unknown"),
+                "outstanding": float(d["outstanding"] or 0),
+                "fee_count": d["fee_count"],
+            }
+            for d in defaulter_fees
+        ]
+
+        return Response({
+            "monthly_collections": monthly_collections,
+            "expense_by_category": expense_by_category,
+            "fee_status_breakdown": fee_status_breakdown,
+            "collection_rate": collection_rate,
+            "top_defaulters": top_defaulters,
+        })
 
 
 __all__ = [

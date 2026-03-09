@@ -1236,6 +1236,14 @@ export interface FinanceDashboard {
     recent_expenses: Expense[];
 }
 
+export interface FinancialAnalytics {
+    monthly_collections: Array<{ month: string; label: string; total: number }>;
+    expense_by_category: Array<{ category: string; total: number; count: number }>;
+    fee_status_breakdown: Array<{ status: string; count: number; total_due: number; total_paid: number }>;
+    collection_rate: number;
+    top_defaulters: Array<{ student_id: string; student_name: string; outstanding: number; fee_count: number }>;
+}
+
 export interface Book {
     book_id: string;
     title: string;
@@ -2542,7 +2550,15 @@ export const billingAPI = {
         method: 'DELETE'
     }),
 
-    getFinanceDashboard: () => apiRequest<FinanceDashboard>(`${BILLING_SCHOOL_BASE}/dashboard/`),
+    getFinanceDashboard: (startDate?: string, endDate?: string) => {
+        const q = new URLSearchParams();
+        if (startDate) q.append('start_date', startDate);
+        if (endDate) q.append('end_date', endDate);
+        const qs = q.toString() ? `?${q.toString()}` : '';
+        return apiRequest<FinanceDashboard>(`${BILLING_SCHOOL_BASE}/dashboard/${qs}`);
+    },
+
+    getFinancialAnalytics: () => apiRequest<FinancialAnalytics>(`${BILLING_SCHOOL_BASE}/dashboard/analytics/`),
 
     downloadReceipt: (paymentId: string) => apiRequestBlob(`${BILLING_SCHOOL_BASE}/payments/${paymentId}/generate_receipt/`),
 };
