@@ -66,7 +66,7 @@ const WINDOW_OPTIONS = [
 export default function AnalyticsPage() {
     const [data, setData] = useState<AnalyticsDashboard | null>(null);
     const [loading, setLoading] = useState(true);
-    const [window, setWindow] = useState(30);
+    const [days, setDays] = useState(30);
     const [refreshing, setRefreshing] = useState(false);
 
     const load = useCallback(async (days: number) => {
@@ -78,7 +78,7 @@ export default function AnalyticsPage() {
         finally { setLoading(false); setRefreshing(false); }
     }, []);
 
-    useEffect(() => { load(window); }, [window]);
+    useEffect(() => { load(days); }, [days]);
 
     const snap = data?.snapshot;
     const maxGrade = Math.max(1, ...(data?.grade_distribution ?? []).map(g => g.count));
@@ -109,13 +109,13 @@ export default function AnalyticsPage() {
                     {/* Window selector */}
                     <div className="flex bg-slate-100 rounded-xl p-1 gap-1">
                         {WINDOW_OPTIONS.map(o => (
-                            <button key={o.value} onClick={() => setWindow(o.value)}
-                                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${window === o.value ? 'bg-white shadow-sm text-indigo-700' : 'text-slate-500'}`}>
+                            <button key={o.value} onClick={() => setDays(o.value)}
+                                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${days === o.value ? 'bg-white shadow-sm text-indigo-700' : 'text-slate-500'}`}>
                                 {o.label}
                             </button>
                         ))}
                     </div>
-                    <Button variant="outline" size="sm" onClick={() => load(window)} disabled={refreshing}
+                    <Button variant="outline" size="sm" onClick={() => load(days)} disabled={refreshing}
                         className="rounded-xl text-xs font-bold gap-1.5 border-slate-200">
                         {refreshing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
                         Refresh
