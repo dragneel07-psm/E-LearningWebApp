@@ -16,6 +16,7 @@ const PUBLIC_PATHS = [
     '/public',
     '/forgot-password',
     '/debug-auth',
+    '/school',
     '/manifest.json',
     '/sw.js',
     '/icons/'
@@ -151,8 +152,10 @@ export async function proxy(request: NextRequest) {
     if (pathname === '/' || PUBLIC_PATHS.some(path => pathname.startsWith(path))) {
         // Tenant subdomains without a session should enter via login page.
         if (!token && pathname === '/' && tenantSubdomain && tenantSubdomain !== 'localhost') {
-            // Tenant subdomains should show school entry/login, not SaaS marketing root.
-            return NextResponse.redirect(new URL('/login', request.url));
+            // Tenant subdomains without a session → show the school landing page.
+            const url = request.nextUrl.clone();
+            url.pathname = '/school';
+            return NextResponse.rewrite(url);
         }
         // Always allow /login and /register to render; avoid server-side auth loops.
         if (isAuthPage) {
