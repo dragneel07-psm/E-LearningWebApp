@@ -16,3 +16,4 @@ from .sis import (
     SISDashboardViewSet,
 )
 from .events import SchoolEventViewSet
+from .inventory import AssetViewSet, MaintenanceRequestViewSet, ConsumableStockViewSet

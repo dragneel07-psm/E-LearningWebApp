@@ -3637,6 +3637,132 @@ export interface StudentDocument {
     created_at: string;
 }
 
+// ─── Inventory API ───────────────────────────────────────────────────────────
+
+export interface InventoryAsset {
+    asset_id: string;
+    name: string;
+    asset_tag: string;
+    category: string;
+    category_display: string;
+    description: string;
+    serial_number: string;
+    brand: string;
+    model_number: string;
+    purchase_date: string | null;
+    purchase_price: number | null;
+    warranty_expiry: string | null;
+    location: string;
+    status: 'available' | 'in_use' | 'maintenance' | 'retired' | 'lost';
+    status_display: string;
+    condition: 'new' | 'good' | 'fair' | 'poor';
+    condition_display: string;
+    notes: string;
+    active_assignment: {
+        assignment_id: string;
+        assigned_to_name: string | null;
+        assigned_to_location: string;
+        assigned_date: string;
+        expected_return_date: string | null;
+    } | null;
+    open_maintenance_count: number;
+    created_at: string;
+    updated_at: string;
+}
+
+export interface MaintenanceRequest {
+    request_id: string;
+    asset: string;
+    asset_name: string;
+    asset_tag: string;
+    reported_by_name: string | null;
+    title: string;
+    description: string;
+    status: 'open' | 'in_progress' | 'resolved' | 'cancelled';
+    status_display: string;
+    priority: 'low' | 'medium' | 'high' | 'critical';
+    priority_display: string;
+    estimated_cost: number | null;
+    actual_cost: number | null;
+    resolution_notes: string;
+    reported_date: string;
+    resolved_date: string | null;
+    created_at: string;
+}
+
+export interface ConsumableStock {
+    stock_id: string;
+    name: string;
+    category: string;
+    category_display: string;
+    unit: string;
+    unit_display: string;
+    current_quantity: number;
+    minimum_quantity: number;
+    location: string;
+    notes: string;
+    last_restocked: string | null;
+    is_low: boolean;
+    created_at: string;
+    updated_at: string;
+}
+
+export interface InventoryDashboard {
+    total_assets: number;
+    by_status: Array<{ status: string; count: number }>;
+    by_category: Array<{ category: string; count: number }>;
+    open_maintenance: number;
+    low_stock_count: number;
+    low_stock_items: ConsumableStock[];
+}
+
+export const inventoryAPI = {
+    // Assets
+    getAssets: (params?: { category?: string; status?: string; search?: string }) => {
+        const q = params ? '?' + new URLSearchParams(
+            Object.entries(params).filter(([, v]) => v !== undefined) as [string, string][]
+        ).toString() : '';
+        return apiRequest<InventoryAsset[]>(`/academic/inventory/assets/${q}`);
+    },
+    createAsset: (data: Partial<InventoryAsset>) =>
+        apiRequest<InventoryAsset>('/academic/inventory/assets/', { method: 'POST', body: JSON.stringify(data) }),
+    updateAsset: (id: string, data: Partial<InventoryAsset>) =>
+        apiRequest<InventoryAsset>(`/academic/inventory/assets/${id}/`, { method: 'PATCH', body: JSON.stringify(data) }),
+    deleteAsset: (id: string) =>
+        apiRequest<void>(`/academic/inventory/assets/${id}/`, { method: 'DELETE' }),
+    assignAsset: (id: string, data: { assigned_to_location?: string; assigned_to_user?: string; assigned_date: string; expected_return_date?: string; notes?: string }) =>
+        apiRequest<any>(`/academic/inventory/assets/${id}/assign/`, { method: 'POST', body: JSON.stringify(data) }),
+    returnAsset: (id: string) =>
+        apiRequest<any>(`/academic/inventory/assets/${id}/return/`, { method: 'POST', body: '{}' }),
+    getDashboard: () => apiRequest<InventoryDashboard>('/academic/inventory/assets/dashboard/'),
+
+    // Maintenance
+    getMaintenanceRequests: (params?: { status?: string; priority?: string }) => {
+        const q = params ? '?' + new URLSearchParams(
+            Object.entries(params).filter(([, v]) => v !== undefined) as [string, string][]
+        ).toString() : '';
+        return apiRequest<MaintenanceRequest[]>(`/academic/inventory/maintenance/${q}`);
+    },
+    createMaintenanceRequest: (data: Partial<MaintenanceRequest>) =>
+        apiRequest<MaintenanceRequest>('/academic/inventory/maintenance/', { method: 'POST', body: JSON.stringify(data) }),
+    resolveMaintenanceRequest: (id: string, data: { resolution_notes?: string; actual_cost?: number }) =>
+        apiRequest<MaintenanceRequest>(`/academic/inventory/maintenance/${id}/resolve/`, { method: 'POST', body: JSON.stringify(data) }),
+
+    // Consumables
+    getStock: (lowOnly?: boolean) => {
+        const q = lowOnly ? '?low_stock=1' : '';
+        return apiRequest<ConsumableStock[]>(`/academic/inventory/stock/${q}`);
+    },
+    createStock: (data: Partial<ConsumableStock>) =>
+        apiRequest<ConsumableStock>('/academic/inventory/stock/', { method: 'POST', body: JSON.stringify(data) }),
+    updateStock: (id: string, data: Partial<ConsumableStock>) =>
+        apiRequest<ConsumableStock>(`/academic/inventory/stock/${id}/`, { method: 'PATCH', body: JSON.stringify(data) }),
+    restock: (id: string, quantity: number) =>
+        apiRequest<ConsumableStock>(`/academic/inventory/stock/${id}/restock/`, { method: 'POST', body: JSON.stringify({ quantity }) }),
+    consume: (id: string, quantity: number) =>
+        apiRequest<ConsumableStock>(`/academic/inventory/stock/${id}/consume/`, { method: 'POST', body: JSON.stringify({ quantity }) }),
+};
+
 // ─── Events / Calendar API ────────────────────────────────────────────────────
 
 export interface SchoolEvent {

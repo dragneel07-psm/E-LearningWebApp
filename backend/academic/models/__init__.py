@@ -23,3 +23,4 @@ from .health import StudentHealthRecord, ImmunizationRecord
 from .discipline import DisciplinaryIncident
 from .documents import StudentDocument
 from .event import SchoolEvent
+from .inventory import Asset, AssetAssignment, MaintenanceRequest, ConsumableStock
