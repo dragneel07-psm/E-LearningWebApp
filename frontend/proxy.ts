@@ -150,24 +150,23 @@ export async function proxy(request: NextRequest) {
 
     // Allow access to public paths
     if (pathname === '/' || PUBLIC_PATHS.some(path => pathname.startsWith(path))) {
-        // Tenant subdomains without a session should enter via login page.
-        if (!token && pathname === '/' && tenantSubdomain && tenantSubdomain !== 'localhost') {
-            // Tenant subdomains without a session → show the school landing page.
-            const url = request.nextUrl.clone();
-            url.pathname = '/school';
-            return NextResponse.rewrite(url);
+        if (pathname === '/' && !token) {
+            if (tenantSubdomain && tenantSubdomain !== 'localhost') {
+                // Tenant subdomain root → show school landing page
+                const url = request.nextUrl.clone();
+                url.pathname = '/school';
+                return NextResponse.rewrite(url);
+            }
+            // SaaS root (no tenant) → show the SaaS marketing landing page
+            return NextResponse.next({ request: { headers: requestHeaders } });
         }
         // Always allow /login and /register to render; avoid server-side auth loops.
         if (isAuthPage) {
-            return NextResponse.next({
-                request: { headers: requestHeaders }
-            });
+            return NextResponse.next({ request: { headers: requestHeaders } });
         }
-        // For "/", continue into token check below so we can redirect authenticated users.
+        // For "/", continue into token check below so authenticated users get dashboard redirect.
         if (pathname !== '/') {
-            return NextResponse.next({
-                request: { headers: requestHeaders }
-            });
+            return NextResponse.next({ request: { headers: requestHeaders } });
         }
     }
 
