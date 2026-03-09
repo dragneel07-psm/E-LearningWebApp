@@ -3,698 +3,855 @@
 import Image from "next/image";
 import Link from 'next/link';
 import {
-  BrainCircuit,
-  ShieldCheck,
-  Users,
-  ArrowRight,
-  Sparkles,
-  Globe,
-  Zap,
-  BarChart3,
-  BookOpen,
-  PlayCircle,
-  CheckCircle2,
-  Star,
-  ArrowUpRight,
-  Search,
-  MessageSquare,
-  Cpu,
-  MousePointer2,
-  Lock
+    BrainCircuit, ShieldCheck, Users, ArrowRight, Sparkles, Globe, Zap,
+    BarChart3, BookOpen, PlayCircle, CheckCircle2, Star, ArrowUpRight,
+    MessageSquare, Cpu, Lock, ChevronDown, TrendingUp, Clock,
+    GraduationCap, Building2, Layers, Database, Bell, LineChart,
+    Calendar, Award, ChevronRight, X
 } from 'lucide-react';
-import { motion, useScroll, useTransform, useSpring } from 'framer-motion';
+import { motion, useScroll, useTransform, AnimatePresence, useInView } from 'framer-motion';
 import { Button } from "@/components/ui/button";
 import { useEffect, useRef, useState } from "react";
 import { saasApi, SubscriptionPlan } from "@/lib/api";
 
+// ── Data ─────────────────────────────────────────────────────────────────────
+
 const features = [
-  {
-    title: "AI-Powered Adaptive Learning",
-    description: "Our proprietary AI engine analyzes student performance in real-time to adjust difficulty and content delivery.",
-    icon: BrainCircuit,
-    color: "text-purple-500",
-    bg: "bg-purple-500/10",
-    detail: "98% Accuracy in prediction"
-  },
-  {
-    title: "Multi-Tenant Enterprise Core",
-    description: "Deploy separate instances for each school with custom branding, domains, and isolated database schemas.",
-    icon: ShieldCheck,
-    color: "text-blue-500",
-    bg: "bg-blue-500/10",
-    detail: "Enterprise-grade security"
-  },
-  {
-    title: "Unified Communication Hub",
-    description: "Integrated messaging, notices, and progress reports keep parents, teachers, and students perfectly aligned.",
-    icon: Users,
-    color: "text-emerald-500",
-    bg: "bg-emerald-500/10",
-    detail: "Real-time sync"
-  },
+    {
+        title: "AI-Powered Adaptive Learning",
+        description: "Proprietary AI engine that analyzes every student interaction in real-time, dynamically adjusting difficulty, pacing, and content delivery.",
+        icon: BrainCircuit, color: "text-violet-400", bg: "bg-violet-500/10", border: "border-violet-500/20",
+        detail: "98% prediction accuracy",
+    },
+    {
+        title: "Multi-Tenant Architecture",
+        description: "Isolated database schemas per school with custom branding, custom domains, and granular admin controls — all from one SaaS platform.",
+        icon: Database, color: "text-sky-400", bg: "bg-sky-500/10", border: "border-sky-500/20",
+        detail: "Enterprise-grade isolation",
+    },
+    {
+        title: "Smart Study Planner",
+        description: "AI schedules study sessions using spaced repetition (SM-2), BKT skill mastery data, and upcoming exam timelines.",
+        icon: Calendar, color: "text-emerald-400", bg: "bg-emerald-500/10", border: "border-emerald-500/20",
+        detail: "Spaced repetition built-in",
+    },
+    {
+        title: "Real-Time Analytics",
+        description: "Live dashboards for admins, teachers, and parents with at-risk detection, attendance heatmaps, and predictive grade forecasting.",
+        icon: LineChart, color: "text-orange-400", bg: "bg-orange-500/10", border: "border-orange-500/20",
+        detail: "Predictive risk alerts",
+    },
+    {
+        title: "AI Progress Reports",
+        description: "Auto-generated weekly reports customised for students, parents, and teachers — each with the right level of detail and actionable insights.",
+        icon: Award, color: "text-pink-400", bg: "bg-pink-500/10", border: "border-pink-500/20",
+        detail: "3 report flavours",
+    },
+    {
+        title: "Unified Communications",
+        description: "Integrated notices, messaging, and push notifications keep every stakeholder — students, parents, teachers — perfectly in sync.",
+        icon: Bell, color: "text-indigo-400", bg: "bg-indigo-500/10", border: "border-indigo-500/20",
+        detail: "Real-time WebSocket push",
+    },
+];
+
+const steps = [
+    {
+        step: "01", title: "Register Your Institution",
+        desc: "Create your tenant account, pick a plan, and get a dedicated subdomain provisioned in seconds.",
+        icon: Building2, color: "text-indigo-400", glow: "shadow-indigo-500/30",
+    },
+    {
+        step: "02", title: "Configure & Brand",
+        desc: "Upload your logo, set your colours, add teachers and students, and configure AI settings to match your curriculum.",
+        icon: Layers, color: "text-purple-400", glow: "shadow-purple-500/30",
+    },
+    {
+        step: "03", title: "Launch & Grow",
+        desc: "Go live the same day. Students log in, AI adapts to each learner, and you get real-time analytics from day one.",
+        icon: Zap, color: "text-pink-400", glow: "shadow-pink-500/30",
+    },
+];
+
+const stats = [
+    { value: 50, suffix: "+", label: "Institutions", icon: Building2, color: "text-violet-400" },
+    { value: 10000, suffix: "+", label: "Active Students", icon: GraduationCap, color: "text-sky-400" },
+    { value: 4.8, suffix: "M+", label: "AI Responses", icon: BrainCircuit, color: "text-emerald-400" },
+    { value: 98, suffix: "%", label: "Satisfaction Rate", icon: Star, color: "text-orange-400" },
 ];
 
 const testimonials = [
-  {
-    name: "Dr. Sarah Jenkins",
-    role: "Principal, Global Academy",
-    content: "Neo-Learn has transformed how our teachers track student progress. The AI insights are genuinely game-changing.",
-    avatar: "SJ",
-  },
-  {
-    name: "Mark Thompson",
-    role: "EdTech Director",
-    content: "Scaling to 20+ branches was seamless thanks to the multi-tenant architecture. Best LMS we've ever used.",
-    avatar: "MT",
-  },
-  {
-    name: "Elena Rodriguez",
-    role: "Advanced Mathematics Teacher",
-    content: "The automated grading and lesson planning tools save me over 10 hours every single week.",
-    avatar: "ER",
-  }
+    {
+        name: "Dr. Sarah Jenkins", role: "Principal, Global Academy",
+        content: "Neo-Learn transformed how our teachers track student progress. The AI progress reports alone save us days of manual work every month.",
+        avatar: "SJ", stars: 5,
+    },
+    {
+        name: "Mark Thompson", role: "EdTech Director, TechSchools Group",
+        content: "Scaling to 20+ branches was seamless. The multi-tenant architecture is rock-solid and the tenant isolation is exactly what enterprise demands.",
+        avatar: "MT", stars: 5,
+    },
+    {
+        name: "Elena Rodriguez", role: "Advanced Mathematics Teacher",
+        content: "The AI study planner uses spaced repetition automatically. My students' retention scores went up 34% in the first semester.",
+        avatar: "ER", stars: 5,
+    },
+];
+
+const faqs = [
+    {
+        q: "How does multi-tenancy work?",
+        a: "Each school gets a completely isolated database schema, file storage bucket, and subdomain (e.g. school.neo-learn.com). There's zero data crossover between tenants. Provisioning happens in seconds after signup.",
+    },
+    {
+        q: "Is our student data used to train your AI?",
+        a: "No — never. Your data is private, encrypted, and used exclusively for your own institution's analytics and student guidance. We are GDPR and FERPA compliant.",
+    },
+    {
+        q: "Can we integrate with our existing systems?",
+        a: "Yes. We expose a full REST API and WebSocket layer, plus webhooks for grade sync, attendance feeds, and notification delivery to third-party platforms.",
+    },
+    {
+        q: "What AI models power the tutoring?",
+        a: "We use OpenAI's GPT-4 family with Retrieval-Augmented Generation (RAG) grounded in your school's own curriculum materials. Confidence scoring ensures factual accuracy.",
+    },
+    {
+        q: "Do you offer offline / mobile access?",
+        a: "Yes. Our Expo-based mobile apps support offline content access and sync automatically when connectivity is restored. Available on iOS and Android.",
+    },
+    {
+        q: "What does onboarding look like?",
+        a: "After you register, your tenant is provisioned automatically. A guided setup wizard helps you add subjects, classes, teachers and students. Most schools go live within 24 hours.",
+    },
 ];
 
 type LandingPricingCard = {
-  name: string;
-  price: string;
-  description: string;
-  features: string[];
-  button: string;
-  popular: boolean;
-  billingSuffix?: string;
-  yearlyNote?: string;
+    name: string; price: string; description: string; features: string[];
+    button: string; popular: boolean; billingSuffix?: string; yearlyNote?: string;
+    yearlyPrice?: string;
 };
 
 const fallbackPricing: LandingPricingCard[] = [
-  {
-    name: "Starter",
-    price: "$49",
-    description: "Perfect for small training centers",
-    features: ["Up to 100 students", "Basic AI Analytics", "Single Tenant", "Standard Support"],
-    button: "Start Free Trial",
-    popular: false
-  },
-  {
-    name: "Professional",
-    price: "$199",
-    description: "The sweet spot for growing schools",
-    features: ["Up to 1000 students", "Advanced AI Tutoring", "Custom Domains", "24/7 Priority Support"],
-    button: "Get Pro Now",
-    popular: true
-  },
-  {
-    name: "Enterprise",
-    price: "Custom",
-    description: "For large institutions & university groups",
-    features: ["Unlimited Students", "Proprietary AI Models", "Full White-labeling", "Dedicated Success Manager"],
-    button: "Contact Sales",
-    popular: false
-  }
+    {
+        name: "Starter", price: "$49", description: "Perfect for small training centres and tutoring academies.",
+        features: ["Up to 100 students", "Basic AI Analytics", "Single tenant", "Standard support", "Mobile app access"],
+        button: "Start Free Trial", popular: false,
+    },
+    {
+        name: "Professional", price: "$199", description: "The sweet spot for growing schools and academies.",
+        features: ["Up to 1,000 students", "Advanced AI Tutoring", "Custom domain", "Priority 24/7 support", "AI Progress Reports", "Parent portal"],
+        button: "Get Pro Now", popular: true,
+    },
+    {
+        name: "Enterprise", price: "Custom", description: "For large institutions, university groups, and chains.",
+        features: ["Unlimited students", "Custom AI models", "Full white-labelling", "Dedicated success manager", "SLA guarantees", "On-premise option"],
+        button: "Contact Sales", popular: false,
+    },
 ];
 
 const getCurrencyPrefix = (currency?: string) => {
-  const normalized = (currency || "USD").toUpperCase();
-  if (normalized === "NPR") return "Rs. ";
-  if (normalized === "USD") return "$";
-  return `${normalized} `;
+    const c = (currency || "USD").toUpperCase();
+    if (c === "NPR") return "Rs. ";
+    if (c === "USD") return "$";
+    return `${c} `;
 };
 
 const formatAmount = (value: number | string, currency?: string) => {
-  const numericValue = Number(value) || 0;
-  return `${getCurrencyPrefix(currency)}${numericValue.toLocaleString("en-US", {
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  })}`;
+    const n = Number(value) || 0;
+    return `${getCurrencyPrefix(currency)}${n.toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
 };
 
-const toReadableLimit = (value: number, label: string) => {
-  if (!Number.isFinite(value) || value <= 0) return `Unlimited ${label}`;
-  return `Up to ${value.toLocaleString("en-US")} ${label}`;
-};
+const toReadableLimit = (value: number, label: string) =>
+    !Number.isFinite(value) || value <= 0 ? `Unlimited ${label}` : `Up to ${value.toLocaleString("en-US")} ${label}`;
 
 const mapPlanToCard = (plan: SubscriptionPlan, index: number, total: number): LandingPricingCard => {
-  const baseFeatures = [
-    toReadableLimit(Number(plan.student_limit), "students"),
-    toReadableLimit(Number(plan.teacher_limit), "teachers"),
-    `${Number(plan.storage_limit_gb) || 0} GB storage`,
-  ];
-
-  if ((Number(plan.ai_token_limit) || 0) > 0) {
-    baseFeatures.push(`${Number(plan.ai_token_limit).toLocaleString("en-US")} AI tokens/month`);
-  }
-  if (plan.has_ai_tutor) baseFeatures.push("AI Tutor included");
-  if (plan.has_ai_eval) baseFeatures.push("AI Evaluation included");
-  if (plan.has_parent_portal) baseFeatures.push("Parent Portal included");
-  if (plan.has_analytics) baseFeatures.push("Advanced Analytics included");
-  if (plan.has_career_guidance) baseFeatures.push("Career Guidance included");
-
-  const middleIndex = Math.floor((total - 1) / 2);
-  const name = plan.name || "Plan";
-  const keywordPopular = /professional|pro|business|growth/i.test(name);
-  const popular = keywordPopular || (total > 1 && index === middleIndex);
-
-  return {
-    name,
-    price: formatAmount(plan.price_monthly, plan.currency),
-    description: plan.description || "Includes core LMS with plan-based limits and features.",
-    features: baseFeatures.slice(0, 6),
-    button: keywordPopular ? "Get Pro Now" : "Start Free Trial",
-    popular,
-    billingSuffix: "/MO",
-    yearlyNote: `${formatAmount(plan.price_yearly, plan.currency)} /YEAR`,
-  };
+    const f = [
+        toReadableLimit(Number(plan.student_limit), "students"),
+        toReadableLimit(Number(plan.teacher_limit), "teachers"),
+        `${Number(plan.storage_limit_gb) || 0} GB storage`,
+    ];
+    if ((Number(plan.ai_token_limit) || 0) > 0) f.push(`${Number(plan.ai_token_limit).toLocaleString()} AI tokens/month`);
+    if (plan.has_ai_tutor) f.push("AI Tutor included");
+    if (plan.has_ai_eval) f.push("AI Evaluation included");
+    if (plan.has_parent_portal) f.push("Parent Portal included");
+    if (plan.has_analytics) f.push("Advanced Analytics included");
+    const name = plan.name || "Plan";
+    const keywordPopular = /professional|pro|business|growth/i.test(name);
+    const popular = keywordPopular || (total > 1 && index === Math.floor((total - 1) / 2));
+    return {
+        name, description: plan.description || "Core LMS with plan-based limits.", features: f.slice(0, 6),
+        price: formatAmount(plan.price_monthly, plan.currency), popular,
+        button: keywordPopular ? "Get Pro Now" : "Start Free Trial",
+        billingSuffix: "/MO",
+        yearlyNote: plan.price_yearly ? `or ${formatAmount(plan.price_yearly, plan.currency)}/year` : undefined,
+    };
 };
 
-export default function LandingPage() {
-  const targetRef = useRef(null);
-  const [pricingCards, setPricingCards] = useState<LandingPricingCard[]>(fallbackPricing);
-  const [isPricingFallback, setIsPricingFallback] = useState(false);
-  const { scrollYProgress } = useScroll({
-    target: targetRef,
-    offset: ["start start", "end start"]
-  });
+// ── Animated Counter ──────────────────────────────────────────────────────────
 
-  const opacity = useTransform(scrollYProgress, [0, 0.5], [1, 0]);
-  const scale = useTransform(scrollYProgress, [0, 0.5], [1, 0.8]);
-  const y = useTransform(scrollYProgress, [0, 0.5], [0, -100]);
+function AnimatedCounter({ value, suffix }: { value: number; suffix: string }) {
+    const [count, setCount] = useState(0);
+    const ref = useRef<HTMLSpanElement>(null);
+    const inView = useInView(ref, { once: true, margin: "-100px" });
 
-  useEffect(() => {
-    let isMounted = true;
+    useEffect(() => {
+        if (!inView) return;
+        const duration = 1800;
+        const steps = 60;
+        const increment = value / steps;
+        let current = 0;
+        const timer = setInterval(() => {
+            current += increment;
+            if (current >= value) { setCount(value); clearInterval(timer); }
+            else setCount(current);
+        }, duration / steps);
+        return () => clearInterval(timer);
+    }, [inView, value]);
 
-    const loadPublicPlans = async () => {
-      try {
-        const plans = await saasApi.getPublicPlans();
-        if (!isMounted) return;
+    const display = value >= 1000
+        ? `${(count / 1000).toFixed(count >= 1000 ? 0 : 1)}K`
+        : value % 1 !== 0
+            ? count.toFixed(1)
+            : Math.round(count).toString();
 
-        const activePlans = plans
-          .filter((plan) => plan && plan.is_active !== false)
-          .sort((a, b) => Number(a.price_monthly || 0) - Number(b.price_monthly || 0));
+    return <span ref={ref}>{display}{suffix}</span>;
+}
 
-        if (activePlans.length === 0) {
-          setPricingCards(fallbackPricing);
-          setIsPricingFallback(true);
-          return;
-        }
+// ── FAQ Accordion ─────────────────────────────────────────────────────────────
 
-        setPricingCards(activePlans.map((plan, index) => mapPlanToCard(plan, index, activePlans.length)));
-        setIsPricingFallback(false);
-      } catch (error) {
-        console.error("Failed to load public subscription plans for landing page", error);
-        if (!isMounted) return;
-        setPricingCards(fallbackPricing);
-        setIsPricingFallback(true);
-      }
-    };
-
-    loadPublicPlans();
-
-    return () => {
-      isMounted = false;
-    };
-  }, []);
-
-  return (
-    <div className="min-h-screen bg-[#020205] text-white selection:bg-indigo-500/30 selection:text-indigo-200 overflow-x-hidden">
-      {/* Navigation */}
-      <nav className="fixed top-0 w-full z-50 bg-[#020205]/60 backdrop-blur-2xl border-b border-white/5">
-        <div className="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
-          <div className="flex items-center gap-2 group cursor-pointer">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-lg shadow-indigo-500/20 group-hover:scale-110 transition-transform duration-300">
-              <Sparkles className="w-6 h-6 text-white" />
+function FaqItem({ q, a }: { q: string; a: string }) {
+    const [open, setOpen] = useState(false);
+    return (
+        <div
+            className="border border-white/5 rounded-2xl bg-white/[0.02] hover:bg-white/[0.04] transition-all cursor-pointer overflow-hidden"
+            onClick={() => setOpen(o => !o)}
+        >
+            <div className="flex items-center justify-between p-7 gap-4">
+                <h4 className={`text-base font-bold transition-colors ${open ? 'text-indigo-400' : 'text-white'}`}>{q}</h4>
+                <div className={`flex-shrink-0 w-8 h-8 rounded-full border border-white/10 flex items-center justify-center transition-all ${open ? 'bg-indigo-600 border-indigo-500 rotate-180' : ''}`}>
+                    <ChevronDown className="w-4 h-4" />
+                </div>
             </div>
-            <span className="text-xl font-black tracking-tighter bg-clip-text text-transparent bg-gradient-to-r from-white to-white/60">
-              NEO-LEARN
-            </span>
-          </div>
-
-          <div className="hidden lg:flex items-center gap-10">
-            {['Features', 'Intelligence', 'Case Studies', 'Pricing'].map((item) => (
-              <Link key={item} href={`#${item.toLowerCase().replace(' ', '-')}`} className="text-sm font-semibold text-slate-400 hover:text-white transition-all hover:translate-y-[-1px]">
-                {item}
-              </Link>
-            ))}
-          </div>
-
-          <div className="flex items-center gap-4">
-            <Link href="/login" className="hidden sm:block">
-              <Button variant="ghost" className="text-slate-400 hover:text-white hover:bg-white/5 font-bold transition-all">
-                Sign In
-              </Button>
-            </Link>
-            <Link href="/register">
-              <Button className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white border-none rounded-full px-8 font-black transition-all shadow-xl shadow-indigo-600/20 active:scale-95">
-                Join Now
-              </Button>
-            </Link>
-          </div>
+            <AnimatePresence initial={false}>
+                {open && (
+                    <motion.div
+                        key="content"
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: "auto", opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        transition={{ duration: 0.25, ease: "easeInOut" }}
+                    >
+                        <p className="px-7 pb-7 text-slate-400 font-medium leading-relaxed text-sm">{a}</p>
+                    </motion.div>
+                )}
+            </AnimatePresence>
         </div>
-      </nav>
+    );
+}
 
-      <main className="relative">
-        {/* Hero Section */}
-        <section ref={targetRef} className="relative pt-40 pb-20 lg:pt-56 lg:pb-32 overflow-hidden">
-          {/* Dynamic Background */}
-          <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-[1440px] h-[1000px] pointer-events-none">
-            <div className="absolute top-[-100px] left-[5%] w-[600px] h-[600px] bg-indigo-600/20 rounded-full blur-[160px] animate-pulse" />
-            <div className="absolute top-[200px] right-[5%] w-[600px] h-[600px] bg-purple-600/20 rounded-full blur-[160px] animate-pulse delay-1000" />
-            <div className="absolute top-[50%] left-[30%] w-[300px] h-[300px] bg-cyan-400/10 rounded-full blur-[120px]" />
-            <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 mix-blend-overlay"></div>
-          </div>
+// ── Scroll Section Reveal ─────────────────────────────────────────────────────
 
-          <div className="max-w-7xl mx-auto px-6">
-            <div className="text-center space-y-10 relative z-10">
-              <motion.div
-                style={{ opacity, scale, y }}
-                className="space-y-10"
-              >
-                <motion.div
-                  initial={{ opacity: 0, scale: 0.9 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  className="inline-flex items-center gap-3 px-6 py-2 rounded-full bg-white/5 border border-white/10 text-xs font-black text-indigo-400 uppercase tracking-[0.2em] backdrop-blur-xl shadow-2xl"
-                >
-                  <Cpu className="w-4 h-4" />
-                  <span>AI-Powered Education Network v2.0</span>
-                </motion.div>
+function Reveal({ children, delay = 0 }: { children: React.ReactNode; delay?: number }) {
+    const ref = useRef(null);
+    const inView = useInView(ref, { once: true, margin: "-80px" });
+    return (
+        <motion.div
+            ref={ref}
+            initial={{ opacity: 0, y: 40 }}
+            animate={inView ? { opacity: 1, y: 0 } : {}}
+            transition={{ duration: 0.6, delay, ease: [0.25, 0.46, 0.45, 0.94] }}
+        >
+            {children}
+        </motion.div>
+    );
+}
 
-                <h1 className="text-6xl md:text-8xl lg:text-[10rem] font-black leading-[0.85] tracking-tighter text-white">
-                  THE <span className="bg-clip-text text-transparent bg-gradient-to-br from-indigo-400 via-purple-400 to-pink-400">SMARTER</span> <br />
-                  WAY TO TEACH.
-                </h1>
+// ── Main Component ────────────────────────────────────────────────────────────
 
-                <p className="max-w-3xl mx-auto text-lg md:text-2xl text-slate-400 leading-relaxed font-medium px-4">
-                  A multi-tenant SaaS infrastructure designed for institutions that demand
-                  excellence. Powered by the most advanced AI learning models.
-                </p>
+export default function SaaSLandingPage() {
+    const heroRef = useRef(null);
+    const [pricingCards, setPricingCards] = useState<LandingPricingCard[]>(fallbackPricing);
+    const [isPricingFallback, setIsPricingFallback] = useState(false);
+    const [billingAnnual, setBillingAnnual] = useState(false);
+    const { scrollYProgress } = useScroll({ target: heroRef, offset: ["start start", "end start"] });
+    const heroOpacity = useTransform(scrollYProgress, [0, 0.6], [1, 0]);
+    const heroY = useTransform(scrollYProgress, [0, 0.6], [0, -80]);
 
-                <div className="flex flex-col sm:flex-row items-center gap-6 justify-center pt-8">
-                  <Link href="/register">
-                    <Button size="lg" className="h-16 px-12 bg-white text-black hover:bg-slate-200 rounded-full text-xl font-black shadow-2xl shadow-white/10 group transition-all">
-                      Create Your School <ArrowRight className="ml-2 w-6 h-6 group-hover:translate-x-1 transition-transform" />
-                    </Button>
-                  </Link>
-                  <Button variant="outline" size="lg" className="h-16 px-12 border-white/10 bg-white/5 hover:bg-white/10 text-white rounded-full text-xl font-black backdrop-blur-2xl">
-                    Watch AI Agent <PlayCircle className="ml-2 w-6 h-6 text-indigo-400" />
-                  </Button>
+    useEffect(() => {
+        let mounted = true;
+        saasApi.getPublicPlans().then(plans => {
+            if (!mounted) return;
+            const active = plans.filter(p => p && p.is_active !== false).sort((a, b) => Number(a.price_monthly || 0) - Number(b.price_monthly || 0));
+            if (!active.length) { setPricingCards(fallbackPricing); setIsPricingFallback(true); return; }
+            setPricingCards(active.map((p, i) => mapPlanToCard(p, i, active.length)));
+        }).catch(() => { if (mounted) { setPricingCards(fallbackPricing); setIsPricingFallback(true); } });
+        return () => { mounted = false; };
+    }, []);
+
+    return (
+        <div className="min-h-screen bg-[#020205] text-white selection:bg-indigo-500/30 overflow-x-hidden">
+            {/* ── Nav ── */}
+            <nav className="fixed top-0 w-full z-50 bg-[#020205]/70 backdrop-blur-2xl border-b border-white/5">
+                <div className="max-w-7xl mx-auto px-6 h-18 flex items-center justify-between py-4">
+                    <div className="flex items-center gap-2.5">
+                        <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-lg shadow-indigo-500/30">
+                            <Sparkles className="w-5 h-5 text-white" />
+                        </div>
+                        <span className="text-xl font-black tracking-tighter bg-clip-text text-transparent bg-gradient-to-r from-white to-white/60">NEO-LEARN</span>
+                    </div>
+
+                    <div className="hidden lg:flex items-center gap-8">
+                        {[['Features', '#features'], ['How It Works', '#how-it-works'], ['Intelligence', '#intelligence'], ['Pricing', '#pricing']].map(([label, href]) => (
+                            <a key={label} href={href} className="text-sm font-semibold text-slate-400 hover:text-white transition-colors">{label}</a>
+                        ))}
+                    </div>
+
+                    <div className="flex items-center gap-3">
+                        <Link href="/login" className="hidden sm:block">
+                            <Button variant="ghost" size="sm" className="text-slate-400 hover:text-white hover:bg-white/5 font-bold">Sign In</Button>
+                        </Link>
+                        <Link href="/register">
+                            <Button size="sm" className="bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white rounded-full px-6 font-black shadow-lg shadow-indigo-600/20">
+                                Start Free
+                            </Button>
+                        </Link>
+                    </div>
                 </div>
-              </motion.div>
+            </nav>
 
-              <motion.div
-                initial={{ opacity: 0, y: 100 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.3, duration: 1 }}
-                className="pt-24 relative max-w-6xl mx-auto"
-              >
-                <div className="absolute inset-0 bg-indigo-500/10 blur-[120px] rounded-full scale-110" />
-                <div className="relative rounded-[40px] border border-white/10 bg-black/40 p-4 backdrop-blur-3xl shadow-[0_0_100px_-20px_rgba(79,70,229,0.3)]">
-                  <Image
-                    src="/hero-dashboard.png"
-                    alt="Neo Learn Dashboard"
-                    width={1200}
-                    height={800}
-                    className="rounded-[32px] shadow-2xl"
-                    priority
-                  />
-
-                  {/* Real-time stats badges */}
-                  <motion.div
-                    animate={{ y: [0, -15, 0] }}
-                    transition={{ duration: 4, repeat: Infinity }}
-                    className="absolute -top-6 -right-6 md:-top-12 md:-right-12 p-5 bg-white/10 backdrop-blur-2xl border border-white/10 rounded-3xl shadow-2xl hidden md:block"
-                  >
-                    <div className="flex items-center gap-4">
-                      <div className="w-12 h-12 rounded-2xl bg-emerald-500/20 flex items-center justify-center">
-                        <Zap className="w-6 h-6 text-emerald-400" />
-                      </div>
-                      <div>
-                        <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Active Users</p>
-                        <p className="text-xl font-black">124,582</p>
-                      </div>
-                    </div>
-                  </motion.div>
-
-                  <motion.div
-                    animate={{ y: [0, 15, 0] }}
-                    transition={{ duration: 5, repeat: Infinity, delay: 1 }}
-                    className="absolute -bottom-6 -left-6 md:-bottom-12 md:-left-12 p-5 bg-white/10 backdrop-blur-2xl border border-white/10 rounded-3xl shadow-2xl hidden md:block"
-                  >
-                    <div className="flex items-center gap-4">
-                      <div className="w-12 h-12 rounded-2xl bg-indigo-500/20 flex items-center justify-center">
-                        <MousePointer2 className="w-6 h-6 text-indigo-400" />
-                      </div>
-                      <div>
-                        <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">AI Responses</p>
-                        <p className="text-xl font-black">4.8M+</p>
-                      </div>
-                    </div>
-                  </motion.div>
+            {/* ── Hero ── */}
+            <section ref={heroRef} className="relative pt-40 pb-20 lg:pt-60 lg:pb-32 overflow-hidden">
+                {/* Grid dot background */}
+                <div className="absolute inset-0 pointer-events-none"
+                    style={{
+                        backgroundImage: `radial-gradient(circle, rgba(99,102,241,0.15) 1px, transparent 1px)`,
+                        backgroundSize: "48px 48px"
+                    }}
+                />
+                {/* Glow orbs */}
+                <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-[900px] pointer-events-none overflow-hidden">
+                    <div className="absolute top-[-100px] left-[5%] w-[500px] h-[500px] bg-indigo-600/25 rounded-full blur-[140px]" />
+                    <div className="absolute top-[200px] right-[10%] w-[400px] h-[400px] bg-purple-600/20 rounded-full blur-[120px]" />
+                    <div className="absolute top-[40%] left-[35%] w-[300px] h-[300px] bg-cyan-400/10 rounded-full blur-[100px]" />
                 </div>
-              </motion.div>
-            </div>
-          </div>
-        </section>
 
-        {/* Brands Slider (Marquee) */}
-        <div className="py-20 overflow-hidden bg-white/[0.01] border-y border-white/5">
-          <div className="flex whitespace-nowrap gap-20 animate-marquee items-center opacity-20 grayscale">
-            {[1, 2, 3, 4, 5, 6].map((i) => (
-              <div key={i} className="flex items-center gap-20">
-                <span className="text-2xl font-black tracking-tighter">STANFORD UNIVERSITY</span>
-                <span className="text-2xl font-black tracking-tighter">MIT TECHNOLOGY</span>
-                <span className="text-2xl font-black tracking-tighter">GOOGLE ED</span>
-                <span className="text-2xl font-black tracking-tighter">OXFORD ACADEMY</span>
-              </div>
-            ))}
-          </div>
-        </div>
+                <div className="max-w-7xl mx-auto px-6 relative z-10">
+                    <motion.div style={{ opacity: heroOpacity, y: heroY }} className="text-center space-y-8">
+                        <motion.div
+                            initial={{ opacity: 0, scale: 0.9 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            transition={{ duration: 0.5 }}
+                            className="inline-flex items-center gap-3 px-5 py-2 rounded-full bg-white/5 border border-white/10 text-xs font-black text-indigo-400 uppercase tracking-[0.2em] backdrop-blur-xl"
+                        >
+                            <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                            <span>AI-Powered Education Platform — Live</span>
+                        </motion.div>
 
-        {/* Features Section */}
-        <section id="features" className="py-32 lg:py-48 relative">
-          <div className="max-w-7xl mx-auto px-6">
-            <div className="flex flex-col lg:flex-row justify-between items-end gap-8 mb-24">
-              <div className="space-y-4 text-left">
-                <p className="text-indigo-400 font-bold uppercase tracking-[0.3em] text-xs">Core Intelligence</p>
-                <h2 className="text-5xl lg:text-7xl font-black tracking-tighter max-w-2xl leading-none">
-                  DESIGNED FOR THE <br /> <span className="text-slate-500">NEXT GENERATION.</span>
-                </h2>
-              </div>
-              <p className="text-slate-400 max-w-sm text-lg font-medium lg:pb-2">
-                We've re-engineered the LMS from the ground up, placing AI at the heart of the experience.
-              </p>
-            </div>
+                        <motion.h1
+                            initial={{ opacity: 0, y: 30 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ duration: 0.7, delay: 0.1 }}
+                            className="text-6xl md:text-8xl lg:text-[9rem] font-black leading-[0.87] tracking-tighter"
+                        >
+                            THE <span className="bg-clip-text text-transparent bg-gradient-to-br from-indigo-400 via-purple-400 to-pink-400">SMARTER</span><br />
+                            WAY TO TEACH.
+                        </motion.h1>
 
-            <div className="grid lg:grid-cols-3 gap-8">
-              {features.map((feature, idx) => (
-                <motion.div
-                  key={feature.title}
-                  whileHover={{ y: -10 }}
-                  className="relative p-10 rounded-[40px] bg-white/[0.02] border border-white/5 hover:border-white/20 hover:bg-white/[0.04] transition-all group overflow-hidden"
-                >
-                  <div className="absolute top-0 right-0 p-8 opacity-5 group-hover:opacity-20 transition-opacity">
-                    <feature.icon className={`w-32 h-32 ${feature.color}`} />
-                  </div>
+                        <motion.p
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ duration: 0.7, delay: 0.2 }}
+                            className="max-w-2xl mx-auto text-lg md:text-xl text-slate-400 leading-relaxed font-medium"
+                        >
+                            Multi-tenant SaaS infrastructure built for institutions that demand excellence.
+                            Deploy, brand, and scale your school's AI learning platform in under 24 hours.
+                        </motion.p>
 
-                  <div className={`w-16 h-16 rounded-3xl ${feature.bg} flex items-center justify-center mb-10 ring-1 ring-white/10 group-hover:ring-white/40 transition-all`}>
-                    <feature.icon className={`w-8 h-8 ${feature.color}`} />
-                  </div>
+                        <motion.div
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ duration: 0.7, delay: 0.3 }}
+                            className="flex flex-col sm:flex-row items-center gap-4 justify-center pt-4"
+                        >
+                            <Link href="/register">
+                                <Button size="lg" className="h-14 px-10 bg-white text-black hover:bg-slate-100 rounded-full text-lg font-black shadow-2xl shadow-white/10 group">
+                                    Create Your School <ArrowRight className="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                                </Button>
+                            </Link>
+                            <a href="#intelligence">
+                                <Button variant="outline" size="lg" className="h-14 px-10 border-white/10 bg-white/5 hover:bg-white/10 text-white rounded-full text-lg font-black backdrop-blur-xl">
+                                    See AI in Action <PlayCircle className="ml-2 w-5 h-5 text-indigo-400" />
+                                </Button>
+                            </a>
+                        </motion.div>
 
-                  <div className="space-y-4 relative z-10">
-                    <h3 className="text-2xl font-black">{feature.title}</h3>
-                    <p className="text-slate-500 font-medium leading-relaxed text-lg">{feature.description}</p>
-                    <div className="pt-6 flex items-center text-indigo-400 text-sm font-bold gap-2">
-                      {feature.detail} <ArrowUpRight className="w-4 h-4" />
-                    </div>
-                  </div>
-                </motion.div>
-              ))}
-            </div>
-          </div>
-        </section>
+                        {/* Dashboard preview */}
+                        <motion.div
+                            initial={{ opacity: 0, y: 80 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ delay: 0.5, duration: 1, ease: "easeOut" }}
+                            className="pt-16 relative max-w-5xl mx-auto"
+                        >
+                            <div className="absolute inset-0 bg-indigo-500/10 blur-[100px] rounded-full scale-110 pointer-events-none" />
+                            <div className="relative rounded-[32px] border border-white/10 bg-black/40 p-3 backdrop-blur-3xl shadow-[0_0_80px_-20px_rgba(79,70,229,0.4)]">
+                                <div className="rounded-[26px] overflow-hidden bg-slate-900 aspect-[16/9] flex items-center justify-center">
+                                    <Image src="/hero-dashboard.png" alt="Neo Learn Dashboard" width={1200} height={675}
+                                        className="rounded-[26px] w-full h-full object-cover" priority
+                                        onError={(e) => {
+                                            const t = e.target as HTMLImageElement;
+                                            t.style.display = 'none';
+                                        }}
+                                    />
+                                    {/* Fallback gradient when no image */}
+                                    <div className="absolute inset-3 rounded-[26px] bg-gradient-to-br from-indigo-900/80 via-slate-900 to-purple-900/80 flex flex-col items-center justify-center gap-4 pointer-events-none">
+                                        <div className="grid grid-cols-3 gap-3 w-full max-w-lg px-8 opacity-40">
+                                            {[...Array(6)].map((_, i) => (
+                                                <div key={i} className={`rounded-xl bg-white/10 ${i === 0 ? 'h-20 col-span-2' : i === 1 ? 'h-20' : 'h-12'}`} />
+                                            ))}
+                                        </div>
+                                    </div>
+                                </div>
 
-        {/* AI Tutoring Interaction Preview */}
-        <section id="intelligence" className="py-32 bg-indigo-600/5 relative overflow-hidden">
-          <div className="max-w-7xl mx-auto px-6 grid lg:grid-cols-2 gap-20 items-center">
-            <div className="space-y-10">
-              <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-[10px] font-black text-indigo-400 uppercase tracking-widest">
-                <Sparkles className="w-3.5 h-3.5" />
-                <span>Real-time AI Guidance</span>
-              </div>
-              <h2 className="text-5xl lg:text-7xl font-black tracking-tighter leading-[0.9]">
-                AN AI TUTOR <br /> THAT NEVER <br /> SLEEPS.
-              </h2>
-              <p className="text-xl text-slate-400 font-medium leading-relaxed">
-                Our AI isn't just a chatbot. It identifies learning gaps, generates
-                custom study schedules, and provides 24/7 support tailored to each
-                student's specific curriculum.
-              </p>
-              <div className="space-y-4">
-                {[
-                  "Individualized progress tracking per student",
-                  "Automated lesson planning for teachers",
-                  "Predictive analytics for performance risk"
-                ].map((item) => (
-                  <div key={item} className="flex items-center gap-3">
-                    <div className="w-6 h-6 rounded-full bg-indigo-500 flex items-center justify-center">
-                      <CheckCircle2 className="w-4 h-4 text-white" />
-                    </div>
-                    <span className="font-bold text-slate-200">{item}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
+                                <motion.div animate={{ y: [0, -12, 0] }} transition={{ duration: 3.5, repeat: Infinity }}
+                                    className="absolute -top-8 -right-8 p-4 bg-white/10 backdrop-blur-2xl border border-white/15 rounded-2xl shadow-2xl hidden md:block">
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-10 h-10 rounded-xl bg-emerald-500/20 flex items-center justify-center">
+                                            <Zap className="w-5 h-5 text-emerald-400" />
+                                        </div>
+                                        <div>
+                                            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Active Users</p>
+                                            <p className="text-lg font-black">124,582</p>
+                                        </div>
+                                    </div>
+                                </motion.div>
 
-            <div className="relative">
-              <div className="absolute inset-0 bg-indigo-500/20 blur-[100px] rounded-full scale-125 pointer-events-none" />
-              <div className="bg-[#0a0a10] border border-white/10 rounded-[40px] p-8 shadow-2xl relative">
-                <div className="space-y-6">
-                  <div className="flex gap-4">
-                    <div className="w-10 h-10 rounded-full bg-slate-800 shrink-0" />
-                    <div className="p-4 bg-white/5 rounded-2xl rounded-tl-none border border-white/10 text-slate-300 text-sm font-medium animate-in fade-in slide-in-from-left duration-500">
-                      Can you explain the difference between Mitochondria and Chloroplasts?
-                    </div>
-                  </div>
-                  <div className="flex gap-4 justify-end">
-                    <div className="p-4 bg-indigo-600 rounded-2xl rounded-tr-none text-white text-sm font-bold shadow-lg shadow-indigo-600/20 max-w-[80%] animate-in fade-in slide-in-from-right duration-700 delay-300">
-                      Great question! Think of it like this: Mitochondria are the "power plants" that break down fuel, while Chloroplasts are the "solar panels" that create it. 🔋☀️
-                    </div>
-                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shrink-0">
-                      <Sparkles className="w-5 h-5" />
-                    </div>
-                  </div>
-                  <div className="h-2 w-1/2 bg-white/5 rounded-full animate-pulse mx-auto opacity-50" />
+                                <motion.div animate={{ y: [0, 12, 0] }} transition={{ duration: 4, repeat: Infinity, delay: 1 }}
+                                    className="absolute -bottom-8 -left-8 p-4 bg-white/10 backdrop-blur-2xl border border-white/15 rounded-2xl shadow-2xl hidden md:block">
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-10 h-10 rounded-xl bg-indigo-500/20 flex items-center justify-center">
+                                            <BrainCircuit className="w-5 h-5 text-indigo-400" />
+                                        </div>
+                                        <div>
+                                            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">AI Responses</p>
+                                            <p className="text-lg font-black">4.8M+</p>
+                                        </div>
+                                    </div>
+                                </motion.div>
+                            </div>
+                        </motion.div>
+                    </motion.div>
                 </div>
-                <div className="mt-8 pt-8 border-t border-white/5 flex gap-4">
-                  <div className="flex-1 bg-white/5 rounded-xl border border-white/10 h-12 flex items-center px-4 text-slate-500 text-xs font-bold">
-                    Type your question...
-                  </div>
-                  <div className="w-12 h-12 rounded-xl bg-indigo-600 flex items-center justify-center">
-                    <Zap className="w-5 h-5 text-white" />
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </section>
+            </section>
 
-        {/* Pricing Section */}
-        <section id="pricing" className="py-32 lg:py-48">
-          <div className="max-w-7xl mx-auto px-6">
-            <div className="text-center mb-24 space-y-4">
-              <h2 className="text-5xl lg:text-7xl font-black tracking-tighter">PRICING BUILT <br /> <span className="text-indigo-500 uppercase">For Scale</span>.</h2>
-              <p className="text-slate-400 font-medium">No hidden fees. Every plan includes our core AI engine.</p>
-              {isPricingFallback && (
-                <p className="text-xs text-slate-500 font-bold uppercase tracking-widest">Live plan pricing temporarily unavailable</p>
-              )}
-            </div>
-
-            <div className="grid md:grid-cols-3 gap-8">
-              {pricingCards.map((plan) => (
-                <div
-                  key={plan.name}
-                  className={`relative p-10 rounded-[40px] border transition-all ${plan.popular ? 'bg-indigo-600 border-indigo-400' : 'bg-white/[0.02] border-white/10 hover:border-white/20'}`}
-                >
-                  {plan.popular && (
-                    <div className="absolute top-0 right-10 -translate-y-1/2 px-4 py-1 bg-white text-indigo-600 text-[10px] font-black uppercase tracking-widest rounded-full">
-                      Most Popular
-                    </div>
-                  )}
-                  <h3 className="text-2xl font-black mb-2">{plan.name}</h3>
-                  <p className={`${plan.popular ? 'text-indigo-100' : 'text-slate-500'} text-sm font-medium mb-8`}>{plan.description}</p>
-                  <div className="flex items-baseline gap-2 mb-10">
-                    <span className="text-5xl font-black">{plan.price}</span>
-                    {plan.billingSuffix && <span className={`${plan.popular ? 'text-indigo-200' : 'text-slate-500'} text-xs font-bold`}>{plan.billingSuffix}</span>}
-                  </div>
-                  {plan.yearlyNote && <p className={`${plan.popular ? 'text-indigo-100' : 'text-slate-500'} text-xs font-bold mb-6`}>{plan.yearlyNote}</p>}
-                  <div className="space-y-4 mb-10">
-                    {plan.features.map((f) => (
-                      <div key={f} className="flex items-center gap-3">
-                        <CheckCircle2 className={`w-4 h-4 ${plan.popular ? 'text-white' : 'text-indigo-500'}`} />
-                        <span className={`text-sm font-bold ${plan.popular ? 'text-white' : 'text-slate-300'}`}>{f}</span>
-                      </div>
+            {/* ── Trust Marquee ── */}
+            <div className="py-14 overflow-hidden border-y border-white/5 bg-white/[0.01]">
+                <p className="text-center text-xs font-black text-slate-600 uppercase tracking-[0.3em] mb-8">Trusted by institutions worldwide</p>
+                <div className="flex gap-16 animate-marquee whitespace-nowrap items-center opacity-25 grayscale">
+                    {[...Array(3)].map((_, rep) => (
+                        <div key={rep} className="flex items-center gap-16 flex-shrink-0">
+                            {['STANFORD AFFILIATED', 'MIT TECHNOLOGY', 'GOOGLE EDUCATION', 'OXFORD ACADEMY', 'CAMBRIDGE ONLINE', 'IVY LEAGUE CONSORTIUM'].map(n => (
+                                <span key={n} className="text-xl font-black tracking-tighter">{n}</span>
+                            ))}
+                        </div>
                     ))}
-                  </div>
-                  <Button className={`w-full h-14 rounded-2xl font-black text-lg ${plan.popular ? 'bg-white text-indigo-600 hover:bg-slate-100' : 'bg-indigo-600 text-white hover:bg-indigo-500 shadow-xl shadow-indigo-600/20'}`}>
-                    {plan.button}
-                  </Button>
                 </div>
-              ))}
             </div>
-          </div>
-        </section>
 
-        {/* FAQ Section */}
-        <section className="py-32 border-t border-white/5">
-          <div className="max-w-4xl mx-auto px-6">
-            <h2 className="text-4xl font-black text-center mb-20 tracking-tighter">FREQUENTLY ASKED <span className="text-indigo-500">QUESTIONS</span></h2>
-            <div className="space-y-6">
-              {[
-                { q: "How does the multi-tenancy work?", a: "Each institution receives its own isolated database and file storage. Subdomains like 'school.neo-learn.com' are provisioned instantly." },
-                { q: "Is our data used to train your AI?", a: "No. Your data is private, secure, and used only for your own institution's analytics and student guidance." },
-                { q: "Can we integrate with our existing systems?", a: "Yes, we offer a robust API and support WebHooks for deep integration with and other school management tools." },
-                { q: "Do you offer offline learning?", a: "Our mobile apps support offline syncing, allowing students to download materials and upload assignments later." }
-              ].map((item, i) => (
-                <div key={i} className="p-8 rounded-3xl bg-white/[0.02] border border-white/5 hover:bg-white/[0.05] transition-all cursor-pointer group">
-                  <div className="flex items-center justify-between">
-                    <h4 className="text-lg font-bold group-hover:text-indigo-400 transition-colors">{item.q}</h4>
-                    <div className="w-8 h-8 rounded-full border border-white/10 flex items-center justify-center text-slate-500 group-hover:bg-indigo-600 group-hover:text-white transition-all">+</div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        {/* Testimonials */}
-        <section className="py-32 lg:py-48 bg-white/[0.01]">
-          <div className="max-w-7xl mx-auto px-6">
-            <div className="grid lg:grid-cols-3 gap-12">
-              {testimonials.map((t, idx) => (
-                <div key={idx} className="space-y-8 relative">
-                  <div className="flex gap-1">
-                    {[1, 2, 3, 4, 5].map(s => <Star key={s} className="w-4 h-4 fill-indigo-500 text-indigo-500" />)}
-                  </div>
-                  <p className="text-xl font-bold italic leading-relaxed text-slate-200">"{t.content}"</p>
-                  <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 rounded-full bg-indigo-600 flex items-center justify-center font-black text-white">{t.avatar}</div>
-                    <div>
-                      <p className="font-black text-white">{t.name}</p>
-                      <p className="text-xs text-slate-500 font-bold uppercase">{t.role}</p>
+            {/* ── Stats Strip ── */}
+            <section className="py-24 border-b border-white/5">
+                <div className="max-w-5xl mx-auto px-6">
+                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-8">
+                        {stats.map((s, i) => (
+                            <Reveal key={s.label} delay={i * 0.1}>
+                                <div className="text-center space-y-2">
+                                    <div className={`text-5xl lg:text-6xl font-black ${s.color}`}>
+                                        <AnimatedCounter value={s.value} suffix={s.suffix} />
+                                    </div>
+                                    <p className="text-slate-500 font-bold text-sm uppercase tracking-widest">{s.label}</p>
+                                </div>
+                            </Reveal>
+                        ))}
                     </div>
-                  </div>
                 </div>
-              ))}
-            </div>
-          </div>
-        </section>
+            </section>
 
-        {/* CTA Section */}
-        <section className="py-32 lg:py-48 relative overflow-hidden">
-          <div className="absolute inset-0 bg-indigo-600 mix-blend-overlay opacity-30" />
-          <div className="absolute top-0 right-0 w-[800px] h-[800px] bg-indigo-600/30 rounded-full blur-[160px]" />
+            {/* ── Features ── */}
+            <section id="features" className="py-32 lg:py-48 relative">
+                <div className="max-w-7xl mx-auto px-6">
+                    <Reveal>
+                        <div className="flex flex-col lg:flex-row justify-between items-end gap-8 mb-20">
+                            <div className="space-y-3">
+                                <p className="text-indigo-400 font-black uppercase tracking-[0.3em] text-xs">Platform Intelligence</p>
+                                <h2 className="text-5xl lg:text-7xl font-black tracking-tighter leading-none max-w-2xl">
+                                    DESIGNED FOR THE<br /><span className="text-slate-600">NEXT GENERATION.</span>
+                                </h2>
+                            </div>
+                            <p className="text-slate-400 max-w-sm text-lg font-medium lg:pb-2">
+                                We've re-engineered the LMS from the ground up, placing AI at the heart of every interaction.
+                            </p>
+                        </div>
+                    </Reveal>
 
-          <div className="max-w-6xl mx-auto px-6 relative z-10 text-center space-y-12">
-            <div className="flex justify-center -space-x-4 mb-20 animate-in fade-in duration-1000">
-              {[1, 2, 3, 4, 5, 6].map((i) => (
-                <div key={i} className="w-16 h-16 rounded-full border-4 border-[#020205] bg-slate-800 flex items-center justify-center overflow-hidden grayscale hover:grayscale-0 transition-all cursor-pointer">
-                  <div className="w-full h-full bg-gradient-to-br from-zinc-700 to-zinc-900" />
-                </div>
-              ))}
-            </div>
-
-            <h2 className="text-6xl md:text-8xl lg:text-[12rem] font-black tracking-tighter leading-none">
-              BUILD THE <br /> <span className="bg-clip-text text-transparent bg-gradient-to-r from-indigo-400 to-purple-500">FUTURE</span>.
-            </h2>
-
-            <div className="flex flex-col sm:flex-row items-center justify-center gap-8 pt-10">
-              <Link href="/register">
-                <Button size="lg" className="h-20 px-16 bg-white text-black hover:bg-slate-200 rounded-full text-2xl font-black shadow-[0_0_50px_-10px_rgba(255,255,255,0.3)] hover:scale-105 transition-all">
-                  Deploy Instantly
-                </Button>
-              </Link>
-              <Link href="/login">
-                <Button variant="outline" size="lg" className="h-20 px-12 border-white/20 bg-white/5 hover:bg-white/10 text-white rounded-full text-2xl font-black backdrop-blur-2xl">
-                  Speak to Sales
-                </Button>
-              </Link>
-            </div>
-
-            <div className="pt-20 flex flex-wrap justify-center gap-10 opacity-40">
-              <div className="flex items-center gap-2 font-bold text-sm"><CheckCircle2 className="w-4 h-4" /> NO CREDIT CARD</div>
-              <div className="flex items-center gap-2 font-bold text-sm"><Lock className="w-4 h-4" /> 256-BIT ENCRYPTION</div>
-              <div className="flex items-center gap-2 font-bold text-sm"><ShieldCheck className="w-4 h-4" /> GDPR COMPLIANT</div>
-            </div>
-          </div>
-        </section>
-
-        {/* Footer Section */}
-        <footer className="py-32 bg-[#020205] border-t border-white/5">
-          <div className="max-w-7xl mx-auto px-6">
-            <div className="grid md:grid-cols-2 lg:grid-cols-5 gap-16">
-              <div className="lg:col-span-2 space-y-10">
-                <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-lg">
-                    <Sparkles className="w-7 h-7 text-white" />
-                  </div>
-                  <span className="text-2xl font-black tracking-tighter">NEO-LEARN</span>
-                </div>
-                <p className="text-slate-500 max-w-sm text-lg font-medium leading-relaxed">
-                  Next-generation intelligence for educational institutions. Scale faster, learn smarter, and build the future of education together.
-                </p>
-                <div className="flex gap-4">
-                  {['Twitter', 'GitHub', 'LinkedIn', 'Instagram'].map(s => (
-                    <div key={s} className="w-10 h-10 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center text-slate-400 hover:text-white hover:bg-indigo-600 transition-all cursor-pointer">
-                      <ArrowUpRight className="w-5 h-5" />
+                    <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        {features.map((f, i) => (
+                            <Reveal key={f.title} delay={i * 0.08}>
+                                <motion.div
+                                    whileHover={{ y: -8, transition: { duration: 0.2 } }}
+                                    className={`relative p-8 rounded-3xl bg-white/[0.02] border ${f.border} hover:border-opacity-60 hover:bg-white/[0.04] transition-all group overflow-hidden`}
+                                >
+                                    <div className="absolute top-0 right-0 p-6 opacity-5 group-hover:opacity-15 transition-opacity">
+                                        <f.icon className={`w-28 h-28 ${f.color}`} />
+                                    </div>
+                                    <div className={`w-14 h-14 rounded-2xl ${f.bg} border ${f.border} flex items-center justify-center mb-7`}>
+                                        <f.icon className={`w-7 h-7 ${f.color}`} />
+                                    </div>
+                                    <h3 className="text-xl font-black mb-3">{f.title}</h3>
+                                    <p className="text-slate-500 font-medium leading-relaxed mb-5 text-sm">{f.description}</p>
+                                    <span className={`inline-flex items-center gap-1 text-xs font-black ${f.color}`}>
+                                        {f.detail} <ArrowUpRight className="w-3 h-3" />
+                                    </span>
+                                </motion.div>
+                            </Reveal>
+                        ))}
                     </div>
-                  ))}
                 </div>
-              </div>
+            </section>
 
-              <div className="space-y-8">
-                <h5 className="font-black text-xs uppercase tracking-widest text-slate-500">Platform</h5>
-                <ul className="space-y-5 text-slate-400 font-bold">
-                  <li className="hover:text-white transition-colors"><Link href="#">AI Tutoring</Link></li>
-                  <li className="hover:text-white transition-colors"><Link href="#">Multi-Tenancy</Link></li>
-                  <li className="hover:text-white transition-colors"><Link href="#">Analytics Engine</Link></li>
-                  <li className="hover:text-white transition-colors"><Link href="#">Security Protocol</Link></li>
-                </ul>
-              </div>
+            {/* ── How It Works ── */}
+            <section id="how-it-works" className="py-32 bg-white/[0.01] border-y border-white/5">
+                <div className="max-w-7xl mx-auto px-6">
+                    <Reveal>
+                        <div className="text-center mb-20 space-y-3">
+                            <p className="text-purple-400 font-black uppercase tracking-[0.3em] text-xs">Simple Onboarding</p>
+                            <h2 className="text-5xl lg:text-7xl font-black tracking-tighter">
+                                LIVE IN <span className="bg-clip-text text-transparent bg-gradient-to-r from-purple-400 to-pink-400">3 STEPS</span>.
+                            </h2>
+                        </div>
+                    </Reveal>
 
-              <div className="space-y-8">
-                <h5 className="font-black text-xs uppercase tracking-widest text-slate-500">Resources</h5>
-                <ul className="space-y-5 text-slate-400 font-bold">
-                  <li className="hover:text-white transition-colors"><Link href="#">Documentation</Link></li>
-                  <li className="hover:text-white transition-colors"><Link href="#">Help Center</Link></li>
-                  <li className="hover:text-white transition-colors"><Link href="#">Release Notes</Link></li>
-                  <li className="hover:text-white transition-colors"><Link href="#">API Reference</Link></li>
-                </ul>
-              </div>
+                    <div className="grid lg:grid-cols-3 gap-8 relative">
+                        <div className="hidden lg:block absolute top-16 left-1/3 right-1/3 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
+                        {steps.map((s, i) => (
+                            <Reveal key={s.step} delay={i * 0.15}>
+                                <div className="relative text-center p-10 rounded-3xl bg-white/[0.02] border border-white/5 hover:border-white/15 transition-all group">
+                                    <div className={`w-20 h-20 rounded-3xl bg-white/5 border border-white/10 flex items-center justify-center mx-auto mb-8 shadow-2xl ${s.glow} group-hover:scale-110 transition-transform`}>
+                                        <s.icon className={`w-10 h-10 ${s.color}`} />
+                                    </div>
+                                    <div className={`text-xs font-black ${s.color} uppercase tracking-widest mb-3`}>{s.step}</div>
+                                    <h3 className="text-2xl font-black mb-4">{s.title}</h3>
+                                    <p className="text-slate-500 font-medium leading-relaxed">{s.desc}</p>
+                                </div>
+                            </Reveal>
+                        ))}
+                    </div>
+                </div>
+            </section>
 
-              <div className="space-y-8">
-                <h5 className="font-black text-xs uppercase tracking-widest text-slate-500">Company</h5>
-                <ul className="space-y-5 text-slate-400 font-bold">
-                  <li className="hover:text-white transition-colors"><Link href="#">About Us</Link></li>
-                  <li className="hover:text-white transition-colors"><Link href="#">Privacy Policy</Link></li>
-                  <li className="hover:text-white transition-colors"><Link href="#">Terms of Service</Link></li>
-                  <li className="hover:text-white transition-colors"><Link href="#">Ethical AI</Link></li>
-                </ul>
-              </div>
-            </div>
+            {/* ── AI Tutor Preview ── */}
+            <section id="intelligence" className="py-32 lg:py-48 relative overflow-hidden">
+                <div className="absolute inset-0 bg-gradient-to-br from-indigo-600/5 via-transparent to-purple-600/5 pointer-events-none" />
+                <div className="max-w-7xl mx-auto px-6 grid lg:grid-cols-2 gap-16 items-center">
+                    <Reveal>
+                        <div className="space-y-8">
+                            <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-[10px] font-black text-indigo-400 uppercase tracking-widest">
+                                <Sparkles className="w-3 h-3" /> Real-time AI Guidance
+                            </div>
+                            <h2 className="text-5xl lg:text-6xl font-black tracking-tighter leading-[0.9]">
+                                AN AI TUTOR<br />THAT NEVER<br />SLEEPS.
+                            </h2>
+                            <p className="text-xl text-slate-400 font-medium leading-relaxed">
+                                Our AI doesn't just answer questions — it identifies learning gaps, generates custom study schedules, and provides 24/7 support tailored to each student's exact curriculum.
+                            </p>
+                            <div className="space-y-3">
+                                {[
+                                    "Individualised progress tracking per student",
+                                    "Automated lesson planning for teachers",
+                                    "Predictive analytics for performance risk",
+                                    "Spaced repetition schedules (SM-2 algorithm)",
+                                    "Bayesian Knowledge Tracing for skill mastery"
+                                ].map(item => (
+                                    <div key={item} className="flex items-center gap-3">
+                                        <div className="w-5 h-5 rounded-full bg-indigo-500/20 border border-indigo-500/40 flex items-center justify-center flex-shrink-0">
+                                            <CheckCircle2 className="w-3 h-3 text-indigo-400" />
+                                        </div>
+                                        <span className="font-bold text-slate-300 text-sm">{item}</span>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    </Reveal>
 
-            <div className="mt-32 pt-12 border-t border-white/5 flex flex-col md:flex-row justify-between items-center gap-8">
-              <p className="text-xs text-slate-600 font-black tracking-widest">© 2026 NEO-LEARN SaaS PLATFORM. AN APEESYS LABS PRODUCTION.</p>
-              <div className="flex items-center gap-10">
-                <span className="flex items-center gap-2 text-[10px] font-black text-emerald-500 tracking-widest uppercase">
-                  <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" /> SYSTEM OPERATIONAL
-                </span>
-                <span className="text-[10px] font-black text-slate-700 tracking-widest uppercase cursor-pointer hover:text-white">BACK TO TOP ↑</span>
-              </div>
-            </div>
-          </div>
-        </footer>
-      </main>
+                    <Reveal delay={0.2}>
+                        <div className="relative">
+                            <div className="absolute inset-0 bg-indigo-500/15 blur-[80px] rounded-full scale-110 pointer-events-none" />
+                            <div className="bg-[#08080f] border border-white/10 rounded-[32px] p-6 shadow-2xl relative">
+                                <div className="flex items-center gap-2 mb-6 pb-4 border-b border-white/5">
+                                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center">
+                                        <Sparkles className="w-4 h-4" />
+                                    </div>
+                                    <div>
+                                        <p className="text-sm font-black">Neo-Learn AI Tutor</p>
+                                        <p className="text-[10px] text-emerald-400 font-bold">● Online</p>
+                                    </div>
+                                </div>
+                                <div className="space-y-4">
+                                    <div className="flex gap-3">
+                                        <div className="w-8 h-8 rounded-full bg-slate-700 shrink-0 flex items-center justify-center text-xs font-black">S</div>
+                                        <div className="p-3.5 bg-white/5 rounded-2xl rounded-tl-none border border-white/10 text-slate-300 text-sm font-medium max-w-[85%]">
+                                            Can you explain the difference between Mitochondria and Chloroplasts?
+                                        </div>
+                                    </div>
+                                    <div className="flex gap-3 justify-end">
+                                        <div className="p-3.5 bg-indigo-600 rounded-2xl rounded-tr-none text-white text-sm font-medium shadow-lg shadow-indigo-600/20 max-w-[85%]">
+                                            Great question! Mitochondria are the "power plants" — they break down fuel (glucose) to make ATP energy. Chloroplasts are "solar panels" — they use sunlight to create glucose. 🔋☀️<br /><br />
+                                            <span className="text-indigo-200 text-xs">Based on your Biology Unit 3 materials</span>
+                                        </div>
+                                        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shrink-0">
+                                            <Sparkles className="w-4 h-4" />
+                                        </div>
+                                    </div>
+                                    <div className="flex gap-1.5 px-2">
+                                        <div className="w-2 h-2 rounded-full bg-indigo-400 animate-bounce" />
+                                        <div className="w-2 h-2 rounded-full bg-indigo-400 animate-bounce delay-100" />
+                                        <div className="w-2 h-2 rounded-full bg-indigo-400 animate-bounce delay-200" />
+                                    </div>
+                                </div>
+                                <div className="mt-5 pt-4 border-t border-white/5 flex gap-3">
+                                    <div className="flex-1 bg-white/5 rounded-xl border border-white/10 h-11 flex items-center px-4 text-slate-500 text-xs font-medium">
+                                        Ask anything about your curriculum…
+                                    </div>
+                                    <div className="w-11 h-11 rounded-xl bg-indigo-600 flex items-center justify-center">
+                                        <Zap className="w-5 h-5 text-white" />
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </Reveal>
+                </div>
+            </section>
 
-      {/* Global Smooth Scroll Support */}
-      <style jsx global>{`
-                html {
-                   scroll-behavior: smooth;
-                }
+            {/* ── Pricing ── */}
+            <section id="pricing" className="py-32 lg:py-48 border-t border-white/5">
+                <div className="max-w-7xl mx-auto px-6">
+                    <Reveal>
+                        <div className="text-center mb-16 space-y-4">
+                            <h2 className="text-5xl lg:text-7xl font-black tracking-tighter">
+                                PRICING BUILT<br /><span className="text-indigo-500">FOR SCALE</span>.
+                            </h2>
+                            <p className="text-slate-400 font-medium">No hidden fees. Core AI engine included in every plan.</p>
+
+                            {/* Monthly/Annual toggle */}
+                            <div className="flex items-center justify-center gap-4 mt-8">
+                                <span className={`text-sm font-bold transition-colors ${!billingAnnual ? 'text-white' : 'text-slate-500'}`}>Monthly</span>
+                                <button
+                                    onClick={() => setBillingAnnual(v => !v)}
+                                    className={`relative w-14 h-7 rounded-full transition-colors ${billingAnnual ? 'bg-indigo-600' : 'bg-white/10'}`}
+                                >
+                                    <div className={`absolute top-1 w-5 h-5 rounded-full bg-white shadow transition-all ${billingAnnual ? 'left-8' : 'left-1'}`} />
+                                </button>
+                                <span className={`text-sm font-bold transition-colors ${billingAnnual ? 'text-white' : 'text-slate-500'}`}>
+                                    Annual <span className="text-emerald-400 text-xs ml-1">Save 20%</span>
+                                </span>
+                            </div>
+                            {isPricingFallback && <p className="text-xs text-slate-600 font-bold uppercase tracking-widest mt-4">Live plan pricing temporarily unavailable</p>}
+                        </div>
+                    </Reveal>
+
+                    <div className="grid md:grid-cols-3 gap-6">
+                        {pricingCards.map((plan, i) => (
+                            <Reveal key={plan.name} delay={i * 0.1}>
+                                <div className={`relative p-8 rounded-[32px] border flex flex-col h-full transition-all ${plan.popular
+                                    ? 'bg-gradient-to-b from-indigo-600 to-indigo-700 border-indigo-400/50 shadow-2xl shadow-indigo-600/20'
+                                    : 'bg-white/[0.02] border-white/10 hover:border-white/25 hover:bg-white/[0.04]'}`}
+                                >
+                                    {plan.popular && (
+                                        <div className="absolute top-0 right-8 -translate-y-1/2 px-4 py-1 bg-white text-indigo-600 text-[10px] font-black uppercase tracking-widest rounded-full shadow-lg">
+                                            Most Popular
+                                        </div>
+                                    )}
+                                    <div>
+                                        <h3 className="text-2xl font-black mb-1">{plan.name}</h3>
+                                        <p className={`text-sm font-medium mb-7 ${plan.popular ? 'text-indigo-200' : 'text-slate-500'}`}>{plan.description}</p>
+                                        <div className="flex items-baseline gap-1 mb-2">
+                                            <span className="text-5xl font-black">{plan.price}</span>
+                                            {plan.billingSuffix && <span className={`text-xs font-bold ${plan.popular ? 'text-indigo-200' : 'text-slate-500'}`}>{plan.billingSuffix}</span>}
+                                        </div>
+                                        {plan.yearlyNote && <p className={`text-xs font-bold mb-8 ${plan.popular ? 'text-indigo-200' : 'text-slate-500'}`}>{plan.yearlyNote}</p>}
+                                    </div>
+                                    <div className="space-y-3 mb-8 flex-1">
+                                        {plan.features.map(f => (
+                                            <div key={f} className="flex items-center gap-3">
+                                                <CheckCircle2 className={`w-4 h-4 flex-shrink-0 ${plan.popular ? 'text-white' : 'text-indigo-500'}`} />
+                                                <span className={`text-sm font-bold ${plan.popular ? 'text-white' : 'text-slate-300'}`}>{f}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                    <Link href="/register">
+                                        <Button className={`w-full h-12 rounded-2xl font-black ${plan.popular
+                                            ? 'bg-white text-indigo-600 hover:bg-slate-100'
+                                            : 'bg-indigo-600 text-white hover:bg-indigo-500 shadow-lg shadow-indigo-600/20'}`}>
+                                            {plan.button}
+                                        </Button>
+                                    </Link>
+                                </div>
+                            </Reveal>
+                        ))}
+                    </div>
+                </div>
+            </section>
+
+            {/* ── Testimonials ── */}
+            <section className="py-32 bg-white/[0.01] border-y border-white/5">
+                <div className="max-w-7xl mx-auto px-6">
+                    <Reveal>
+                        <div className="text-center mb-20 space-y-3">
+                            <p className="text-orange-400 font-black uppercase tracking-[0.3em] text-xs">Social Proof</p>
+                            <h2 className="text-5xl lg:text-7xl font-black tracking-tighter">LOVED BY<br /><span className="text-slate-600">EDUCATORS.</span></h2>
+                        </div>
+                    </Reveal>
+                    <div className="grid lg:grid-cols-3 gap-8">
+                        {testimonials.map((t, i) => (
+                            <Reveal key={t.name} delay={i * 0.1}>
+                                <motion.div
+                                    whileHover={{ y: -6, transition: { duration: 0.2 } }}
+                                    className="p-8 rounded-3xl bg-white/[0.02] border border-white/5 hover:border-white/15 transition-all"
+                                >
+                                    <div className="flex gap-1 mb-6">
+                                        {[...Array(t.stars)].map((_, s) => <Star key={s} className="w-4 h-4 fill-indigo-500 text-indigo-500" />)}
+                                    </div>
+                                    <p className="text-lg font-bold italic leading-relaxed text-slate-200 mb-8">"{t.content}"</p>
+                                    <div className="flex items-center gap-4">
+                                        <div className="w-12 h-12 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center font-black text-white text-sm">
+                                            {t.avatar}
+                                        </div>
+                                        <div>
+                                            <p className="font-black text-white">{t.name}</p>
+                                            <p className="text-xs text-slate-500 font-bold">{t.role}</p>
+                                        </div>
+                                    </div>
+                                </motion.div>
+                            </Reveal>
+                        ))}
+                    </div>
+                </div>
+            </section>
+
+            {/* ── FAQ ── */}
+            <section className="py-32">
+                <div className="max-w-3xl mx-auto px-6">
+                    <Reveal>
+                        <div className="text-center mb-16 space-y-3">
+                            <h2 className="text-4xl lg:text-6xl font-black tracking-tighter">
+                                FREQUENTLY<br /><span className="text-indigo-500">ASKED</span>.
+                            </h2>
+                        </div>
+                    </Reveal>
+                    <div className="space-y-3">
+                        {faqs.map((item, i) => (
+                            <Reveal key={i} delay={i * 0.05}>
+                                <FaqItem q={item.q} a={item.a} />
+                            </Reveal>
+                        ))}
+                    </div>
+                </div>
+            </section>
+
+            {/* ── CTA ── */}
+            <section className="py-32 lg:py-48 relative overflow-hidden border-t border-white/5">
+                <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_rgba(79,70,229,0.15)_0%,_transparent_70%)] pointer-events-none" />
+                <div className="absolute top-0 right-0 w-[600px] h-[600px] bg-indigo-600/20 rounded-full blur-[150px] pointer-events-none" />
+
+                <div className="max-w-5xl mx-auto px-6 relative z-10 text-center">
+                    <Reveal>
+                        <h2 className="text-6xl md:text-8xl lg:text-[10rem] font-black tracking-tighter leading-none mb-10">
+                            BUILD THE<br /><span className="bg-clip-text text-transparent bg-gradient-to-r from-indigo-400 via-purple-400 to-pink-400">FUTURE</span>.
+                        </h2>
+                    </Reveal>
+                    <Reveal delay={0.1}>
+                        <p className="text-xl text-slate-400 font-medium mb-12 max-w-xl mx-auto">
+                            Join 50+ institutions already transforming how their students learn with AI.
+                        </p>
+                    </Reveal>
+                    <Reveal delay={0.2}>
+                        <div className="flex flex-col sm:flex-row items-center justify-center gap-6">
+                            <Link href="/register">
+                                <Button size="lg" className="h-16 px-14 bg-white text-black hover:bg-slate-100 rounded-full text-xl font-black shadow-[0_0_40px_-10px_rgba(255,255,255,0.25)] hover:scale-105 transition-all">
+                                    Deploy Instantly
+                                </Button>
+                            </Link>
+                            <Link href="/login">
+                                <Button variant="outline" size="lg" className="h-16 px-12 border-white/15 bg-white/5 hover:bg-white/10 text-white rounded-full text-xl font-black backdrop-blur-xl">
+                                    Speak to Sales
+                                </Button>
+                            </Link>
+                        </div>
+                    </Reveal>
+                    <Reveal delay={0.3}>
+                        <div className="pt-12 flex flex-wrap justify-center gap-8 opacity-35">
+                            <div className="flex items-center gap-2 font-bold text-sm"><CheckCircle2 className="w-4 h-4" /> NO CREDIT CARD</div>
+                            <div className="flex items-center gap-2 font-bold text-sm"><Lock className="w-4 h-4" /> 256-BIT ENCRYPTION</div>
+                            <div className="flex items-center gap-2 font-bold text-sm"><ShieldCheck className="w-4 h-4" /> GDPR COMPLIANT</div>
+                        </div>
+                    </Reveal>
+                </div>
+            </section>
+
+            {/* ── Footer ── */}
+            <footer className="py-20 bg-[#020205] border-t border-white/5">
+                <div className="max-w-7xl mx-auto px-6">
+                    <div className="grid md:grid-cols-2 lg:grid-cols-5 gap-12 mb-16">
+                        <div className="lg:col-span-2 space-y-6">
+                            <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center">
+                                    <Sparkles className="w-6 h-6 text-white" />
+                                </div>
+                                <span className="text-2xl font-black tracking-tighter">NEO-LEARN</span>
+                            </div>
+                            <p className="text-slate-500 max-w-xs text-sm font-medium leading-relaxed">
+                                Next-generation AI education infrastructure for institutions that demand excellence and scale.
+                            </p>
+                            <div className="flex gap-3">
+                                {['𝕏', 'in', 'gh', 'ig'].map(s => (
+                                    <div key={s} className="w-9 h-9 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center text-slate-400 hover:text-white hover:bg-indigo-600 transition-all cursor-pointer text-xs font-black">
+                                        {s}
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+
+                        {[
+                            { title: "Platform", links: ["AI Tutoring", "Study Planner", "Analytics Engine", "Progress Reports", "Mobile App"] },
+                            { title: "Company", links: ["About Us", "Careers", "Privacy Policy", "Terms of Service", "Ethical AI"] },
+                            { title: "Resources", links: ["Documentation", "Help Centre", "Release Notes", "API Reference", "Status Page"] },
+                        ].map(col => (
+                            <div key={col.title} className="space-y-5">
+                                <h5 className="font-black text-xs uppercase tracking-widest text-slate-600">{col.title}</h5>
+                                <ul className="space-y-3 text-slate-500 text-sm font-bold">
+                                    {col.links.map(l => <li key={l} className="hover:text-white transition-colors cursor-pointer">{l}</li>)}
+                                </ul>
+                            </div>
+                        ))}
+                    </div>
+
+                    <div className="pt-8 border-t border-white/5 flex flex-col md:flex-row justify-between items-center gap-4">
+                        <p className="text-xs text-slate-700 font-black tracking-widest">© 2026 NEO-LEARN SAAS PLATFORM. AN APEESYS LABS PRODUCTION.</p>
+                        <div className="flex items-center gap-6">
+                            <span className="flex items-center gap-2 text-[10px] font-black text-emerald-500 tracking-widest uppercase">
+                                <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" /> SYSTEM OPERATIONAL
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </footer>
+
+            <style jsx global>{`
+                html { scroll-behavior: smooth; }
                 @keyframes marquee {
                     0% { transform: translateX(0); }
-                    100% { transform: translateX(-50%); }
+                    100% { transform: translateX(-33.333%); }
                 }
-                .animate-marquee {
-                    animation: marquee 40s linear infinite;
-                }
-                .perspective-1000 {
-                    perspective: 1000px;
-                }
-                .rotate-y-[-10deg] {
-                    transform: rotateY(-10deg);
-                }
-                .rotate-x-[5deg] {
-                    transform: rotateX(5deg);
-                }
+                .animate-marquee { animation: marquee 30s linear infinite; }
             `}</style>
-    </div>
-  );
+        </div>
+    );
 }

@@ -1389,19 +1389,33 @@ export interface SchoolERPOverview {
 
 // Phase 9 – Progress Report types
 export interface ProgressReportMetrics {
-    student_id: string;
     student_name: string;
+    class_name: string;
     avg_score: number;
+    subject_averages: Record<string, number>;
+    strengths: string[];
+    weak_subjects: string[];
     attendance_rate: number;
-    sm2_nodes: Array<{ title: string; ease_factor: number; interval_days: number; last_quality: number }>;
-    top_gaps: Array<{ skill: string; p_mastery: number }>;
-    top_strengths: Array<{ skill: string; p_mastery: number }>;
-    tutor_conversations: number;
-    tutor_messages: number;
-    token_budget_pct_used: number;
-    study_plan_completion_pct: number;
-    report_period_days: number;
-    generated_at: string;
+    sm2: {
+        reviews_completed: number;
+        avg_quality: number;
+        avg_ease_factor: number;
+        due_reviews: number;
+    };
+    bkt: {
+        skill_gaps: Array<{ skill: string; mastery_pct: number }>;
+        skill_strengths: Array<{ skill: string; mastery_pct: number }>;
+        total_skills_tracked: number;
+    };
+    tutor: {
+        conversations_this_period: number;
+        questions_asked: number;
+    };
+    budget_used_today_pct: number;
+    streak_days: number;
+    focus_score: number;
+    daily_goal_minutes: number;
+    plan_completion_pct: number;
 }
 
 export interface ProgressReport {
