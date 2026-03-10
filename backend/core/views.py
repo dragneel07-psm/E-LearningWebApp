@@ -301,7 +301,12 @@ class TenantViewSet(viewsets.ModelViewSet):
             "status": instance.status,
             "type": instance.type,
         }
-        super().perform_destroy(instance)
+        # Tenant deletion must run from the public schema. If the request is served while
+        # another tenant schema is active, django-tenants can reject the drop or leave the
+        # connection on a schema that no longer exists after deletion.
+        connection.set_schema_to_public()
+        instance.delete(force_drop=True)
+        connection.set_schema_to_public()
         record_audit_event(
             action="core.tenant_deleted",
             user=getattr(self.request, "user", None),

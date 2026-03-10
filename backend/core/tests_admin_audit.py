@@ -7,7 +7,7 @@ from rest_framework.test import APIClient, APIRequestFactory, force_authenticate
 
 from core.models import AuditLog, Tenant
 from core.models.tenant import Domain
-from core.views import BackupViewSet, GlobalSettingsViewSet
+from core.views import BackupViewSet, GlobalSettingsViewSet, TenantViewSet
 from core.views_saas import TenantUserPasswordResetView
 from users.models import UserAccount
 
@@ -103,3 +103,28 @@ class SaasAdminMutationAuditTests(FastTenantTestCase):
         row = AuditLog.objects.filter(action="core.backup_created").first()
         self.assertIsNotNone(row)
         self.assertEqual(row.details.get("all"), True)
+
+    @patch("core.views.record_audit_event")
+    @patch("core.views.connection.set_schema_to_public")
+    def test_tenant_delete_uses_public_schema_and_force_drop(self, mock_set_public, mock_audit):
+        request = self.factory.delete(f"/api/core/tenants/{self.tenant.id}/", {"password": "Saas@1234"}, format="json")
+        force_authenticate(request, user=self.saas_admin)
+
+        view = TenantViewSet()
+        view.request = request
+
+        tenant = SimpleNamespace(
+            id=self.tenant.id,
+            schema_name=self.tenant.schema_name,
+            name=self.tenant.name,
+            status=self.tenant.status,
+            type=self.tenant.type,
+        )
+        tenant.delete = lambda *args, **kwargs: None
+
+        with patch.object(tenant, "delete") as mocked_delete:
+            view.perform_destroy(tenant)
+
+        mock_set_public.assert_called()
+        mocked_delete.assert_called_once_with(force_drop=True)
+        mock_audit.assert_called_once()
