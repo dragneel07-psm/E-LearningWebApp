@@ -1,3 +1,4 @@
+import uuid
 import uuid as uuid_lib
 
 from django.conf import settings
@@ -6,6 +7,42 @@ from django.db import models
 from core.models.tenant import Tenant
 
 from .models_base import SchemaScopedBillingModel
+
+
+class FeeDiscount(models.Model):
+    """Reusable discount template (scholarship, sibling discount, staff child, etc.)"""
+    discount_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    tenant = models.ForeignKey(
+        'core.Tenant', on_delete=models.CASCADE,
+        related_name='fee_discounts', db_constraint=False,
+    )
+    name = models.CharField(max_length=100)
+    DISCOUNT_TYPES = [('percentage', 'Percentage'), ('flat', 'Flat Amount')]
+    discount_type = models.CharField(max_length=20, choices=DISCOUNT_TYPES, default='percentage')
+    value = models.DecimalField(max_digits=10, decimal_places=2)
+    max_cap = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True,
+                                   help_text='Maximum discount cap (for percentage type)')
+    reason = models.CharField(max_length=200, blank=True)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['name']
+
+    def __str__(self):
+        if self.discount_type == 'percentage':
+            return f"{self.name} ({self.value}%)"
+        return f"{self.name} (NPR {self.value})"
+
+    def compute_discount(self, amount):
+        """Return the actual discount amount for a given fee amount."""
+        if self.discount_type == 'percentage':
+            disc = amount * self.value / 100
+            if self.max_cap:
+                disc = min(disc, self.max_cap)
+        else:
+            disc = self.value
+        return min(disc, amount)  # Can't discount more than the amount
 
 
 class FeeStructure(SchemaScopedBillingModel, models.Model):
@@ -66,6 +103,12 @@ class StudentFee(SchemaScopedBillingModel, models.Model):
         ("waived", "Waived"),
     )
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="pending")
+
+    discount = models.ForeignKey(
+        FeeDiscount, on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='applied_fees', db_constraint=False,
+    )
+    discount_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

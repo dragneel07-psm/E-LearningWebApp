@@ -15,6 +15,7 @@ const NAV = [
     { href: '/parent/attendance', label: 'Attendance', icon: CalendarDays },
     { href: '/parent/grades', label: 'Grades', icon: GraduationCap },
     { href: '/parent/fees', label: 'Fees', icon: Wallet },
+    { href: '/parent/leaves', label: 'Leave Requests', icon: CalendarClock },
     { href: '/parent/meetings', label: 'Meetings', icon: CalendarClock },
     { href: '/parent/notices', label: 'Notices', icon: BookOpen },
     { href: '/parent/messages', label: 'Messages', icon: MessageSquare },

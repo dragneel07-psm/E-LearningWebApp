@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { CreditCard, DollarSign, Calendar, History, Wallet, AlertCircle, CheckCircle2, Download, Loader2, Sparkles, Receipt } from 'lucide-react';
-import { billingAPI, academicAPI, usersAPI, StudentFee, Payment } from '@/lib/api';
+import { billingAPI, academicAPI, usersAPI, paymentGatewayAPI, StudentFee, Payment } from '@/lib/api';
 import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
@@ -20,6 +20,7 @@ export default function StudentFeesPage() {
     const [isPayDialogOpen, setIsPayDialogOpen] = useState(false);
     const [selectedFee, setSelectedFee] = useState<StudentFee | null>(null);
     const [payLoading, setPayLoading] = useState(false);
+    const [paymentMethod, setPaymentMethod] = useState<'manual' | 'esewa' | 'khalti'>('manual');
     const [user, setUser] = useState<any>(null);
 
     useEffect(() => {
@@ -70,17 +71,38 @@ export default function StudentFeesPage() {
         }
         setPayLoading(true);
         try {
-            await billingAPI.recordPayment({
-                student: selectedFee.student,
-                student_fee: selectedFee.student_fee_id,
-                amount: payableAmount,
-                method: 'online',
-                remarks: 'Self-paid via Student Portal'
-            });
-
-            toast.success('Payment successful! Your receipt is being generated.');
-            setIsPayDialogOpen(false);
-            loadData();
+            if (paymentMethod === 'esewa') {
+                const fields = await paymentGatewayAPI.esewaInitiate(selectedFee.student_fee_id);
+                // Build and submit eSewa form
+                const form = document.createElement('form');
+                form.method = 'POST';
+                form.action = 'https://rc-epay.esewa.com.np/api/epay/main/v2/form';
+                Object.entries(fields).forEach(([key, value]) => {
+                    const input = document.createElement('input');
+                    input.type = 'hidden';
+                    input.name = key;
+                    input.value = String(value);
+                    form.appendChild(input);
+                });
+                document.body.appendChild(form);
+                form.submit();
+                return;
+            } else if (paymentMethod === 'khalti') {
+                const res = await paymentGatewayAPI.khaltiInitiate(selectedFee.student_fee_id);
+                window.location.href = res.payment_url;
+                return;
+            } else {
+                await billingAPI.recordPayment({
+                    student: selectedFee.student,
+                    student_fee: selectedFee.student_fee_id,
+                    amount: payableAmount,
+                    method: 'online',
+                    remarks: 'Self-paid via Student Portal'
+                });
+                toast.success('Payment successful! Your receipt is being generated.');
+                setIsPayDialogOpen(false);
+                loadData();
+            }
         } catch (error) {
             toast.error('Payment failed. Please try again.');
         } finally {
@@ -342,16 +364,35 @@ export default function StudentFeesPage() {
 
                         <div className="space-y-4">
                             <Label className="font-bold text-slate-700">Payment Method</Label>
-                            <div className="grid grid-cols-2 gap-3">
-                                <Button variant="outline" className="h-16 border-2 border-indigo-100 flex flex-col gap-1 active:border-indigo-600">
-                                    <CreditCard className="h-5 w-5 text-indigo-600" />
-                                    <span className="text-[10px] uppercase font-bold">Credit Card</span>
+                            <div className="grid grid-cols-3 gap-3">
+                                <Button
+                                    variant="outline"
+                                    onClick={() => setPaymentMethod('manual')}
+                                    className={`h-16 flex flex-col gap-1 border-2 ${paymentMethod === 'manual' ? 'border-indigo-600 bg-indigo-50' : 'border-slate-100'}`}
+                                >
+                                    <CreditCard className={`h-5 w-5 ${paymentMethod === 'manual' ? 'text-indigo-600' : 'text-slate-400'}`} />
+                                    <span className="text-[10px] uppercase font-bold">Manual</span>
                                 </Button>
-                                <Button variant="outline" className="h-16 border-2 border-slate-100 flex flex-col gap-1 opacity-50 cursor-not-allowed">
-                                    <DollarSign className="h-5 w-5 text-slate-400" />
-                                    <span className="text-[10px] uppercase font-bold">Digital Wallet</span>
+                                <Button
+                                    variant="outline"
+                                    onClick={() => setPaymentMethod('esewa')}
+                                    className={`h-16 flex flex-col gap-1 border-2 ${paymentMethod === 'esewa' ? 'border-green-600 bg-green-50' : 'border-slate-100'}`}
+                                >
+                                    <span className={`text-sm font-black ${paymentMethod === 'esewa' ? 'text-green-700' : 'text-slate-500'}`}>eSewa</span>
+                                    <span className="text-[10px] uppercase font-bold">Digital</span>
+                                </Button>
+                                <Button
+                                    variant="outline"
+                                    onClick={() => setPaymentMethod('khalti')}
+                                    className={`h-16 flex flex-col gap-1 border-2 ${paymentMethod === 'khalti' ? 'border-purple-600 bg-purple-50' : 'border-slate-100'}`}
+                                >
+                                    <span className={`text-sm font-black ${paymentMethod === 'khalti' ? 'text-purple-700' : 'text-slate-500'}`}>Khalti</span>
+                                    <span className="text-[10px] uppercase font-bold">Digital</span>
                                 </Button>
                             </div>
+                            {paymentMethod !== 'manual' && (
+                                <p className="text-xs text-slate-500">You will be redirected to {paymentMethod === 'esewa' ? 'eSewa' : 'Khalti'} to complete payment.</p>
+                            )}
                         </div>
 
                         <div className="flex items-center gap-3 p-3 bg-amber-50 rounded-lg border border-amber-100">

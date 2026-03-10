@@ -5,13 +5,17 @@ import { SISDashboardOverview } from './SISDashboardOverview';
 import { IncidentLog } from './IncidentLog';
 import { HealthRecords } from './HealthRecords';
 import { DocumentsManager } from './DocumentsManager';
-import { LayoutDashboard, AlertTriangle, Heart, FileText } from 'lucide-react';
+import { StudentLeaveManager } from './StudentLeaveManager';
+import { ComplaintManager } from './ComplaintManager';
+import { LayoutDashboard, AlertTriangle, Heart, FileText, CalendarClock, MessageSquareWarning } from 'lucide-react';
 
 const TABS = [
     { id: 'overview', label: 'Overview', icon: LayoutDashboard },
     { id: 'incidents', label: 'Incidents', icon: AlertTriangle },
     { id: 'health', label: 'Health', icon: Heart },
     { id: 'documents', label: 'Documents', icon: FileText },
+    { id: 'leaves', label: 'Leaves', icon: CalendarClock },
+    { id: 'complaints', label: 'Complaints', icon: MessageSquareWarning },
 ] as const;
 
 type TabId = typeof TABS[number]['id'];
@@ -28,7 +32,7 @@ export default function SISPage() {
             </div>
 
             {/* Tabs */}
-            <div className="flex bg-slate-100 rounded-2xl p-1 gap-1 w-fit">
+            <div className="flex flex-wrap bg-slate-100 rounded-2xl p-1 gap-1 w-fit">
                 {TABS.map(tab => {
                     const Icon = tab.icon;
                     return (
@@ -53,6 +57,8 @@ export default function SISPage() {
             {activeTab === 'incidents' && <IncidentLog />}
             {activeTab === 'health' && <HealthRecords />}
             {activeTab === 'documents' && <DocumentsManager />}
+            {activeTab === 'leaves' && <StudentLeaveManager />}
+            {activeTab === 'complaints' && <ComplaintManager />}
         </div>
     );
 }

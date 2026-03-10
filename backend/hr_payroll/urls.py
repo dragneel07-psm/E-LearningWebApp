@@ -11,6 +11,7 @@ from .views import (
     SalarySlipViewSet,
     StaffAttendanceViewSet,
 )
+from .views_appraisal import AppraisalCycleViewSet, AppraisalFormViewSet
 
 router = DefaultRouter()
 router.register(r"departments", DepartmentViewSet)
@@ -21,6 +22,8 @@ router.register(r"attendance", StaffAttendanceViewSet)
 router.register(r"payroll-periods", PayrollPeriodViewSet)
 router.register(r"salary-slips", SalarySlipViewSet)
 router.register(r"dashboard", HRDashboardViewSet, basename="hr-dashboard")
+router.register(r"appraisal-cycles", AppraisalCycleViewSet, basename="appraisal-cycle")
+router.register(r"appraisals", AppraisalFormViewSet, basename="appraisal")
 
 urlpatterns = [
     path("", include(router.urls)),

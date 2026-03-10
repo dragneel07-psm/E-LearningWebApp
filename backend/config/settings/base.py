@@ -139,6 +139,8 @@ TENANT_APPS = [
     "gamification",
     "conversations",
     "hr_payroll",
+    "transport",
+    "hostel",
 ]
 
 INSTALLED_APPS = list(SHARED_APPS) + [app for app in TENANT_APPS if app not in SHARED_APPS]
@@ -456,6 +458,18 @@ AI_RISK_USE_LLM_EXPLANATIONS = os.environ.get("AI_RISK_USE_LLM_EXPLANATIONS", "f
 AI_ADMIN_ASSISTANT_LOOKBACK_DAYS = int(os.environ.get("AI_ADMIN_ASSISTANT_LOOKBACK_DAYS", "30"))
 AI_ADMIN_ASSISTANT_USE_LLM_CLASSIFIER = os.environ.get("AI_ADMIN_ASSISTANT_USE_LLM_CLASSIFIER", "false").lower() == "true"
 AI_ADMIN_ASSISTANT_USE_LLM_RESPONSE = os.environ.get("AI_ADMIN_ASSISTANT_USE_LLM_RESPONSE", "false").lower() == "true"
+
+# SMS (Sparrow SMS - Nepal)
+SPARROW_SMS_TOKEN = os.environ.get("SPARROW_SMS_TOKEN", "").strip()
+SPARROW_SMS_FROM = os.environ.get("SPARROW_SMS_FROM", "School").strip()
+
+# Payment Gateways (Nepal)
+ESEWA_MERCHANT_CODE = os.environ.get("ESEWA_MERCHANT_CODE", "EPAYTEST").strip()
+ESEWA_PAYMENT_URL = os.environ.get("ESEWA_PAYMENT_URL", "https://uat.esewa.com.np/epay/main").strip()
+ESEWA_VERIFY_URL = os.environ.get("ESEWA_VERIFY_URL", "https://uat.esewa.com.np/epay/transrec").strip()
+KHALTI_SECRET_KEY = os.environ.get("KHALTI_SECRET_KEY", "").strip()
+KHALTI_INITIATE_URL = os.environ.get("KHALTI_INITIATE_URL", "https://a.khalti.com/api/v2/epayment/initiate/").strip()
+KHALTI_LOOKUP_URL = os.environ.get("KHALTI_LOOKUP_URL", "https://a.khalti.com/api/v2/epayment/lookup/").strip()
 
 # Tenant trust policy:
 # - dev_only (default): allow x-tenant-id only in DEBUG + localhost/127.0.0.1/*.local hosts

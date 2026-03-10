@@ -10,7 +10,7 @@ import { academicAPI, Parent, Student } from '@/lib/api';
 import { useToast } from '@/hooks/use-toast';
 import {
     Users, Loader2, AlertCircle, GraduationCap, CalendarDays,
-    Activity, TrendingUp, ChevronRight,
+    Activity, TrendingUp, ChevronRight, CalendarClock,
 } from 'lucide-react';
 
 export default function ParentChildrenPage() {
@@ -99,12 +99,19 @@ export default function ParentChildrenPage() {
                                     </div>
 
                                     {/* Actions */}
-                                    <Link href={`/parent/children/${child.student_id}`} className="block">
-                                        <Button className="w-full h-9 text-xs font-bold rounded-xl gap-2 bg-violet-600 hover:bg-violet-700">
-                                            <GraduationCap className="h-3.5 w-3.5" /> View Full Profile
-                                            <ChevronRight className="h-3.5 w-3.5 ml-auto" />
-                                        </Button>
-                                    </Link>
+                                    <div className="flex gap-2">
+                                        <Link href={`/parent/children/${child.student_id}`} className="flex-1">
+                                            <Button className="w-full h-9 text-xs font-bold rounded-xl gap-2 bg-violet-600 hover:bg-violet-700">
+                                                <GraduationCap className="h-3.5 w-3.5" /> Profile
+                                                <ChevronRight className="h-3.5 w-3.5 ml-auto" />
+                                            </Button>
+                                        </Link>
+                                        <Link href="/parent/leaves">
+                                            <Button variant="outline" className="h-9 text-xs font-bold rounded-xl gap-1.5 border-violet-200 text-violet-700 hover:bg-violet-50">
+                                                <CalendarClock className="h-3.5 w-3.5" /> Leave
+                                            </Button>
+                                        </Link>
+                                    </div>
                                 </CardContent>
                             </Card>
                         );

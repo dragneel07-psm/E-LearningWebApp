@@ -6,9 +6,11 @@ import { FeeStructureManager } from './FeeStructureManager';
 import { StudentFeeList } from './StudentFeeList';
 import { ExpenseManager } from './ExpenseManager';
 import FinancialReports from '@/components/finance/FinancialReports';
+import { DiscountManager } from './DiscountManager';
+import { LedgerManager } from './LedgerManager';
 import {
     LayoutDashboard, Receipt, Settings2, TrendingUp, Wallet,
-    Building2, CalendarDays
+    Building2, CalendarDays, Percent, BookOpen
 } from 'lucide-react';
 
 const TABS = [
@@ -17,6 +19,8 @@ const TABS = [
     { id: 'structures', label: 'Fee Matrix', icon: Settings2 },
     { id: 'expenses', label: 'Expenses', icon: Wallet },
     { id: 'reports', label: 'Reports', icon: TrendingUp },
+    { id: 'discounts', label: 'Discounts', icon: Percent },
+    { id: 'ledger', label: 'Ledger', icon: BookOpen },
 ] as const;
 
 type TabId = typeof TABS[number]['id'];
@@ -75,6 +79,8 @@ export default function FinanceDashboardPage() {
                         <FinancialReports />
                     </div>
                 )}
+                {activeTab === 'discounts' && <DiscountManager />}
+                {activeTab === 'ledger' && <LedgerManager />}
             </div>
         </div>
     );

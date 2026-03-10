@@ -28,21 +28,36 @@ class EmailService:
             return False
 
 class SMSService:
+    SPARROW_URL = "http://api.sparrowsms.com/v2/sms/"
+
     @staticmethod
-    def send_sms(recipient_phone, message):
-        """
-        Mock SMS service. In a real app, integrate Twilio/AWS SNS here.
-        """
+    def send_sms(recipient_phone: str, message: str) -> bool:
+        from django.conf import settings
+        import requests, logging
+        logger = logging.getLogger(__name__)
+
         if not recipient_phone:
-            logger.warning("No phone number provided for SMS.")
             return False
-            
-        # Mock sending
-        logger.info(f"--------------------------------------------------")
-        logger.info(f"SMS Sent to {recipient_phone}:")
-        logger.info(f"Message: {message}")
-        logger.info(f"--------------------------------------------------")
-        return True
+        token = getattr(settings, 'SPARROW_SMS_TOKEN', '')
+        if not token:
+            logger.warning("SPARROW_SMS_TOKEN not configured; skipping SMS to %s", recipient_phone)
+            return False
+        try:
+            resp = requests.post(SMSService.SPARROW_URL, data={
+                "token": token,
+                "from": getattr(settings, 'SPARROW_SMS_FROM', 'School'),
+                "to": recipient_phone,
+                "text": message,
+            }, timeout=10)
+            data = resp.json()
+            if data.get("response_code") == 200:
+                logger.info("SMS sent to %s", recipient_phone)
+                return True
+            logger.warning("Sparrow SMS failed: %s", data)
+            return False
+        except Exception as e:
+            logger.error("Sparrow SMS error: %s", e)
+            return False
 
 class NotificationService:
     @staticmethod

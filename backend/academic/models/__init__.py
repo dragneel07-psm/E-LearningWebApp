@@ -24,3 +24,5 @@ from .discipline import DisciplinaryIncident
 from .documents import StudentDocument
 from .event import SchoolEvent
 from .inventory import Asset, AssetAssignment, MaintenanceRequest, ConsumableStock
+from .student_leave import StudentLeave
+from .complaint import Complaint

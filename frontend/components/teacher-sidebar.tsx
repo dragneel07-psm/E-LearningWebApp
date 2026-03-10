@@ -15,7 +15,8 @@ import {
     GraduationCap,
     School,
     Bell,
-    Award
+    Award,
+    CalendarClock
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
@@ -29,6 +30,7 @@ const navigation = [
     { name: 'Gradebook', href: '/teacher/grades', icon: Award },
     { name: 'Timetable', href: '/teacher/timetable', icon: Calendar },
     { name: 'Library', href: '/teacher/library', icon: BookOpen },
+    { name: 'Student Leaves', href: '/teacher/leaves', icon: CalendarClock },
     { name: 'Notices', href: '/teacher/notices', icon: Bell },
     { name: 'Messages', href: '/teacher/messages', icon: MessageSquare },
     { name: 'Profile', href: '/teacher/profile', icon: User },

@@ -11,6 +11,8 @@ from .views import (
     StudentDocumentViewSet, SISDashboardViewSet,
     SchoolEventViewSet,
     AssetViewSet, MaintenanceRequestViewSet, ConsumableStockViewSet,
+    StudentLeaveViewSet,
+    ComplaintViewSet,
 )
 from .views.stats import AcademicStatsView
 from .views.analytics import SchoolAnalyticsDashboardView
@@ -46,6 +48,8 @@ router.register(r'events', SchoolEventViewSet, basename='events')
 router.register(r'inventory/assets', AssetViewSet, basename='inventory-assets')
 router.register(r'inventory/maintenance', MaintenanceRequestViewSet, basename='inventory-maintenance')
 router.register(r'inventory/stock', ConsumableStockViewSet, basename='inventory-stock')
+router.register(r'student-leaves', StudentLeaveViewSet, basename='student-leave')
+router.register(r'complaints', ComplaintViewSet, basename='complaint')
 
 urlpatterns = [
     path('stats/', AcademicStatsView.as_view(), name='academic-stats'),

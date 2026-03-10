@@ -82,7 +82,7 @@ class AssetAssignment(models.Model):
     assignment_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     asset = models.ForeignKey(Asset, on_delete=models.CASCADE, related_name='assignments', db_constraint=False)
     assigned_to_user = models.ForeignKey(
-        'auth.User', on_delete=models.SET_NULL, null=True, blank=True,
+        'users.UserAccount', on_delete=models.SET_NULL, null=True, blank=True,
         related_name='asset_assignments', db_constraint=False,
     )
     assigned_to_location = models.CharField(max_length=200, blank=True)  # room/dept if not a person
@@ -109,7 +109,7 @@ class MaintenanceRequest(models.Model):
         Asset, on_delete=models.CASCADE, related_name='maintenance_requests', db_constraint=False,
     )
     reported_by = models.ForeignKey(
-        'auth.User', on_delete=models.SET_NULL, null=True,
+        'users.UserAccount', on_delete=models.SET_NULL, null=True,
         related_name='reported_maintenance', db_constraint=False,
     )
     title = models.CharField(max_length=200)

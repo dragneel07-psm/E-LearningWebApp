@@ -9,7 +9,7 @@ import {
     LayoutDashboard, BookOpen, FileText, Calendar,
     User as UserIcon, LogOut, Menu, X, MessageSquare,
     GraduationCap, Clock, FileBarChart, CreditCard,
-    BrainCircuit, Trophy, Award, WifiOff, Download, Brain
+    BrainCircuit, Trophy, Award, WifiOff, Download, Brain, CalendarClock, Info, MessageSquareWarning
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -73,6 +73,9 @@ export default function StudentLayout({ children }: { children: React.ReactNode 
             icon: Trophy,
             hidden: user?.tenant_features?.student_gamification === false
         },
+        { label: 'Leave Requests', href: '/student/leaves', icon: CalendarClock },
+        { label: 'My Hostel & Bus', href: '/student/my-info', icon: Info },
+        { label: 'Report Issue', href: '/student/complaints', icon: MessageSquareWarning },
         { label: 'Notices', href: '/student/notices', icon: FileBarChart },
         { label: 'Messages', href: '/student/messages', icon: MessageSquare },
         { label: 'Profile', href: '/student/profile', icon: UserIcon },

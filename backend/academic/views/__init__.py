@@ -17,3 +17,5 @@ from .sis import (
 )
 from .events import SchoolEventViewSet
 from .inventory import AssetViewSet, MaintenanceRequestViewSet, ConsumableStockViewSet
+from .student_leave import StudentLeaveViewSet
+from .complaint import ComplaintViewSet

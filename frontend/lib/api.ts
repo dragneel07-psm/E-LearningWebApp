@@ -3974,4 +3974,418 @@ export const communicationAPI = {
         apiRequest<void>(`/notifications/templates/${id}/`, { method: 'DELETE' }),
 };
 
+// ── Hostel ────────────────────────────────────────────────────────────────────
+
+export interface HostelBlock {
+    block_id: string;
+    name: string;
+    gender: 'male' | 'female' | 'mixed';
+    warden_name: string;
+    warden_phone: string;
+    total_rooms: number;
+    is_active: boolean;
+    occupied_rooms: number;
+    available_rooms: number;
+    created_at: string;
+}
+
+export interface HostelRoom {
+    room_id: string;
+    block: string;
+    room_number: string;
+    room_type: 'single' | 'double' | 'dormitory';
+    capacity: number;
+    monthly_fee: number;
+    floor: number;
+    is_active: boolean;
+    occupied_beds: number;
+    available_beds: number;
+    is_full: boolean;
+}
+
+export interface HostelAllotment {
+    allotment_id: string;
+    student: string;
+    student_name?: string;
+    room: string;
+    room_number?: string;
+    block_name?: string;
+    check_in_date: string;
+    check_out_date: string | null;
+    is_active: boolean;
+    remarks: string;
+    created_at: string;
+}
+
+export interface HostelDashboard {
+    total_blocks: number;
+    total_capacity: number;
+    total_occupied: number;
+    available_beds: number;
+    occupancy_rate: number;
+}
+
+export const hostelAPI = {
+    // Dashboard
+    getDashboard: () => apiRequest<HostelDashboard>('/hostel/blocks/dashboard/'),
+
+    // Blocks
+    getBlocks: () => apiRequest<HostelBlock[]>('/hostel/blocks/'),
+    createBlock: (data: Partial<HostelBlock>) =>
+        apiRequest<HostelBlock>('/hostel/blocks/', { method: 'POST', body: JSON.stringify(data) }),
+    updateBlock: (id: string, data: Partial<HostelBlock>) =>
+        apiRequest<HostelBlock>(`/hostel/blocks/${id}/`, { method: 'PATCH', body: JSON.stringify(data) }),
+    deleteBlock: (id: string) => apiRequest<void>(`/hostel/blocks/${id}/`, { method: 'DELETE' }),
+
+    // Rooms
+    getRooms: (params?: { block?: string; is_active?: boolean }) => {
+        const q = params ? '?' + new URLSearchParams(
+            Object.entries(params).filter(([, v]) => v !== undefined).map(([k, v]) => [k, String(v)])
+        ).toString() : '';
+        return apiRequest<HostelRoom[]>(`/hostel/rooms/${q}`);
+    },
+    createRoom: (data: Partial<HostelRoom>) =>
+        apiRequest<HostelRoom>('/hostel/rooms/', { method: 'POST', body: JSON.stringify(data) }),
+    updateRoom: (id: string, data: Partial<HostelRoom>) =>
+        apiRequest<HostelRoom>(`/hostel/rooms/${id}/`, { method: 'PATCH', body: JSON.stringify(data) }),
+    deleteRoom: (id: string) => apiRequest<void>(`/hostel/rooms/${id}/`, { method: 'DELETE' }),
+
+    // Allotments
+    getAllotments: (params?: { is_active?: boolean }) => {
+        const q = params ? '?' + new URLSearchParams(
+            Object.entries(params).filter(([, v]) => v !== undefined).map(([k, v]) => [k, String(v)])
+        ).toString() : '';
+        return apiRequest<HostelAllotment[]>(`/hostel/allotments/${q}`);
+    },
+    createAllotment: (data: Partial<HostelAllotment>) =>
+        apiRequest<HostelAllotment>('/hostel/allotments/', { method: 'POST', body: JSON.stringify(data) }),
+    updateAllotment: (id: string, data: Partial<HostelAllotment>) =>
+        apiRequest<HostelAllotment>(`/hostel/allotments/${id}/`, { method: 'PATCH', body: JSON.stringify(data) }),
+    checkOut: (id: string, date: string) =>
+        apiRequest<HostelAllotment>(`/hostel/allotments/${id}/`, { method: 'PATCH', body: JSON.stringify({ is_active: false, check_out_date: date }) }),
+};
+
+// ── Transport ─────────────────────────────────────────────────────────────────
+
+export interface TransportRoute {
+    route_id: string;
+    name: string;
+    description: string;
+    stops: { name: string; order: number; pickup_time: string }[];
+    is_active: boolean;
+    created_at: string;
+}
+
+export interface TransportVehicle {
+    vehicle_id: string;
+    plate_number: string;
+    model: string;
+    capacity: number;
+    driver_name: string;
+    driver_phone: string;
+    route: string | null;
+    is_active: boolean;
+}
+
+export interface TransportAssignment {
+    assignment_id: string;
+    student: string;
+    student_name?: string;
+    route: string;
+    route_name?: string;
+    vehicle: string | null;
+    pickup_stop: string;
+    monthly_fee: number;
+    active_from: string;
+    active_until: string | null;
+    is_active: boolean;
+    created_at: string;
+}
+
+export interface TransportSummary {
+    total_routes: number;
+    active_routes: number;
+}
+
+export const transportAPI = {
+    getSummary: () => apiRequest<TransportSummary>('/transport/routes/summary/'),
+
+    // Routes
+    getRoutes: () => apiRequest<TransportRoute[]>('/transport/routes/'),
+    createRoute: (data: Partial<TransportRoute>) =>
+        apiRequest<TransportRoute>('/transport/routes/', { method: 'POST', body: JSON.stringify(data) }),
+    updateRoute: (id: string, data: Partial<TransportRoute>) =>
+        apiRequest<TransportRoute>(`/transport/routes/${id}/`, { method: 'PATCH', body: JSON.stringify(data) }),
+    deleteRoute: (id: string) => apiRequest<void>(`/transport/routes/${id}/`, { method: 'DELETE' }),
+
+    // Vehicles
+    getVehicles: () => apiRequest<TransportVehicle[]>('/transport/vehicles/'),
+    createVehicle: (data: Partial<TransportVehicle>) =>
+        apiRequest<TransportVehicle>('/transport/vehicles/', { method: 'POST', body: JSON.stringify(data) }),
+    updateVehicle: (id: string, data: Partial<TransportVehicle>) =>
+        apiRequest<TransportVehicle>(`/transport/vehicles/${id}/`, { method: 'PATCH', body: JSON.stringify(data) }),
+    deleteVehicle: (id: string) => apiRequest<void>(`/transport/vehicles/${id}/`, { method: 'DELETE' }),
+
+    // Assignments
+    getAssignments: (params?: { is_active?: boolean }) => {
+        const q = params ? '?' + new URLSearchParams(
+            Object.entries(params).filter(([, v]) => v !== undefined).map(([k, v]) => [k, String(v)])
+        ).toString() : '';
+        return apiRequest<TransportAssignment[]>(`/transport/assignments/${q}`);
+    },
+    createAssignment: (data: Partial<TransportAssignment>) =>
+        apiRequest<TransportAssignment>('/transport/assignments/', { method: 'POST', body: JSON.stringify(data) }),
+    updateAssignment: (id: string, data: Partial<TransportAssignment>) =>
+        apiRequest<TransportAssignment>(`/transport/assignments/${id}/`, { method: 'PATCH', body: JSON.stringify(data) }),
+};
+
+// ── Student Leaves ────────────────────────────────────────────────────────────
+
+export interface StudentLeave {
+    leave_id: string;
+    student: string;
+    student_name?: string;
+    class_name?: string;
+    applied_by: string;
+    leave_type: 'sick' | 'personal' | 'family' | 'event' | 'other';
+    start_date: string;
+    end_date: string;
+    total_days: number;
+    reason: string;
+    supporting_document_url?: string;
+    status: 'pending' | 'approved' | 'rejected' | 'cancelled';
+    reviewed_by?: string;
+    reviewed_by_name?: string;
+    reviewed_at?: string;
+    review_remarks?: string;
+    created_at: string;
+}
+
+export const studentLeaveAPI = {
+    getLeaves: (params?: { status?: string; student?: string }) => {
+        const q = params ? '?' + new URLSearchParams(
+            Object.entries(params).filter(([, v]) => v !== undefined) as [string, string][]
+        ).toString() : '';
+        return apiRequest<StudentLeave[]>(`/academic/student-leaves/${q}`);
+    },
+    getPendingLeaves: () => apiRequest<StudentLeave[]>('/academic/student-leaves/pending/'),
+    applyLeave: (data: { student: string; leave_type: string; start_date: string; end_date: string; reason: string; supporting_document_url?: string }) =>
+        apiRequest<StudentLeave>('/academic/student-leaves/', { method: 'POST', body: JSON.stringify(data) }),
+    approveLeave: (id: string, remarks?: string) =>
+        apiRequest<StudentLeave>(`/academic/student-leaves/${id}/approve/`, { method: 'POST', body: JSON.stringify({ remarks: remarks ?? '' }) }),
+    rejectLeave: (id: string, remarks?: string) =>
+        apiRequest<StudentLeave>(`/academic/student-leaves/${id}/reject/`, { method: 'POST', body: JSON.stringify({ remarks: remarks ?? 'Rejected.' }) }),
+    cancelLeave: (id: string) =>
+        apiRequest<{ status: string }>(`/academic/student-leaves/${id}/cancel/`, { method: 'POST' }),
+};
+
+// ── Complaints ────────────────────────────────────────────────────────────────
+
+export interface Complaint {
+    complaint_id: string;
+    category: 'academic' | 'facility' | 'staff' | 'billing' | 'bullying' | 'safety' | 'other';
+    title: string;
+    description: string;
+    anonymous: boolean;
+    status: 'open' | 'in_progress' | 'resolved' | 'closed';
+    priority: 'low' | 'medium' | 'high';
+    submitted_by?: string;
+    submitted_by_name?: string;
+    assigned_to?: string;
+    assigned_to_name?: string;
+    resolution_note?: string;
+    resolved_at?: string;
+    created_at: string;
+    updated_at: string;
+}
+
+export const complaintAPI = {
+    getComplaints: (params?: { status?: string; category?: string }) => {
+        const q = params ? '?' + new URLSearchParams(
+            Object.entries(params).filter(([, v]) => v !== undefined) as [string, string][]
+        ).toString() : '';
+        return apiRequest<Complaint[]>(`/academic/complaints/${q}`);
+    },
+    submitComplaint: (data: { category: string; title: string; description: string; anonymous?: boolean; priority?: string }) =>
+        apiRequest<Complaint>('/academic/complaints/', { method: 'POST', body: JSON.stringify(data) }),
+    resolveComplaint: (id: string, resolution_note: string) =>
+        apiRequest<Complaint>(`/academic/complaints/${id}/resolve/`, { method: 'POST', body: JSON.stringify({ resolution_note }) }),
+    assignComplaint: (id: string, assigned_to: string) =>
+        apiRequest<Complaint>(`/academic/complaints/${id}/assign/`, { method: 'POST', body: JSON.stringify({ assigned_to }) }),
+    updateComplaint: (id: string, data: Partial<Complaint>) =>
+        apiRequest<Complaint>(`/academic/complaints/${id}/`, { method: 'PATCH', body: JSON.stringify(data) }),
+};
+
+// ── HR Appraisal ──────────────────────────────────────────────────────────────
+
+export interface AppraisalCycle {
+    cycle_id: string;
+    name: string;
+    period_start: string;
+    period_end: string;
+    status: 'draft' | 'active' | 'closed';
+    form_count: number;
+    created_at: string;
+}
+
+export interface AppraisalForm {
+    form_id: string;
+    cycle: string;
+    cycle_name?: string;
+    employee: string;
+    employee_name?: string;
+    reviewer?: string;
+    reviewer_name?: string;
+    punctuality?: number;
+    subject_knowledge?: number;
+    student_engagement?: number;
+    communication?: number;
+    teamwork?: number;
+    overall_score?: number;
+    employee_comments?: string;
+    reviewer_comments?: string;
+    goals_next_period?: string;
+    status: 'pending' | 'self_reviewed' | 'completed';
+    submitted_at?: string;
+    completed_at?: string;
+}
+
+export const appraisalAPI = {
+    // Cycles
+    getCycles: () => apiRequest<AppraisalCycle[]>('/hr/appraisal-cycles/'),
+    createCycle: (data: { name: string; period_start: string; period_end: string }) =>
+        apiRequest<AppraisalCycle>('/hr/appraisal-cycles/', { method: 'POST', body: JSON.stringify(data) }),
+    activateCycle: (id: string) =>
+        apiRequest<{ status: string }>(`/hr/appraisal-cycles/${id}/activate/`, { method: 'POST' }),
+    closeCycle: (id: string) =>
+        apiRequest<{ status: string }>(`/hr/appraisal-cycles/${id}/close/`, { method: 'POST' }),
+
+    // Forms
+    getForms: (params?: { cycle?: string }) => {
+        const q = params ? '?' + new URLSearchParams(
+            Object.entries(params).filter(([, v]) => v !== undefined) as [string, string][]
+        ).toString() : '';
+        return apiRequest<AppraisalForm[]>(`/hr/appraisals/${q}`);
+    },
+    createForm: (data: { cycle: string; employee: string }) =>
+        apiRequest<AppraisalForm>('/hr/appraisals/', { method: 'POST', body: JSON.stringify(data) }),
+    submitSelfReview: (id: string, employee_comments: string) =>
+        apiRequest<AppraisalForm>(`/hr/appraisals/${id}/submit_self_review/`, { method: 'POST', body: JSON.stringify({ employee_comments }) }),
+    completeAppraisal: (id: string, data: Partial<AppraisalForm>) =>
+        apiRequest<AppraisalForm>(`/hr/appraisals/${id}/complete/`, { method: 'POST', body: JSON.stringify(data) }),
+};
+
+// ── Fee Discounts ─────────────────────────────────────────────────────────────
+
+export interface FeeDiscount {
+    discount_id: string;
+    name: string;
+    discount_type: 'percentage' | 'flat';
+    value: number;
+    max_cap?: number;
+    reason?: string;
+    is_active: boolean;
+    created_at: string;
+}
+
+export const feeDiscountAPI = {
+    getDiscounts: (active?: boolean) => {
+        const q = active !== undefined ? `?active=${active}` : '';
+        return apiRequest<FeeDiscount[]>(`/billing/school/discounts/${q}`);
+    },
+    createDiscount: (data: Partial<FeeDiscount>) =>
+        apiRequest<FeeDiscount>('/billing/school/discounts/', { method: 'POST', body: JSON.stringify(data) }),
+    updateDiscount: (id: string, data: Partial<FeeDiscount>) =>
+        apiRequest<FeeDiscount>(`/billing/school/discounts/${id}/`, { method: 'PATCH', body: JSON.stringify(data) }),
+    deleteDiscount: (id: string) =>
+        apiRequest<void>(`/billing/school/discounts/${id}/`, { method: 'DELETE' }),
+    applyDiscount: (discountId: string, studentFeeId: string) =>
+        apiRequest<{ fee_id: string; discount_applied: number; new_amount_due: number }>(
+            `/billing/school/discounts/${discountId}/apply/${studentFeeId}/`, { method: 'POST' }
+        ),
+};
+
+// ── Ledger ────────────────────────────────────────────────────────────────────
+
+export interface LedgerAccount {
+    account_id: string;
+    name: string;
+    account_type: 'cash' | 'bank' | 'mobile_banking' | 'other';
+    bank_name?: string;
+    account_number?: string;
+    opening_balance: number;
+    current_balance: number;
+    is_active: boolean;
+    created_at: string;
+}
+
+export interface LedgerEntry {
+    entry_id: string;
+    account: string;
+    date: string;
+    entry_type: 'credit' | 'debit';
+    amount: number;
+    description: string;
+    reference?: string;
+    recorded_by?: string;
+    recorded_by_name?: string;
+    created_at: string;
+}
+
+export interface LedgerStatement {
+    account: LedgerAccount;
+    entries: {
+        entry_id: string;
+        date: string;
+        description: string;
+        reference: string;
+        debit: number | null;
+        credit: number | null;
+        balance: number;
+    }[];
+    closing_balance: number;
+}
+
+export const ledgerAPI = {
+    getAccounts: () => apiRequest<LedgerAccount[]>('/billing/school/ledger-accounts/'),
+    createAccount: (data: Partial<LedgerAccount>) =>
+        apiRequest<LedgerAccount>('/billing/school/ledger-accounts/', { method: 'POST', body: JSON.stringify(data) }),
+    updateAccount: (id: string, data: Partial<LedgerAccount>) =>
+        apiRequest<LedgerAccount>(`/billing/school/ledger-accounts/${id}/`, { method: 'PATCH', body: JSON.stringify(data) }),
+    getStatement: (id: string, params?: { from?: string; to?: string }) => {
+        const q = params ? '?' + new URLSearchParams(
+            Object.entries(params).filter(([, v]) => v !== undefined) as [string, string][]
+        ).toString() : '';
+        return apiRequest<LedgerStatement>(`/billing/school/ledger-accounts/${id}/statement/${q}`);
+    },
+
+    getEntries: (params?: { account?: string; from?: string; to?: string }) => {
+        const q = params ? '?' + new URLSearchParams(
+            Object.entries(params).filter(([, v]) => v !== undefined) as [string, string][]
+        ).toString() : '';
+        return apiRequest<LedgerEntry[]>(`/billing/school/ledger-entries/${q}`);
+    },
+    createEntry: (data: Partial<LedgerEntry>) =>
+        apiRequest<LedgerEntry>('/billing/school/ledger-entries/', { method: 'POST', body: JSON.stringify(data) }),
+};
+
+// ── Payment Gateways (eSewa / Khalti) ─────────────────────────────────────────
+
+export interface EsewaFormFields {
+    [key: string]: string;
+}
+
+export interface KhaltiInitResponse {
+    pidx: string;
+    payment_url: string;
+    expires_at: string;
+}
+
+export const paymentGatewayAPI = {
+    esewaInitiate: (student_fee_id: string) =>
+        apiRequest<EsewaFormFields>('/billing/school/esewa/initiate/', { method: 'POST', body: JSON.stringify({ student_fee_id }) }),
+    khaltiInitiate: (student_fee_id: string) =>
+        apiRequest<KhaltiInitResponse>('/billing/school/khalti/initiate/', { method: 'POST', body: JSON.stringify({ student_fee_id }) }),
+};
+
 export default api;

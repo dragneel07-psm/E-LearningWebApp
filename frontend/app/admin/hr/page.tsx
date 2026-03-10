@@ -6,8 +6,9 @@ import { HROverview } from './HROverview';
 import { EmployeeList } from './EmployeeList';
 import { LeaveManager } from './LeaveManager';
 import { PayrollManager } from './PayrollManager';
+import { AppraisalManager } from './AppraisalManager';
 import {
-    LayoutDashboard, Users, CalendarClock, Wallet, Building2
+    LayoutDashboard, Users, CalendarClock, Wallet, Building2, Award
 } from 'lucide-react';
 
 export default function HRDashboardPage() {
@@ -56,6 +57,12 @@ export default function HRDashboardPage() {
                     >
                         <Wallet className="h-3.5 w-3.5 mr-2" /> Payroll
                     </TabsTrigger>
+                    <TabsTrigger
+                        value="appraisals"
+                        className="rounded-xl px-5 py-2.5 text-xs font-black uppercase tracking-wider data-[state=active]:bg-white data-[state=active]:text-violet-700 data-[state=active]:shadow-md transition-all"
+                    >
+                        <Award className="h-3.5 w-3.5 mr-2" /> Appraisal
+                    </TabsTrigger>
                 </TabsList>
 
                 <TabsContent value="overview" className="animate-in fade-in slide-in-from-bottom-2 duration-400">
@@ -69,6 +76,9 @@ export default function HRDashboardPage() {
                 </TabsContent>
                 <TabsContent value="payroll" className="animate-in fade-in slide-in-from-bottom-2 duration-400">
                     <PayrollManager />
+                </TabsContent>
+                <TabsContent value="appraisals" className="animate-in fade-in slide-in-from-bottom-2 duration-400">
+                    <AppraisalManager />
                 </TabsContent>
             </Tabs>
         </div>

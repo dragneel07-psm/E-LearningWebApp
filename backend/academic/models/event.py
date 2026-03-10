@@ -44,7 +44,7 @@ class SchoolEvent(models.Model):
     color = models.CharField(max_length=7, blank=True, default='')  # hex color for calendar
 
     created_by = models.ForeignKey(
-        'auth.User', on_delete=models.SET_NULL, null=True,
+        'users.UserAccount', on_delete=models.SET_NULL, null=True,
         related_name='created_events', db_constraint=False,
     )
     created_at = models.DateTimeField(auto_now_add=True)

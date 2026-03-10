@@ -5,12 +5,16 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
-import { academicAPI, Parent, Student } from '@/lib/api';
+import { academicAPI, paymentGatewayAPI, Parent, Student } from '@/lib/api';
 import { useToast } from '@/hooks/use-toast';
+import { toast as toastSonner } from 'sonner';
 import {
     Wallet, Loader2, AlertCircle, CheckCircle2, Clock,
-    XCircle, Receipt, DollarSign, TrendingDown,
+    XCircle, Receipt, DollarSign, TrendingDown, CreditCard,
 } from 'lucide-react';
+import {
+    Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
+} from '@/components/ui/dialog';
 
 const FEE_STATUS: Record<string, { label: string; cls: string; icon: React.ReactNode }> = {
     paid:    { label: 'Paid',    cls: 'bg-emerald-100 text-emerald-700 border-emerald-200', icon: <CheckCircle2 className="h-3.5 w-3.5" /> },
@@ -30,6 +34,10 @@ export default function ParentFeesPage() {
     const [feesData, setFeesData] = useState<{ fees: any[]; payments: any[]; summary: any } | null>(null);
     const [loading, setLoading] = useState(true);
     const [feesLoading, setFeesLoading] = useState(false);
+    const [payDialog, setPayDialog] = useState(false);
+    const [payingFee, setPayingFee] = useState<any>(null);
+    const [payMethod, setPayMethod] = useState<'esewa' | 'khalti'>('esewa');
+    const [payLoading, setPayLoading] = useState(false);
 
     useEffect(() => {
         academicAPI.getMyParent()
@@ -49,6 +57,38 @@ export default function ParentFeesPage() {
             .catch(() => toast({ title: 'Error', description: 'Failed to load fees.', variant: 'destructive' }))
             .finally(() => setFeesLoading(false));
     }, [selectedStudent, toast]);
+
+    const openPayDialog = (fee: any) => {
+        setPayingFee(fee);
+        setPayMethod('esewa');
+        setPayDialog(true);
+    };
+
+    const confirmPay = async () => {
+        if (!payingFee) return;
+        setPayLoading(true);
+        try {
+            if (payMethod === 'esewa') {
+                const fields = await paymentGatewayAPI.esewaInitiate(payingFee.student_fee_id ?? payingFee.id);
+                const form = document.createElement('form');
+                form.method = 'POST';
+                form.action = 'https://rc-epay.esewa.com.np/api/epay/main/v2/form';
+                Object.entries(fields).forEach(([k, v]) => {
+                    const inp = document.createElement('input');
+                    inp.type = 'hidden'; inp.name = k; inp.value = String(v);
+                    form.appendChild(inp);
+                });
+                document.body.appendChild(form);
+                form.submit();
+            } else {
+                const res = await paymentGatewayAPI.khaltiInitiate(payingFee.student_fee_id ?? payingFee.id);
+                window.location.href = res.payment_url;
+            }
+        } catch {
+            toastSonner.error('Payment initiation failed. Please try again.');
+            setPayLoading(false);
+        }
+    };
 
     if (loading) return (
         <div className="flex items-center justify-center min-h-[60vh]">
@@ -177,6 +217,15 @@ export default function ParentFeesPage() {
                                                     <Badge className={`flex items-center gap-1 text-xs ${cfg.cls}`}>
                                                         {cfg.icon} {cfg.label}
                                                     </Badge>
+                                                    {['pending', 'partial', 'overdue'].includes(st) && (fee.student_fee_id || fee.id) && (
+                                                        <Button
+                                                            size="sm"
+                                                            className="h-7 text-xs font-bold bg-violet-600 hover:bg-violet-700 gap-1"
+                                                            onClick={() => openPayDialog(fee)}
+                                                        >
+                                                            <CreditCard className="h-3 w-3" /> Pay
+                                                        </Button>
+                                                    )}
                                                 </div>
                                             </div>
                                         );
@@ -225,6 +274,47 @@ export default function ParentFeesPage() {
                     )}
                 </>
             )}
+            {/* Payment Dialog */}
+            <Dialog open={payDialog} onOpenChange={setPayDialog}>
+                <DialogContent className="sm:max-w-sm">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2 font-black">
+                            <CreditCard className="h-5 w-5 text-violet-600" /> Pay Online
+                        </DialogTitle>
+                    </DialogHeader>
+                    <div className="py-4 space-y-4">
+                        <p className="text-sm text-slate-600">
+                            Select a payment method to pay <span className="font-black text-slate-900">{fmt(payingFee?.amount ?? 0)}</span>.
+                        </p>
+                        <div className="grid grid-cols-2 gap-3">
+                            {(['esewa', 'khalti'] as const).map(m => (
+                                <button
+                                    key={m}
+                                    onClick={() => setPayMethod(m)}
+                                    className={`h-16 rounded-xl border-2 font-black text-sm transition-all ${payMethod === m
+                                        ? m === 'esewa' ? 'border-green-600 bg-green-50 text-green-700' : 'border-purple-600 bg-purple-50 text-purple-700'
+                                        : 'border-slate-200 text-slate-500 hover:border-slate-300'
+                                    }`}
+                                >
+                                    {m === 'esewa' ? 'eSewa' : 'Khalti'}
+                                </button>
+                            ))}
+                        </div>
+                        <p className="text-xs text-slate-400">You will be redirected to complete payment.</p>
+                    </div>
+                    <DialogFooter>
+                        <Button variant="ghost" onClick={() => setPayDialog(false)}>Cancel</Button>
+                        <Button
+                            className="bg-violet-600 hover:bg-violet-700 gap-2 font-bold"
+                            onClick={confirmPay}
+                            disabled={payLoading}
+                        >
+                            {payLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <CreditCard className="h-4 w-4" />}
+                            {payLoading ? 'Redirecting...' : 'Continue'}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }

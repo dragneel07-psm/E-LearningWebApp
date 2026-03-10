@@ -32,6 +32,8 @@ urlpatterns = [
     path('api/gamification/', include('gamification.urls')),
     path('api/conversations/', include('conversations.urls')),
     path('api/hr/', include('hr_payroll.urls')),
+    path('api/transport/', include('transport.urls')),
+    path('api/hostel/', include('hostel.urls')),
 
     # Versioned aliases (v1)
     path('api/v1/core/', include('core.urls')),
@@ -46,6 +48,8 @@ urlpatterns = [
     path('api/v1/gamification/', include('gamification.urls')),
     path('api/v1/conversations/', include('conversations.urls')),
     path('api/v1/hr/', include('hr_payroll.urls')),
+    path('api/v1/transport/', include('transport.urls')),
+    path('api/v1/hostel/', include('hostel.urls')),
 
     # JWT Auth
     path('api/token/', CustomTokenObtainPairView.as_view(), name='token_obtain_pair'),
