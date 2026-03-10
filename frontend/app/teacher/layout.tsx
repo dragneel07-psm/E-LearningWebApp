@@ -65,6 +65,7 @@ export default function TeacherLayout({
                             roleLabel={user?.role || 'Educator'}
                             avatarUrl={user?.profile_image}
                             settingsHref="/teacher/profile"
+                            profileHref="/teacher/profile"
                             logoutHref="/login"
                             className="border-l border-slate-100 pl-4"
                         />

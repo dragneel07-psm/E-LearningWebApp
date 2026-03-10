@@ -5,6 +5,7 @@ from django.utils import timezone
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
+from django.utils.timezone import localtime
 
 from billing.shared_views import BillingSchemaGuardMixin
 from core.mixins import TenantScopedQuerysetMixin
@@ -482,6 +483,65 @@ class SalarySlipViewSet(_HRBase):
             request=self.request,
             details={"slip_id": str(slip.slip_id), "net_salary": str(slip.net_salary)},
         )
+
+    @action(detail=True, methods=["get"], url_path="payslip-pdf")
+    def payslip_pdf(self, request, pk=None):
+        """Generate and return a PDF payslip for this salary slip."""
+        from core.reports import generate_pdf_response
+        slip = self.get_object()
+        tenant = getattr(request.user, "tenant", None)
+        school_name = tenant.name if tenant else "School"
+
+        def fmt(val):
+            return f"{float(val):,.2f}"
+
+        context = {
+            "school_name": school_name,
+            "slip_id": str(slip.slip_id)[:12],
+            "period_name": slip.payroll_period.name if slip.payroll_period else "",
+            "status": slip.status,
+            "employee_name": slip.employee.user.get_full_name() if slip.employee and slip.employee.user else "",
+            "employee_code": slip.employee.employee_code if slip.employee else "",
+            "department": slip.employee.department.name if slip.employee and slip.employee.department else "",
+            "designation": slip.employee.designation if slip.employee else "",
+            "working_days": slip.working_days,
+            "paid_days": slip.paid_days,
+            "absent_days": slip.absent_days,
+            "lop_days": slip.lop_days,
+            "basic_salary": fmt(slip.basic_salary),
+            "hra": fmt(slip.hra),
+            "da": fmt(slip.da),
+            "transport_allowance": fmt(slip.transport_allowance),
+            "medical_allowance": fmt(slip.medical_allowance),
+            "other_allowance": fmt(slip.other_allowance),
+            "gross_salary": fmt(slip.gross_salary),
+            "pf_employee": fmt(slip.pf_employee),
+            "pf_employer": fmt(slip.pf_employer),
+            "esi_employee": fmt(slip.esi_employee),
+            "tds": fmt(slip.tds),
+            "professional_tax": fmt(slip.professional_tax),
+            "other_deduction": fmt(slip.other_deduction),
+            "total_deductions": fmt(slip.total_deductions),
+            "net_salary": fmt(slip.net_salary),
+            "payment_date": str(slip.payment_date) if slip.payment_date else "",
+            "payment_method": slip.payment_method.replace("_", " ").title() if slip.payment_method else "",
+            "transaction_reference": slip.transaction_reference or "",
+            "currency": "$",
+            "generated_on": localtime(timezone.now()).strftime("%d %b %Y, %I:%M %p"),
+        }
+
+        emp_name_safe = (slip.employee.user.get_full_name() if slip.employee and slip.employee.user else "employee").replace(" ", "_")
+        filename = f"payslip_{emp_name_safe}_{str(slip.slip_id)[:8]}.pdf"
+        response = generate_pdf_response("reports/payslip.html", context, filename)
+        record_audit_event(
+            action="hr.payslip_downloaded",
+            user=request.user,
+            request=request,
+            details={"slip_id": str(slip.slip_id), "employee": context["employee_name"]},
+        )
+        if response:
+            return response
+        return Response({"error": "Failed to generate payslip PDF"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     @action(detail=True, methods=["post"], url_path="mark-paid")
     def mark_paid(self, request, pk=None):

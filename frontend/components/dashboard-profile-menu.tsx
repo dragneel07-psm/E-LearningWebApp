@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useMemo, useState } from 'react';
-import { KeyRound, Loader2, LogOut, Settings } from 'lucide-react';
+import { KeyRound, Loader2, LogOut, Settings, User } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { removeTokens } from '@/lib/auth';
@@ -34,6 +34,7 @@ interface DashboardProfileMenuProps {
     roleLabel?: string;
     avatarUrl?: string;
     settingsHref: string;
+    profileHref?: string;
     logoutHref?: string;
     showName?: boolean;
     className?: string;
@@ -68,6 +69,7 @@ export function DashboardProfileMenu({
     roleLabel = 'User',
     avatarUrl,
     settingsHref,
+    profileHref,
     logoutHref = '/login',
     showName = true,
     className,
@@ -163,6 +165,14 @@ export function DashboardProfileMenu({
                         <p className="text-xs font-normal capitalize text-slate-500">{roleLabel}</p>
                     </DropdownMenuLabel>
                     <DropdownMenuSeparator />
+                    {profileHref && (
+                        <DropdownMenuItem asChild>
+                            <Link href={profileHref} className="flex items-center gap-2">
+                                <User className="h-4 w-4" />
+                                View Profile
+                            </Link>
+                        </DropdownMenuItem>
+                    )}
                     <DropdownMenuItem asChild>
                         <Link href={settingsHref} className="flex items-center gap-2">
                             <Settings className="h-4 w-4" />

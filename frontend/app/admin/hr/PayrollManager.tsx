@@ -4,10 +4,14 @@ import { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
+import {
+    Dialog, DialogContent, DialogHeader, DialogTitle,
+} from '@/components/ui/dialog';
 import { hrAPI, HRPayrollPeriod, HRSalarySlip } from '@/lib/api';
 import {
     FileText, ChevronRight, Sparkles, CheckCheck,
-    ArrowLeft, DollarSign, Users, CreditCard
+    ArrowLeft, DollarSign, Users, CreditCard, Download, Loader2, Plus
 } from 'lucide-react';
 
 const PERIOD_STATUS_COLOR: Record<string, string> = {
@@ -35,6 +39,40 @@ export function PayrollManager() {
     const [loading, setLoading] = useState(true);
     const [slipsLoading, setSlipsLoading] = useState(false);
     const [actionId, setActionId] = useState<string | null>(null);
+    const [downloadingId, setDownloadingId] = useState<string | null>(null);
+    const [newPeriodOpen, setNewPeriodOpen] = useState(false);
+    const [creating, setCreating] = useState(false);
+    const [newForm, setNewForm] = useState({
+        month: new Date().getMonth() + 1,
+        year: new Date().getFullYear(),
+        start_date: '',
+        end_date: '',
+        working_days: 26,
+        notes: '',
+    });
+
+    const handleCreatePeriod = async () => {
+        setCreating(true);
+        try {
+            const monthName = MONTHS[newForm.month - 1];
+            await hrAPI.createPayrollPeriod({
+                name: `${monthName} ${newForm.year}`,
+                month: newForm.month,
+                year: newForm.year,
+                start_date: newForm.start_date,
+                end_date: newForm.end_date,
+                working_days: newForm.working_days,
+                notes: newForm.notes,
+            });
+            setNewPeriodOpen(false);
+            setNewForm({ month: new Date().getMonth() + 1, year: new Date().getFullYear(), start_date: '', end_date: '', working_days: 26, notes: '' });
+            await loadPeriods();
+        } catch {
+            /* handle silently */
+        } finally {
+            setCreating(false);
+        }
+    };
 
     const loadPeriods = async () => {
         setLoading(true);
@@ -93,6 +131,18 @@ export function PayrollManager() {
             /* handle silently */
         } finally {
             setActionId(null);
+        }
+    };
+
+    const handleDownloadPayslip = async (slip: HRSalarySlip) => {
+        setDownloadingId(slip.slip_id);
+        try {
+            const empName = slip.employee_name?.replace(/\s+/g, '_') || 'employee';
+            await hrAPI.downloadPayslip(slip.slip_id, `payslip_${empName}_${slip.period_name?.replace(/\s+/g, '_') || ''}.pdf`);
+        } catch {
+            /* handle silently */
+        } finally {
+            setDownloadingId(null);
         }
     };
 
@@ -232,16 +282,30 @@ export function PayrollManager() {
                                                 </Badge>
                                             </td>
                                             <td className="px-4 py-3">
-                                                {slip.status === 'finalized' && (
+                                                <div className="flex items-center gap-2">
+                                                    {slip.status === 'finalized' && (
+                                                        <Button
+                                                            size="sm"
+                                                            disabled={actionId === slip.slip_id}
+                                                            onClick={() => handleMarkPaid(slip)}
+                                                            className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs rounded-lg h-7 px-3 gap-1"
+                                                        >
+                                                            <CreditCard className="h-3 w-3" /> Pay
+                                                        </Button>
+                                                    )}
                                                     <Button
                                                         size="sm"
-                                                        disabled={actionId === slip.slip_id}
-                                                        onClick={() => handleMarkPaid(slip)}
-                                                        className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs rounded-lg h-7 px-3 gap-1"
+                                                        variant="outline"
+                                                        disabled={downloadingId === slip.slip_id}
+                                                        onClick={() => handleDownloadPayslip(slip)}
+                                                        className="border-indigo-200 text-indigo-700 hover:bg-indigo-50 text-xs rounded-lg h-7 px-3 gap-1"
                                                     >
-                                                        <CreditCard className="h-3 w-3" /> Pay
+                                                        {downloadingId === slip.slip_id
+                                                            ? <Loader2 className="h-3 w-3 animate-spin" />
+                                                            : <Download className="h-3 w-3" />}
+                                                        PDF
                                                     </Button>
-                                                )}
+                                                </div>
                                             </td>
                                         </tr>
                                     ))}
@@ -259,10 +323,103 @@ export function PayrollManager() {
         <div className="space-y-4">
             <div className="flex items-center justify-between">
                 <p className="text-sm text-slate-500">Select a payroll period to manage salary slips.</p>
-                <Button className="bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold h-9 px-4 gap-2">
-                    <FileText className="h-4 w-4" /> New Period
+                <Button
+                    onClick={() => setNewPeriodOpen(true)}
+                    className="bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold h-9 px-4 gap-2"
+                >
+                    <Plus className="h-4 w-4" /> New Period
                 </Button>
             </div>
+
+            {/* New Period Dialog */}
+            <Dialog open={newPeriodOpen} onOpenChange={setNewPeriodOpen}>
+                <DialogContent className="sm:max-w-[440px]">
+                    <DialogHeader>
+                        <DialogTitle className="font-black text-slate-900">Create Payroll Period</DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-4 pt-2">
+                        <div className="grid grid-cols-2 gap-3">
+                            <div className="space-y-1.5">
+                                <label className="text-xs font-bold text-slate-600 uppercase tracking-wide">Month</label>
+                                <select
+                                    className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm bg-white"
+                                    value={newForm.month}
+                                    onChange={e => setNewForm(f => ({ ...f, month: Number(e.target.value) }))}
+                                >
+                                    {MONTHS.map((m, i) => (
+                                        <option key={m} value={i + 1}>{m}</option>
+                                    ))}
+                                </select>
+                            </div>
+                            <div className="space-y-1.5">
+                                <label className="text-xs font-bold text-slate-600 uppercase tracking-wide">Year</label>
+                                <Input
+                                    type="number"
+                                    value={newForm.year}
+                                    onChange={e => setNewForm(f => ({ ...f, year: Number(e.target.value) }))}
+                                    className="rounded-xl border-slate-200 text-sm"
+                                    min={2020}
+                                    max={2099}
+                                />
+                            </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                            <div className="space-y-1.5">
+                                <label className="text-xs font-bold text-slate-600 uppercase tracking-wide">Start Date</label>
+                                <Input
+                                    type="date"
+                                    value={newForm.start_date}
+                                    onChange={e => setNewForm(f => ({ ...f, start_date: e.target.value }))}
+                                    className="rounded-xl border-slate-200 text-sm"
+                                    required
+                                />
+                            </div>
+                            <div className="space-y-1.5">
+                                <label className="text-xs font-bold text-slate-600 uppercase tracking-wide">End Date</label>
+                                <Input
+                                    type="date"
+                                    value={newForm.end_date}
+                                    onChange={e => setNewForm(f => ({ ...f, end_date: e.target.value }))}
+                                    className="rounded-xl border-slate-200 text-sm"
+                                    required
+                                />
+                            </div>
+                        </div>
+                        <div className="space-y-1.5">
+                            <label className="text-xs font-bold text-slate-600 uppercase tracking-wide">Working Days</label>
+                            <Input
+                                type="number"
+                                value={newForm.working_days}
+                                onChange={e => setNewForm(f => ({ ...f, working_days: Number(e.target.value) }))}
+                                className="rounded-xl border-slate-200 text-sm"
+                                min={1}
+                                max={31}
+                            />
+                        </div>
+                        <div className="space-y-1.5">
+                            <label className="text-xs font-bold text-slate-600 uppercase tracking-wide">Notes (optional)</label>
+                            <Input
+                                value={newForm.notes}
+                                onChange={e => setNewForm(f => ({ ...f, notes: e.target.value }))}
+                                placeholder="E.g. includes bonus payment..."
+                                className="rounded-xl border-slate-200 text-sm"
+                            />
+                        </div>
+                        <div className="flex gap-3 pt-1">
+                            <Button
+                                onClick={handleCreatePeriod}
+                                disabled={creating || !newForm.start_date || !newForm.end_date}
+                                className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold text-sm"
+                            >
+                                {creating ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Creating...</> : 'Create Period'}
+                            </Button>
+                            <Button type="button" variant="outline" onClick={() => setNewPeriodOpen(false)} className="rounded-xl border-slate-200 text-slate-600">
+                                Cancel
+                            </Button>
+                        </div>
+                    </div>
+                </DialogContent>
+            </Dialog>
 
             {loading ? (
                 <div className="space-y-3 animate-pulse">

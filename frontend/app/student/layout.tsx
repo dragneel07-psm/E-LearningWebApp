@@ -9,7 +9,7 @@ import {
     LayoutDashboard, BookOpen, FileText, Calendar,
     User as UserIcon, LogOut, Menu, X, MessageSquare,
     GraduationCap, Clock, FileBarChart, CreditCard,
-    BrainCircuit, Trophy, Award, WifiOff, Download
+    BrainCircuit, Trophy, Award, WifiOff, Download, Brain
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -53,6 +53,8 @@ export default function StudentLayout({ children }: { children: React.ReactNode 
             hidden: user?.tenant_features?.student_ai_chatbot === false
         },
         { label: 'My Classes', href: '/student/classes', icon: BookOpen },
+        { label: 'Courses', href: '/student/courses', icon: GraduationCap },
+        { label: 'Quizzes', href: '/student/quizzes', icon: Brain },
         { label: 'Assignments', href: '/student/assignments', icon: FileText },
         { label: 'Library', href: '/student/library', icon: BookOpen },
         { label: 'Attendance', href: '/student/attendance', icon: Calendar },

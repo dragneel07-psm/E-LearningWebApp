@@ -608,6 +608,8 @@ export interface GradebookData {
         id: string;
         name: string;
         email: string;
+        section_id: number | null;
+        section_name: string | null;
         results: Record<string, {
             score: number | null;
             result_id: string | null;
@@ -2360,8 +2362,9 @@ export const academicAPI = {
 
     // Assessments
 
-    getGradebook: (subjectId: number) => {
-        return apiRequest<GradebookData>(`/academic/assessments/gradebook/?subject=${subjectId}`);
+    getGradebook: (subjectId: number, sectionId?: number) => {
+        const q = sectionId ? `&section=${sectionId}` : '';
+        return apiRequest<GradebookData>(`/academic/assessments/gradebook/?subject=${subjectId}${q}`);
     },
 
 
@@ -3580,6 +3583,19 @@ export const hrAPI = {
         apiRequest<HRSalarySlip>(`/hr/salary-slips/${id}/`, { method: 'PATCH', body: JSON.stringify(data) }),
     markSlipPaid: (id: string, data: { payment_date: string; payment_method?: string; transaction_reference?: string }) =>
         apiRequest<HRSalarySlip>(`/hr/salary-slips/${id}/mark-paid/`, { method: 'POST', body: JSON.stringify(data) }),
+    downloadPayslip: async (slipId: string, filename?: string) => {
+        const res = await fetch(`/api/hr/salary-slips/${slipId}/payslip-pdf/`, {
+            headers: { 'Authorization': `Bearer ${typeof window !== 'undefined' ? localStorage.getItem('access_token') || '' : ''}` }
+        });
+        if (!res.ok) throw new Error('Failed to download payslip');
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename || `payslip_${slipId.slice(0, 8)}.pdf`;
+        a.click();
+        URL.revokeObjectURL(url);
+    },
 };
 
 // ─── SIS API ─────────────────────────────────────────────────────────────────

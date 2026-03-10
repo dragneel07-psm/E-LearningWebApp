@@ -39,6 +39,15 @@ function clearAuthCookies(response: NextResponse): void {
     response.cookies.set('tenant_id', '', { ...baseOptions, domain: sharedDomain });
 }
 
+function buildPublicRootResponse(request: NextRequest, requestHeaders: Headers, hostname: string): NextResponse {
+    if (isTenantHost(hostname)) {
+        const url = request.nextUrl.clone();
+        url.pathname = '/school';
+        return NextResponse.rewrite(url, { request: { headers: requestHeaders } });
+    }
+    return NextResponse.next({ request: { headers: requestHeaders } });
+}
+
 function getUserFromToken(token: string): UserPayload | null {
     try {
         const decoded = decodeJwt(token) as Partial<UserPayload>;
@@ -120,14 +129,7 @@ export async function proxy(request: NextRequest) {
     // Allow access to public paths
     if (pathname === '/' || PUBLIC_PATHS.some(path => pathname.startsWith(path))) {
         if (pathname === '/' && !token) {
-            if (isTenantHost(hostname)) {
-                // Tenant root (subdomain or custom domain) → show school landing page
-                const url = request.nextUrl.clone();
-                url.pathname = '/school';
-                return NextResponse.rewrite(url);
-            }
-            // SaaS root (no tenant) → show the SaaS marketing landing page
-            return NextResponse.next({ request: { headers: requestHeaders } });
+            return buildPublicRootResponse(request, requestHeaders, hostname);
         }
         // Always allow /login and /register to render; avoid server-side auth loops.
         if (isAuthPage) {
@@ -174,9 +176,12 @@ export async function proxy(request: NextRequest) {
         // Check expiration
         if (user.exp && user.exp * 1000 < Date.now()) {
             console.log(`[Proxy] Token expired (exp ${user.exp * 1000} < now ${Date.now()})`);
-            const response = isAuthPage
-                ? NextResponse.next({ request: { headers: requestHeaders } })
-                : NextResponse.redirect(new URL('/login', request.url));
+            const response =
+                pathname === '/'
+                    ? buildPublicRootResponse(request, requestHeaders, hostname)
+                    : isAuthPage
+                        ? NextResponse.next({ request: { headers: requestHeaders } })
+                        : NextResponse.redirect(new URL('/login', request.url));
             clearAuthCookies(response);
             return response;
         }
@@ -222,7 +227,10 @@ export async function proxy(request: NextRequest) {
             clearAuthCookies(response);
             return response;
         }
-        const response = NextResponse.redirect(new URL('/login', request.url));
+        const response =
+            pathname === '/'
+                ? buildPublicRootResponse(request, requestHeaders, hostname)
+                : NextResponse.redirect(new URL('/login', request.url));
         clearAuthCookies(response);
         return response;
     }

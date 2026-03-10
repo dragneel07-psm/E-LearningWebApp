@@ -944,7 +944,10 @@ class AssessmentViewSet(viewsets.ModelViewSet):
                     status=status.HTTP_403_FORBIDDEN,
                 )
             academic_class = subject.academic_class
+            section_id = request.query_params.get('section')
             students = Student.objects.filter(academic_class=academic_class)
+            if section_id:
+                students = students.filter(section_id=section_id)
         except Subject.DoesNotExist:
             return Response({'error': 'Subject not found'}, status=404)
 
@@ -981,6 +984,8 @@ class AssessmentViewSet(viewsets.ModelViewSet):
                 'id': s.id,
                 'name': s.user.get_full_name(),
                 'email': s.user.email,
+                'section_id': s.section_id,
+                'section_name': s.section.name if s.section else None,
                 'results': student_results
             })
 

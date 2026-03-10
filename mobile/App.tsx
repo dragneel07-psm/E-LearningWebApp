@@ -18,6 +18,7 @@ import CoursesScreen from './screens/CoursesScreen';
 import LessonsScreen from './screens/LessonsScreen';
 import LessonDetailScreen from './screens/LessonDetailScreen';
 import GradesScreen from './screens/GradesScreen';
+import AssignmentsScreen from './screens/AssignmentsScreen';
 import OfflineScreen from './screens/OfflineScreen';
 import ProfileScreen from './screens/ProfileScreen';
 import {
@@ -50,6 +51,7 @@ function tabIcon(name: string, focused: boolean) {
     Home: ['🏠', '🏡'],
     Courses: ['📚', '📖'],
     Grades: ['📊', '📈'],
+    Assignments: ['📝', '✏️'],
     Timetable: ['🗓️', '📆'],
     People: ['👥', '🧑‍🤝‍🧑'],
     Children: ['👶', '🧒'],
@@ -129,6 +131,7 @@ function StudentTabs({
       <Tab.Screen name="Home" component={DashboardStackNavigator} />
       <Tab.Screen name="Courses" component={CoursesStackNavigator} />
       <Tab.Screen name="Grades" component={GradesScreen} />
+      <Tab.Screen name="Assignments" component={AssignmentsScreen} />
       <Tab.Screen name="Notices">
         {() => <NoticeBoardScreen role="student" />}
       </Tab.Screen>

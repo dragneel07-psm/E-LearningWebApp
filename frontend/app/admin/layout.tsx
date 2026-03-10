@@ -46,6 +46,7 @@ export default function AdminLayout({
                             firstName={user?.first_name}
                             lastName={user?.last_name}
                             roleLabel={user?.role || 'School Administrator'}
+                            profileHref="/admin/profile"
                             settingsHref="/admin/settings"
                             logoutHref="/login"
                             className="border-l pl-4"

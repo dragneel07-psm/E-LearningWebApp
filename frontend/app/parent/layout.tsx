@@ -1,12 +1,13 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { ReactNode } from 'react';
 import {
     LayoutDashboard, Users, CalendarDays, GraduationCap,
-    Wallet, CalendarClock, Bell, BookOpen
+    Wallet, CalendarClock, BookOpen, MessageSquare, LogOut
 } from 'lucide-react';
+import { removeTokens } from '@/lib/auth';
 
 const NAV = [
     { href: '/parent', label: 'Overview', icon: LayoutDashboard, exact: true },
@@ -16,10 +17,17 @@ const NAV = [
     { href: '/parent/fees', label: 'Fees', icon: Wallet },
     { href: '/parent/meetings', label: 'Meetings', icon: CalendarClock },
     { href: '/parent/notices', label: 'Notices', icon: BookOpen },
+    { href: '/parent/messages', label: 'Messages', icon: MessageSquare },
 ];
 
 export default function ParentLayout({ children }: { children: ReactNode }) {
     const pathname = usePathname();
+    const router = useRouter();
+
+    const handleLogout = () => {
+        removeTokens();
+        router.push('/login');
+    };
 
     return (
         <div className="flex min-h-screen bg-slate-50">
@@ -58,7 +66,13 @@ export default function ParentLayout({ children }: { children: ReactNode }) {
                 </nav>
 
                 <div className="p-4 border-t border-slate-100">
-                    <p className="text-[10px] text-slate-400 font-medium">School ERP · Parent Access</p>
+                    <button
+                        onClick={handleLogout}
+                        className="flex items-center gap-2 w-full px-3 py-2.5 rounded-xl text-sm font-bold text-slate-500 hover:bg-red-50 hover:text-red-600 transition-colors"
+                    >
+                        <LogOut className="h-4 w-4" />
+                        Logout
+                    </button>
                 </div>
             </aside>
 
