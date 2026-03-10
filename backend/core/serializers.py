@@ -190,10 +190,33 @@ class TenantSerializer(serializers.ModelSerializer):
         return round((self.get_storage_used_bytes(obj) / limit_bytes) * 100, 2)
 
     def to_representation(self, instance):
-        data = super().to_representation(instance)
-        plan = get_tenant_plan(instance)
-        data['type'] = derive_tenant_type_from_plan(plan)
-        data['features'] = build_plan_entitled_features(plan)
+        import logging
+        import traceback
+        logger = logging.getLogger(__name__)
+        try:
+            data = super().to_representation(instance)
+        except Exception as exc:
+            logger.error(
+                "TenantSerializer.to_representation failed for tenant %s: %s\n%s",
+                getattr(instance, 'id', 'unknown'),
+                exc,
+                traceback.format_exc(),
+            )
+            raise
+        try:
+            plan = get_tenant_plan(instance)
+            data['type'] = derive_tenant_type_from_plan(plan)
+            data['features'] = build_plan_entitled_features(plan)
+        except Exception as exc:
+            logger.error(
+                "TenantSerializer plan enrichment failed for tenant %s: %s\n%s",
+                getattr(instance, 'id', 'unknown'),
+                exc,
+                traceback.format_exc(),
+            )
+            # Fall back to safe defaults rather than returning a 500
+            data.setdefault('type', 'standard')
+            data.setdefault('features', {})
         return data
 
 class AuditLogSerializer(serializers.ModelSerializer):
