@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { academicAPI, aiAPI, AtRiskStudent, Student, StudentProfileOverview } from '@/lib/api';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Card, CardContent } from '@/components/ui/card';
@@ -13,6 +13,7 @@ interface StudentProfileOverviewDialogProps {
     student: Student | null;
     open: boolean;
     onOpenChange: (open: boolean) => void;
+    headerAction?: ReactNode;
 }
 
 function formatDate(value: string | null | undefined): string {
@@ -37,7 +38,7 @@ function statusBadgeClass(status: string): string {
     }
 }
 
-export function StudentProfileOverviewDialog({ student, open, onOpenChange }: StudentProfileOverviewDialogProps) {
+export function StudentProfileOverviewDialog({ student, open, onOpenChange, headerAction }: StudentProfileOverviewDialogProps) {
     const [loading, setLoading] = useState(false);
     const [overview, setOverview] = useState<StudentProfileOverview | null>(null);
     const [riskInsight, setRiskInsight] = useState<AtRiskStudent | null>(null);
@@ -109,10 +110,15 @@ export function StudentProfileOverviewDialog({ student, open, onOpenChange }: St
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
-                    <DialogTitle className="text-xl">Student Profile</DialogTitle>
-                    <DialogDescription>
-                        Detailed performance view for {fullName}
-                    </DialogDescription>
+                    <div className="flex items-start justify-between gap-3">
+                        <div>
+                            <DialogTitle className="text-xl">Student Profile</DialogTitle>
+                            <DialogDescription>
+                                Detailed performance view for {fullName}
+                            </DialogDescription>
+                        </div>
+                        {headerAction}
+                    </div>
                 </DialogHeader>
 
                 {loading && (

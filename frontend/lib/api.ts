@@ -1681,6 +1681,10 @@ export const coreAPI = {
         method: 'PATCH',
         body: formData
     }),
+    deleteTenant: (id: string, password: string) => apiRequest<void>(`/core/tenants/${id}/`, {
+        method: 'DELETE',
+        body: JSON.stringify({ password }),
+    }),
     getAuditLogs: async () => {
         const firstPage = await apiRequest<AuditLog[] | PaginatedResponse<AuditLog>>('/core/audit-logs/');
         if (Array.isArray(firstPage)) return firstPage;
@@ -2968,6 +2972,7 @@ export const saasApi = {
     getTenant: (id: string) => coreAPI.getTenant(id),
     createTenant: (data: Partial<Tenant>) => coreAPI.createTenant(data),
     updateTenant: (id: string, data: Partial<Tenant>) => coreAPI.updateTenant(id, data),
+    deleteTenant: (id: string, password: string) => coreAPI.deleteTenant(id, password),
     getInvoices: async () => {
         const firstPage = await apiRequest<Invoice[] | PaginatedResponse<Invoice>>(`${BILLING_SAAS_BASE}/invoices/`);
         if (Array.isArray(firstPage)) return firstPage;

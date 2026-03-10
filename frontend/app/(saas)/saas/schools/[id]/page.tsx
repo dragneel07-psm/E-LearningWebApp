@@ -7,8 +7,9 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ArrowLeft, Building, Users, CreditCard, Activity, Loader2, RefreshCcw, Eye, EyeOff, Key, ShieldAlert, ShieldCheck, Save, Download, Upload, Copy } from "lucide-react";
+import { ArrowLeft, Building, Users, CreditCard, Activity, Loader2, RefreshCcw, Eye, EyeOff, Key, ShieldAlert, ShieldCheck, Save, Download, Upload, Copy, Trash2 } from "lucide-react";
 import { coreAPI, getApiBaseUrl, Invoice, saasApi, Subscription, SubscriptionPlan, SubscriptionPlanHistory, Tenant } from "@/lib/api";
+import { DeleteTenantDialog } from "@/components/saas/delete-tenant-dialog";
 import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -72,6 +73,7 @@ export default function SchoolDetailsPage() {
     const [activeTab, setActiveTab] = useState('overview');
     const [isSavingSettings, setIsSavingSettings] = useState(false);
     const [isUpdatingTenantStatus, setIsUpdatingTenantStatus] = useState(false);
+    const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
     const [isSavingFeatures, setIsSavingFeatures] = useState(false);
     const [isUploadingLogo, setIsUploadingLogo] = useState(false);
     const [selectedLogoFile, setSelectedLogoFile] = useState<File | null>(null);
@@ -552,6 +554,16 @@ export default function SchoolDetailsPage() {
                         {isUpdatingTenantStatus && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                         {school.status === 'active' ? 'Suspend Tenant' : 'Activate Tenant'}
                     </Button>
+                    {school.status === 'suspended' && (
+                        <Button
+                            variant="destructive"
+                            onClick={() => setIsDeleteDialogOpen(true)}
+                            className="bg-red-700 hover:bg-red-800"
+                        >
+                            <Trash2 className="mr-2 h-4 w-4" />
+                            Delete Tenant
+                        </Button>
+                    )}
                 </div>
             </div>
 
@@ -1268,6 +1280,11 @@ export default function SchoolDetailsPage() {
                 </TabsContent>
             </Tabs>
 
+            <DeleteTenantDialog
+                tenant={school}
+                open={isDeleteDialogOpen}
+                onOpenChange={setIsDeleteDialogOpen}
+            />
         </div>
     );
 }

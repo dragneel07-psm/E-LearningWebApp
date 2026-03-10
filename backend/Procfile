@@ -1,2 +1,2 @@
-web: python manage.py migrate_schemas --shared && gunicorn config.wsgi --bind 0.0.0.0:$PORT
+web: bash scripts/railway-start-web.sh
 worker: celery -A config.celery:app worker --loglevel=info --concurrency=2

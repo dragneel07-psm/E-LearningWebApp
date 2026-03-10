@@ -8,7 +8,7 @@ import {
     Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle
 } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { ArrowLeft, Plus, Trash2, Loader2, User, Filter, Edit, Mail, Eye } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, Loader2, User, Filter, Edit, Mail, Eye, Lock } from 'lucide-react';
 import { academicAPI, AcademicClass, Student } from '@/lib/api';
 import { ImportStudentsDialog } from './import-students-dialog';
 import Link from 'next/link';
@@ -17,6 +17,7 @@ import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { StudentProfileOverviewDialog } from '@/components/student/student-profile-overview-dialog';
+import { ChangePasswordDialog } from '@/components/admin/change-password-dialog';
 
 type StudentFormData = {
     first_name: string;
@@ -54,6 +55,11 @@ export default function StudentsPage() {
     const [currentStudentId, setCurrentStudentId] = useState<string | null>(null);
     const [profileStudent, setProfileStudent] = useState<Student | null>(null);
     const [submitting, setSubmitting] = useState(false);
+    const [passwordDialog, setPasswordDialog] = useState<{ open: boolean; userId: string; userName: string }>({
+        open: false,
+        userId: '',
+        userName: '',
+    });
 
     const [formData, setFormData] = useState<StudentFormData>(defaultFormData);
 
@@ -174,6 +180,21 @@ export default function StudentsPage() {
         }
     };
 
+    const openPasswordDialog = (student: Student, closeProfile = false) => {
+        if (!student.user_id) {
+            toast.error('Student account is missing a linked user.');
+            return;
+        }
+        if (closeProfile) {
+            setProfileStudent(null);
+        }
+        setPasswordDialog({
+            open: true,
+            userId: student.user_id,
+            userName: `${student.first_name || ''} ${student.last_name || ''}`.trim() || student.email,
+        });
+    };
+
     // Helper: Find full class object matching selected ID
     const selectedClass = classes.find(c => c.id.toString() === formData.academic_class);
     const availableSections = selectedClass?.sections || [];
@@ -289,6 +310,9 @@ export default function StudentsPage() {
                                                     </Button>
                                                     <Button variant="ghost" size="icon" onClick={() => openEditDialog(student)}>
                                                         <Edit className="h-4 w-4 text-slate-500" />
+                                                    </Button>
+                                                    <Button variant="ghost" size="icon" onClick={() => openPasswordDialog(student)}>
+                                                        <Lock className="h-4 w-4 text-slate-500" />
                                                     </Button>
                                                     <Button variant="ghost" size="icon" className="text-red-600" onClick={() => handleDelete(student.id)}>
                                                         <Trash2 className="h-4 w-4" />
@@ -409,6 +433,25 @@ export default function StudentsPage() {
                 onOpenChange={(open) => {
                     if (!open) setProfileStudent(null);
                 }}
+                headerAction={profileStudent ? (
+                    <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="shrink-0"
+                        onClick={() => openPasswordDialog(profileStudent, true)}
+                    >
+                        <Lock className="mr-2 h-4 w-4" />
+                        Change Password
+                    </Button>
+                ) : null}
+            />
+
+            <ChangePasswordDialog
+                open={passwordDialog.open}
+                onOpenChange={(open) => setPasswordDialog((prev) => ({ ...prev, open }))}
+                userId={passwordDialog.userId}
+                userName={passwordDialog.userName}
             />
         </div>
     );

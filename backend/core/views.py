@@ -267,6 +267,32 @@ class TenantViewSet(viewsets.ModelViewSet):
             },
         )
 
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+
+        # Only allow deletion of suspended tenants
+        if instance.status != 'suspended':
+            return Response(
+                {'error': 'Only suspended tenants can be deleted. Suspend the tenant first.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Require SaaS admin password confirmation
+        password = request.data.get('password', '')
+        if not password:
+            return Response(
+                {'error': 'Password is required to confirm tenant deletion.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if not request.user.check_password(password):
+            return Response(
+                {'error': 'Incorrect password. Deletion cancelled.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        self.perform_destroy(instance)
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
     def perform_destroy(self, instance):
         payload = {
             "tenant_id": str(instance.id),

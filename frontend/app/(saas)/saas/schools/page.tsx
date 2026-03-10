@@ -12,7 +12,7 @@ import {
     TableHeader,
     TableRow,
 } from "@/components/ui/table";
-import { MoreHorizontal, ArrowUpCircle, AlertCircle, Loader2, Search, ShieldCheck, Globe, RefreshCcw } from "lucide-react";
+import { MoreHorizontal, ArrowUpCircle, AlertCircle, Loader2, Search, ShieldCheck, Globe, RefreshCcw, Trash2 } from "lucide-react";
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -27,6 +27,7 @@ import Link from 'next/link';
 import { CreateSchoolDialog } from "@/components/saas/create-school-dialog";
 import { ManageFeaturesDialog } from "@/components/saas/manage-features-dialog";
 import { ResetPasswordDialog } from "@/components/saas/reset-password-dialog";
+import { DeleteTenantDialog } from "@/components/saas/delete-tenant-dialog";
 import { motion } from "framer-motion";
 import { Input } from "@/components/ui/input";
 import { Eye, Key } from "lucide-react";
@@ -184,6 +185,7 @@ export default function SaasSchoolsPage() {
 function SchoolTableRow({ school, index, onUpdated }: { school: TenantSummary, index: number, onUpdated: () => Promise<void> | void }) {
     const [isManageFeaturesOpen, setIsManageFeaturesOpen] = useState(false);
     const [isResetPasswordOpen, setIsResetPasswordOpen] = useState(false);
+    const [isDeleteOpen, setIsDeleteOpen] = useState(false);
     const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
 
     const schoolId = String(school.id || school.tenant_id || '');
@@ -318,6 +320,18 @@ function SchoolTableRow({ school, index, onUpdated }: { school: TenantSummary, i
                                     <AlertCircle className="mr-2 h-4 w-4" />
                                     {isSuspended ? 'Activate Account' : 'Suspend Account'}
                                 </DropdownMenuItem>
+                                {isSuspended && (
+                                    <>
+                                        <DropdownMenuSeparator />
+                                        <DropdownMenuItem
+                                            onSelect={() => setIsDeleteOpen(true)}
+                                            className="text-red-600 dark:text-red-400 focus:bg-red-50 dark:focus:bg-red-500/10 focus:text-red-700"
+                                        >
+                                            <Trash2 className="mr-2 h-4 w-4" />
+                                            Delete Tenant
+                                        </DropdownMenuItem>
+                                    </>
+                                )}
                                 <DropdownMenuSeparator />
                                 <DropdownMenuItem disabled className="text-slate-500">
                                     <ArrowUpCircle className="mr-2 h-4 w-4 text-emerald-500" /> Upgrade Plan
@@ -338,6 +352,12 @@ function SchoolTableRow({ school, index, onUpdated }: { school: TenantSummary, i
                 tenant={school}
                 open={isResetPasswordOpen}
                 onOpenChange={setIsResetPasswordOpen}
+            />
+            <DeleteTenantDialog
+                tenant={school}
+                open={isDeleteOpen}
+                onOpenChange={setIsDeleteOpen}
+                onDeleted={onUpdated}
             />
         </>
     );
