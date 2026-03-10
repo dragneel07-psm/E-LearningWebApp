@@ -57,7 +57,8 @@ export default function SaasSchoolsPage() {
     const loadSchools = async () => {
         try {
             const data = await saasApi.getTenants();
-            setSchools(Array.isArray(data) ? data : []);
+            const rows = (Array.isArray(data) ? data : []) as TenantSummary[];
+            setSchools(rows.filter((school) => (school.schema_name || '').toLowerCase() !== 'public'));
         } catch (error) {
             console.error(error);
             toast.error("Failed to load schools.");

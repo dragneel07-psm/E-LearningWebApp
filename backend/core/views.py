@@ -138,9 +138,12 @@ class JobStatusView(APIView):
 from .views_saas import IsSaaSAdmin
 
 class TenantViewSet(viewsets.ModelViewSet):
-    queryset = Tenant.objects.select_related('subscription__plan').all()
+    queryset = Tenant.objects.select_related('subscription__plan').exclude(schema_name='public')
     permission_classes = [IsSaaSAdmin]
     throttle_classes = []
+
+    def get_queryset(self):
+        return Tenant.objects.select_related('subscription__plan').exclude(schema_name='public')
 
     def get_serializer_class(self):
         if self.action == 'create':
@@ -269,6 +272,12 @@ class TenantViewSet(viewsets.ModelViewSet):
 
     def destroy(self, request, *args, **kwargs):
         instance = self.get_object()
+
+        if str(getattr(instance, "schema_name", "")).strip().lower() == "public":
+            return Response(
+                {'error': 'The public tenant cannot be deleted.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
 
         # Only allow deletion of suspended tenants
         if instance.status != 'suspended':

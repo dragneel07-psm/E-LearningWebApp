@@ -128,3 +128,27 @@ class SaasAdminMutationAuditTests(FastTenantTestCase):
         mock_set_public.assert_called()
         mocked_delete.assert_called_once_with(force_drop=True)
         mock_audit.assert_called_once()
+
+    def test_public_tenant_cannot_be_deleted(self):
+        request = self.factory.delete(
+            "/api/core/tenants/1/",
+            {"password": "Saas@1234"},
+            format="json",
+        )
+        force_authenticate(request, user=self.saas_admin)
+
+        public_tenant = SimpleNamespace(
+            schema_name="public",
+            status="suspended",
+        )
+
+        view = TenantViewSet()
+        view.request = request
+
+        with patch.object(view, "get_object", return_value=public_tenant), patch.object(
+            view, "perform_destroy"
+        ) as mocked_destroy:
+            response = view.destroy(request)
+
+        self.assertEqual(response.status_code, 403)
+        mocked_destroy.assert_not_called()
