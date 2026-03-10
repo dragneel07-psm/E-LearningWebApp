@@ -21,7 +21,6 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "E-Learning SaaS – AI-Powered School Platform",
   description: "AI-Powered School Platform with offline learning for rural areas",
-  manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
@@ -57,6 +56,7 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <head>
         {/* PWA Meta Tags */}
+        <link rel="manifest" href="/manifest.json" crossOrigin="use-credentials" />
         <meta name="application-name" content="E-Learning Portal" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
