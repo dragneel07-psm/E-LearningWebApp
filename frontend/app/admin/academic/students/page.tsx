@@ -8,7 +8,7 @@ import {
     Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle
 } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { ArrowLeft, Trash2, Loader2, User, Filter, Edit, Mail, Eye, Lock, UserRoundPlus } from 'lucide-react';
+import { ArrowLeft, Trash2, Loader2, User, Filter, Edit, Mail, Eye, Lock, UserRoundPlus, Wrench, AlertTriangle } from 'lucide-react';
 import { academicAPI, AcademicClass, Student } from '@/lib/api';
 import Link from 'next/link';
 import { Label } from '@/components/ui/label';
@@ -58,6 +58,9 @@ export default function StudentsPage() {
         userId: '',
         userName: '',
     });
+    const [repairDialog, setRepairDialog] = useState<{ open: boolean; student: Student | null }>({ open: false, student: null });
+    const [repairForm, setRepairForm] = useState({ email: '', password: 'Student@123', first_name: '', last_name: '' });
+    const [repairing, setRepairing] = useState(false);
 
     const [formData, setFormData] = useState<StudentFormData>(defaultFormData);
 
@@ -177,6 +180,35 @@ export default function StudentsPage() {
             userId: student.user_id,
             userName: `${student.first_name || ''} ${student.last_name || ''}`.trim() || student.email || 'Student',
         });
+    };
+
+    const openRepairDialog = (student: Student) => {
+        setRepairForm({
+            email: student.email || '',
+            password: 'Student@123',
+            first_name: student.first_name || '',
+            last_name: student.last_name || '',
+        });
+        setRepairDialog({ open: true, student });
+    };
+
+    const handleRepair = async () => {
+        if (!repairDialog.student) return;
+        if (!repairForm.email.trim()) { toast.error('Email is required.'); return; }
+        setRepairing(true);
+        try {
+            const res = await academicAPI.repairStudentUser(repairDialog.student.id, repairForm);
+            toast.success('Student account repaired successfully.');
+            setRepairDialog({ open: false, student: null });
+            // Update student in local state
+            setStudents(prev => prev.map(s =>
+                s.id === repairDialog.student!.id ? { ...s, ...res.student } : s
+            ));
+        } catch (err) {
+            toast.error(err instanceof Error ? err.message : 'Failed to repair account.');
+        } finally {
+            setRepairing(false);
+        }
     };
 
     // Helper: Find full class object matching selected ID
@@ -310,18 +342,37 @@ export default function StudentsPage() {
                                             <TableCell className="capitalize">{student.learning_style || '-'}</TableCell>
                                             <TableCell className="text-right">
                                                 <div className="flex justify-end gap-2">
-                                                    <Button variant="ghost" size="icon" onClick={() => setProfileStudent(student)}>
-                                                        <Eye className="h-4 w-4 text-slate-500" />
-                                                    </Button>
-                                                    <Button variant="ghost" size="icon" onClick={() => openEditDialog(student)}>
-                                                        <Edit className="h-4 w-4 text-slate-500" />
-                                                    </Button>
-                                                    <Button variant="ghost" size="icon" onClick={() => openPasswordDialog(student)}>
-                                                        <Lock className="h-4 w-4 text-slate-500" />
-                                                    </Button>
-                                                    <Button variant="ghost" size="icon" className="text-red-600" onClick={() => handleDelete(student.id)}>
-                                                        <Trash2 className="h-4 w-4" />
-                                                    </Button>
+                                                    {hasNoUser ? (
+                                                        <>
+                                                            <Button
+                                                                variant="outline"
+                                                                size="sm"
+                                                                className="text-amber-700 border-amber-300 hover:bg-amber-50 gap-1.5 h-8 px-2 text-xs font-semibold"
+                                                                onClick={() => openRepairDialog(student)}
+                                                            >
+                                                                <Wrench className="h-3.5 w-3.5" />
+                                                                Repair Account
+                                                            </Button>
+                                                            <Button variant="ghost" size="icon" className="text-red-600" onClick={() => handleDelete(student.id)}>
+                                                                <Trash2 className="h-4 w-4" />
+                                                            </Button>
+                                                        </>
+                                                    ) : (
+                                                        <>
+                                                            <Button variant="ghost" size="icon" onClick={() => setProfileStudent(student)}>
+                                                                <Eye className="h-4 w-4 text-slate-500" />
+                                                            </Button>
+                                                            <Button variant="ghost" size="icon" onClick={() => openEditDialog(student)}>
+                                                                <Edit className="h-4 w-4 text-slate-500" />
+                                                            </Button>
+                                                            <Button variant="ghost" size="icon" onClick={() => openPasswordDialog(student)}>
+                                                                <Lock className="h-4 w-4 text-slate-500" />
+                                                            </Button>
+                                                            <Button variant="ghost" size="icon" className="text-red-600" onClick={() => handleDelete(student.id)}>
+                                                                <Trash2 className="h-4 w-4" />
+                                                            </Button>
+                                                        </>
+                                                    )}
                                                 </div>
                                             </TableCell>
                                         </TableRow>
@@ -451,6 +502,57 @@ export default function StudentsPage() {
                 userId={passwordDialog.userId}
                 userName={passwordDialog.userName}
             />
+
+            {/* Repair Account Dialog */}
+            <Dialog open={repairDialog.open} onOpenChange={(open) => setRepairDialog(prev => ({ ...prev, open }))}>
+                <DialogContent className="sm:max-w-[480px]">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2 text-amber-700">
+                            <Wrench className="h-5 w-5" />
+                            Repair Student Account
+                        </DialogTitle>
+                        <DialogDescription>
+                            This student&apos;s user account was deleted or is missing. Enter an email and password to create a new login account and re-link it to this student.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <div className="rounded-lg bg-amber-50 border border-amber-200 p-3 flex gap-2 text-xs text-amber-800">
+                        <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+                        <span>A new login account will be created. The student will use this email &amp; password to log in.</span>
+                    </div>
+
+                    <div className="grid gap-3 py-2">
+                        <div className="grid grid-cols-2 gap-3">
+                            <div className="grid gap-1.5">
+                                <Label>First Name</Label>
+                                <Input value={repairForm.first_name} onChange={e => setRepairForm(p => ({ ...p, first_name: e.target.value }))} />
+                            </div>
+                            <div className="grid gap-1.5">
+                                <Label>Last Name</Label>
+                                <Input value={repairForm.last_name} onChange={e => setRepairForm(p => ({ ...p, last_name: e.target.value }))} />
+                            </div>
+                        </div>
+                        <div className="grid gap-1.5">
+                            <Label>Email *</Label>
+                            <Input type="email" value={repairForm.email} onChange={e => setRepairForm(p => ({ ...p, email: e.target.value }))} placeholder="student@school.com" />
+                        </div>
+                        <div className="grid gap-1.5">
+                            <Label>Password *</Label>
+                            <Input type="text" value={repairForm.password} onChange={e => setRepairForm(p => ({ ...p, password: e.target.value }))} />
+                        </div>
+                    </div>
+
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setRepairDialog({ open: false, student: null })} disabled={repairing}>
+                            Cancel
+                        </Button>
+                        <Button onClick={handleRepair} disabled={repairing} className="bg-amber-600 hover:bg-amber-700 text-white">
+                            {repairing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                            Repair Account
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }

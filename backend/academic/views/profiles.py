@@ -665,6 +665,75 @@ class StudentViewSet(TenantScopedQuerysetMixin, viewsets.ModelViewSet):
         
         return Response({'message': 'Password reset successfully'})
     
+    @action(detail=True, methods=['post'], url_path='repair_user')
+    def repair_user(self, request, pk=None):
+        """
+        Create a fresh UserAccount and link it to an orphaned Student
+        (i.e. one whose previously linked user was deleted).
+        Requires: email, optionally first_name / last_name / password.
+        """
+        student = self.get_object()
+
+        # Check whether the student already has a valid linked user
+        try:
+            existing_user = student.user
+            if existing_user and existing_user.pk:
+                return Response(
+                    {'detail': 'Student already has a linked user account.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+        except Exception:
+            pass  # Expected: RelatedObjectDoesNotExist for truly orphaned students
+
+        email = (request.data.get('email') or '').strip().lower()
+        if not email:
+            return Response({'detail': 'email is required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        password = request.data.get('password') or 'Student@123'
+        first_name = (request.data.get('first_name') or '').strip()
+        last_name = (request.data.get('last_name') or '').strip()
+        tenant = getattr(request, 'tenant', None)
+
+        User = get_user_model()
+
+        with transaction.atomic():
+            existing = User.objects.filter(email__iexact=email).first()
+            if existing:
+                if existing.role != 'student':
+                    return Response(
+                        {'detail': f'Email is already used by a {existing.role} account.'},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+                # Re-link to the existing student user
+                user = existing
+            else:
+                base_username = email.split('@')[0]
+                username = base_username
+                suffix = 1
+                while User.objects.filter(username=username).exists():
+                    username = f"{base_username}{suffix}"
+                    suffix += 1
+
+                user = User.objects.create_user(
+                    username=username,
+                    email=email,
+                    password=password,
+                    first_name=first_name,
+                    last_name=last_name,
+                    role='student',
+                    tenant=tenant,
+                )
+
+            # Re-link student to the (new or existing) user
+            Student.objects.filter(pk=student.pk).update(user=user)
+            student.refresh_from_db()
+
+        serializer = StudentListSerializer(student, context={'request': request})
+        return Response(
+            {'detail': 'Student user account repaired successfully.', 'student': serializer.data},
+            status=status.HTTP_200_OK,
+        )
+
     @action(detail=False, methods=['post'], parser_classes=[MultiPartParser, FormParser])
     def import_data(self, request):
         """

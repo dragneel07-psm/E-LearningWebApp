@@ -2226,6 +2226,11 @@ export const academicAPI = {
     deleteStudent: (id: string) => apiRequest<void>(`/academic/students/${id}/`, {
         method: 'DELETE'
     }),
+    repairStudentUser: (id: string, data: { email: string; password: string; first_name?: string; last_name?: string }) =>
+        apiRequest<{ detail: string; student: Student }>(`/academic/students/${id}/repair_user/`, {
+            method: 'POST',
+            body: JSON.stringify(data),
+        }),
 
     // Admissions
     getAdmissions: async (params?: {
