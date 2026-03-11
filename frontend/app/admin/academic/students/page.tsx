@@ -166,7 +166,7 @@ export default function StudentsPage() {
 
     const openPasswordDialog = (student: Student, closeProfile = false) => {
         if (!student.user_id) {
-            toast.error('Student account is missing a linked user.');
+            toast.error('This student has no linked user account. Delete and re-admit via the Admissions Pipeline to fix this.');
             return;
         }
         if (closeProfile) {
@@ -175,7 +175,7 @@ export default function StudentsPage() {
         setPasswordDialog({
             open: true,
             userId: student.user_id,
-            userName: `${student.first_name || ''} ${student.last_name || ''}`.trim() || student.email,
+            userName: `${student.first_name || ''} ${student.last_name || ''}`.trim() || student.email || 'Student',
         });
     };
 
@@ -277,18 +277,28 @@ export default function StudentsPage() {
                                     const cls = classes.find(c => c.id === student.academic_class);
                                     const sec = cls?.sections?.find(s => s.id === student.section);
 
+                                    const hasNoUser = !student.user_id;
                                     return (
-                                        <TableRow key={student.id}>
+                                        <TableRow key={student.id} className={hasNoUser ? 'bg-red-50' : ''}>
                                             <TableCell className="font-medium">
                                                 <div className="flex items-center gap-2">
-                                                    <div className="bg-indigo-100 p-1 rounded-full"><User className="h-4 w-4 text-indigo-600" /></div>
-                                                    {student.first_name} {student.last_name}
+                                                    <div className={`p-1 rounded-full ${hasNoUser ? 'bg-red-100' : 'bg-indigo-100'}`}>
+                                                        <User className={`h-4 w-4 ${hasNoUser ? 'text-red-500' : 'text-indigo-600'}`} />
+                                                    </div>
+                                                    <div>
+                                                        <span>{student.first_name} {student.last_name}</span>
+                                                        {hasNoUser && (
+                                                            <span className="ml-2 text-[10px] font-bold text-red-600 bg-red-100 px-1.5 py-0.5 rounded">
+                                                                No user account
+                                                            </span>
+                                                        )}
+                                                    </div>
                                                 </div>
                                             </TableCell>
                                             <TableCell>
                                                 <div className="flex items-center gap-2 text-slate-500 text-sm">
                                                     <Mail className="h-3 w-3" />
-                                                    {student.email}
+                                                    {student.email || <span className="italic text-slate-400">—</span>}
                                                 </div>
                                             </TableCell>
                                             <TableCell>

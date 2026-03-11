@@ -223,7 +223,7 @@ export interface AcademicClass {
 export interface Student {
     id: string; // UUID (usually maps to student_id or pk)
     student_id: string; // Explicitly from some serializers
-    user_id: string; // UUID
+    user_id?: string | null; // UUID — null if linked user was deleted (db_constraint=False)
     email: string;
     username?: string;
     first_name: string;

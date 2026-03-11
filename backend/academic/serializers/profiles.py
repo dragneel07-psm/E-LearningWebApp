@@ -83,18 +83,55 @@ class StudentUserSerializer(serializers.ModelSerializer):
 
 
 class StudentAccountFieldsMixin(serializers.Serializer):
-    """Shared flattened account fields for student payloads."""
+    """Shared flattened account fields for student payloads.
 
-    user = StudentUserSerializer(read_only=True)
+    Uses SerializerMethodFields for all user-sourced data so that orphaned
+    Student records (user deleted but Student row still exists, possible when
+    db_constraint=False) never cause a 500 — they simply return None.
+    """
+
     id = serializers.UUIDField(source='student_id', read_only=True)
-    user_id = serializers.UUIDField(source='user.user_id', read_only=True)
-    username = serializers.CharField(source='user.username', read_only=True)
-    email = serializers.EmailField(source='user.email', read_only=True)
-    first_name = serializers.CharField(source='user.first_name', read_only=True)
-    last_name = serializers.CharField(source='user.last_name', read_only=True)
-    is_active = serializers.BooleanField(source='user.is_active', read_only=True)
+    user = StudentUserSerializer(read_only=True)
     class_name = serializers.CharField(source='academic_class.name', read_only=True)
     section_name = serializers.CharField(source='section.name', read_only=True)
+
+    # Safe user-field accessors ------------------------------------------------
+    user_id    = serializers.SerializerMethodField()
+    username   = serializers.SerializerMethodField()
+    email      = serializers.SerializerMethodField()
+    first_name = serializers.SerializerMethodField()
+    last_name  = serializers.SerializerMethodField()
+    is_active  = serializers.SerializerMethodField()
+
+    def _user(self, obj):
+        try:
+            return obj.user
+        except Exception:
+            return None
+
+    def get_user_id(self, obj):
+        u = self._user(obj)
+        return str(u.user_id) if u else None
+
+    def get_username(self, obj):
+        u = self._user(obj)
+        return u.username if u else None
+
+    def get_email(self, obj):
+        u = self._user(obj)
+        return u.email if u else None
+
+    def get_first_name(self, obj):
+        u = self._user(obj)
+        return u.first_name if u else None
+
+    def get_last_name(self, obj):
+        u = self._user(obj)
+        return u.last_name if u else None
+
+    def get_is_active(self, obj):
+        u = self._user(obj)
+        return u.is_active if u else False
 
 
 class StudentListSerializer(StudentAccountFieldsMixin, serializers.ModelSerializer):

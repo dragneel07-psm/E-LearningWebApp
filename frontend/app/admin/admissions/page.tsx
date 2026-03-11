@@ -352,6 +352,34 @@ export default function AdmissionsPage() {
                 </div>
             </header>
 
+            {/* Step-by-step onboarding guide */}
+            <Card className="border-indigo-100 bg-gradient-to-r from-indigo-50 to-violet-50">
+                <CardContent className="p-5">
+                    <p className="text-xs font-bold text-indigo-700 uppercase tracking-wider mb-3">How to admit a new student</p>
+                    <div className="flex flex-col sm:flex-row gap-3">
+                        {[
+                            { step: '1', title: 'New Enquiry', desc: 'Click "New Enquiry" and fill in the student\'s name, guardian, phone & preferred class.', color: 'bg-blue-500' },
+                            { step: '2', title: 'Follow Up', desc: 'Update the status as you progress: Contacted → Interested → Application Started.', color: 'bg-amber-500' },
+                            { step: '3', title: 'Convert to Student', desc: 'Click the green person-plus icon (✚) to create the student login account with email & password.', color: 'bg-emerald-500' },
+                            { step: '4', title: 'Student Onboarded', desc: 'Status changes to Converted. Student can now log in at /login with their credentials.', color: 'bg-indigo-500' },
+                        ].map((s, i, arr) => (
+                            <div key={s.step} className="flex items-start gap-3 flex-1">
+                                <div className={`h-7 w-7 rounded-full ${s.color} text-white text-xs font-black flex items-center justify-center shrink-0 mt-0.5`}>
+                                    {s.step}
+                                </div>
+                                <div className="min-w-0">
+                                    <p className="text-sm font-bold text-slate-800">{s.title}</p>
+                                    <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">{s.desc}</p>
+                                </div>
+                                {i < arr.length - 1 && (
+                                    <div className="hidden sm:flex items-center self-center text-slate-300 text-lg font-light shrink-0">›</div>
+                                )}
+                            </div>
+                        ))}
+                    </div>
+                </CardContent>
+            </Card>
+
             <div className="grid gap-4 md:grid-cols-3 xl:grid-cols-6">
                 {pipelineCards.map((item) => (
                     <Card key={item.key}>
