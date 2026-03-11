@@ -3,10 +3,24 @@
 import * as React from "react"
 import * as AlertDialogPrimitive from "@radix-ui/react-alert-dialog"
 
+import { blurActiveLayerTrigger } from "@/components/ui/layer-focus"
 import { cn } from "@/lib/utils"
 import { buttonVariants } from "@/components/ui/button"
 
-const AlertDialog = AlertDialogPrimitive.Root
+function AlertDialog({
+    onOpenChange,
+    ...props
+}: React.ComponentProps<typeof AlertDialogPrimitive.Root>) {
+    return (
+        <AlertDialogPrimitive.Root
+            {...props}
+            onOpenChange={(open) => {
+                if (open) blurActiveLayerTrigger()
+                onOpenChange?.(open)
+            }}
+        />
+    )
+}
 
 const AlertDialogTrigger = AlertDialogPrimitive.Trigger
 

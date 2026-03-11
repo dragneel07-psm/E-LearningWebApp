@@ -4,9 +4,23 @@ import * as React from "react"
 import * as DropdownMenuPrimitive from "@radix-ui/react-dropdown-menu"
 import { Check, ChevronRight, Circle } from "lucide-react"
 
+import { blurActiveLayerTrigger } from "@/components/ui/layer-focus"
 import { cn } from "@/lib/utils"
 
-const DropdownMenu = DropdownMenuPrimitive.Root
+function DropdownMenu({
+    onOpenChange,
+    ...props
+}: React.ComponentProps<typeof DropdownMenuPrimitive.Root>) {
+    return (
+        <DropdownMenuPrimitive.Root
+            {...props}
+            onOpenChange={(open) => {
+                if (open) blurActiveLayerTrigger()
+                onOpenChange?.(open)
+            }}
+        />
+    )
+}
 
 const DropdownMenuTrigger = DropdownMenuPrimitive.Trigger
 

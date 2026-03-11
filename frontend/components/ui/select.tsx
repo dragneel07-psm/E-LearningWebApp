@@ -4,12 +4,23 @@ import * as React from "react"
 import * as SelectPrimitive from "@radix-ui/react-select"
 import { CheckIcon, ChevronDownIcon, ChevronUpIcon } from "lucide-react"
 
+import { blurActiveLayerTrigger } from "@/components/ui/layer-focus"
 import { cn } from "@/lib/utils"
 
 function Select({
+  onOpenChange,
   ...props
 }: React.ComponentProps<typeof SelectPrimitive.Root>) {
-  return <SelectPrimitive.Root data-slot="select" {...props} />
+  return (
+    <SelectPrimitive.Root
+      data-slot="select"
+      {...props}
+      onOpenChange={(open) => {
+        if (open) blurActiveLayerTrigger()
+        onOpenChange?.(open)
+      }}
+    />
+  )
 }
 
 function SelectGroup({

@@ -4,12 +4,23 @@ import * as React from "react"
 import * as DialogPrimitive from "@radix-ui/react-dialog"
 import { XIcon } from "lucide-react"
 
+import { blurActiveLayerTrigger } from "@/components/ui/layer-focus"
 import { cn } from "@/lib/utils"
 
 function Dialog({
+  onOpenChange,
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Root>) {
-  return <DialogPrimitive.Root data-slot="dialog" {...props} />
+  return (
+    <DialogPrimitive.Root
+      data-slot="dialog"
+      {...props}
+      onOpenChange={(open) => {
+        if (open) blurActiveLayerTrigger()
+        onOpenChange?.(open)
+      }}
+    />
+  )
 }
 
 function DialogTrigger({
