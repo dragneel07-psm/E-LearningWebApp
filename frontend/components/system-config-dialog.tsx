@@ -4,8 +4,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
-import { Settings, Save, Loader2 } from 'lucide-react';
-import { api, GlobalSettings } from '@/lib/api';
+import { Settings } from 'lucide-react';
+import { usersAPI } from '@/lib/api';
 import { toast } from 'sonner';
 
 interface SystemConfigDialogProps {
@@ -16,11 +16,9 @@ interface SystemConfigDialogProps {
 export function SystemConfigDialog({ open, onOpenChange }: SystemConfigDialogProps) {
     const [config, setConfig] = useState({
         schoolName: '',
-        contactEmail: 'admin@school.edu',
+        contactEmail: '',
         maintenanceMode: false,
     });
-    const [loading, setLoading] = useState(false);
-    const [saving, setSaving] = useState(false);
 
     useEffect(() => {
         if (open) {
@@ -30,36 +28,17 @@ export function SystemConfigDialog({ open, onOpenChange }: SystemConfigDialogPro
 
     const loadConfig = async () => {
         try {
-            setLoading(true);
-            const settings = await api.settings.get() as GlobalSettings;
+            const me = await usersAPI.getMe();
+            const cachedTenantName = typeof window !== 'undefined' ? localStorage.getItem('tenant_name') : null;
+            const tenantSchema = (typeof window !== 'undefined' ? localStorage.getItem('tenant_id') : null) || me.tenant || 'school';
             setConfig({
-                schoolName: settings.site_name || '',
-                contactEmail: settings.support_email || '',
-                maintenanceMode: Boolean(settings.maintenance_mode),
+                schoolName: (cachedTenantName || '').trim() || tenantSchema,
+                contactEmail: me.email || '',
+                maintenanceMode: false,
             });
         } catch (error) {
             console.error('Failed to load system configuration:', error);
             toast.error('Failed to load system configuration.');
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const handleSave = async () => {
-        try {
-            setSaving(true);
-            await api.settings.update({
-                site_name: config.schoolName,
-                support_email: config.contactEmail,
-                maintenance_mode: config.maintenanceMode,
-            });
-            toast.success('System configuration saved successfully.');
-            onOpenChange(false);
-        } catch (error) {
-            console.error('Failed to save system configuration:', error);
-            toast.error('Failed to save system configuration.');
-        } finally {
-            setSaving(false);
         }
     };
 
@@ -72,7 +51,7 @@ export function SystemConfigDialog({ open, onOpenChange }: SystemConfigDialogPro
                         System Configuration
                     </DialogTitle>
                     <DialogDescription>
-                        Manage global settings for your educational tenant.
+                        Review school-level configuration. Platform-wide settings are managed from the SaaS admin portal.
                     </DialogDescription>
                 </DialogHeader>
 
@@ -82,7 +61,8 @@ export function SystemConfigDialog({ open, onOpenChange }: SystemConfigDialogPro
                         <Input
                             id="name"
                             value={config.schoolName}
-                            onChange={(e) => setConfig({ ...config, schoolName: e.target.value })}
+                            readOnly
+                            disabled
                             className="col-span-3"
                         />
                     </div>
@@ -91,7 +71,8 @@ export function SystemConfigDialog({ open, onOpenChange }: SystemConfigDialogPro
                         <Input
                             id="email"
                             value={config.contactEmail}
-                            onChange={(e) => setConfig({ ...config, contactEmail: e.target.value })}
+                            readOnly
+                            disabled
                             className="col-span-3"
                         />
                     </div>
@@ -102,17 +83,15 @@ export function SystemConfigDialog({ open, onOpenChange }: SystemConfigDialogPro
                             <span className="text-sm text-slate-600">{config.maintenanceMode ? 'Maintenance Mode' : 'Operational'}</span>
                             <Switch
                                 checked={config.maintenanceMode}
-                                onCheckedChange={(checked) => setConfig((prev) => ({ ...prev, maintenanceMode: checked }))}
+                                disabled
                             />
                         </div>
                     </div>
                 </div>
 
                 <DialogFooter>
-                    <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-                    <Button onClick={handleSave} className="bg-indigo-600 hover:bg-indigo-700" disabled={loading || saving}>
-                        {loading || saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-                        Save Changes
+                    <Button variant="outline" onClick={() => onOpenChange(false)}>
+                        Close
                     </Button>
                 </DialogFooter>
             </DialogContent>

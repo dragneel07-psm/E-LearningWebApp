@@ -14,7 +14,7 @@ import { SafeResponsiveContainer } from '@/components/ui/safe-responsive-contain
 import Link from 'next/link'; // Ensure Link is imported
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
-import { api, coreAPI, usersAPI, AuditLog } from '@/lib/api';
+import { coreAPI, usersAPI, AuditLog } from '@/lib/api';
 import { toast } from 'sonner';
 
 export default function SystemAdminDashboard() {
@@ -27,8 +27,6 @@ export default function SystemAdminDashboard() {
     const [latencyHistory, setLatencyHistory] = useState<Array<{ time: string; load: number }>>([]);
     const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
     const [auditLoading, setAuditLoading] = useState(true);
-    const [settingsEditable, setSettingsEditable] = useState(false);
-    const [savingMaintenance, setSavingMaintenance] = useState(false);
 
     // Real-time System Stats
     const [systemStats, setSystemStats] = useState({
@@ -78,20 +76,6 @@ export default function SystemAdminDashboard() {
             }
         }
 
-        async function loadMaintenanceState() {
-            try {
-                const settings = await api.settings.get();
-                setFeatures((prev) => ({
-                    ...prev,
-                    maintenanceMode: Boolean((settings as any)?.maintenance_mode),
-                }));
-                setSettingsEditable(true);
-            } catch (error) {
-                console.error('Failed to load maintenance setting:', error);
-                setSettingsEditable(false);
-            }
-        }
-
         async function loadAuditLogs() {
             try {
                 setAuditLoading(true);
@@ -106,26 +90,11 @@ export default function SystemAdminDashboard() {
         }
 
         loadFeatureState();
-        loadMaintenanceState();
         loadAuditLogs();
     }, []);
 
-    const handleMaintenanceToggle = async (checked: boolean) => {
-        const previous = features.maintenanceMode;
-        setFeatures((prev) => ({ ...prev, maintenanceMode: checked }));
-        if (!settingsEditable) return;
-
-        try {
-            setSavingMaintenance(true);
-            await api.settings.update({ maintenance_mode: checked });
-            toast.success(`Maintenance mode ${checked ? 'enabled' : 'disabled'}.`);
-        } catch (error) {
-            console.error('Failed to update maintenance mode:', error);
-            setFeatures((prev) => ({ ...prev, maintenanceMode: previous }));
-            toast.error('Failed to update maintenance mode.');
-        } finally {
-            setSavingMaintenance(false);
-        }
+    const handleMaintenanceToggle = () => {
+        toast.info('Platform maintenance mode is managed from the SaaS admin portal.');
     };
 
     return (
@@ -237,11 +206,11 @@ export default function SystemAdminDashboard() {
                                     id="maint"
                                     checked={features.maintenanceMode}
                                     onCheckedChange={handleMaintenanceToggle}
-                                    disabled={savingMaintenance}
+                                    disabled
                                 />
                             </div>
                             <p className="text-xs text-muted-foreground">
-                                Feature flags are plan-controlled. Maintenance mode is synced with global settings when permitted.
+                                Feature flags are plan-controlled. Platform maintenance mode is managed only from the SaaS admin portal.
                             </p>
                         </CardContent>
                     </Card>
