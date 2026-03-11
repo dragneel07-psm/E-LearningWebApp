@@ -12,11 +12,26 @@ from rest_framework_simplejwt.tokens import AccessToken, RefreshToken as _Refres
 from rest_framework.exceptions import AuthenticationFailed
 from .token_policy import role_token_lifetimes
 
-def _safe_tenant_features(user) -> dict:
+def _resolved_tenant(user):
     try:
         tenant = getattr(user, "tenant", None)
     except Exception:
         tenant = None
+
+    return tenant
+
+
+def _ensure_valid_login_tenant(user) -> None:
+    role = (getattr(user, "role", "") or "").strip().lower()
+    if role == "saas_admin":
+        return
+
+    if _resolved_tenant(user) is None:
+        raise AuthenticationFailed("Account tenant configuration is invalid. Please contact your administrator.")
+
+
+def _safe_tenant_features(user) -> dict:
+    tenant = _resolved_tenant(user)
 
     if not tenant:
         return {}
@@ -28,7 +43,7 @@ def _safe_tenant_features(user) -> dict:
 
 
 def _tenant_claims(user) -> dict:
-    tenant = getattr(user, "tenant", None)
+    tenant = _resolved_tenant(user)
     if not tenant:
         return {
             "tenant_schema": "public",
@@ -124,6 +139,7 @@ class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
             # Login failure (401) is handled by super()
             raise e
 
+        _ensure_valid_login_tenant(self.user)
         data = _apply_role_token_lifetimes(data, user=self.user)
 
         # Attach the user profile to every login response

@@ -75,6 +75,20 @@ class JWTAuthenticationTests(FastTenantTestCase):
         })
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
+    def test_login_rejects_broken_tenant_mapping(self):
+        """Test login returns a controlled auth error when tenant FK is stale"""
+        with tenant_context(self.tenant):
+            self.user.tenant_id = 999999
+            self.user.save(update_fields=['tenant'])
+
+        response = self.client.post(self.login_url, {
+            'email': 'test@example.com',
+            'password': 'TestPass123!'
+        })
+
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+        self.assertIn('tenant configuration', str(response.data.get('detail', '')).lower())
+
     def test_token_refresh(self):
         """Test token refresh mechanism"""
         # 1. Login to get refresh token
