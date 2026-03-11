@@ -82,31 +82,37 @@ class StudentUserSerializer(serializers.ModelSerializer):
         read_only_fields = ['user_id']
 
 
-class StudentListSerializer(serializers.ModelSerializer):
-    """Lightweight serializer for listing students"""
+class StudentAccountFieldsMixin(serializers.Serializer):
+    """Shared flattened account fields for student payloads."""
+
     user = StudentUserSerializer(read_only=True)
-    class_name = serializers.CharField(source='academic_class.name', read_only=True)
-    section_name = serializers.CharField(source='section.name', read_only=True)
-    student_id = serializers.UUIDField(read_only=True) # Explicitly include student_id
-    
-    # Flatten user fields for easier frontend consumption
+    id = serializers.UUIDField(source='student_id', read_only=True)
+    user_id = serializers.UUIDField(source='user.user_id', read_only=True)
+    username = serializers.CharField(source='user.username', read_only=True)
+    email = serializers.EmailField(source='user.email', read_only=True)
     first_name = serializers.CharField(source='user.first_name', read_only=True)
     last_name = serializers.CharField(source='user.last_name', read_only=True)
-    email = serializers.EmailField(source='user.email', read_only=True)
-    
+    is_active = serializers.BooleanField(source='user.is_active', read_only=True)
+    class_name = serializers.CharField(source='academic_class.name', read_only=True)
+    section_name = serializers.CharField(source='section.name', read_only=True)
+
+
+class StudentListSerializer(StudentAccountFieldsMixin, serializers.ModelSerializer):
+    """Lightweight serializer for listing students"""
+    student_id = serializers.UUIDField(read_only=True) # Explicitly include student_id
+
     attendance_percentage = serializers.SerializerMethodField()
     recent_grades = serializers.SerializerMethodField()
     upcoming_assessments = serializers.SerializerMethodField()
-    
-    id = serializers.UUIDField(source='student_id', read_only=True)
-    
+
     class Meta:
         model = Student
         fields = [
-            'id', 'student_id', 'user', 'first_name', 'last_name', 'email',
-            'academic_class', 'class_name', 
-            'section', 'section_name', 'current_streak', 'focus_score',
-            'attendance_percentage', 'recent_grades', 'upcoming_assessments'
+            'id', 'student_id', 'user', 'user_id', 'username', 'email', 'first_name', 'last_name',
+            'is_active', 'academic_class', 'class_name', 'section', 'section_name',
+            'learning_style', 'daily_study_goal', 'ai_explanation_level', 'language_preference',
+            'current_streak', 'total_minutes_learned', 'focus_score', 'attendance_percentage',
+            'recent_grades', 'upcoming_assessments',
         ]
 
     def get_attendance_percentage(self, obj):
@@ -155,14 +161,17 @@ class StudentListSerializer(serializers.ModelSerializer):
         } for a in upcoming]
 
 
-class StudentDetailSerializer(serializers.ModelSerializer):
+class StudentDetailSerializer(StudentAccountFieldsMixin, serializers.ModelSerializer):
     """Detailed serializer for student profile"""
-    user = StudentUserSerializer(read_only=True)
-    id = serializers.UUIDField(source='student_id', read_only=True)
-    
+
     class Meta:
         model = Student
-        fields = '__all__'
+        fields = [
+            'id', 'student_id', 'user', 'user_id', 'username', 'email', 'first_name', 'last_name',
+            'is_active', 'academic_class', 'class_name', 'section', 'section_name',
+            'learning_style', 'daily_study_goal', 'ai_explanation_level', 'language_preference',
+            'current_streak', 'total_minutes_learned', 'focus_score',
+        ]
 
 
 class StudentCreateSerializer(serializers.ModelSerializer):

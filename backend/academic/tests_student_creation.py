@@ -110,3 +110,40 @@ class StudentCreationTests(FastTenantTestCase):
         self.assertIn("Grade 8", msg)
         self.assertIn("A", msg)
 
+    def test_student_list_and_detail_include_linked_user_fields(self):
+        linked_user = User.objects.create_user(
+            username="linked_student",
+            email="linked_student@example.com",
+            password="Student@1234",
+            role="student",
+            first_name="Linked",
+            last_name="Learner",
+            tenant=self.tenant,
+        )
+        student = Student.objects.create(
+            user=linked_user,
+            academic_class=self.academic_class,
+            section=self.section,
+            learning_style="practice",
+            daily_study_goal=45,
+        )
+
+        list_response = self.client.get("/api/academic/students/")
+        self.assertEqual(list_response.status_code, status.HTTP_200_OK)
+        list_rows = list_response.data["results"] if isinstance(list_response.data, dict) else list_response.data
+        list_row = next(item for item in list_rows if str(item["id"]) == str(student.student_id))
+        self.assertEqual(str(list_row["user_id"]), str(linked_user.user_id))
+        self.assertEqual(list_row["username"], linked_user.username)
+        self.assertEqual(list_row["email"], linked_user.email)
+        self.assertEqual(list_row["first_name"], linked_user.first_name)
+        self.assertEqual(list_row["last_name"], linked_user.last_name)
+        self.assertEqual(list_row["learning_style"], "practice")
+        self.assertEqual(list_row["daily_study_goal"], 45)
+
+        detail_response = self.client.get(f"/api/academic/students/{student.student_id}/")
+        self.assertEqual(detail_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(str(detail_response.data["user_id"]), str(linked_user.user_id))
+        self.assertEqual(detail_response.data["username"], linked_user.username)
+        self.assertEqual(detail_response.data["email"], linked_user.email)
+        self.assertEqual(detail_response.data["first_name"], linked_user.first_name)
+        self.assertEqual(detail_response.data["last_name"], linked_user.last_name)
