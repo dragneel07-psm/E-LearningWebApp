@@ -59,7 +59,7 @@ class UserAccountSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = UserAccount
-        fields = ['user_id', 'username', 'email', 'first_name', 'last_name', 'role', 'tenant', 'is_active', 'tenant_features']
+        fields = ['user_id', 'username', 'email', 'first_name', 'last_name', 'role', 'staff_role', 'tenant', 'is_active', 'tenant_features']
         read_only_fields = ['user_id', 'email', 'role', 'tenant', 'tenant_features']
 
     def get_tenant_features(self, obj):
@@ -117,6 +117,7 @@ class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
 
         # Embed useful claims so the frontend can read role without a second API call
         token['role'] = user.role
+        token['staff_role'] = getattr(user, 'staff_role', '')
         token['email'] = user.email
         token['first_name'] = user.first_name
         token['last_name'] = user.last_name
@@ -153,6 +154,7 @@ class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
                 'first_name': getattr(user, 'first_name', ''),
                 'last_name':  getattr(user, 'last_name', ''),
                 'role':       getattr(user, 'role', 'student'),
+                'staff_role': getattr(user, 'staff_role', ''),
                 'tenant': str(getattr(getattr(user, 'tenant', None), 'id', '') or ""),
                 'tenant_schema': _tenant_claims(user).get('tenant_schema'),
                 'tenant_features': _safe_tenant_features(user),
@@ -284,7 +286,7 @@ class UserManagementSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = UserAccount
-        fields = ['user_id', 'username', 'email', 'password', 'first_name', 'last_name', 'role', 'tenant', 'is_active']
+        fields = ['user_id', 'username', 'email', 'password', 'first_name', 'last_name', 'role', 'staff_role', 'tenant', 'is_active']
 
     def create(self, validated_data):
         password = validated_data.pop('password', None)

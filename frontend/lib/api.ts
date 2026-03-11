@@ -91,6 +91,7 @@ export interface User {
     first_name: string;
     last_name: string;
     role: 'student' | 'teacher' | 'parent' | 'admin' | 'staff' | 'saas_admin';
+    staff_role?: '' | 'accountant' | 'librarian' | 'receptionist' | 'hr_manager' | 'hostel_warden' | 'transport_manager';
     tenant: string;
     is_active?: boolean;
     phone_number?: string;

@@ -8,9 +8,8 @@ import {
     Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle
 } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { ArrowLeft, Plus, Trash2, Loader2, User, Filter, Edit, Mail, Eye, Lock } from 'lucide-react';
+import { ArrowLeft, Trash2, Loader2, User, Filter, Edit, Mail, Eye, Lock, UserRoundPlus } from 'lucide-react';
 import { academicAPI, AcademicClass, Student } from '@/lib/api';
-import { ImportStudentsDialog } from './import-students-dialog';
 import Link from 'next/link';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
@@ -51,7 +50,6 @@ export default function StudentsPage() {
 
     // Form State
     const [isDialogOpen, setIsDialogOpen] = useState(false);
-    const [isEditMode, setIsEditMode] = useState(false);
     const [currentStudentId, setCurrentStudentId] = useState<string | null>(null);
     const [profileStudent, setProfileStudent] = useState<Student | null>(null);
     const [submitting, setSubmitting] = useState(false);
@@ -85,13 +83,7 @@ export default function StudentsPage() {
 
     const resetForm = () => {
         setFormData(defaultFormData);
-        setIsEditMode(false);
         setCurrentStudentId(null);
-    };
-
-    const openCreateDialog = () => {
-        resetForm();
-        setIsDialogOpen(true);
     };
 
     const openEditDialog = (student: Student) => {
@@ -100,13 +92,12 @@ export default function StudentsPage() {
             last_name: student.last_name,
             email: student.email,
             username: student.username || '',
-            password: '', // Don't fill password
+            password: '',
             academic_class: student.academic_class ? student.academic_class.toString() : '',
             section: student.section ? student.section.toString() : '',
             learning_style: student.learning_style || 'visual',
             daily_study_goal: student.daily_study_goal || 30
         });
-        setIsEditMode(true);
         setCurrentStudentId(student.id);
         setIsDialogOpen(true);
     };
@@ -130,16 +121,9 @@ export default function StudentsPage() {
                 daily_study_goal: formData.daily_study_goal
             };
 
-            if (!isEditMode && formData.password) {
-                payload.password = formData.password;
-            }
-
-            if (isEditMode && currentStudentId) {
+            if (currentStudentId) {
                 await academicAPI.updateStudent(currentStudentId, payload);
                 toast.success("Student updated");
-            } else {
-                await academicAPI.createStudent(payload);
-                toast.success("Student created");
             }
 
             setIsDialogOpen(false);
@@ -221,13 +205,24 @@ export default function StudentsPage() {
                     </div>
                 </div>
 
-                <div className="flex items-center gap-2">
-                    <ImportStudentsDialog onSuccess={loadData} />
-                    <Button onClick={openCreateDialog} className="bg-indigo-600 hover:bg-indigo-700">
-                        <Plus className="mr-2 h-4 w-4" /> Add Student
+                <Link href="/admin/admissions">
+                    <Button className="bg-indigo-600 hover:bg-indigo-700">
+                        <UserRoundPlus className="mr-2 h-4 w-4" /> Admissions Pipeline
                     </Button>
-                </div>
+                </Link>
             </header>
+
+            {/* Info banner */}
+            <div className="flex items-center gap-3 rounded-xl border border-indigo-100 bg-indigo-50 px-4 py-3 text-sm text-indigo-700">
+                <UserRoundPlus className="h-4 w-4 shrink-0" />
+                <span>
+                    New students are enrolled via the{' '}
+                    <Link href="/admin/admissions" className="font-semibold underline underline-offset-2 hover:text-indigo-900">
+                        Admissions Pipeline
+                    </Link>
+                    . Use the edit action below to update existing student profiles.
+                </span>
+            </div>
 
             <Card>
                 <CardHeader>
@@ -328,13 +323,13 @@ export default function StudentsPage() {
                 </CardContent>
             </Card>
 
-            {/* Create/Edit Dialog */}
+            {/* Edit Dialog */}
             <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
                 <DialogContent className="sm:max-w-[600px]">
                     <DialogHeader>
-                        <DialogTitle>{isEditMode ? 'Edit Student' : 'Enroll Student'}</DialogTitle>
+                        <DialogTitle>Edit Student</DialogTitle>
                         <DialogDescription>
-                            Create a student profile and user account.
+                            Update the student&apos;s profile and enrollment details.
                         </DialogDescription>
                     </DialogHeader>
                     <div className="grid gap-4 py-4">
@@ -358,13 +353,6 @@ export default function StudentsPage() {
                                 <Input value={formData.username} onChange={e => setFormData({ ...formData, username: e.target.value })} placeholder="johndoe" />
                             </div>
                         </div>
-                        {!isEditMode && (
-                            <div className="grid gap-2">
-                                <Label>Password</Label>
-                                <Input type="password" value={formData.password} onChange={e => setFormData({ ...formData, password: e.target.value })} placeholder="Sensitive123" />
-                            </div>
-                        )}
-
                         <div className="grid grid-cols-2 gap-4">
                             <div className="grid gap-2">
                                 <Label>Academic Class</Label>
@@ -421,7 +409,7 @@ export default function StudentsPage() {
                         <Button variant="outline" onClick={() => setIsDialogOpen(false)}>Cancel</Button>
                         <Button onClick={handleSubmit} disabled={submitting}>
                             {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                            {isEditMode ? 'Update Student' : 'Enroll Student'}
+                            Update Student
                         </Button>
                     </DialogFooter>
                 </DialogContent>

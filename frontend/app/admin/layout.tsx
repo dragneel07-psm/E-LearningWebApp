@@ -7,6 +7,9 @@ import { useState, useEffect } from 'react';
 import { usersAPI, User as UserType } from '@/lib/api';
 import NotificationCenter from '@/components/notifications/NotificationCenter';
 import { DashboardProfileMenu } from '@/components/dashboard-profile-menu';
+import { getUser } from '@/lib/auth';
+import { getRoleLabel } from '@/lib/rbac';
+import type { StaffRole } from '@/lib/auth';
 
 export default function AdminLayout({
     children,
@@ -18,6 +21,13 @@ export default function AdminLayout({
     useEffect(() => {
         usersAPI.getMe().then(setUser).catch(console.error);
     }, []);
+
+    // Resolve role label from JWT so it's available immediately (no flicker)
+    const jwtUser = getUser();
+    const roleLabel = getRoleLabel(
+        jwtUser?.role ?? user?.role ?? 'staff',
+        (jwtUser?.staff_role ?? '') as StaffRole,
+    );
 
     return (
         <div className="flex min-h-screen bg-slate-50">
@@ -43,9 +53,9 @@ export default function AdminLayout({
                     <div className="flex items-center gap-4">
                         <NotificationCenter />
                         <DashboardProfileMenu
-                            firstName={user?.first_name}
-                            lastName={user?.last_name}
-                            roleLabel={user?.role || 'School Administrator'}
+                            firstName={user?.first_name ?? jwtUser?.first_name}
+                            lastName={user?.last_name ?? jwtUser?.last_name}
+                            roleLabel={roleLabel}
                             profileHref="/admin/profile"
                             settingsHref="/admin/settings"
                             logoutHref="/login"

@@ -1,13 +1,26 @@
 // lib/auth.ts
 import { jwtDecode } from "jwt-decode";
 
+export type StaffRole =
+    | 'accountant'
+    | 'librarian'
+    | 'receptionist'
+    | 'hr_manager'
+    | 'hostel_warden'
+    | 'transport_manager'
+    | '';
+
 export interface UserPayload {
     user_id: string;
     username: string;
     role: string;
-    // tenant_id: string; // If implemented
+    staff_role: StaffRole;
+    email: string;
+    first_name: string;
+    last_name: string;
+    tenant_id: string;
+    tenant_schema: string;
     exp: number;
-    // email? check JWT content
 }
 
 const ACCESS_KEY = 'access_token';

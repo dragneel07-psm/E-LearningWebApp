@@ -11,11 +11,24 @@ class UserAccount(AbstractUser):
         ('staff', 'Staff'),
         ('saas_admin', 'SaaS Admin'),
     )
+
+    # Distinguishes different staff functions within the school
+    STAFF_ROLE_CHOICES = (
+        ('', 'None'),
+        ('accountant', 'Accountant'),
+        ('librarian', 'Librarian'),
+        ('receptionist', 'Receptionist'),
+        ('hr_manager', 'HR Manager'),
+        ('hostel_warden', 'Hostel Warden'),
+        ('transport_manager', 'Transport Manager'),
+    )
+
     user_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    # Circular import risk if we import Tenant directly? 
+    # Circular import risk if we import Tenant directly?
     # Use string reference 'core.Tenant'.
     tenant = models.ForeignKey('core.Tenant', on_delete=models.CASCADE, null=True, blank=True, db_constraint=False)
     role = models.CharField(max_length=20, choices=ROLE_CHOICES, default='student')
+    staff_role = models.CharField(max_length=30, choices=STAFF_ROLE_CHOICES, blank=True, default='')
     
     # Extended Profile Fields
     phone_number = models.CharField(max_length=15, blank=True, null=True)

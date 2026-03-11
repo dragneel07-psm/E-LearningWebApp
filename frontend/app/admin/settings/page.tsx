@@ -10,7 +10,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
-import { Loader2, Save, Globe, Shield, Activity } from 'lucide-react';
+import { Loader2, Save, Globe, Shield, Activity, UserCog, ChevronRight } from 'lucide-react';
+import Link from 'next/link';
 
 export default function SettingsPage() {
     const [settings, setSettings] = useState<any>(null);
@@ -67,6 +68,7 @@ export default function SettingsPage() {
                 <TabsList className="mb-4">
                     <TabsTrigger value="general" className="gap-2"><Globe className="h-4 w-4" /> General</TabsTrigger>
                     <TabsTrigger value="security" className="gap-2"><Shield className="h-4 w-4" /> Security & Access</TabsTrigger>
+                    <TabsTrigger value="staff-access" className="gap-2"><UserCog className="h-4 w-4" /> Staff Access</TabsTrigger>
                     <TabsTrigger value="system" className="gap-2"><Activity className="h-4 w-4" /> System</TabsTrigger>
                 </TabsList>
 
@@ -159,6 +161,26 @@ export default function SettingsPage() {
                             <div className="text-sm text-slate-500">
                                 System metrics are available on the <span className="font-semibold text-slate-700">Admin Dashboard</span>.
                             </div>
+                        </CardContent>
+                    </Card>
+                </TabsContent>
+
+                <TabsContent value="staff-access">
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>Staff Access Control</CardTitle>
+                            <CardDescription>
+                                Assign module permissions to staff accounts. School Admins always have full access.
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                            <Link href="/admin/settings/staff-access">
+                                <Button variant="outline" className="gap-2">
+                                    <UserCog className="h-4 w-4" />
+                                    Manage Staff Roles
+                                    <ChevronRight className="h-4 w-4 ml-1" />
+                                </Button>
+                            </Link>
                         </CardContent>
                     </Card>
                 </TabsContent>

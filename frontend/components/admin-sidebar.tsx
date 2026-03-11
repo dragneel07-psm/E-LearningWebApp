@@ -2,52 +2,70 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, Users, GraduationCap, School, CreditCard, BarChart3, Settings, LogOut, Bell, BookOpen, Calendar, Library, Wallet, DollarSign, ClipboardList, FileText, MessageSquare, UserRoundPlus, ShieldAlert, Sparkles, Bus, Building2, type LucideIcon } from 'lucide-react';
+import {
+    LayoutDashboard, Users, GraduationCap, School, CreditCard, BarChart3,
+    Settings, LogOut, Bell, BookOpen, Calendar, Library, Wallet, DollarSign,
+    ClipboardList, FileText, MessageSquare, UserRoundPlus, ShieldAlert,
+    Sparkles, Bus, Building2, type LucideIcon,
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { getUser } from '@/lib/auth';
+import { getAllowedModules, getRoleLabel, type AdminModule } from '@/lib/rbac';
+import type { StaffRole } from '@/lib/auth';
 
 type NavigationItem = {
     name: string;
-    href: string;
+    href: AdminModule;
     icon: LucideIcon;
     indent?: boolean;
 };
 
 const navigation: NavigationItem[] = [
-    { name: 'Dashboard', href: '/admin', icon: LayoutDashboard },
-    { name: 'ERP Overview', href: '/admin/erp', icon: BarChart3 },
-    { name: 'Admissions', href: '/admin/admissions', icon: UserRoundPlus },
-    { name: 'Academic Years', href: '/admin/academic/years', icon: Calendar },
-    { name: 'Classes', href: '/admin/academic/classes', icon: School },
-    { name: 'Timetable', href: '/admin/timetable', icon: Calendar },
-    { name: 'Subjects', href: '/admin/academic/subjects', icon: BookOpen },
-    { name: 'Assessments', href: '/admin/academic/assessments', icon: ClipboardList },
-    { name: 'Promotion Exceptions', href: '/admin/academic/promotion-exceptions', icon: ShieldAlert },
-    { name: 'Exams', href: '/admin/exams', icon: ClipboardList },
-    { name: 'Students', href: '/admin/academic/students', icon: GraduationCap },
-    { name: 'Teachers', href: '/admin/academic/teachers', icon: Users },
-    { name: 'Library', href: '/admin/library', icon: Library },
-    { name: 'Finance', href: '/admin/finance', icon: CreditCard },
-    { name: 'Fee Structures', href: '/admin/finance/fees', icon: Wallet, indent: true },
-    { name: 'Collect Payments', href: '/admin/finance/collect', icon: DollarSign, indent: true },
-    { name: 'Financial Reports', href: '/admin/finance/reports', icon: BarChart3, indent: true },
-    { name: 'Calendar', href: '/admin/calendar', icon: Calendar },
-    { name: 'HR & Payroll', href: '/admin/hr', icon: Users },
-    { name: 'Student Info (SIS)', href: '/admin/sis', icon: ShieldAlert },
-    { name: 'Hostel', href: '/admin/hostel', icon: Building2 },
-    { name: 'Transport', href: '/admin/transport', icon: Bus },
-    { name: 'Inventory', href: '/admin/inventory', icon: FileText },
-    { name: 'Analytics', href: '/admin/analytics', icon: BarChart3 },
-    { name: 'AI Analytics', href: '/admin/ai-analytics', icon: Sparkles, indent: true },
-    { name: 'Reports', href: '/admin/reports', icon: BarChart3 },
-    { name: 'Communication', href: '/admin/communication', icon: Bell },
-    { name: 'Messages', href: '/admin/messages', icon: MessageSquare, indent: true },
-    { name: 'Templates', href: '/admin/communication/templates', icon: FileText, indent: true },
-    { name: 'Notices', href: '/admin/notices', icon: Bell, indent: true },
-    { name: 'Settings', href: '/admin/settings', icon: Settings },
+    { name: 'Dashboard',              href: '/admin',                              icon: LayoutDashboard },
+    { name: 'ERP Overview',           href: '/admin/erp',                          icon: BarChart3 },
+    { name: 'Admissions',             href: '/admin/admissions',                   icon: UserRoundPlus },
+    { name: 'Academic Years',         href: '/admin/academic/years',               icon: Calendar },
+    { name: 'Classes',                href: '/admin/academic/classes',             icon: School },
+    { name: 'Timetable',              href: '/admin/timetable',                    icon: Calendar },
+    { name: 'Subjects',               href: '/admin/academic/subjects',            icon: BookOpen },
+    { name: 'Assessments',            href: '/admin/academic/assessments',         icon: ClipboardList },
+    { name: 'Promotion Exceptions',   href: '/admin/academic/promotion-exceptions',icon: ShieldAlert },
+    { name: 'Exams',                  href: '/admin/exams',                        icon: ClipboardList },
+    { name: 'Students',               href: '/admin/academic/students',            icon: GraduationCap },
+    { name: 'Teachers',               href: '/admin/academic/teachers',            icon: Users },
+    { name: 'Library',                href: '/admin/library',                      icon: Library },
+    { name: 'Finance',                href: '/admin/finance',                      icon: CreditCard },
+    { name: 'Fee Structures',         href: '/admin/finance/fees',                 icon: Wallet,      indent: true },
+    { name: 'Collect Payments',       href: '/admin/finance/collect',              icon: DollarSign,  indent: true },
+    { name: 'Financial Reports',      href: '/admin/finance/reports',              icon: BarChart3,   indent: true },
+    { name: 'Calendar',               href: '/admin/calendar',                     icon: Calendar },
+    { name: 'HR & Payroll',           href: '/admin/hr',                           icon: Users },
+    { name: 'Student Info (SIS)',      href: '/admin/sis',                          icon: ShieldAlert },
+    { name: 'Hostel',                 href: '/admin/hostel',                       icon: Building2 },
+    { name: 'Transport',              href: '/admin/transport',                    icon: Bus },
+    { name: 'Inventory',              href: '/admin/inventory',                    icon: FileText },
+    { name: 'Analytics',              href: '/admin/analytics',                    icon: BarChart3 },
+    { name: 'AI Analytics',           href: '/admin/ai-analytics',                 icon: Sparkles,    indent: true },
+    { name: 'Reports',                href: '/admin/reports',                      icon: BarChart3 },
+    { name: 'Communication',          href: '/admin/communication',                icon: Bell },
+    { name: 'Messages',               href: '/admin/messages',                     icon: MessageSquare, indent: true },
+    { name: 'Templates',              href: '/admin/communication/templates',      icon: FileText,    indent: true },
+    { name: 'Notices',                href: '/admin/notices',                      icon: Bell,        indent: true },
+    { name: 'Settings',               href: '/admin/settings',                     icon: Settings },
 ];
 
 export function AdminSidebar() {
     const pathname = usePathname();
+
+    // Read role from decoded JWT (client-side, no extra fetch needed)
+    const user = getUser();
+    const role = user?.role ?? 'staff';
+    const staffRole = (user?.staff_role ?? '') as StaffRole;
+    const roleLabel = getRoleLabel(role, staffRole);
+    const allowed = getAllowedModules(role, staffRole);
+
+    const visibleNav = navigation.filter((item) => allowed.has(item.href));
 
     return (
         <div className="flex h-full bg-slate-900 text-white w-64 flex-col overflow-hidden">
@@ -56,23 +74,40 @@ export function AdminSidebar() {
                     <div className="h-8 w-8 rounded-lg bg-indigo-500 flex items-center justify-center">
                         <School className="h-5 w-5 text-white" />
                     </div>
-                    <span className="font-bold text-lg tracking-tight">School Admin</span>
+                    <div className="min-w-0">
+                        <span className="font-bold text-lg tracking-tight block leading-tight">School Admin</span>
+                        <Badge
+                            variant="secondary"
+                            className="mt-0.5 text-[10px] px-1.5 py-0 bg-indigo-700/60 text-indigo-200 border-0 truncate max-w-full"
+                        >
+                            {roleLabel}
+                        </Badge>
+                    </div>
                 </div>
             </div>
 
             <nav className="flex-1 min-h-0 overflow-y-auto px-4 space-y-1 pb-4">
-                {navigation.map((item) => {
-                    const isActive = pathname === item.href || (item.href !== '/admin' && pathname.startsWith(item.href));
+                {visibleNav.map((item) => {
+                    const isActive =
+                        pathname === item.href ||
+                        (item.href !== '/admin' && pathname.startsWith(item.href));
                     return (
                         <Link
                             key={item.name}
                             href={item.href}
-                            className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${item.indent ? 'ml-6 text-xs py-1.5' : ''} ${isActive
-                                ? 'bg-indigo-600 text-white shadow-md'
-                                : 'text-slate-400 hover:text-white hover:bg-slate-800'
-                                }`}
+                            className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                                item.indent ? 'ml-6 text-xs py-1.5' : ''
+                            } ${
+                                isActive
+                                    ? 'bg-indigo-600 text-white shadow-md'
+                                    : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                            }`}
                         >
-                            <item.icon className={`h-5 w-5 ${isActive ? 'text-white' : 'text-slate-400'} ${item.indent ? 'h-4 w-4' : ''}`} />
+                            <item.icon
+                                className={`h-5 w-5 ${isActive ? 'text-white' : 'text-slate-400'} ${
+                                    item.indent ? 'h-4 w-4' : ''
+                                }`}
+                            />
                             {item.name}
                         </Link>
                     );
@@ -91,7 +126,7 @@ export function AdminSidebar() {
                 <Button
                     variant="ghost"
                     className="w-full justify-start text-red-400 hover:text-red-300 hover:bg-red-900/20 gap-3"
-                    onClick={() => window.location.href = '/login'}
+                    onClick={() => (window.location.href = '/login')}
                 >
                     <LogOut className="h-5 w-5" />
                     Sign Out
