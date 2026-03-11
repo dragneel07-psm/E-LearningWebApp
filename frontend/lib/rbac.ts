@@ -17,6 +17,7 @@ import { StaffRole } from './auth';
 export type AdminModule =
     | '/admin'
     | '/admin/erp'
+    | '/admin/settings/staff-access'
     | '/admin/admissions'
     | '/admin/academic/years'
     | '/admin/academic/classes'
@@ -84,6 +85,7 @@ const ADMIN_FULL: AdminModule[] = [
     '/admin/communication/templates',
     '/admin/notices',
     '/admin/settings',
+    '/admin/settings/staff-access',
     '/admin/notifications',
 ];
 

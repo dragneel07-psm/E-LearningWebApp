@@ -6,7 +6,7 @@ import {
     LayoutDashboard, Users, GraduationCap, School, CreditCard, BarChart3,
     Settings, LogOut, Bell, BookOpen, Calendar, Library, Wallet, DollarSign,
     ClipboardList, FileText, MessageSquare, UserRoundPlus, ShieldAlert,
-    Sparkles, Bus, Building2, type LucideIcon,
+    Sparkles, Bus, Building2, UserCog, type LucideIcon,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -53,6 +53,7 @@ const navigation: NavigationItem[] = [
     { name: 'Templates',              href: '/admin/communication/templates',      icon: FileText,    indent: true },
     { name: 'Notices',                href: '/admin/notices',                      icon: Bell,        indent: true },
     { name: 'Settings',               href: '/admin/settings',                     icon: Settings },
+    { name: 'Staff Access',           href: '/admin/settings/staff-access',        icon: UserCog, indent: true },
 ];
 
 export function AdminSidebar() {
