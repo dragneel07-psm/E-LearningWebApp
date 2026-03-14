@@ -117,6 +117,11 @@ else
   log "Skipping init_prod (RUN_STARTUP_INIT_PROD=${RUN_STARTUP_INIT_PROD})"
 fi
 
+# Ensure staticfiles directory exists so WhiteNoise doesn't warn/error.
+# collectstatic is idempotent and fast when files haven't changed.
+log "Collecting static files"
+"${PY_BIN}" manage.py collectstatic --noinput --clear 2>&1 | tail -3 || log "WARNING: collectstatic failed (non-fatal)"
+
 if [ "${SERVER_TYPE}" = "daphne" ]; then
   log "Starting daphne (ASGI — HTTP + WebSockets)"
   exec "${SERVER_BIN}" \

@@ -23,21 +23,20 @@ DATABASES["default"]["CONN_MAX_AGE"] = int(os.environ.get("CONN_MAX_AGE", "60"))
 DATABASES["default"]["OPTIONS"] = {"connect_timeout": 10}  # noqa: F405
 
 # ── Caching ───────────────────────────────────────────────────────────────────
-# Use Redis for full Django cache (sessions, rate limits, template fragments)
-_REDIS_URL = os.environ.get("REDIS_URL", "redis://localhost:6379/1")
-CACHES = {
-    "default": {
-        "BACKEND": "django.core.cache.backends.redis.RedisCache",
-        "LOCATION": _REDIS_URL,
-        "OPTIONS": {
-            "CLIENT_CLASS": "django_redis.client.DefaultClient",
-        },
-        "KEY_PREFIX": "elms",
-        "TIMEOUT": 300,
+# Use Redis cache when REDIS_URL is configured; fall back to db-backed sessions
+# so the app stays healthy even if Redis isn't wired up yet.
+_REDIS_URL = os.environ.get("REDIS_URL", "")
+if _REDIS_URL:
+    CACHES = {
+        "default": {
+            "BACKEND": "django.core.cache.backends.redis.RedisCache",
+            "LOCATION": _REDIS_URL,
+            "KEY_PREFIX": "elms",
+            "TIMEOUT": 300,
+        }
     }
-}
-SESSION_ENGINE = "django.contrib.sessions.backends.cache"
-SESSION_CACHE_ALIAS = "default"
+    SESSION_ENGINE = "django.contrib.sessions.backends.cache"
+    SESSION_CACHE_ALIAS = "default"
 
 # ── Celery ────────────────────────────────────────────────────────────────────
 CELERY_TASK_ALWAYS_EAGER = False        # never run tasks inline in production
@@ -76,4 +75,6 @@ LOGGING = {
 }
 
 # ── Static files ──────────────────────────────────────────────────────────────
-STATICFILES_STORAGE = "django.contrib.staticfiles.storage.ManifestStaticFilesStorage"
+# WhiteNoise (CompressedManifestStaticFilesStorage) is already set in base.py.
+# Do NOT override it here — ManifestStaticFilesStorage breaks when staticfiles/
+# directory is missing and has no WhiteNoise serving capability.
