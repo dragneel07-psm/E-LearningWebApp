@@ -48,7 +48,7 @@ export default function GradeBook() {
     const [classes, setClasses] = useState<AcademicClass[]>([]);
     const [selectedClassId, setSelectedClassId] = useState('');
     const [selectedSubjectId, setSelectedSubjectId] = useState('');
-    const [selectedSectionId, setSelectedSectionId] = useState('');
+    const [selectedSectionId, setSelectedSectionId] = useState('all');
     const [gradebookData, setGradebookData] = useState<GradebookData | null>(null);
     const [loading, setLoading] = useState(false);
     const [saving, setSaving] = useState(false);
@@ -72,7 +72,7 @@ export default function GradeBook() {
             // @ts-ignore
             const data = await academicAPI.getGradebook(
                 parseInt(selectedSubjectId),
-                selectedSectionId ? parseInt(selectedSectionId) : undefined
+                selectedSectionId !== 'all' ? parseInt(selectedSectionId) : undefined
             );
             setGradebookData(data);
             setSavedCells(new Set());
@@ -239,7 +239,7 @@ export default function GradeBook() {
                             <Select value={selectedClassId} onValueChange={(v) => {
                                 setSelectedClassId(v);
                                 setSelectedSubjectId('');
-                                setSelectedSectionId('');
+                                setSelectedSectionId('all');
                             }}>
                                 <SelectTrigger><SelectValue placeholder="Select Class" /></SelectTrigger>
                                 <SelectContent>
@@ -266,7 +266,7 @@ export default function GradeBook() {
                                 <Select value={selectedSectionId} onValueChange={setSelectedSectionId} disabled={!selectedSubjectId}>
                                     <SelectTrigger><SelectValue placeholder="All Sections" /></SelectTrigger>
                                     <SelectContent>
-                                        <SelectItem value="">All Sections</SelectItem>
+                                        <SelectItem value="all">All Sections</SelectItem>
                                         {sections.map(s => <SelectItem key={s.id} value={s.id.toString()}>{s.name}</SelectItem>)}
                                     </SelectContent>
                                 </Select>
