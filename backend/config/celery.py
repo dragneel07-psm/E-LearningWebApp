@@ -35,10 +35,22 @@ app.autodiscover_tasks([
 ])
 
 try:
+    # Route heavy AI/LLM tasks to a dedicated queue so they don't starve
+    # notifications or billing tasks. Start the worker with --queues=default,ai
+    app.conf.task_default_queue = "default"
+    app.conf.task_routes = {
+        "ai.*": {"queue": "ai"},
+        "ai_engine.*": {"queue": "ai"},
+    }
+
     app.conf.beat_schedule = {
         "send-fee-reminders": {
             "task": "billing_school.tasks.send_fee_due_reminders",
             "schedule": crontab(hour=8, minute=0),
+        },
+        "send-parent-digests": {
+            "task": "ai.parent_digest",
+            "schedule": crontab(hour=7, minute=0),  # daily at 7 AM
         },
     }
 except Exception:

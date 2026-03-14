@@ -64,33 +64,40 @@ resolve_python_bin() {
   exit 1
 }
 
-resolve_gunicorn_bin() {
-  if [ -n "${GUNICORN_BIN:-}" ] && [ -x "${GUNICORN_BIN}" ]; then
-    echo "${GUNICORN_BIN}"
-    return 0
+resolve_server_bin() {
+  # Prefer daphne (ASGI — required for Django Channels WebSockets)
+  if [ -n "${DAPHNE_BIN:-}" ] && [ -x "${DAPHNE_BIN}" ]; then
+    echo "${DAPHNE_BIN}"; return 0
   fi
+  if command -v daphne >/dev/null 2>&1; then
+    command -v daphne; return 0
+  fi
+  for candidate in /usr/local/bin/daphne /opt/venv/bin/daphne; do
+    [ -x "$candidate" ] && echo "$candidate" && return 0
+  done
+  # Fall back to gunicorn (HTTP only — WebSockets disabled)
+  log "WARNING: daphne not found, falling back to gunicorn (WebSockets will not work)"
   if command -v gunicorn >/dev/null 2>&1; then
-    command -v gunicorn
-    return 0
+    command -v gunicorn; return 0
   fi
-  if [ -x "/usr/local/bin/gunicorn" ]; then
-    echo "/usr/local/bin/gunicorn"
-    return 0
-  fi
-  if [ -x "/opt/venv/bin/gunicorn" ]; then
-    echo "/opt/venv/bin/gunicorn"
-    return 0
-  fi
-  echo "Unable to locate gunicorn binary. Set GUNICORN_BIN explicitly." >&2
+  for candidate in /usr/local/bin/gunicorn /opt/venv/bin/gunicorn; do
+    [ -x "$candidate" ] && echo "$candidate" && return 0
+  done
+  echo "Unable to locate daphne or gunicorn. Install daphne." >&2
   exit 1
 }
 
 PY_BIN="$(resolve_python_bin)"
-GUNICORN_BIN="$(resolve_gunicorn_bin)"
+SERVER_BIN="$(resolve_server_bin)"
+# Derive server type from binary name for conditional startup logic
+SERVER_TYPE="$(basename "${SERVER_BIN}")"
+
+# Default worker count: 2 * CPUs + 1 (capped at 8 for Railway free tier)
+WORKERS="${WEB_WORKERS:-$(python -c "import os; print(min(2*os.cpu_count()+1, 8))" 2>/dev/null || echo 3)}"
 
 cd "${APP_DIR}"
 
-log "Using APP_DIR=${APP_DIR}, PY_BIN=${PY_BIN}, GUNICORN_BIN=${GUNICORN_BIN}"
+log "Using APP_DIR=${APP_DIR}, PY_BIN=${PY_BIN}, SERVER=${SERVER_BIN} (workers=${WORKERS})"
 log "Startup tasks: RUN_STARTUP_MIGRATIONS=${RUN_STARTUP_MIGRATIONS}, RUN_STARTUP_INIT_PROD=${RUN_STARTUP_INIT_PROD}"
 
 if [ "${RUN_STARTUP_MIGRATIONS}" = "true" ]; then
@@ -110,5 +117,22 @@ else
   log "Skipping init_prod (RUN_STARTUP_INIT_PROD=${RUN_STARTUP_INIT_PROD})"
 fi
 
-log "Starting gunicorn"
-exec "${GUNICORN_BIN}" config.wsgi --bind "0.0.0.0:${PORT}"
+if [ "${SERVER_TYPE}" = "daphne" ]; then
+  log "Starting daphne (ASGI — HTTP + WebSockets)"
+  exec "${SERVER_BIN}" \
+    -b 0.0.0.0 \
+    -p "${PORT}" \
+    --access-log - \
+    --proxy-headers \
+    config.asgi:application
+else
+  log "Starting gunicorn (WSGI — HTTP only)"
+  exec "${SERVER_BIN}" config.wsgi \
+    --bind "0.0.0.0:${PORT}" \
+    --workers "${WORKERS}" \
+    --worker-class gthread \
+    --threads 4 \
+    --timeout 120 \
+    --keep-alive 5 \
+    --access-logfile -
+fi

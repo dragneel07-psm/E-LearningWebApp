@@ -2,7 +2,10 @@
 set -euo pipefail
 
 CELERY_LOG_LEVEL="${CELERY_LOG_LEVEL:-info}"
-CELERY_WORKER_CONCURRENCY="${CELERY_WORKER_CONCURRENCY:-2}"
+# Default concurrency = CPU count (min 2, max 8); override via CELERY_WORKER_CONCURRENCY env var
+CELERY_WORKER_CONCURRENCY="${CELERY_WORKER_CONCURRENCY:-$(python -c "import os; print(min(max(os.cpu_count(), 2), 8))" 2>/dev/null || echo 4)}"
+# Queues: 'default' for general tasks, 'ai' for heavy AI/LLM tasks (keeps AI from blocking notifications)
+CELERY_QUEUES="${CELERY_QUEUES:-default,ai}"
 
 if [ -f manage.py ]; then
   APP_DIR="."
@@ -37,4 +40,10 @@ resolve_celery_bin() {
 CELERY_BIN="$(resolve_celery_bin)"
 
 cd "${APP_DIR}"
-exec "${CELERY_BIN}" -A config.celery:app worker --loglevel="${CELERY_LOG_LEVEL}" --concurrency="${CELERY_WORKER_CONCURRENCY}"
+exec "${CELERY_BIN}" -A config.celery:app worker \
+  --loglevel="${CELERY_LOG_LEVEL}" \
+  --concurrency="${CELERY_WORKER_CONCURRENCY}" \
+  --queues="${CELERY_QUEUES}" \
+  --max-tasks-per-child=100 \
+  --without-gossip \
+  --without-mingle
