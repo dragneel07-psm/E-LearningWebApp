@@ -53,9 +53,8 @@ LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,
     "formatters": {
-        "json": {
-            "()": "pythonjsonlogger.jsonlogger.JsonFormatter",
-            "format": "%(asctime)s %(levelname)s %(name)s %(message)s",
+        "verbose": {
+            "format": "%(asctime)s %(levelname)s %(name)s %(process)d %(message)s",
         },
         "simple": {
             "format": "[%(levelname)s] %(name)s: %(message)s",
@@ -64,7 +63,7 @@ LOGGING = {
     "handlers": {
         "console": {
             "class": "logging.StreamHandler",
-            "formatter": "json" if os.environ.get("LOG_JSON", "false") == "true" else "simple",
+            "formatter": "verbose",
         },
     },
     "root": {
