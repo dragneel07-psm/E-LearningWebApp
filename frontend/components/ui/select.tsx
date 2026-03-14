@@ -111,11 +111,26 @@ function SelectLabel({
   )
 }
 
+type SelectItemProps = Omit<React.ComponentProps<typeof SelectPrimitive.Item>, "value"> & {
+  value: string | number | null | undefined
+}
+
 function SelectItem({
   className,
   children,
+  value,
   ...props
-}: React.ComponentProps<typeof SelectPrimitive.Item>) {
+}: SelectItemProps) {
+  const normalizedValue =
+    typeof value === "string" ? value : value == null ? "" : String(value)
+
+  if (normalizedValue.trim().length === 0) {
+    if (process.env.NODE_ENV !== "production") {
+      console.warn("[SelectItem] Skipped option with empty value.", { children })
+    }
+    return null
+  }
+
   return (
     <SelectPrimitive.Item
       data-slot="select-item"
@@ -123,6 +138,7 @@ function SelectItem({
         "focus:bg-accent focus:text-accent-foreground [&_svg:not([class*='text-'])]:text-muted-foreground relative flex w-full cursor-default items-center gap-2 rounded-sm py-1.5 pr-8 pl-2 text-sm outline-hidden select-none data-[disabled]:pointer-events-none data-[disabled]:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 *:[span]:last:flex *:[span]:last:items-center *:[span]:last:gap-2",
         className
       )}
+      value={normalizedValue}
       {...props}
     >
       <span

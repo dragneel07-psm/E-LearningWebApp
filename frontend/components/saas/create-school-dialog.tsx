@@ -25,6 +25,10 @@ type CreateTenantPayload = Parameters<typeof coreAPI.createTenant>[0] & {
     type: string;
 };
 
+function getPlanValue(plan: SubscriptionPlan): string {
+    return (plan.plan_id || plan.id || '').trim();
+}
+
 function resolveTenantTypeFromPlanName(planName: string): 'standard' | 'premium' | 'enterprise' {
     const normalized = planName.trim().toLowerCase();
     if (normalized === 'premium' || normalized.includes('premium')) return 'premium';
@@ -47,14 +51,17 @@ export function CreateSchoolDialog({ onCreated }: { onCreated: () => void }) {
     const [plansLoading, setPlansLoading] = useState(false);
     const [selectedPlanId, setSelectedPlanId] = useState("");
 
+    const availablePlans = plans.filter((plan) => getPlanValue(plan).length > 0);
+
     const loadPlans = useCallback(async () => {
         setPlansLoading(true);
         try {
             const data = await saasApi.getPlans();
             const activePlans = (Array.isArray(data) ? data : []).filter((plan) => plan.is_active);
             setPlans(activePlans);
-            if (!selectedPlanId && activePlans.length > 0) {
-                setSelectedPlanId(activePlans[0].plan_id || activePlans[0].id);
+            const firstValidPlanId = activePlans.map(getPlanValue).find((value) => value.length > 0) || '';
+            if (!selectedPlanId && firstValidPlanId) {
+                setSelectedPlanId(firstValidPlanId);
             }
         } catch (error) {
             console.error(error);
@@ -77,7 +84,7 @@ export function CreateSchoolDialog({ onCreated }: { onCreated: () => void }) {
             return;
         }
 
-        const selectedPlan = plans.find((plan) => (plan.plan_id || plan.id) === selectedPlanId);
+        const selectedPlan = plans.find((plan) => getPlanValue(plan) === selectedPlanId);
         if (!selectedPlan) {
             toast.error("Please select a valid subscription type.");
             return;
@@ -89,7 +96,7 @@ export function CreateSchoolDialog({ onCreated }: { onCreated: () => void }) {
                 name,
                 subdomain,
                 type: resolveTenantTypeFromPlanName(selectedPlan.name),
-                plan_id: selectedPlan.plan_id || selectedPlan.id,
+                plan_id: getPlanValue(selectedPlan),
                 status: 'active',
                 admin_email: adminEmail,
                 password: adminPassword,
@@ -171,13 +178,13 @@ export function CreateSchoolDialog({ onCreated }: { onCreated: () => void }) {
                                 Type
                             </Label>
                             <div className="col-span-3 space-y-1">
-                                <Select value={selectedPlanId} onValueChange={setSelectedPlanId} disabled={plansLoading || plans.length === 0}>
+                                <Select value={selectedPlanId} onValueChange={setSelectedPlanId} disabled={plansLoading || availablePlans.length === 0}>
                                     <SelectTrigger id="type">
                                         <SelectValue placeholder={plansLoading ? "Loading plans..." : "Select subscription type"} />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        {plans.map((plan) => (
-                                            <SelectItem key={plan.plan_id || plan.id} value={plan.plan_id || plan.id}>
+                                        {availablePlans.map((plan) => (
+                                            <SelectItem key={getPlanValue(plan)} value={getPlanValue(plan)}>
                                                 {plan.name}
                                             </SelectItem>
                                         ))}

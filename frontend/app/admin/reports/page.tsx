@@ -14,6 +14,12 @@ import {
     GraduationCap, BookOpen,
 } from 'lucide-react';
 
+function getSelectValue(value: string | number | null | undefined): string | null {
+    if (value == null) return null;
+    const normalized = typeof value === 'string' ? value : String(value);
+    return normalized.trim().length > 0 ? normalized : null;
+}
+
 function downloadUrl(url: string, filename: string) {
     const a = document.createElement('a');
     a.href = url;
@@ -224,6 +230,16 @@ function ExamReports() {
     const [examId, setExamId] = useState('');
     const [loading, setLoading] = useState(false);
     const [busy, setBusy] = useState(false);
+    const examOptions = exams.flatMap((exam) => {
+        const value = getSelectValue(exam.exam_id ?? exam.id);
+        if (!value) return [];
+
+        return [{
+            key: value,
+            value,
+            label: exam.assessment?.title || exam.title || `Exam ${value}`,
+        }];
+    });
 
     useEffect(() => {
         academicAPI.getClasses().then(setClasses).catch(() => null);
@@ -245,7 +261,7 @@ function ExamReports() {
     const downloadBulk = () => {
         if (!examId) { toast.error('Select an exam'); return; }
         setBusy(true);
-        const exam = exams.find(e => (e.exam_id || e.id?.toString()) === examId);
+        const exam = exams.find((entry) => getSelectValue(entry.exam_id ?? entry.id) === examId);
         downloadUrl(reportsAPI.getBulkHallTicketsZIP(examId), `hall_tickets_${exam?.assessment?.title?.replace(/\s+/g, '_') ?? examId}.zip`);
         toast.success('Downloading hall tickets ZIP…');
         setTimeout(() => setBusy(false), 2000);
@@ -299,9 +315,9 @@ function ExamReports() {
                     <Select value={examId} onValueChange={setExamId}>
                         <SelectTrigger className="rounded-xl"><SelectValue placeholder="Select exam" /></SelectTrigger>
                         <SelectContent>
-                            {exams.map((e: any) => (
-                                <SelectItem key={e.exam_id || e.id} value={e.exam_id || e.id?.toString()}>
-                                    {e.assessment?.title || e.title || `Exam ${e.exam_id || e.id}`}
+                            {examOptions.map((exam) => (
+                                <SelectItem key={exam.key} value={exam.value}>
+                                    {exam.label}
                                 </SelectItem>
                             ))}
                         </SelectContent>
