@@ -20,10 +20,7 @@ X_FRAME_OPTIONS = "DENY"
 # Keep connections alive for 60s — avoids reconnect overhead on every request.
 # Django's default is 0 (new connection per request).
 DATABASES["default"]["CONN_MAX_AGE"] = int(os.environ.get("CONN_MAX_AGE", "60"))  # noqa: F405
-DATABASES["default"]["OPTIONS"] = {  # noqa: F405
-    "connect_timeout": 10,
-    "options": "-c default_transaction_isolation=read committed",
-}
+DATABASES["default"]["OPTIONS"] = {"connect_timeout": 10}  # noqa: F405
 
 # ── Caching ───────────────────────────────────────────────────────────────────
 # Use Redis for full Django cache (sessions, rate limits, template fragments)
