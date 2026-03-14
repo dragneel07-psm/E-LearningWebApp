@@ -10,4 +10,4 @@ Disallow: /parent/
 Disallow: /saas/
 Disallow: /api/
 
-Sitemap: https://yourdomain.com/sitemap.xml
+Sitemap: https://manyaltech.com/sitemap.xml
