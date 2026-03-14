@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import { withSentryConfig } from "@sentry/nextjs";
 
 const nextConfig: NextConfig = {
   output: 'standalone',
@@ -69,4 +70,20 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default nextConfig;
+export default process.env.NEXT_PUBLIC_SENTRY_DSN
+  ? withSentryConfig(nextConfig, {
+      // Sentry org/project (set these as build env vars in Vercel)
+      org: process.env.SENTRY_ORG,
+      project: process.env.SENTRY_PROJECT,
+      authToken: process.env.SENTRY_AUTH_TOKEN,
+
+      // Upload source maps for readable stack traces — suppressed in local dev
+      silent: !process.env.CI,
+
+      // Automatically tree-shake Sentry logger statements in production
+      disableLogger: true,
+
+      // Tunnel Sentry requests through Next.js to avoid ad blockers
+      tunnelRoute: "/monitoring",
+    })
+  : nextConfig;
