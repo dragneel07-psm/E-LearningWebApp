@@ -31,11 +31,11 @@ class IndexingSummary:
 
 
 def _embedding_dimensions() -> int:
-    value = getattr(settings, "AI_EMBEDDING_DIMENSIONS", 1536)
+    value = getattr(settings, "AI_EMBEDDING_DIMENSIONS", 3072)
     try:
         return max(1, int(value))
     except (TypeError, ValueError):
-        return 1536
+        return 3072
 
 
 def _chunk_words() -> int:
@@ -163,7 +163,7 @@ def _source_documents() -> list[dict[str, Any]]:
             (
                 f"{lesson.title}\n"
                 f"{lesson.content or ''}\n"
-                f"{lesson.video_url or ''}\n"
+                f"{getattr(lesson, 'video_transcript', None) or ''}\n"
                 f"Chapter: {getattr(lesson.chapter, 'title', '')}\n"
                 f"Subject: {getattr(getattr(lesson.chapter, 'subject', None), 'name', '')}"
             )

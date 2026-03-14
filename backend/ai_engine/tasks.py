@@ -192,3 +192,128 @@ def generate_quiz_task(
         "questions": questions,
         "model": tutor.model,
     }
+
+
+@shared_task(name="ai.parent_digest")
+def send_parent_digest_task(*, tenant_schema: str) -> dict[str, Any]:
+    """
+    Phase 14 — AI Parent Daily Digest.
+
+    For every student in a tenant that has at least one linked parent, generate
+    a 3-sentence plain-language digest and send it via the notification system.
+
+    Schedule this task daily (e.g., 7 PM) using Celery Beat:
+      CELERY_BEAT_SCHEDULE = {
+          "daily-parent-digest": {
+              "task": "ai.parent_digest",
+              "schedule": crontab(hour=19, minute=0),
+              "kwargs": {"tenant_schema": "<schema_name>"},
+          }
+      }
+    """
+    schema_name = _tenant_schema(tenant_schema)
+    sent_count = 0
+    skipped_count = 0
+
+    with schema_context(schema_name):
+        tenant = _resolve_tenant(schema_name)
+        if tenant is None:
+            return {"error": "Tenant not found", "schema": schema_name}
+
+        from academic.models.student import Student
+        from academic.models.parent import Parent
+        from ai_engine.services.parent_digest_service import ParentDigestService
+        from notifications.services import NotificationService
+
+        service = ParentDigestService(tenant=tenant)
+
+        students = Student.objects.filter(
+            academic_class__isnull=False
+        ).select_related("user")
+
+        for student in students:
+            try:
+                # Find parent linked to this student
+                parents = Parent.objects.filter(student=student).select_related("user")
+                if not parents.exists():
+                    continue
+
+                digest = service.generate_digest(student)
+                if not digest:
+                    skipped_count += 1
+                    continue
+
+                for parent in parents:
+                    if parent.user:
+                        NotificationService.create_notification(
+                            recipient=parent.user,
+                            title=f"Daily Update: {student.user.get_full_name() if student.user else 'Your child'}",
+                            message=digest,
+                            tenant=tenant,
+                        )
+                        sent_count += 1
+            except Exception as exc:
+                import logging
+                logging.getLogger(__name__).warning(
+                    "ParentDigest failed for student %s: %s", student.student_id, exc
+                )
+                skipped_count += 1
+
+    return {"sent": sent_count, "skipped": skipped_count, "tenant": schema_name}
+
+
+@shared_task(name="ai.transcribe_lesson")
+def transcribe_lesson_task(*, tenant_schema: str, lesson_id: int) -> dict[str, Any]:
+    """
+    Phase 11 — Video Transcript Indexing.
+
+    Transcribes the video attached to a lesson via OpenAI Whisper, persists
+    the transcript to Lesson.video_transcript, then re-indexes the lesson
+    in the RAG vector store so the transcript becomes searchable.
+    """
+    import logging as _logging
+    _log = _logging.getLogger(__name__)
+
+    schema_name = _tenant_schema(tenant_schema)
+    with schema_context(schema_name):
+        tenant = _resolve_tenant(schema_name)
+        if tenant is None:
+            return {"error": "Tenant not found", "schema": schema_name}
+
+        from academic.models.lesson import Lesson
+        from ai_engine.services.video_transcript_service import VideoTranscriptService
+        from ai_engine.services.indexing_service import index_raw_content
+
+        lesson = Lesson.objects.filter(pk=lesson_id).first()
+        if lesson is None:
+            return {"error": f"Lesson {lesson_id} not found"}
+
+        service = VideoTranscriptService(tenant=tenant)
+        transcript = service.transcribe_lesson(lesson)
+
+        if not transcript:
+            return {"lesson_id": lesson_id, "status": "skipped", "reason": "no transcript generated"}
+
+        # Re-index lesson so transcript is included in RAG retrieval
+        full_text = " ".join(filter(None, [
+            lesson.title,
+            lesson.content or "",
+            transcript,
+        ]))
+        try:
+            index_raw_content(
+                tenant_schema=schema_name,
+                source_type="lesson",
+                source_id=str(lesson_id),
+                text=full_text,
+                metadata={"lesson_id": lesson_id, "title": lesson.title, "has_transcript": True},
+            )
+        except Exception as exc:
+            _log.warning("transcribe_lesson_task: re-index failed for lesson %s: %s", lesson_id, exc)
+
+        return {
+            "lesson_id": lesson_id,
+            "status": "ok",
+            "transcript_chars": len(transcript),
+            "tenant": schema_name,
+        }

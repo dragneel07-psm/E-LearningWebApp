@@ -117,6 +117,41 @@ class TutorStreamConsumer(AsyncWebsocketConsumer):
             user, tenant, conversation_id, message, context, db_alias
         )
 
+        # --- Resolve teaching mode (persisted → auto-select → default) ---
+        explicit_mode = str(context.get("mode") or "").strip().lower()
+        if explicit_mode in ("direct", "socratic"):
+            # Client sent an explicit mode — honour it and persist if different
+            if explicit_mode != conversation.preferred_mode:
+                await sync_to_async(
+                    lambda: TutorConversation.objects.using(db_alias)
+                    .filter(id=conversation.id)
+                    .update(preferred_mode=explicit_mode)
+                )()
+                conversation.preferred_mode = explicit_mode
+            context["mode"] = explicit_mode
+        else:
+            # No explicit mode — use persisted or auto-select based on BKT mastery
+            resolved_mode = conversation.preferred_mode or "direct"
+            if not conversation.preferred_mode and student:
+                # Auto-select: low mastery students benefit more from Socratic
+                from ai_engine.models import SkillMastery
+                avg_mastery = await sync_to_async(
+                    lambda: (
+                        SkillMastery.objects.using(db_alias)
+                        .filter(student=student)
+                        .values_list("p_mastery", flat=True)
+                    )
+                )()
+                avg_mastery = list(avg_mastery)
+                if avg_mastery:
+                    avg = sum(avg_mastery) / len(avg_mastery)
+                    resolved_mode = "socratic" if avg < 0.45 else "direct"
+            context["mode"] = resolved_mode
+
+        # --- Persist student language preference into context ---
+        if student and "lang" not in context:
+            context["lang"] = getattr(student, "language_preference", "en") or "en"
+
         # --- Persist student message ---
         await sync_to_async(TutorMessage.objects.using(db_alias).create)(
             conversation=conversation,
@@ -142,7 +177,10 @@ class TutorStreamConsumer(AsyncWebsocketConsumer):
 
         # Run synchronous generator in thread pool, sending each chunk to client
         def _generate():
-            return list(service.stream_answer(message, context=context, conversation_history=history))
+            return list(service.stream_answer(
+                message, context=context, conversation_history=history,
+                student=student, using=db_alias,
+            ))
 
         chunks = await sync_to_async(_generate)()
 
@@ -230,6 +268,131 @@ class TutorStreamConsumer(AsyncWebsocketConsumer):
             subject_id=context.get("subject_id") or None,
             title=auto_title,
         )
+
+    async def send_json(self, content):
+        await self.send(text_data=json.dumps(content))
+
+
+class ProgressReportStreamConsumer(AsyncWebsocketConsumer):
+    """
+    WebSocket consumer for streaming AI progress report generation.
+
+    URL: ws://<host>/ws/progress-report/?token=<jwt>
+
+    Protocol (JSON messages):
+
+    Client → Server:
+      { "type": "generate",
+        "report_type": "student" | "parent" | "teacher",
+        "force": false
+      }
+
+    Server → Client:
+      { "type": "status",  "message": "Collecting lesson data..." }
+      { "type": "status",  "message": "Analyzing assessment results..." }
+      { "type": "status",  "message": "Generating AI insights..." }
+      { "type": "done",    "report": {...}, "cached": false }
+      { "type": "error",   "detail": "..." }
+    """
+
+    async def connect(self):
+        user = self.scope.get("user")
+        if not user or not user.is_authenticated:
+            await self.close(code=4001)
+            return
+        await self.accept()
+
+    async def disconnect(self, close_code):
+        pass
+
+    async def receive(self, text_data=None, bytes_data=None):
+        user = self.scope.get("user")
+        if not user or not user.is_authenticated:
+            await self.send_json({"type": "auth_required"})
+            await self.close(code=4001)
+            return
+
+        try:
+            data = json.loads(text_data or "{}")
+        except json.JSONDecodeError:
+            await self.send_json({"type": "error", "detail": "Invalid JSON."})
+            return
+
+        if data.get("type") != "generate":
+            await self.send_json({"type": "error", "detail": "Unknown message type."})
+            return
+
+        report_type = str(data.get("report_type") or "student").lower()
+        if report_type not in ("student", "parent", "teacher"):
+            await self.send_json({"type": "error", "detail": "report_type must be student, parent, or teacher."})
+            return
+
+        force = bool(data.get("force", False))
+        await self._handle_generate(user, report_type, force)
+
+    async def _handle_generate(self, user, report_type: str, force: bool):
+        from academic.models import Student
+
+        tenant = getattr(user, "tenant", None)
+        if tenant is None:
+            await self.send_json({"type": "error", "detail": "tenant context required."})
+            return
+
+        db_alias = "default"
+
+        # Resolve student
+        try:
+            student = await sync_to_async(Student.objects.get)(user=user)
+        except Student.DoesNotExist:
+            await self.send_json({"type": "error", "detail": "Progress reports are only available for students."})
+            return
+
+        from ai_engine.models import StudentAIReport
+        from ai_engine.services.progress_report_service import ProgressReportService
+        from datetime import timedelta
+        from django.utils import timezone
+
+        # Check cache first (avoids expensive LLM call)
+        if not force:
+            cutoff = timezone.now() - timedelta(days=7)
+            cached = await sync_to_async(
+                lambda: StudentAIReport.objects.using(db_alias)
+                .filter(student=student, report_type=report_type, generated_at__gte=cutoff)
+                .order_by("-generated_at")
+                .first()
+            )()
+            if cached:
+                await self.send_json({
+                    "type": "done",
+                    "report": cached.report_data,
+                    "cached": True,
+                    "generated_at": cached.generated_at.isoformat(),
+                })
+                return
+
+        # Stream status updates through the generation phases
+        await self.send_json({"type": "status", "message": "Collecting lesson progress data..."})
+        await self.send_json({"type": "status", "message": "Analyzing assessment results..."})
+        await self.send_json({"type": "status", "message": "Reviewing AI tutor usage..."})
+        await self.send_json({"type": "status", "message": "Generating AI insights (this may take a moment)..."})
+
+        def _generate():
+            svc = ProgressReportService(tenant=tenant, db_alias=db_alias)
+            return svc.generate(student, report_type=report_type, save=True, is_automated=False)
+
+        try:
+            result = await sync_to_async(_generate)()
+        except Exception as exc:
+            logger.warning("ProgressReportStreamConsumer: generation failed: %s", exc)
+            await self.send_json({"type": "error", "detail": "Report generation failed. Please try again."})
+            return
+
+        await self.send_json({
+            "type": "done",
+            "report": result.get("report") or result,
+            "cached": False,
+            "generated_at": result.get("generated_at", ""),
+        })
 
     async def send_json(self, content):
         await self.send(text_data=json.dumps(content))

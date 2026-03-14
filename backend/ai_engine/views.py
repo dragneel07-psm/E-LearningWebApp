@@ -1243,6 +1243,169 @@ def _is_teacher_or_admin(user) -> bool:
     return role in {"teacher", "admin"}
 
 
+# ---------------------------------------------------------------------------
+# Phase 13 — Collaborative Filtering Recommendations
+# ---------------------------------------------------------------------------
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def collaborative_recommendations(request):
+    """
+    GET /api/ai/personalization/collaborative-recommendations/
+    Returns peer-based lesson recommendations for the authenticated student.
+    """
+    role = str(getattr(request.user, "role", "") or "").strip().lower()
+    if role != "student":
+        return Response({"detail": "Only students can view peer recommendations."}, status=status.HTTP_403_FORBIDDEN)
+
+    tenant = getattr(request, "tenant", None) or getattr(request.user, "tenant", None)
+    db_alias = getattr(getattr(tenant, "_state", None), "db", None) or "default"
+
+    try:
+        student = request.user.student_profile
+    except Exception:
+        return Response({"detail": "Student profile not found."}, status=status.HTTP_404_NOT_FOUND)
+
+    from .services.collaborative_filter_service import CollaborativeFilterService
+    service = CollaborativeFilterService(tenant=tenant)
+    recommendations = service.recommend_lessons(student, using=db_alias)
+    return Response({"recommendations": recommendations})
+
+
+# ---------------------------------------------------------------------------
+# Phase 11 — Misconception Detection from Wrong Answers
+# ---------------------------------------------------------------------------
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def misconception_me(request):
+    """
+    GET /api/ai/analytics/misconceptions/me/?force=true
+    Returns misconception report for the authenticated student.
+    """
+    role = str(getattr(request.user, "role", "") or "").strip().lower()
+    if role != "student":
+        return Response({"detail": "Only students can view their own misconception report."}, status=status.HTTP_403_FORBIDDEN)
+
+    tenant = getattr(request, "tenant", None) or getattr(request.user, "tenant", None)
+    if tenant is None:
+        return Response({"error": "tenant context required"}, status=status.HTTP_400_BAD_REQUEST)
+    db_alias = getattr(getattr(tenant, "_state", None), "db", None) or "default"
+
+    try:
+        student = request.user.student_profile
+    except Exception:
+        return Response({"detail": "Student profile not found."}, status=status.HTTP_404_NOT_FOUND)
+
+    force = request.query_params.get("force", "").lower() in ("1", "true")
+    from .services.misconception_service import MisconceptionDetectionService
+    service = MisconceptionDetectionService(tenant=tenant, user=request.user)
+    report = service.analyse_student(student, using=db_alias, force=force)
+    return Response(report)
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def misconception_student(request, student_id):
+    """
+    GET /api/ai/analytics/misconceptions/student/<student_id>/
+    Teacher/admin view of a student's misconception report.
+    """
+    if not _is_teacher_or_admin(request.user):
+        return Response({"detail": "Only teachers and admins can view misconception reports."}, status=status.HTTP_403_FORBIDDEN)
+
+    tenant = getattr(request, "tenant", None) or getattr(request.user, "tenant", None)
+    if tenant is None:
+        return Response({"error": "tenant context required"}, status=status.HTTP_400_BAD_REQUEST)
+    db_alias = getattr(getattr(tenant, "_state", None), "db", None) or "default"
+
+    student = Student.objects.using(db_alias).filter(student_id=student_id).select_related("user").first()
+    if student is None:
+        return Response({"detail": "Student not found."}, status=status.HTTP_404_NOT_FOUND)
+
+    force = request.query_params.get("force", "").lower() in ("1", "true")
+    from .services.misconception_service import MisconceptionDetectionService
+    service = MisconceptionDetectionService(tenant=tenant, user=request.user)
+    report = service.analyse_student(student, using=db_alias, force=force)
+    return Response(report)
+
+
+# ---------------------------------------------------------------------------
+# Phase 10 — Predictive Grade Forecasting
+# ---------------------------------------------------------------------------
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def grade_forecast_me(request):
+    """
+    GET /api/ai/analytics/grade_forecast/me/
+    Returns per-subject grade forecasts for the authenticated student using
+    exponential weighted moving average on past assessment results.
+    """
+    role = str(getattr(request.user, "role", "") or "").strip().lower()
+    if role != "student":
+        return Response({"detail": "Only students can view their own forecast."}, status=status.HTTP_403_FORBIDDEN)
+
+    tenant = getattr(request, "tenant", None) or getattr(request.user, "tenant", None)
+    db_alias = getattr(tenant, "_state", None)
+    db_alias = (db_alias.db if db_alias else None) or "default"
+
+    try:
+        student = request.user.student_profile
+    except Exception:
+        return Response({"detail": "Student profile not found."}, status=status.HTTP_404_NOT_FOUND)
+
+    from .services.grade_forecast_service import grade_forecast_service
+    forecasts = grade_forecast_service.forecast_for_student(student, using=db_alias)
+    return Response({"forecasts": forecasts})
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def grade_forecast_student(request, student_id):
+    """
+    GET /api/ai/analytics/grade_forecast/student/<student_id>/
+    Returns per-subject grade forecasts for a specific student (teacher/admin only).
+    """
+    if not _is_teacher_or_admin(request.user):
+        return Response({"detail": "Only teachers and admins can view student forecasts."}, status=status.HTTP_403_FORBIDDEN)
+
+    tenant = getattr(request, "tenant", None) or getattr(request.user, "tenant", None)
+    db_alias = getattr(tenant, "_state", None)
+    db_alias = (db_alias.db if db_alias else None) or "default"
+
+    student = Student.objects.using(db_alias).filter(student_id=student_id).select_related("user").first()
+    if student is None:
+        return Response({"detail": "Student not found."}, status=status.HTTP_404_NOT_FOUND)
+
+    from .services.grade_forecast_service import grade_forecast_service
+    forecasts = grade_forecast_service.forecast_for_student(student, using=db_alias)
+    return Response({
+        "student_id": str(student.student_id),
+        "student_name": student.user.get_full_name() if student.user else "",
+        "forecasts": forecasts,
+    })
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def grade_forecast_class(request, class_id):
+    """
+    GET /api/ai/analytics/grade_forecast/class/<class_id>/
+    Returns aggregate grade forecasts for all students in a class (teacher/admin only).
+    """
+    if not _is_teacher_or_admin(request.user):
+        return Response({"detail": "Only teachers and admins can view class forecasts."}, status=status.HTTP_403_FORBIDDEN)
+
+    tenant = getattr(request, "tenant", None) or getattr(request.user, "tenant", None)
+    db_alias = getattr(tenant, "_state", None)
+    db_alias = (db_alias.db if db_alias else None) or "default"
+
+    from .services.grade_forecast_service import grade_forecast_service
+    data = grade_forecast_service.forecast_for_class(class_id, using=db_alias)
+    return Response(data)
+
+
 def _teacher_can_manage_submission(user, submission: Submission) -> bool:
     role = str(getattr(user, "role", "") or "").strip().lower()
     if role == "admin":
@@ -1501,3 +1664,174 @@ def ai_approve_grading_draft(request):
         import traceback
         traceback.print_exc()
         return Response({"error": str(exc)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+# ---------------------------------------------------------------------------
+# Phase 12 — Knowledge Graph / Concept Prerequisites
+# ---------------------------------------------------------------------------
+
+def _get_kg_service(request):
+    tenant = getattr(request, "tenant", None) or getattr(request.user, "tenant", None)
+    db_alias = getattr(getattr(tenant, "_state", None), "db", None) or "default"
+    from .services.knowledge_graph_service import KnowledgeGraphService
+    return KnowledgeGraphService(tenant=tenant, user=request.user), db_alias
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def knowledge_graph_subject(request, subject_id):
+    """
+    GET /api/ai/knowledge-graph/subject/<subject_id>/
+    Returns prerequisite graph (nodes + edges) for a subject.
+    """
+    service, db_alias = _get_kg_service(request)
+    data = service.get_graph_for_subject(subject_id, using=db_alias)
+    return Response(data)
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def knowledge_graph_gaps(request):
+    """
+    GET /api/ai/knowledge-graph/gaps/
+    Returns root-cause prerequisite gaps for the authenticated student.
+    """
+    role = str(getattr(request.user, "role", "") or "").strip().lower()
+    if role != "student":
+        return Response({"detail": "Only students can view their own gaps."}, status=status.HTTP_403_FORBIDDEN)
+
+    try:
+        student = request.user.student_profile
+    except Exception:
+        return Response({"detail": "Student profile not found."}, status=status.HTTP_404_NOT_FOUND)
+
+    service, db_alias = _get_kg_service(request)
+    gaps = service.find_root_cause_gaps(student, using=db_alias)
+    return Response({"root_cause_gaps": gaps})
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def knowledge_graph_gaps_student(request, student_id):
+    """
+    GET /api/ai/knowledge-graph/gaps/student/<student_id>/
+    Teacher/admin view of root-cause prerequisite gaps for a student.
+    """
+    if not _is_teacher_or_admin(request.user):
+        return Response({"detail": "Only teachers and admins can view student gaps."}, status=status.HTTP_403_FORBIDDEN)
+
+    service, db_alias = _get_kg_service(request)
+    student = Student.objects.using(db_alias).filter(student_id=student_id).first()
+    if student is None:
+        return Response({"detail": "Student not found."}, status=status.HTTP_404_NOT_FOUND)
+
+    gaps = service.find_root_cause_gaps(student, using=db_alias)
+    return Response({"root_cause_gaps": gaps})
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def knowledge_graph_add_prerequisite(request):
+    """
+    POST /api/ai/knowledge-graph/prerequisites/
+    Body: { skill_id, prerequisite_id }
+    Add a prerequisite edge (teacher/admin only).
+    """
+    if not _is_teacher_or_admin(request.user):
+        return Response({"detail": "Only teachers and admins can manage prerequisites."}, status=status.HTTP_403_FORBIDDEN)
+
+    skill_id = request.data.get("skill_id")
+    prerequisite_id = request.data.get("prerequisite_id")
+    if not skill_id or not prerequisite_id:
+        return Response({"error": "skill_id and prerequisite_id are required."}, status=status.HTTP_400_BAD_REQUEST)
+
+    service, db_alias = _get_kg_service(request)
+    try:
+        edge = service.add_prerequisite(skill_id=skill_id, prerequisite_id=prerequisite_id, using=db_alias)
+        return Response({"id": str(edge.id), "skill_id": str(edge.skill_id), "prerequisite_id": str(edge.prerequisite_id)}, status=status.HTTP_201_CREATED)
+    except ValueError as exc:
+        return Response({"error": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(["DELETE"])
+@permission_classes([IsAuthenticated])
+def knowledge_graph_remove_prerequisite(request):
+    """
+    DELETE /api/ai/knowledge-graph/prerequisites/
+    Body: { skill_id, prerequisite_id }
+    Remove a prerequisite edge (teacher/admin only).
+    """
+    if not _is_teacher_or_admin(request.user):
+        return Response({"detail": "Only teachers and admins can manage prerequisites."}, status=status.HTTP_403_FORBIDDEN)
+
+    skill_id = request.data.get("skill_id")
+    prerequisite_id = request.data.get("prerequisite_id")
+    service, db_alias = _get_kg_service(request)
+    deleted = service.remove_prerequisite(skill_id=skill_id, prerequisite_id=prerequisite_id, using=db_alias)
+    if deleted:
+        return Response(status=status.HTTP_204_NO_CONTENT)
+    return Response({"error": "Edge not found."}, status=status.HTTP_404_NOT_FOUND)
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def knowledge_graph_auto_generate(request, subject_id):
+    """
+    POST /api/ai/knowledge-graph/subject/<subject_id>/auto-generate/
+    Use LLM to auto-generate prerequisite edges for a subject (admin only).
+    """
+    role = str(getattr(request.user, "role", "") or "").strip().lower()
+    if role != "admin":
+        return Response({"detail": "Only admins can auto-generate the prerequisite graph."}, status=status.HTTP_403_FORBIDDEN)
+
+    service, db_alias = _get_kg_service(request)
+    results = service.generate_prerequisites_for_subject(subject_id, using=db_alias)
+    return Response({"generated": results, "count": sum(1 for r in results if r.get("created"))})
+
+
+# ── Phase 11: Video Transcript Indexing ──────────────────────────────────────
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def ai_transcribe_lesson(request, lesson_id):
+    """
+    POST /api/ai/lessons/<lesson_id>/transcribe/
+
+    Trigger Whisper transcription for a video lesson.
+    Runs async via Celery (or sync fallback).
+    Returns the transcript immediately if the lesson already has one,
+    otherwise enqueues transcription and returns 202 Accepted.
+
+    Teacher/admin only.
+    """
+    role = str(getattr(request.user, "role", "") or "").strip().lower()
+    if role not in ("teacher", "admin", "staff"):
+        return Response({"detail": "Only teachers and admins can trigger transcription."}, status=status.HTTP_403_FORBIDDEN)
+
+    db_alias = getattr(request, "db_alias", "default")
+    lesson = Lesson.objects.using(db_alias).filter(pk=lesson_id).first()
+    if lesson is None:
+        return Response({"detail": "Lesson not found."}, status=status.HTTP_404_NOT_FOUND)
+
+    # If transcript already exists and force=false, return it
+    existing = getattr(lesson, "video_transcript", None) or ""
+    force = request.data.get("force", False)
+    if existing and not force:
+        return Response({"lesson_id": lesson_id, "transcript": existing, "status": "cached"})
+
+    if not getattr(lesson, "video_url", None):
+        return Response({"detail": "Lesson has no video URL."}, status=status.HTTP_400_BAD_REQUEST)
+
+    tenant = getattr(request, "tenant", None)
+    schema_name = getattr(tenant, "schema_name", "public") if tenant else "public"
+
+    from .tasks import transcribe_lesson_task
+    enqueue_job(
+        transcribe_lesson_task,
+        tenant_schema=schema_name,
+        lesson_id=lesson_id,
+    )
+    return Response(
+        {"lesson_id": lesson_id, "status": "queued", "message": "Transcription started. Check back shortly."},
+        status=status.HTTP_202_ACCEPTED,
+    )

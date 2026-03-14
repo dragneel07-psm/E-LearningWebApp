@@ -41,6 +41,7 @@ class Lesson(models.Model):
     content_type = models.CharField(max_length=20, choices=CONTENT_TYPE_CHOICES, default='text')
     content = models.TextField(blank=True, help_text="Rich text content (HTML/Markdown)")
     video_url = models.URLField(blank=True, null=True, help_text="Link to video lecture (YouTube/Vimeo)")
+    video_transcript = models.TextField(blank=True, null=True, help_text="Auto-generated or manually entered transcript for video lessons")
     interactive_data = models.JSONField(blank=True, null=True, help_text="JSON payload for interactive content")
     assessment = models.ForeignKey('academic.Assessment', on_delete=models.SET_NULL, null=True, blank=True, related_name='linked_lessons', help_text="Linked Quiz/Assessment")
     

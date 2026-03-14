@@ -11,6 +11,8 @@ from django.db.models import Q, QuerySet
 from openai import OpenAI
 
 from ai_engine.models import ContentChunk
+from ai_engine.services.ai_client import chat_with_fallback, stream_with_fallback
+from ai_engine.services.lang_utils import get_lang_instruction
 from ai_engine.services.provider_config import get_ai_provider_config
 from core.vector import PGVECTOR_AVAILABLE
 
@@ -24,6 +26,10 @@ logger = logging.getLogger(__name__)
 
 
 class RAGTutorService:
+    # Adaptive similarity bounds — low-mastery students get broader retrieval
+    _SIMILARITY_LOW_MASTERY = 0.45   # avg BKT mastery < 0.4
+    _SIMILARITY_HIGH_MASTERY = 0.70  # avg BKT mastery >= 0.75
+
     def __init__(self, *, tenant):
         self.tenant = tenant
         self.config = get_ai_provider_config()
@@ -32,6 +38,46 @@ class RAGTutorService:
         self.top_k = int(getattr(settings, "AI_TUTOR_TOP_K", 5))
         self.min_similarity = float(getattr(settings, "AI_TUTOR_MIN_SIMILARITY", 0.58))
         self.embedding_dimensions = int(getattr(settings, "AI_EMBEDDING_DIMENSIONS", 1536))
+
+    def get_adaptive_min_similarity(self, student=None, using="default") -> float:
+        """
+        Compute a dynamic similarity threshold based on the student's average BKT
+        mastery across all skills.
+
+        Low average mastery (<0.4) → lower threshold (0.45): retrieve more content,
+          including foundational material, to help fill knowledge gaps.
+        High average mastery (>=0.75) → higher threshold (0.70): only retrieve
+          highly specific advanced content.
+        Between → linearly interpolate.
+
+        Falls back to `self.min_similarity` (settings default) when student is None
+        or mastery data is unavailable.
+        """
+        if student is None:
+            return self.min_similarity
+        try:
+            from ai_engine.models import SkillMastery
+            masteries = list(
+                SkillMastery.objects.using(using)
+                .filter(student=student)
+                .values_list("p_mastery", flat=True)
+            )
+            if not masteries:
+                return self.min_similarity
+            avg_mastery = sum(masteries) / len(masteries)
+
+            low_bound = self._SIMILARITY_LOW_MASTERY
+            high_bound = self._SIMILARITY_HIGH_MASTERY
+            if avg_mastery < 0.4:
+                return low_bound
+            if avg_mastery >= 0.75:
+                return high_bound
+            # Linear interpolation between low and high
+            t = (avg_mastery - 0.4) / (0.75 - 0.4)
+            return round(low_bound + t * (high_bound - low_bound), 3)
+        except Exception as exc:
+            logger.debug("Adaptive similarity fallback: %s", exc)
+            return self.min_similarity
 
     def _openai_client(self):
         if not (self.config.get("enabled") and self.config.get("configured")):
@@ -307,6 +353,8 @@ class RAGTutorService:
         tenant_name = getattr(self.tenant, "name", "the school")
         user_role = str((context or {}).get("user_role") or "").strip().lower()
         mode = str((context or {}).get("mode") or "direct").strip().lower()
+        lang = str((context or {}).get("lang") or "en")
+        lang_instruction = get_lang_instruction(lang)
         audience = "teacher-friendly" if user_role == "teacher" else "student-friendly"
         context_block = self._build_context_block(snippets)
 
@@ -342,6 +390,9 @@ class RAGTutorService:
                 "Answer using only the snippets. If uncertain, say \"I’m not sure\" and suggest what to ask next."
             )
 
+        if lang_instruction:
+            rules = f"{rules}\n{lang_instruction}"
+
         messages = [{"role": "system", "content": rules}]
         messages.extend(self._sanitize_history(conversation_history))
         messages.append({"role": "user", "content": user_prompt})
@@ -356,6 +407,8 @@ class RAGTutorService:
     ) -> list[dict[str, str]]:
         tenant_name = getattr(self.tenant, "name", "the school")
         user_role = str((context or {}).get("user_role") or "").strip().lower()
+        lang = str((context or {}).get("lang") or "en")
+        lang_instruction = get_lang_instruction(lang)
         if user_role == "teacher":
             rules = (
                 "You are an AI teaching assistant for school teachers.\n"
@@ -373,6 +426,8 @@ class RAGTutorService:
                 "Do not claim to have seen materials that were not provided.\n"
                 f"Keep responses appropriate for {tenant_name}."
             )
+        if lang_instruction:
+            rules = f"{rules}\n{lang_instruction}"
         messages = [{"role": "system", "content": rules}]
         messages.extend(self._sanitize_history(conversation_history))
         messages.append({"role": "user", "content": message})
@@ -472,8 +527,7 @@ class RAGTutorService:
             )
 
         try:
-            response = client.chat.completions.create(
-                model=self.model,
+            response = chat_with_fallback(
                 messages=messages,
                 temperature=0.2,
                 max_tokens=500,
@@ -516,6 +570,8 @@ class RAGTutorService:
         message: str,
         context: dict[str, Any] | None = None,
         conversation_history: list[dict[str, Any]] | None = None,
+        student=None,
+        using: str = "default",
     ):
         """
         Generator that yields streaming chunks for WebSocket delivery.
@@ -529,9 +585,11 @@ class RAGTutorService:
           {"type": "no_context"}                             (no grounded chunks)
 
         Falls back to non-streaming if the OpenAI client is unavailable.
+        Pass `student` to enable adaptive similarity threshold based on BKT mastery.
         """
+        effective_min_similarity = self.get_adaptive_min_similarity(student=student, using=using)
         retrieved = self.retrieve_relevant_chunks(message, context=context)
-        grounded = [item for item in retrieved if float(item["similarity"]) >= self.min_similarity]
+        grounded = [item for item in retrieved if float(item["similarity"]) >= effective_min_similarity]
 
         if not grounded:
             if not self._requires_grounding(context):
@@ -566,12 +624,10 @@ class RAGTutorService:
             return
 
         try:
-            stream = client.chat.completions.create(
-                model=self.model,
+            stream = stream_with_fallback(
                 messages=messages,
                 temperature=0.2,
                 max_tokens=500,
-                stream=True,
             )
             full_answer = ""
             prompt_tokens = 0
@@ -624,9 +680,10 @@ class RAGTutorService:
                    "is_demo": True}
             return
         try:
-            stream = client.chat.completions.create(
-                model=self.model, messages=messages,
-                temperature=0.3, max_tokens=500, stream=True,
+            stream = stream_with_fallback(
+                messages=messages,
+                temperature=0.3,
+                max_tokens=500,
             )
             full_answer = ""
             for chunk in stream:
@@ -672,9 +729,12 @@ class RAGTutorService:
         message: str,
         context: dict[str, Any] | None = None,
         conversation_history: list[dict[str, Any]] | None = None,
+        student=None,
+        using: str = "default",
     ) -> dict[str, Any]:
+        effective_min_similarity = self.get_adaptive_min_similarity(student=student, using=using)
         retrieved = self.retrieve_relevant_chunks(message, context=context)
-        grounded = [item for item in retrieved if float(item["similarity"]) >= self.min_similarity]
+        grounded = [item for item in retrieved if float(item["similarity"]) >= effective_min_similarity]
 
         if not grounded:
             if not self._requires_grounding(context):

@@ -25,6 +25,8 @@ from typing import Any
 
 from django.utils import timezone
 
+from ai_engine.services.lang_utils import get_lang_instruction
+
 logger = logging.getLogger(__name__)
 
 LOOKBACK_DAYS = 30
@@ -99,7 +101,8 @@ class ProgressReportService:
     ) -> dict:
         """Generate a fresh report for the student and optionally persist it."""
         metrics = self._collect_metrics(student)
-        ai_section = self._generate_ai_section(metrics, report_type)
+        lang = getattr(student, "language_preference", "en") or "en"
+        ai_section = self._generate_ai_section(metrics, report_type, lang=lang)
         report_data = {
             "report_type": report_type,
             "student_name": metrics["student_name"],
@@ -279,15 +282,15 @@ class ProgressReportService:
     # LLM section generation
     # ------------------------------------------------------------------ #
 
-    def _generate_ai_section(self, metrics: dict, report_type: str) -> dict:
-        prompt = self._build_prompt(metrics, report_type)
-        raw = self._call_llm(prompt)
+    def _generate_ai_section(self, metrics: dict, report_type: str, lang: str = "en") -> dict:
+        prompt = self._build_prompt(metrics, report_type, lang=lang)
+        raw = self._call_llm(prompt, lang=lang)
         parsed = _extract_json(raw)
         if not parsed:
             parsed = self._fallback_section(metrics, report_type)
         return parsed
 
-    def _build_prompt(self, m: dict, report_type: str) -> str:
+    def _build_prompt(self, m: dict, report_type: str, lang: str = "en") -> str:
         skills_gap_str = ", ".join(f"{g['skill']} ({g['mastery_pct']}%)" for g in m["bkt"]["skill_gaps"]) or "none"
         skills_str = ", ".join(f"{s['skill']} ({s['mastery_pct']}%)" for s in m["bkt"]["skill_strengths"]) or "none"
 
@@ -370,9 +373,12 @@ Return valid JSON only with these keys:
   }
 }"""
 
+        lang_instruction = get_lang_instruction(lang)
+        if lang_instruction:
+            instruction = instruction.rstrip() + f"\n\n{lang_instruction}"
         return base.strip() + "\n\n" + instruction.strip()
 
-    def _call_llm(self, prompt: str) -> str:
+    def _call_llm(self, prompt: str, lang: str = "en") -> str:
         try:
             from ai_engine.services.provider_config import get_ai_provider_config
             from openai import OpenAI
@@ -389,16 +395,17 @@ Return valid JSON only with these keys:
                 timeout=float(getattr(settings, "OPENAI_TIMEOUT_SECONDS", 30)),
             )
             model = str(config.get("model") or getattr(settings, "OPENAI_MODEL", "gpt-4o-mini"))
+            lang_instruction = get_lang_instruction(lang)
+            system_content = (
+                "You are a professional school academic advisor. "
+                "Always respond with valid JSON only — no extra text."
+            )
+            if lang_instruction:
+                system_content = f"{system_content}\n{lang_instruction}"
             resp = client.chat.completions.create(
                 model=model,
                 messages=[
-                    {
-                        "role": "system",
-                        "content": (
-                            "You are a professional school academic advisor. "
-                            "Always respond with valid JSON only — no extra text."
-                        ),
-                    },
+                    {"role": "system", "content": system_content},
                     {"role": "user", "content": prompt},
                 ],
                 temperature=0.4,

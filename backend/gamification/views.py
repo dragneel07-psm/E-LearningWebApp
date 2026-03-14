@@ -31,59 +31,89 @@ class LeaderboardViewSet(viewsets.ViewSet):
 
     def list(self, request):
         """
-        Get the leaderboard. Supports ?scope=class (default) or ?scope=school.
-        Respects is_public=True on GamificationProfile.
+        GET /api/gamification/leaderboard/
+        Params:
+          ?scope=class (default) | school
+          ?limit=20 (default 20, max 50)
+
+        Returns top-N ranked students + the requesting student's own rank
+        (even if outside the top N).
+        Respects GamificationProfile.is_public — private profiles are hidden.
         """
         try:
             current_student = Student.objects.get(user=request.user)
-            scope = request.query_params.get('scope', 'class')
-            period = request.query_params.get('period', 'all_time') # future extension
-
-            # 1. Fetch relevant student IDs based on scope (TENANT DB)
-            if scope == 'school':
-                student_qs = Student.objects.all().values('student_id', 'user__first_name', 'user__last_name')
-            else:
-                # Default to class
-                if not current_student.academic_class:
-                     return Response({'error': 'Student not assigned to a class'}, status=400)
-                student_qs = Student.objects.filter(academic_class=current_student.academic_class) \
-                    .values('student_id', 'user__first_name', 'user__last_name')
-
-            # Create a map for quick lookup: {student_id: "Name"}
-            student_map = {str(s['student_id']): f"{s['user__first_name']} {s['user__last_name']}" for s in student_qs}
-            student_ids = list(student_map.keys())
-
-            # 2. Fetch aggregation from GamificationProfile (SHARED DB)
-            # Filter by matching student IDs and is_public=True
-            # Note: We can't join, so we filter by ID list.
-            profiles = GamificationProfile.objects.filter(
-                student_id__in=student_ids, 
-                is_public=True
-            ).order_by('-total_xp')[:50]
-
-            results = []
-            rank = 1
-            for profile in profiles:
-                # Double check if student exists in our map (integrity)
-                s_name = student_map.get(str(profile.student_id))
-                if s_name:
-                    results.append({
-                        'student_id': profile.student_id,
-                        'student_name': s_name,
-                        'total_points': profile.total_xp,
-                        'current_level': profile.current_level,
-                        'badges_count': 0, # Fetching badges count would be another query. Skip for perf or do separate agg.
-                        'rank': rank
-                    })
-                    rank += 1
-
-            # 3. Handle "My Rank" if not in top 50?
-            # Optional: Add current user's rank separately if needed.
-
-            return Response(results)
-
         except Student.DoesNotExist:
             return Response({'error': 'Leaderboard only available for students'}, status=403)
+
+        scope = request.query_params.get('scope', 'class')
+        limit = min(int(request.query_params.get('limit', 20) or 20), 50)
+        tenant = getattr(request, 'tenant', None) or getattr(request.user, 'tenant', None)
+
+        # 1. Fetch relevant students in scope
+        if scope == 'school':
+            student_qs = Student.objects.filter(user__tenant=tenant) if tenant else Student.objects.none()
+        else:
+            if not current_student.academic_class:
+                return Response({'error': 'Student not assigned to a class'}, status=400)
+            student_qs = Student.objects.filter(academic_class=current_student.academic_class)
+
+        student_ids = list(student_qs.values_list('student_id', flat=True))
+        student_names = {
+            str(s['student_id']): f"{s['user__first_name']} {s['user__last_name']}".strip()
+            for s in student_qs.values('student_id', 'user__first_name', 'user__last_name')
+        }
+
+        # 2. Fetch profiles, tenant-scoped, is_public=True, ordered by XP
+        profile_qs = GamificationProfile.objects.filter(
+            student_id__in=student_ids,
+            is_public=True,
+        )
+        if tenant:
+            profile_qs = profile_qs.filter(tenant=tenant)
+        profiles = list(profile_qs.order_by('-total_xp'))
+
+        # 3. Badge counts in one query
+        badge_counts = {
+            str(row['student_id']): row['count']
+            for row in StudentBadge.objects.filter(
+                student_id__in=student_ids,
+                tenant=tenant,
+            ).values('student_id').annotate(count=Count('id'))
+        } if tenant else {}
+
+        # 4. Build ranked list
+        results = []
+        my_entry = None
+        my_rank = None
+        for rank, profile in enumerate(profiles, start=1):
+            sid = str(profile.student_id)
+            name = student_names.get(sid, "")
+            entry = {
+                'rank': rank,
+                'student_id': sid,
+                'student_name': name,
+                'total_xp': profile.total_xp,
+                'current_level': profile.current_level,
+                'current_streak': profile.current_streak,
+                'badges_count': badge_counts.get(sid, 0),
+                'is_me': sid == str(current_student.student_id),
+            }
+            if entry['is_me']:
+                my_rank = rank
+                my_entry = entry
+            if rank <= limit:
+                results.append(entry)
+
+        # 5. If current student is outside top-N, append their entry
+        if my_entry and my_rank and my_rank > limit:
+            results.append({**my_entry, 'rank': my_rank})
+
+        return Response({
+            'scope': scope,
+            'total_participants': len(profiles),
+            'my_rank': my_rank,
+            'entries': results,
+        })
 
 class BadgeViewSet(TenantScopedQuerysetMixin, viewsets.ReadOnlyModelViewSet):
     queryset = Badge.objects.all()

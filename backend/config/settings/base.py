@@ -440,12 +440,18 @@ if EMAIL_BACKEND == "core.email_backends.resend_backend.ResendAPIEmailBackend" a
         )
 
 # AI Embeddings / RAG
-AI_EMBEDDING_DIMENSIONS = int(os.environ.get("AI_EMBEDDING_DIMENSIONS", "1536"))
-AI_EMBEDDING_MODEL = os.environ.get("AI_EMBEDDING_MODEL", "text-embedding-3-small").strip()
+# Phase 12: Upgraded to text-embedding-3-large (3072 dims) for higher-quality retrieval.
+# Existing ContentChunk rows embedded with the old model must be re-indexed:
+#   python manage.py ai_index_content --tenant <schema>
+# Set AI_EMBEDDING_MODEL=text-embedding-3-small in .env to keep the old model temporarily.
+AI_EMBEDDING_DIMENSIONS = int(os.environ.get("AI_EMBEDDING_DIMENSIONS", "3072"))
+AI_EMBEDDING_MODEL = os.environ.get("AI_EMBEDDING_MODEL", "text-embedding-3-large").strip()
 AI_CONTENT_CHUNK_WORDS = int(os.environ.get("AI_CONTENT_CHUNK_WORDS", "180"))
 AI_CONTENT_CHUNK_OVERLAP_WORDS = int(os.environ.get("AI_CONTENT_CHUNK_OVERLAP_WORDS", "30"))
 AI_TUTOR_TOP_K = int(os.environ.get("AI_TUTOR_TOP_K", "5"))
 AI_TUTOR_MIN_SIMILARITY = float(os.environ.get("AI_TUTOR_MIN_SIMILARITY", "0.58"))
+AI_WHISPER_MODEL = os.environ.get("AI_WHISPER_MODEL", "whisper-1")
+AI_FALLBACK_MODEL = os.environ.get("AI_FALLBACK_MODEL", "gpt-4o-mini")
 
 # AI Risk Analytics
 AI_RISK_LOOKBACK_DAYS = int(os.environ.get("AI_RISK_LOOKBACK_DAYS", "30"))

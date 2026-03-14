@@ -148,6 +148,7 @@ class AiGeneratedArtifact(models.Model):
         ("summary", "Summary"),
         ("exam_notes", "Exam Notes"),
         ("exam_paper", "Exam Paper"),
+        ("misconception_report", "Misconception Report"),
     ]
     SOURCE_TYPE_CHOICES = [
         ("lesson", "Lesson"),
@@ -155,6 +156,7 @@ class AiGeneratedArtifact(models.Model):
         ("material", "Material"),
         ("subject", "Subject"),
         ("class", "Class"),
+        ("student", "Student"),
     ]
     LANG_CHOICES = [
         ("en", "English"),
@@ -275,6 +277,8 @@ class TutorConversation(models.Model):
     Persists a multi-turn tutor chat session per student.
     Replaces localStorage-only storage so history survives across devices/sessions.
     """
+    MODE_CHOICES = [('direct', 'Direct'), ('socratic', 'Socratic')]
+
     id = models.UUIDField(primary_key=True, default=uuid_lib.uuid4, editable=False)
     tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE, db_constraint=False, related_name="tutor_conversations")
     student = models.ForeignKey('academic.Student', on_delete=models.CASCADE, related_name='tutor_conversations', null=True, blank=True)
@@ -282,6 +286,12 @@ class TutorConversation(models.Model):
     subject = models.ForeignKey('academic.Subject', on_delete=models.SET_NULL, null=True, blank=True)
     lesson = models.ForeignKey('academic.Lesson', on_delete=models.SET_NULL, null=True, blank=True)
     title = models.CharField(max_length=255, blank=True, default='')
+    preferred_mode = models.CharField(
+        max_length=16,
+        choices=MODE_CHOICES,
+        default='direct',
+        help_text="Persisted teaching mode (direct | socratic). Auto-selected if not set.",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -385,6 +395,40 @@ class AIGradingDraft(models.Model):
 
     def __str__(self):
         return f"{self.submission_id}:{self.status}:{self.score}"
+
+
+class SkillPrerequisite(models.Model):
+    """
+    Directed edge in the concept prerequisite graph.
+    skill → requires → prerequisite
+
+    Example: "Quadratic Equations" requires "Factoring Polynomials"
+    The graph is tenant-scoped via the SkillTag FKs (which are already tenant-scoped).
+    """
+    id = models.UUIDField(primary_key=True, default=uuid_lib.uuid4, editable=False)
+    skill = models.ForeignKey(
+        'SkillTag',
+        on_delete=models.CASCADE,
+        related_name='prerequisites',
+        help_text="The skill that depends on a prerequisite.",
+    )
+    prerequisite = models.ForeignKey(
+        'SkillTag',
+        on_delete=models.CASCADE,
+        related_name='dependents',
+        help_text="The skill that must be understood first.",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = [('skill', 'prerequisite')]
+        indexes = [
+            models.Index(fields=['skill'], name='ai_prereq_skill_idx'),
+            models.Index(fields=['prerequisite'], name='ai_prereq_prereq_idx'),
+        ]
+
+    def __str__(self):
+        return f"{self.skill.name} → requires → {self.prerequisite.name}"
 
 
 class AITokenBudget(models.Model):
