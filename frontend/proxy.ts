@@ -33,10 +33,12 @@ function clearAuthCookies(response: NextResponse): void {
     response.cookies.set('tenant_id', '', baseOptions);
 
     // Domain-scoped cookies (used for SaaS auth across apex/www)
-    const sharedDomain = 'manyaltech.com';
-    response.cookies.set('access_token', '', { ...baseOptions, domain: sharedDomain });
-    response.cookies.set('refresh_token', '', { ...baseOptions, domain: sharedDomain });
-    response.cookies.set('tenant_id', '', { ...baseOptions, domain: sharedDomain });
+    const sharedDomain = process.env.NEXT_PUBLIC_COOKIE_DOMAIN;
+    if (sharedDomain) {
+        response.cookies.set('access_token', '', { ...baseOptions, domain: sharedDomain });
+        response.cookies.set('refresh_token', '', { ...baseOptions, domain: sharedDomain });
+        response.cookies.set('tenant_id', '', { ...baseOptions, domain: sharedDomain });
+    }
 }
 
 function buildPublicRootResponse(request: NextRequest, requestHeaders: Headers, hostname: string): NextResponse {

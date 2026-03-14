@@ -15,6 +15,9 @@ from .utils.tenant_users import create_tenant_admin
 from django.conf import settings
 from django.core.management import call_command
 import os
+import logging
+
+logger = logging.getLogger(__name__)
 import glob
 from datetime import datetime, timedelta
 from django.utils import timezone
@@ -151,7 +154,7 @@ class TenantViewSet(viewsets.ModelViewSet):
         return TenantSerializer
 
     def perform_create(self, serializer):
-        print("Creating Tenant...")
+        logger.info("Creating Tenant...")
         from django_tenants.utils import schema_context
         from .models.tenant import Domain
         
@@ -166,7 +169,7 @@ class TenantViewSet(viewsets.ModelViewSet):
         # 2. Save Tenant (schema_name is mandatory for TenantMixin)
         # We use the subdomain as the schema name for consistency
         tenant = serializer.save(schema_name=subdomain)
-        print(f"Tenant '{tenant.name}' saved with schema '{tenant.schema_name}'")
+        logger.info("Tenant '%s' saved with schema '%s'", tenant.name, tenant.schema_name)
 
         try:
             # 3. Create Domain
@@ -180,7 +183,7 @@ class TenantViewSet(viewsets.ModelViewSet):
                 tenant=tenant,
                 is_primary=True
             )
-            print(f"Domain '{domain_url}' created for tenant.")
+            logger.info("Domain '%s' created for tenant.", domain_url)
 
             # 4. Create a default Trial Subscription for the new tenant
             try:
@@ -209,7 +212,7 @@ class TenantViewSet(viewsets.ModelViewSet):
                     reason='Initial 15-day trial assignment',
                     changed_by=getattr(self.request, 'user', None),
                 )
-                print(f"15-day trial subscription created for {tenant.name} on plan {plan.name}")
+                logger.info("15-day trial subscription created for %s on plan %s", tenant.name, plan.name)
             except Exception as sub_err:
                 raise RuntimeError(f"Failed to create trial subscription for {tenant.name}: {sub_err}")
 
@@ -218,10 +221,7 @@ class TenantViewSet(viewsets.ModelViewSet):
                 with schema_context(tenant.schema_name):
                     create_tenant_admin(tenant, admin_email, admin_pass, first, last)
                 
-                print(f"--- TENANT PROVISIONED: {tenant.name} ---")
-                print(f"URL: http://{domain_url}:3000")
-                print(f"Admin: {admin_email}")
-                print(f"----------------------------------------")
+                logger.info("Tenant provisioned: %s | domain=%s | admin=%s", tenant.name, domain_url, admin_email)
                 record_audit_event(
                     action="core.tenant_created",
                     user=getattr(self.request, "user", None),
@@ -236,12 +236,12 @@ class TenantViewSet(viewsets.ModelViewSet):
                 )
                 
         except Exception as e:
-            print(f"Provisioning failed for {subdomain}: {e}")
+            logger.error("Provisioning failed for %s: %s", subdomain, e)
             # Cleanup to avoid partial tenant setup
             try:
                 tenant.delete()
             except Exception as delete_error:
-                print(f"Failed to cleanup tenant record: {delete_error}")
+                logger.error("Failed to cleanup tenant record: %s", delete_error)
             raise e
 
     def perform_update(self, serializer):
