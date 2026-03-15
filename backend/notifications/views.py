@@ -6,6 +6,7 @@ from rest_framework import status
 from .models import Notification
 from .serializers import NotificationSerializer
 from core.async_jobs import enqueue_job
+from core.permissions import IsAdminOrStaff
 from notifications.tasks import send_notification_task
 
 User = get_user_model()
@@ -125,6 +126,11 @@ from .serializers import NotificationTemplateSerializer
 class NotificationTemplateViewSet(viewsets.ModelViewSet):
     serializer_class = NotificationTemplateSerializer
     permission_classes = [permissions.IsAuthenticated]
+
+    def get_permissions(self):
+        if self.action in ('create', 'update', 'partial_update', 'destroy'):
+            return [IsAdminOrStaff()]
+        return [permissions.IsAuthenticated()]
 
     def get_queryset(self):
         # Filter by tenant

@@ -163,16 +163,12 @@ test.describe('Student Flows', () => {
   // ── RBAC: student forbidden from admin actions ────────────────────────────
   test.describe('RBAC — student forbidden from admin actions', () => {
     test('student cannot create a class', async ({ request }) => {
-      // NOTE: AcademicClassViewSet currently only requires IsAuthenticated.
-      // Students should be forbidden from creating classes — this test documents
-      // that the RBAC needs to be tightened (tracked as known issue).
       const tokens = await loginAs(request, 'student');
       const res = await request.post(`${API_URL}/api/academic/classes/`, {
         headers: authHeaders(tokens),
         data: { name: 'Student Should Not Create', order: 997 },
       });
-      // Currently returns 201 (RBAC bug — student should not be able to create) — accept 403/401 once fixed
-      expect([201, 400, 403, 401]).toContain(res.status());
+      expect([403, 401]).toContain(res.status());
     });
 
     test('student cannot list all user accounts', async ({ request }) => {

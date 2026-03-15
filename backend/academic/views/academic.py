@@ -3,6 +3,7 @@ from django.utils.dateparse import parse_date
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
+from core.permissions import IsAdminOrStaff
 from rest_framework.response import Response
 
 from ..models import AcademicYear, AcademicClass, Section, Subject, Teacher
@@ -232,6 +233,11 @@ class AcademicClassViewSet(viewsets.ModelViewSet):
     queryset = AcademicClass.objects.prefetch_related('sections', 'subjects').all()
     serializer_class = AcademicClassSerializer
     permission_classes = [IsAuthenticated]
+
+    def get_permissions(self):
+        if self.action in ('create', 'update', 'partial_update', 'destroy'):
+            return [IsAdminOrStaff()]
+        return [IsAuthenticated()]
 
     def get_queryset(self):
         queryset = AcademicClass.objects.prefetch_related('sections', 'subjects').all()
