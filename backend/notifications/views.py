@@ -15,7 +15,17 @@ class NotificationViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
-        return Notification.objects.filter(recipient=self.request.user)
+        user = self.request.user
+        role = getattr(user, 'role', '')
+        tenant = getattr(self.request, 'tenant', None)
+        # Admins and staff can see all tenant notifications
+        if role in ('admin', 'staff', 'saas_admin') and tenant:
+            return Notification.objects.filter(tenant=tenant)
+        return Notification.objects.filter(recipient=user)
+
+    def perform_create(self, serializer):
+        tenant = getattr(self.request, 'tenant', None)
+        serializer.save(tenant=tenant)
 
     @action(detail=False, methods=['GET'])
     def unread_count(self, request):
@@ -121,3 +131,7 @@ class NotificationTemplateViewSet(viewsets.ModelViewSet):
         if hasattr(self.request, 'tenant'):
              return NotificationTemplate.objects.filter(tenant=self.request.tenant)
         return NotificationTemplate.objects.none()
+
+    def perform_create(self, serializer):
+        tenant = getattr(self.request, 'tenant', None)
+        serializer.save(tenant=tenant)

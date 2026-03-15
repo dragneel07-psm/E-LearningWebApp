@@ -158,11 +158,12 @@ test.describe('Admin CRUD — Academic', () => {
       const created = await apiPost(request, tokens, '/api/academic/events/', {
         title: 'QA Sports Day',
         description: 'Annual sports day created by QA.',
-        event_date: '2030-06-15',
+        start_date: '2030-06-15',
+        end_date: '2030-06-16',
         event_type: 'sports',
       }) as Record<string, unknown>;
       expect(created.title).toBe('QA Sports Day');
-      const id = created.id as number;
+      const id = (created.event_id ?? created.id) as string;
 
       await apiGet(request, tokens, '/api/academic/events/');
       await apiDelete(request, tokens, `/api/academic/events/${id}/`);
@@ -194,14 +195,12 @@ test.describe('Admin CRUD — Academic', () => {
       const tokens = await loginAs(request, 'admin');
 
       const created = await apiPost(request, tokens, '/api/academic/admissions/', {
-        student_name: 'QA Applicant',
-        parent_name: 'QA Parent',
-        contact_phone: '+1234567890',
-        enquiry_date: '2030-01-01',
-        status: 'pending',
+        first_name: 'QA Applicant',
+        phone_number: '+1234567890',
+        status: 'new',
       }) as Record<string, unknown>;
-      expect(created.student_name).toBe('QA Applicant');
-      const id = created.id as number;
+      expect(created.first_name).toBe('QA Applicant');
+      const id = (created.enquiry_id ?? created.id) as string;
 
       await apiGet(request, tokens, '/api/academic/admissions/');
       await apiDelete(request, tokens, `/api/academic/admissions/${id}/`);
@@ -209,19 +208,22 @@ test.describe('Admin CRUD — Academic', () => {
   });
 
   // ── Frontend Admin UI ───────────────────────────────────────────────────────
+  // Frontend tests require E2E_BASE_URL to be set (frontend dev server running)
   test.describe('Admin UI pages', () => {
     test('admin dashboard page renders', async ({ page }) => {
+      test.skip(!process.env.E2E_BASE_URL, 'Frontend not running — set E2E_BASE_URL to enable');
       const res = await page.goto(`${FRONTEND_URL}/admin`);
-      // May redirect to login — that's ok, just check no 5xx
       expect((res?.status() ?? 200)).toBeLessThan(500);
     });
 
     test('students list page renders', async ({ page }) => {
+      test.skip(!process.env.E2E_BASE_URL, 'Frontend not running — set E2E_BASE_URL to enable');
       const res = await page.goto(`${FRONTEND_URL}/admin/students`);
       expect((res?.status() ?? 200)).toBeLessThan(500);
     });
 
     test('teachers list page renders', async ({ page }) => {
+      test.skip(!process.env.E2E_BASE_URL, 'Frontend not running — set E2E_BASE_URL to enable');
       const res = await page.goto(`${FRONTEND_URL}/admin/teachers`);
       expect((res?.status() ?? 200)).toBeLessThan(500);
     });

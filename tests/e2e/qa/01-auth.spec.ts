@@ -76,12 +76,12 @@ test.describe('JWT — token refresh', () => {
   });
 });
 
-// ── /api/users/me/ ────────────────────────────────────────────────────────────
+// ── /api/users/accounts/me/ ───────────────────────────────────────────────────
 test.describe('/api/users/me/ — profile', () => {
   for (const role of ALL_ROLES) {
     test(`[${role}] /me returns correct role`, async ({ request }) => {
       const tokens = await loginAs(request, role);
-      const res = await request.get(`${API_URL}/api/users/me/`, {
+      const res = await request.get(`${API_URL}/api/users/accounts/me/`, {
         headers: authHeaders(tokens),
       });
       expect(res.status()).toBe(200);
@@ -92,7 +92,7 @@ test.describe('/api/users/me/ — profile', () => {
   }
 
   test('unauthenticated → 401', async ({ request }) => {
-    const res = await request.get(`${API_URL}/api/users/me/`, {
+    const res = await request.get(`${API_URL}/api/users/accounts/me/`, {
       headers: { 'x-tenant-id': QA_TENANT },
     });
     expect(res.status()).toBe(401);
@@ -127,14 +127,18 @@ test.describe('RBAC — admin-only endpoints', () => {
 });
 
 // ── Frontend UI pages load ────────────────────────────────────────────────────
+// These tests require the frontend dev server (port 3000) to be running.
+// Run `npm run dev` in /frontend/ before executing these tests locally.
 test.describe('Frontend — login page renders', () => {
   test('login page returns 200', async ({ page }) => {
+    test.skip(!process.env.E2E_BASE_URL, 'Frontend not running — set E2E_BASE_URL to enable');
     const res = await page.goto(`${FRONTEND_URL}/login`);
     expect(res?.status()).toBeLessThan(400);
     await expect(page.locator('form, input[type="email"], input[type="text"]').first()).toBeVisible({ timeout: 10000 });
   });
 
   test('unauthenticated / redirects to login or school page', async ({ page }) => {
+    test.skip(!process.env.E2E_BASE_URL, 'Frontend not running — set E2E_BASE_URL to enable');
     const res = await page.goto(`${FRONTEND_URL}/`);
     expect(res?.status()).toBeLessThan(400);
   });

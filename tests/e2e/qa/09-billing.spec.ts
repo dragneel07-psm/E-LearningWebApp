@@ -87,7 +87,7 @@ test.describe('Billing CRUD', () => {
       const created = await apiPost(request, tokens, '/api/billing/school/expenses/', {
         title: 'QA Office Supplies',
         amount: 500.00,
-        category: 'stationery',
+        category: 'supplies',
         date: new Date().toISOString().split('T')[0],
         description: 'QA test expense entry.',
       }) as Record<string, unknown>;

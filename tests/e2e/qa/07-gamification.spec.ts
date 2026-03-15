@@ -20,43 +20,25 @@ import {
 test.describe('Gamification CRUD', () => {
 
   // ── Admin: Badge CRUD ─────────────────────────────────────────────────────
+  // NOTE: /api/gamification/available-badges/ is a ReadOnlyModelViewSet.
+  // Badges are seeded via setup_qa_tenant management command.
   test.describe('Admin — Badge CRUD', () => {
     let badgeId: string;
 
-    test('create badge', async ({ request }) => {
+    test('list all badges (seeded via setup_qa_tenant)', async ({ request }) => {
       const tokens = await loginAs(request, 'admin');
-      const created = await apiPost(request, tokens, '/api/gamification/available-badges/', {
-        name: 'QA Gold Star',
-        description: 'Awarded by QA for excellent performance.',
-        icon_name: 'star',
-        criteria_type: 'perfect_score',
-        criteria_value: 1,
-        xp_reward: 200,
-      }) as Record<string, unknown>;
-      expect(created.name).toBe('QA Gold Star');
-      badgeId = created.id as string;
-    });
-
-    test('list all badges', async ({ request }) => {
-      const tokens = await loginAs(request, 'admin');
-      const body = await apiGet(request, tokens, '/api/gamification/available-badges/');
+      const body = await apiGet(request, tokens, '/api/gamification/available-badges/') as Record<string, unknown>;
       expect(body).toBeTruthy();
+      const results = Array.isArray(body) ? body : (body.results as unknown[]) ?? [];
+      expect(results.length).toBeGreaterThan(0);
+      badgeId = (results[0] as Record<string, unknown>).id as string;
     });
 
-    test('update badge', async ({ request }) => {
+    test('read single badge', async ({ request }) => {
       if (!badgeId) test.skip();
       const tokens = await loginAs(request, 'admin');
-      const updated = await apiPatch(request, tokens, `/api/gamification/available-badges/${badgeId}/`, {
-        xp_reward: 250,
-        description: 'QA updated badge description.',
-      }) as Record<string, unknown>;
-      expect(updated.xp_reward).toBe(250);
-    });
-
-    test('delete badge', async ({ request }) => {
-      if (!badgeId) test.skip();
-      const tokens = await loginAs(request, 'admin');
-      await apiDelete(request, tokens, `/api/gamification/available-badges/${badgeId}/`);
+      const body = await apiGet(request, tokens, `/api/gamification/available-badges/${badgeId}/`) as Record<string, unknown>;
+      expect(body).toHaveProperty('name');
     });
   });
 

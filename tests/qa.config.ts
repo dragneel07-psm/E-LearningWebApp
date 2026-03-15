@@ -17,7 +17,7 @@ const API_URL  = process.env.E2E_API_URL  || 'http://127.0.0.1:8000';
 const BASE_URL = process.env.E2E_BASE_URL || 'http://127.0.0.1:3000';
 
 export default defineConfig({
-  testDir: './tests/e2e/qa',
+  testDir: './e2e/qa',
 
   /* Run tests sequentially in QA to avoid token-cache race conditions */
   fullyParallel: false,

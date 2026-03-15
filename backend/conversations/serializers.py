@@ -9,7 +9,7 @@ class UserShortSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = ['id', 'email', 'full_name', 'role']
+        fields = ['user_id', 'email', 'full_name', 'role']
 
     def get_full_name(self, obj):
         return obj.get_full_name()

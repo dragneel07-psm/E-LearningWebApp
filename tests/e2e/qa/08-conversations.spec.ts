@@ -24,7 +24,7 @@ test.describe('Conversations CRUD', () => {
 
       // Get student user_id
       const studentTokens = await loginAs(request, 'student');
-      const meRes = await request.get(`${API_URL}/api/users/me/`, {
+      const meRes = await request.get(`${API_URL}/api/users/accounts/me/`, {
         headers: authHeaders(studentTokens),
       });
       const studentUser = await meRes.json() as Record<string, unknown>;

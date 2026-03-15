@@ -55,7 +55,7 @@ test.describe('API Health — All Modules', () => {
     const h = authHeaders(tokens);
 
     await checkEndpoint(request, h, 'GET', '/api/users/accounts/');
-    await checkEndpoint(request, h, 'GET', '/api/users/me/');
+    await checkEndpoint(request, h, 'GET', '/api/users/accounts/me/');
     await checkEndpoint(request, h, 'GET', '/api/users/groups/');
   });
 
@@ -180,7 +180,7 @@ test.describe('API Health — All Modules', () => {
     const h = authHeaders(tokens);
 
     const studentEndpoints = [
-      '/api/users/me/',
+      '/api/users/accounts/me/',
       '/api/academic/subjects/',
       '/api/academic/lessons/',
       '/api/academic/assessments/',

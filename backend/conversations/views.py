@@ -20,7 +20,18 @@ class ConversationViewSet(viewsets.ModelViewSet):
         ).distinct()
 
     def perform_create(self, serializer):
-        serializer.save(tenant=self.request.tenant)
+        conversation = serializer.save(tenant=self.request.tenant)
+        # Auto-add the creator as a participant
+        ConversationParticipant.objects.get_or_create(
+            conversation=conversation,
+            user=self.request.user,
+        )
+        # Add any participants passed in the request
+        for uid in self.request.data.get('participants', []):
+            ConversationParticipant.objects.get_or_create(
+                conversation=conversation,
+                user_id=uid,
+            )
 
     @action(detail=True, methods=['post'])
     def mark_as_read(self, request, pk=None):
@@ -124,7 +135,7 @@ class MessageViewSet(viewsets.ModelViewSet):
         if not ConversationParticipant.objects.filter(conversation_id=conversation_id, user=self.request.user).exists():
             raise permissions.exceptions.PermissionDenied("You are not a participant in this conversation.")
         
-        message = serializer.save(sender=self.request.user, tenant=self.request.tenant)
+        message = serializer.save(sender=self.request.user)
         
         # Trigger AI Response (Phase 3)
         handle_ai_response(conversation_id, message.content, self.request.user)

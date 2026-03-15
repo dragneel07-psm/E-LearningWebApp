@@ -14,7 +14,7 @@ Outputs a JSON block with all credentials and IDs used by Playwright QA tests.
 import json
 import random
 import string
-from datetime import date, timedelta
+from datetime import date, timedelta, datetime
 
 from django.core.management.base import BaseCommand
 from django.db import connection
@@ -62,12 +62,16 @@ class Command(BaseCommand):
         context = {}
 
         with schema_context(schema):
+            # Mirror QA users into the tenant schema so cross-schema FK checks pass.
+            # (Tenant migrations create an empty users_useraccount; FKs without
+            #  db_constraint=False check against it, not the public copy.)
+            self._mirror_users_in_tenant_schema(users)
             context.update(self._setup_academic(tenant, users))
             context.update(self._setup_library())
             context.update(self._setup_notifications(tenant, users))
             context.update(self._setup_gamification(tenant, users))
             context.update(self._setup_conversations(tenant, users))
-            context.update(self._setup_billing(users))
+            context.update(self._setup_billing(users, tenant=tenant))
 
         output = {
             'schema':  schema,
@@ -89,14 +93,19 @@ class Command(BaseCommand):
 
     def _drop_tenant(self, schema):
         self.stdout.write(self.style.WARNING(f'Dropping tenant schema={schema}...'))
-        try:
-            tenant = Tenant.objects.get(schema_name=schema)
-            tenant.delete()  # django-tenants drops the schema on delete
-            self.stdout.write(self.style.WARNING('  ✓ Dropped'))
-        except Tenant.DoesNotExist:
-            self.stdout.write('  (not found, skipping)')
-        # Also remove any leftover users
-        UserAccount.objects.filter(email__endswith='@qa.test').delete()
+        with connection.cursor() as cursor:
+            # 1. Drop the PostgreSQL schema (removes all tenant tables)
+            cursor.execute(f'DROP SCHEMA IF EXISTS "{schema}" CASCADE')
+            # 2. Delete Domain rows (FK to Tenant) via raw SQL
+            cursor.execute(
+                "DELETE FROM core_domain WHERE tenant_id IN "
+                "(SELECT id FROM core_tenant WHERE schema_name = %s)", [schema]
+            )
+            # 3. Delete Tenant row
+            cursor.execute("DELETE FROM core_tenant WHERE schema_name = %s", [schema])
+            # 4. Delete QA users (avoids ORM cascade into dropped schema)
+            cursor.execute("DELETE FROM users_useraccount WHERE email LIKE '%%@qa.test'")
+        self.stdout.write(self.style.WARNING('  ✓ Schema and records dropped'))
 
     def _ensure_tenant(self, schema):
         tenant, created = Tenant.objects.get_or_create(
@@ -116,6 +125,11 @@ class Command(BaseCommand):
         )
         if created:
             self.stdout.write(self.style.SUCCESS(f'  ✓ Tenant created: {tenant.name} (schema={schema})'))
+            # Apply tenant-specific migrations to newly created schema
+            self.stdout.write('  Running tenant migrations...')
+            from django.core.management import call_command
+            call_command('migrate_schemas', '--tenant', '--schema', schema, verbosity=0)
+            self.stdout.write('  ✓ Migrations applied')
         else:
             self.stdout.write(f'  ✓ Tenant exists: {tenant.name}')
         return tenant
@@ -143,6 +157,38 @@ class Command(BaseCommand):
             users[key] = user
         self.stdout.write(self.style.SUCCESS(f'  ✓ Users: {len(users)}'))
         return users
+
+    # ── Mirror users into tenant schema ────────────────────────────────────────
+
+    def _mirror_users_in_tenant_schema(self, users):
+        """
+        Copies QA user rows into the tenant-schema users_useraccount table.
+        Required because tenant migrations create an empty users table, and
+        models with hard FKs (no db_constraint=False) check that table, not public.
+
+        IMPORTANT: tenant_id must be copied so that _resolved_tenant() in
+        users/serializers.py returns the tenant object (not None) during login,
+        which happens in the qa-schema context.
+        """
+        from users.models import UserAccount
+        for user in users.values():
+            obj, created = UserAccount.objects.get_or_create(
+                user_id=user.user_id,
+                defaults={
+                    'username':    user.username,
+                    'email':       user.email,
+                    'first_name':  user.first_name,
+                    'last_name':   user.last_name,
+                    'role':        user.role,
+                    'is_active':   True,
+                    'password':    user.password,
+                    'tenant_id':   user.tenant_id,
+                },
+            )
+            if not created and obj.tenant_id != user.tenant_id:
+                obj.tenant_id = user.tenant_id
+                obj.save(update_fields=['tenant_id'])
+        self.stdout.write(self.style.SUCCESS(f'  ✓ Mirrored {len(users)} users into tenant schema'))
 
     # ── Academic ───────────────────────────────────────────────────────────────
 
@@ -192,14 +238,23 @@ class Command(BaseCommand):
             lessons.append(lesson)
 
         # Student profiles
-        student_profile,  _ = Student.objects.get_or_create(
-            user=users['student'],
-            defaults={'academic_class': cls, 'section': section},
-        )
-        student_profile2, _ = Student.objects.get_or_create(
-            user=users['student2'],
-            defaults={'academic_class': cls, 'section': section},
-        )
+        # Disconnect auto-sync signals during seeding to avoid cross-schema FK issues
+        from django.db.models.signals import post_save, pre_save
+        from academic.signals import sync_student_groups, track_section_change
+        post_save.disconnect(sync_student_groups, sender=Student)
+        pre_save.disconnect(track_section_change, sender=Student)
+        try:
+            student_profile,  _ = Student.objects.get_or_create(
+                user=users['student'],
+                defaults={'academic_class': cls, 'section': section},
+            )
+            student_profile2, _ = Student.objects.get_or_create(
+                user=users['student2'],
+                defaults={'academic_class': cls, 'section': section},
+            )
+        finally:
+            post_save.connect(sync_student_groups, sender=Student)
+            pre_save.connect(track_section_change, sender=Student)
 
         # Assessment
         assessment, _ = Assessment.objects.get_or_create(
@@ -207,7 +262,7 @@ class Command(BaseCommand):
             defaults={
                 'type': 'quiz', 'total_marks': 100,
                 'section': section, 'academic_year': year,
-                'due_date': date.today() + timedelta(days=7),
+                'due_date': datetime.now() + timedelta(days=7),
             },
         )
 
@@ -215,13 +270,12 @@ class Command(BaseCommand):
         for sp in [student_profile, student_profile2]:
             Result.objects.get_or_create(
                 assessment=assessment, student=sp,
-                defaults={'obtained_marks': random.randint(60, 100)},
+                defaults={'score': random.randint(60, 100)},
             )
 
         # Parent
         parent_profile, _ = Parent.objects.get_or_create(
             user=users['parent'],
-            defaults={'phone_number': '+9771234567890'},
         )
         parent_profile.students.add(student_profile)
 
@@ -312,13 +366,19 @@ class Command(BaseCommand):
             },
         )
 
-        profile, _ = GamificationProfile.objects.get_or_create(
-            user=users['student'],
-            defaults={'tenant': tenant, 'total_xp': 100, 'current_streak': 3},
-        )
+        from academic.models import Student
+        try:
+            student_obj = Student.objects.get(user=users['student'])
+            profile, _ = GamificationProfile.objects.get_or_create(
+                student=student_obj,
+                defaults={'tenant': tenant, 'total_xp': 100, 'current_streak': 3},
+            )
+            profile_id = str(profile.id)
+        except Student.DoesNotExist:
+            profile_id = None
 
-        self.stdout.write(self.style.SUCCESS(f'  ✓ Gamification: 1 badge, 1 profile'))
-        return {'badge_id': str(badge.id), 'gamification_profile_id': str(profile.id) if hasattr(profile, 'id') else profile.pk}
+        self.stdout.write(self.style.SUCCESS(f'  ✓ Gamification: 1 badge, profile created'))
+        return {'badge_id': str(badge.id), 'gamification_profile_id': profile_id}
 
     # ── Conversations ──────────────────────────────────────────────────────────
 
@@ -333,28 +393,29 @@ class Command(BaseCommand):
         for user in [users['teacher'], users['student']]:
             ConversationParticipant.objects.get_or_create(conversation=conv, user=user)
 
-        msg, _ = Message.objects.get_or_create(
-            conversation=conv, sender=users['teacher'],
-            content='Hello from QA teacher!',
-            defaults={'is_system_message': False},
-        )
+        if not Message.objects.filter(conversation=conv, sender=users['teacher']).exists():
+            Message.objects.create(
+                conversation=conv,
+                sender=users['teacher'],
+                content='Hello from QA teacher!',
+                is_system_message=False,
+            )
 
         self.stdout.write(self.style.SUCCESS(f'  ✓ Conversations: 1 conversation, 1 message'))
         return {'conversation_id': str(conv.conversation_id)}
 
     # ── Billing ────────────────────────────────────────────────────────────────
 
-    def _setup_billing(self, users):
+    def _setup_billing(self, users, tenant=None):
         try:
-            from billing_school.models import FeeStructure, StudentFee
+            from billing.models_school import FeeStructure, StudentFee
 
             fee_structure, _ = FeeStructure.objects.get_or_create(
                 name='QA Tuition Fee',
+                tenant=tenant,
                 defaults={
                     'amount': 5000.00,
                     'frequency': 'monthly',
-                    'description': 'QA test fee structure',
-                    'is_active': True,
                 },
             )
 
@@ -363,7 +424,7 @@ class Command(BaseCommand):
             try:
                 student = Student.objects.get(user=users['student'])
                 StudentFee.objects.get_or_create(
-                    student=student, fee_structure=fee_structure,
+                    student=student, fee_structure=fee_structure, tenant=tenant,
                     defaults={'amount_due': 5000.00, 'due_date': date.today() + timedelta(days=30)},
                 )
             except Student.DoesNotExist:
