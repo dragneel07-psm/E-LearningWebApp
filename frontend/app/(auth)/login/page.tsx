@@ -3,9 +3,9 @@
 import Link from 'next/link';
 import { User, GraduationCap, ShieldCheck, ArrowRight, Building2 } from 'lucide-react';
 import { motion } from 'framer-motion';
-import { getLoginPortalContext } from '@/lib/tenant';
 import { useTenantIdentity } from '@/hooks/use-tenant-identity';
 
+// Tenant login roles — SaaS admin has its own dedicated page at /saas-login
 const roles = [
     {
         id: 'admin',
@@ -32,36 +32,14 @@ const roles = [
         icon: GraduationCap,
         href: '/login/student',
         color: 'from-blue-500 to-cyan-500',
-        hover: 'hover:shadow-blue-500/20 hover:border-blue-500/50',
-    },
-    {
-        id: 'saas',
-        title: 'Platform System Admin',
-        description: 'Global SaaS network management',
-        icon: ShieldCheck,
-        href: '/login/saas',
-        color: 'from-violet-500 to-fuchsia-500',
-        hover: 'hover:shadow-violet-500/20 hover:border-violet-500/50',
+        hover: 'hover:shadow-cyan-500/20 hover:border-cyan-500/50',
     },
 ];
 
 export const dynamic = 'force-dynamic';
 
 export default function LoginPortalPage() {
-    const portalContext = getLoginPortalContext(
-        typeof window !== 'undefined' ? window.location.hostname : 'localhost'
-    );
     const { tenantName, tenantSchema, isTenantContext } = useTenantIdentity();
-
-    const visibleRoles = roles.filter((role) => {
-        if (portalContext === 'public') {
-            return role.id === 'saas';
-        }
-        if (portalContext === 'tenant') {
-            return role.id !== 'saas';
-        }
-        return true;
-    });
 
     return (
         <div className="relative flex items-center justify-center min-h-screen overflow-hidden bg-[#0a0a0c] p-4">
@@ -69,7 +47,14 @@ export default function LoginPortalPage() {
             <div className="absolute inset-0 w-full h-full overflow-hidden">
                 <div className="absolute top-[20%] left-[20%] w-[40%] h-[40%] bg-purple-600/10 rounded-full blur-[100px] animate-pulse" />
                 <div className="absolute bottom-[20%] right-[20%] w-[40%] h-[40%] bg-blue-600/10 rounded-full blur-[100px] animate-pulse" />
-                <div className="absolute inset-0 bg-[url('/grid.svg')] bg-center [mask-image:linear-gradient(180deg,white,rgba(255,255,255,0))]" style={{ backgroundImage: 'linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px)', backgroundSize: '50px 50px' }}></div>
+                <div
+                    className="absolute inset-0 bg-center [mask-image:linear-gradient(180deg,white,rgba(255,255,255,0))]"
+                    style={{
+                        backgroundImage:
+                            'linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px)',
+                        backgroundSize: '50px 50px',
+                    }}
+                />
             </div>
 
             <div className="relative z-10 w-full max-w-4xl">
@@ -80,7 +65,7 @@ export default function LoginPortalPage() {
                     <p className="text-slate-400 text-lg max-w-lg mx-auto">
                         Choose your account type to securely sign in to your dashboard
                     </p>
-                    {portalContext === 'tenant' && isTenantContext && (
+                    {isTenantContext && (
                         <div className="inline-flex items-center gap-2 rounded-full border border-cyan-400/30 bg-cyan-500/10 px-4 py-2 text-sm text-cyan-100">
                             <Building2 className="h-4 w-4" />
                             <span>
@@ -90,8 +75,8 @@ export default function LoginPortalPage() {
                     )}
                 </div>
 
-                <div className={`grid grid-cols-1 gap-6 ${visibleRoles.length === 4 ? 'md:grid-cols-2 lg:grid-cols-4' : visibleRoles.length > 1 ? 'md:grid-cols-2 lg:grid-cols-3' : 'max-w-sm mx-auto'}`}>
-                    {visibleRoles.map((role, index) => (
+                <div className={`grid grid-cols-1 gap-6 ${roles.length > 1 ? 'md:grid-cols-2 lg:grid-cols-3' : 'max-w-sm mx-auto'}`}>
+                    {roles.map((role, index) => (
                         <motion.div
                             key={role.id}
                             initial={{ opacity: 0, y: 20 }}
@@ -125,7 +110,10 @@ export default function LoginPortalPage() {
 
                 <div className="mt-12 text-center">
                     <p className="text-slate-500 text-sm">
-                        Need assistance? <a href="#" className="text-slate-400 hover:text-white transition-colors underline underline-offset-4">Contact IT Support</a>
+                        Need assistance?{' '}
+                        <a href="#" className="text-slate-400 hover:text-white transition-colors underline underline-offset-4">
+                            Contact IT Support
+                        </a>
                     </p>
                 </div>
             </div>

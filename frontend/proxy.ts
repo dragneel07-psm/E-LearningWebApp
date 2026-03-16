@@ -12,6 +12,7 @@ interface UserPayload {
 
 const PUBLIC_PATHS = [
     '/login',
+    '/saas-login',
     '/register',
     '/verify-email',
     '/public',
@@ -126,7 +127,7 @@ export async function proxy(request: NextRequest) {
 
     // 2. Auth Handling
     const token = getLatestAccessToken(request);
-    const isAuthPage = pathname.startsWith('/login') || pathname.startsWith('/register');
+    const isAuthPage = pathname.startsWith('/login') || pathname.startsWith('/saas-login') || pathname.startsWith('/register');
 
     // Allow access to public paths
     if (pathname === '/' || PUBLIC_PATHS.some(path => pathname.startsWith(path))) {
