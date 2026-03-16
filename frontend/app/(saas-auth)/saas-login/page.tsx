@@ -1,7 +1,7 @@
 'use client';
 
 import { Suspense } from 'react';
-import { LoginForm } from '@/components/auth/login-form';
+import { SaasLoginForm } from '@/components/auth/saas-login-form';
 
 export default function SaasLoginPage() {
     return (
@@ -9,8 +9,6 @@ export default function SaasLoginPage() {
             {/* SaaS-specific Ambient Background Effects */}
             <div className="absolute inset-0 w-full h-full overflow-hidden">
                 <div className="absolute top-[-20%] left-[50%] transform -translate-x-1/2 w-[60%] h-[60%] bg-indigo-600/10 rounded-full blur-[120px] animate-pulse" />
-
-                {/* Tech Grid Pattern */}
                 <div
                     className="absolute inset-0 bg-center [mask-image:linear-gradient(180deg,white,rgba(255,255,255,0))]"
                     style={{
@@ -23,11 +21,7 @@ export default function SaasLoginPage() {
 
             <Suspense fallback={<div className="text-indigo-400 animate-pulse font-mono">Initializing System Core...</div>}>
                 <div className="w-full flex justify-center px-4 sm:px-6 relative z-10">
-                    <LoginForm
-                        role="saas_admin"
-                        title="SaaS Master Control"
-                        subtitle="Authorized Personnel Only"
-                    />
+                    <SaasLoginForm />
                 </div>
             </Suspense>
         </div>

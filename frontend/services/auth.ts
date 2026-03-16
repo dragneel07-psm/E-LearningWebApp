@@ -32,14 +32,18 @@ function setTenantCookie(tenantId: string) {
 }
 
 export const authService = {
-    async login(credentials: LoginCredentials) {
+    async login(credentials: LoginCredentials & { totp_code?: string }) {
         // Pull school_code out — it's a header, not a POST body field
-        const { school_code, ...body } = credentials;
-        const normalizedBody = {
+        const { school_code, totp_code, ...body } = credentials;
+        const normalizedBody: Record<string, string> = {
             ...body,
             email: body.email?.trim().toLowerCase(),
             password: body.password,
         };
+        // Include TOTP code in body when provided (required for saas_admin 2FA)
+        if (totp_code) {
+            normalizedBody.totp_code = totp_code;
+        }
 
         // Determine tenant: explicit school_code > subdomain detection > 'public'
         const tenantId = school_code?.trim() ||

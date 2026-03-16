@@ -207,10 +207,54 @@ from .serializers import MyTokenObtainPairSerializer
 class CustomTokenObtainPairView(TokenObtainPairView):
     """
     Login view that returns JWT tokens with custom claims (role, etc.)
-    POST /api/auth/login/
+    POST /api/users/login/
+
+    For saas_admin accounts this view adds a 2FA pre-flight check before
+    invoking the full serializer, so the frontend can guide the user through
+    the setup or TOTP entry flow without leaking sensitive error details.
     """
     serializer_class = MyTokenObtainPairSerializer
     throttle_classes = [LoginRateThrottle]
+
+    def post(self, request, *args, **kwargs):
+        email = (request.data.get("email") or "").strip().lower()
+        password = request.data.get("password", "")
+        totp_code = (request.data.get("totp_code") or "").strip()
+
+        if email:
+            try:
+                user = UserAccount.objects.get(email__iexact=email, role="saas_admin")
+                # Only intercept when password is correct; let serializer handle bad creds.
+                if user.check_password(password):
+                    if not user.is_active:
+                        # Let the serializer surface the "not verified" message.
+                        pass
+                    elif not user.is_2fa_enabled:
+                        return Response(
+                            {
+                                "two_factor_required": True,
+                                "action": "setup_2fa",
+                                "message": (
+                                    "Your account requires 2FA. "
+                                    "Please set up your authenticator app."
+                                ),
+                            },
+                            status=status.HTTP_200_OK,
+                        )
+                    elif not totp_code:
+                        return Response(
+                            {
+                                "two_factor_required": True,
+                                "action": "enter_totp",
+                                "message": "Please enter your 6-digit authenticator code.",
+                            },
+                            status=status.HTTP_200_OK,
+                        )
+                    # Has 2FA enabled + totp_code supplied → fall through to serializer
+            except UserAccount.DoesNotExist:
+                pass  # Not a saas_admin — proceed with normal serializer validation
+
+        return super().post(request, *args, **kwargs)
 
 
 class CustomTokenRefreshView(TokenRefreshView):
@@ -299,3 +343,143 @@ class EmailVerificationView(views.APIView):
                 status=status.HTTP_200_OK,
             )
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+# ── SaaS Admin 2FA Views ──────────────────────────────────────────────────────
+
+def _saas_admin_from_credentials(email: str, password: str):
+    """
+    Validate email + password for a saas_admin account.
+    Returns the UserAccount or raises Response-ready error details.
+    """
+    _CRED_ERR = {"error": "Invalid credentials."}
+    try:
+        user = UserAccount.objects.get(email__iexact=email.strip().lower(), role="saas_admin")
+    except UserAccount.DoesNotExist:
+        return None, _CRED_ERR
+    if not user.check_password(password):
+        return None, _CRED_ERR
+    if not user.is_active:
+        return None, {"error": "Account not yet verified. Check your email."}
+    return user, None
+
+
+class TwoFactorSetupView(views.APIView):
+    """
+    Generate a TOTP secret for a saas_admin who hasn't set up 2FA yet.
+    Requires re-authentication (email + password in body — no JWT needed).
+    Returns {secret, qr_uri} so the admin can scan with Google Authenticator / Authy.
+    The secret is saved as *pending* (is_2fa_enabled stays False until /activate/).
+
+    POST /api/users/2fa/setup/
+    Body: { email, password }
+    """
+    permission_classes = [permissions.AllowAny]
+    throttle_classes = [LoginRateThrottle]
+
+    def post(self, request):
+        import pyotp
+        email = request.data.get("email", "")
+        password = request.data.get("password", "")
+
+        user, err = _saas_admin_from_credentials(email, password)
+        if err:
+            return Response(err, status=status.HTTP_403_FORBIDDEN)
+
+        # Generate a new TOTP secret and store it (pending activation)
+        secret = pyotp.random_base32()
+        totp = pyotp.TOTP(secret)
+        issuer = getattr(settings, "TOTP_ISSUER_NAME", "E-Learning Platform")
+        qr_uri = totp.provisioning_uri(name=user.email, issuer_name=issuer)
+
+        user.two_factor_secret = secret
+        user.save(update_fields=["two_factor_secret"])
+
+        return Response(
+            {
+                "secret": secret,
+                "qr_uri": qr_uri,
+                "instructions": (
+                    "Scan the QR code (or enter the secret) in your authenticator app, "
+                    "then call /api/users/2fa/activate/ with a valid TOTP code to complete setup."
+                ),
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
+class TwoFactorActivateView(views.APIView):
+    """
+    Activate TOTP 2FA for a saas_admin account.
+    Verifies the TOTP code against the pending secret from /setup/.
+    On success, enables 2FA and returns a full JWT pair.
+
+    POST /api/users/2fa/activate/
+    Body: { email, password, totp_code }
+    """
+    permission_classes = [permissions.AllowAny]
+    throttle_classes = [LoginRateThrottle]
+
+    def post(self, request):
+        import pyotp
+        from rest_framework_simplejwt.tokens import RefreshToken as _RT
+        from .token_policy import role_token_lifetimes
+
+        email = request.data.get("email", "")
+        password = request.data.get("password", "")
+        totp_code = (request.data.get("totp_code") or "").strip()
+
+        user, err = _saas_admin_from_credentials(email, password)
+        if err:
+            return Response(err, status=status.HTTP_403_FORBIDDEN)
+
+        if not user.two_factor_secret:
+            return Response(
+                {"error": "No pending 2FA secret found. Call /api/users/2fa/setup/ first."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if not totp_code:
+            return Response(
+                {"error": "totp_code is required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        totp = pyotp.TOTP(user.two_factor_secret)
+        if not totp.verify(totp_code, valid_window=1):
+            return Response(
+                {"error": "Invalid or expired TOTP code. Please try again."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Activate 2FA
+        user.is_2fa_enabled = True
+        user.save(update_fields=["is_2fa_enabled"])
+
+        # Issue JWT tokens with role-scoped lifetimes
+        refresh = _RT.for_user(user)
+        lifetimes = role_token_lifetimes(user.role)
+        refresh.set_exp(lifetime=lifetimes.refresh)
+        access = refresh.access_token
+        access.set_exp(lifetime=lifetimes.access)
+
+        record_audit_event(
+            action="users.2fa_activated",
+            user=user,
+            request=request,
+            details={"email": user.email},
+        )
+
+        return Response(
+            {
+                "message": "2FA successfully activated.",
+                "access": str(access),
+                "refresh": str(refresh),
+                "user": {
+                    "user_id": str(user.user_id),
+                    "email": user.email,
+                    "role": user.role,
+                },
+            },
+            status=status.HTTP_200_OK,
+        )

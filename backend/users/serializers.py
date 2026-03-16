@@ -104,10 +104,42 @@ def _apply_role_token_lifetimes(data: dict, *, user) -> dict:
     return data
 
 
+def _get_client_ip(request) -> str:
+    """Extract real client IP, respecting X-Forwarded-For from trusted proxies."""
+    if request is None:
+        return ""
+    xff = request.META.get("HTTP_X_FORWARDED_FOR", "")
+    if xff:
+        return xff.split(",")[0].strip()
+    return request.META.get("REMOTE_ADDR", "")
+
+
+def _check_saas_admin_ip(request) -> None:
+    """Raise AuthenticationFailed if caller IP is not in the SaaS admin allowlist."""
+    allowed = getattr(settings, "SAAS_ADMIN_ALLOWED_IPS", [])
+    if not allowed:
+        return  # empty list = no restriction (dev/staging)
+    client_ip = _get_client_ip(request)
+    if client_ip not in allowed:
+        raise AuthenticationFailed("Access denied: login from this IP is not permitted.")
+
+
+def _verify_totp(user, totp_code: str) -> bool:
+    import pyotp
+    secret = getattr(user, "two_factor_secret", "") or ""
+    if not secret:
+        return False
+    totp = pyotp.TOTP(secret)
+    return totp.verify(totp_code, valid_window=1)
+
+
 class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
     # Tell SimpleJWT to use 'email' as the login field
     # (matches UserAccount.USERNAME_FIELD = 'email')
     username_field = 'email'
+
+    # Optional TOTP field — required for saas_admin when 2FA is enabled
+    totp_code = serializers.CharField(required=False, write_only=True, allow_blank=True, default="")
 
     @classmethod
     def get_token(cls, user):
@@ -141,6 +173,41 @@ class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
             raise e
 
         _ensure_valid_login_tenant(self.user)
+
+        # ── SaaS admin extra security ──────────────────────────────────────
+        if getattr(self.user, "role", "") == "saas_admin":
+            request = self.context.get("request")
+
+            # 1. IP allowlist
+            _check_saas_admin_ip(request)
+
+            # 2. Enforce TOTP (must have 2FA enabled and supply a valid code)
+            if not getattr(self.user, "is_2fa_enabled", False):
+                raise AuthenticationFailed(
+                    "2FA is not yet set up for this account. "
+                    "Please set up your authenticator app before signing in."
+                )
+            totp_code = (attrs.get("totp_code") or "").strip()
+            if not totp_code:
+                raise AuthenticationFailed("TOTP code is required for SaaS admin login.")
+            if not _verify_totp(self.user, totp_code):
+                raise AuthenticationFailed("Invalid or expired TOTP code.")
+
+            # 3. Async login alert email (fire-and-forget, never block login)
+            try:
+                import threading
+                from .emailing import send_saas_admin_login_alert
+                ip = _get_client_ip(request)
+                ua = (request.META.get("HTTP_USER_AGENT", "") if request else "")
+                threading.Thread(
+                    target=send_saas_admin_login_alert,
+                    kwargs={"user": self.user, "ip_address": ip, "user_agent": ua},
+                    daemon=True,
+                ).start()
+            except Exception:
+                pass  # alert failure must never break login
+        # ──────────────────────────────────────────────────────────────────
+
         data = _apply_role_token_lifetimes(data, user=self.user)
 
         # Attach the user profile to every login response
@@ -257,9 +324,17 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
         return attrs
     
     def create(self, validated_data):
-        """Create SaaS Admin user with hashed password"""
+        """Blocked — SaaS admin accounts must be provisioned via the CLI."""
+        raise serializers.ValidationError(
+            "Public registration is disabled. "
+            "SaaS admin accounts must be created by a platform operator "
+            "using the 'create_saas_admin' management command."
+        )
+
+    def _create_blocked(self, validated_data):
+        """Kept for reference only — not called."""
         validated_data.pop('password_confirm')
-        
+
         # PUBLIC REGISTRATION IS FOR SAAS ADMINS ONLY
         role = 'saas_admin'
         

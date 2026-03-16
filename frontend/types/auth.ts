@@ -45,6 +45,10 @@ export interface LoginResponse {
         last_name: string;
         role: string;
     };
+    // SaaS admin 2FA pre-flight fields (no tokens returned in these cases)
+    two_factor_required?: boolean;
+    action?: 'setup_2fa' | 'enter_totp';
+    message?: string;
 }
 
 export interface ChangePasswordData {

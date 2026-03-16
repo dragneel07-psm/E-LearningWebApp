@@ -383,7 +383,8 @@ JWT_ROLE_TOKEN_LIFETIMES = {
     # High-risk roles get shorter lifetimes.
     "saas_admin": {
         "access": timedelta(minutes=int(os.environ.get("JWT_ACCESS_MINUTES_SAAS_ADMIN", "15"))),
-        "refresh": timedelta(days=int(os.environ.get("JWT_REFRESH_DAYS_SAAS_ADMIN", "1"))),
+        # Session-scoped: 8-hour workday maximum; configure via JWT_REFRESH_HOURS_SAAS_ADMIN
+        "refresh": timedelta(hours=int(os.environ.get("JWT_REFRESH_HOURS_SAAS_ADMIN", "8"))),
     },
     "admin": {
         "access": timedelta(minutes=int(os.environ.get("JWT_ACCESS_MINUTES_ADMIN", "20"))),
@@ -408,6 +409,18 @@ JWT_ROLE_TOKEN_LIFETIMES = {
 }
 
 JWT_STRICT_REFRESH_ROTATION = os.environ.get("JWT_STRICT_REFRESH_ROTATION", "true").lower() == "true"
+
+# SaaS Admin IP Allowlist — comma-separated CIDRs/IPs.
+# Empty = allow all (dev default). Set in production to restrict SaaS admin login
+# to known office/VPN IPs. Example: "203.0.113.10,10.0.0.0/8"
+SAAS_ADMIN_ALLOWED_IPS: list[str] = [
+    ip.strip()
+    for ip in os.environ.get("SAAS_ADMIN_ALLOWED_IPS", "").split(",")
+    if ip.strip()
+]
+
+# TOTP issuer name shown in authenticator apps
+TOTP_ISSUER_NAME = os.environ.get("TOTP_ISSUER_NAME", "E-Learning Platform")
 
 # Email configuration
 # Uses console backend in DEBUG by default, SMTP in production.

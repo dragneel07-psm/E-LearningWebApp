@@ -153,6 +153,36 @@ def send_saas_admin_registration_email(user: UserAccount) -> None:
     logger.info("SaaS admin registration email sent", extra={"email": _user_email(user)})
 
 
+def send_saas_admin_login_alert(user: UserAccount, *, ip_address: str, user_agent: str) -> None:
+    """Send an email alert to a SaaS admin when a new login occurs."""
+    from datetime import datetime, timezone as dt_timezone
+    login_time = datetime.now(dt_timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+    login_url = f"{resolve_frontend_url_for_tenant(None)}/saas-login"
+    subject = "Security Alert: New SaaS Admin Login"
+    message = (
+        f"Hello {_user_first_name(user) or 'there'},\n\n"
+        "A new login to your SaaS Admin account was just recorded:\n\n"
+        f"  Time:       {login_time}\n"
+        f"  IP Address: {ip_address}\n"
+        f"  Device:     {user_agent[:120] or 'Unknown'}\n\n"
+        "If this was you, no action is needed.\n"
+        "If you did NOT initiate this login, change your password and revoke access immediately:\n"
+        f"{login_url}\n\n"
+        "Regards,\nE-Learning Platform Security Team"
+    )
+    send_mail(
+        subject=subject,
+        message=message,
+        from_email=getattr(settings, "DEFAULT_FROM_EMAIL", "noreply@example.com"),
+        recipient_list=[_user_email(user)],
+        fail_silently=True,
+    )
+    logger.info(
+        "SaaS admin login alert sent",
+        extra={"email": _user_email(user), "ip": ip_address},
+    )
+
+
 def send_tenant_account_created_email(user: UserAccount, *, tenant: Tenant) -> None:
     tenant_base = resolve_frontend_url_for_tenant(tenant)
     login_url = f"{tenant_base}/login"

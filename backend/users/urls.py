@@ -1,9 +1,10 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from .views import (
-    UserAccountViewSet, GroupViewSet, PermissionViewSet, 
+    UserAccountViewSet, GroupViewSet, PermissionViewSet,
     AdminPasswordResetView, register_user, CustomTokenObtainPairView, CustomTokenRefreshView,
-    PasswordResetView, PasswordResetConfirmView, EmailVerificationView
+    PasswordResetView, PasswordResetConfirmView, EmailVerificationView,
+    TwoFactorSetupView, TwoFactorActivateView,
 )
 
 router = DefaultRouter()
@@ -20,4 +21,7 @@ urlpatterns = [
     path('password-reset/', PasswordResetView.as_view(), name='password_reset'),
     path('password-reset-confirm/', PasswordResetConfirmView.as_view(), name='password_reset_confirm'),
     path('verify-email/', EmailVerificationView.as_view(), name='verify_email'),
+    # SaaS Admin 2FA — re-auth with email+password (no JWT required)
+    path('2fa/setup/', TwoFactorSetupView.as_view(), name='2fa_setup'),
+    path('2fa/activate/', TwoFactorActivateView.as_view(), name='2fa_activate'),
 ]
