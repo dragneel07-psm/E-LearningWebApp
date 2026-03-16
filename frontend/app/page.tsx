@@ -214,7 +214,7 @@ export default function SaaSLandingPage() {
                     </div>
 
                     <div className="flex items-center gap-3">
-                        <Link href="/login" className="hidden sm:block text-sm font-medium px-4 py-2 rounded-full transition-all hover:text-amber-300" style={{ color: S.muted }}>Sign In</Link>
+                        <Link href="/saas-login" className="hidden sm:block text-sm font-medium px-4 py-2 rounded-full transition-all hover:text-amber-300" style={{ color: S.muted }}>Sign In</Link>
                         <Link href="/register">
                             <button className="px-5 py-2 rounded-full text-sm font-bold transition-all hover:brightness-110" style={{ background: 'linear-gradient(135deg,#d4a34c,#b07a28)', color: '#0c0a08', boxShadow: '0 4px 24px rgba(212,163,76,0.25)' }}>
                                 Start Free →
@@ -718,10 +718,10 @@ export default function SaaSLandingPage() {
                                     Deploy Instantly →
                                 </button>
                             </Link>
-                            <Link href="/login">
+                            <Link href="/saas-login">
                                 <button className="px-10 py-5 rounded-full text-lg font-medium transition-all hover:brightness-110"
                                     style={{ background: 'rgba(212,163,76,0.06)', border: `1px solid rgba(212,163,76,0.2)`, color: S.cream }}>
-                                    Speak to Sales
+                                    Admin Sign In
                                 </button>
                             </Link>
                         </div>

@@ -269,11 +269,11 @@ export function LoginForm({ role, title, subtitle }: LoginFormProps) {
 
                 <div className="py-5 px-8 bg-white/5 border-t border-white/5 flex items-center justify-center space-x-1">
                     <p className="text-xs text-slate-500">
-                        Don&apos;t have an account?
+                        Need help?{' '}
+                        <a href="#" className="text-slate-400 hover:text-white transition-colors">
+                            Contact your administrator
+                        </a>
                     </p>
-                    <Link href="/register" className="text-xs text-white hover:underline font-medium">
-                        Create an account
-                    </Link>
                 </div>
             </div>
             <p className="text-center mt-8 text-slate-500 text-sm">

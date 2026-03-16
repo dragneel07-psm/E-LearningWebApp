@@ -37,7 +37,7 @@ export default function SaasLayout({
                             lastName="Admin"
                             roleLabel="SaaS Admin"
                             settingsHref="/saas/settings"
-                            logoutHref="/login/saas"
+                            logoutHref="/saas-login"
                             showName={false}
                         />
                     </div>
