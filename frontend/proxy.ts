@@ -14,6 +14,7 @@ const PUBLIC_PATHS = [
     '/login',
     '/saas-login',
     '/register',
+    '/contact',
     '/verify-email',
     '/public',
     '/forgot-password',
