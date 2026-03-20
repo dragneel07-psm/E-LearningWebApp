@@ -1,3 +1,6 @@
+# Copyright (c) 2024-2026 Pramod Singh Manyal. All rights reserved.
+# Unauthorized copying, modification, or distribution of this file,
+# via any medium, is strictly prohibited. Proprietary and confidential.
 from django.conf import settings
 from ai_engine.services.tutor_service import ai_tutor_service
 from .models import Message, Conversation, ConversationParticipant

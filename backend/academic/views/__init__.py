@@ -1,3 +1,6 @@
+# Copyright (c) 2024-2026 Pramod Singh Manyal. All rights reserved.
+# Unauthorized copying, modification, or distribution of this file,
+# via any medium, is strictly prohibited. Proprietary and confidential.
 from .academic import AcademicYearViewSet, AcademicClassViewSet, SectionViewSet, SubjectViewSet
 from .profiles import TeacherViewSet, StudentViewSet, ParentViewSet, ParentTeacherMeetingViewSet
 from .lesson import ChapterViewSet, LessonViewSet, LessonMaterialViewSet

@@ -1,3 +1,6 @@
+# Copyright (c) 2024-2026 Pramod Singh Manyal. All rights reserved.
+# Unauthorized copying, modification, or distribution of this file,
+# via any medium, is strictly prohibited. Proprietary and confidential.
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from .models import UserAccount

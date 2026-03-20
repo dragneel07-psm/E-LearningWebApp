@@ -1,3 +1,6 @@
+// Copyright (c) 2024-2026 Pramod Singh Manyal. All rights reserved.
+// Unauthorized copying, modification, or distribution of this file,
+// via any medium, is strictly prohibited. Proprietary and confidential.
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";

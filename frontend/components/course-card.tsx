@@ -1,3 +1,6 @@
+// Copyright (c) 2024-2026 Pramod Singh Manyal. All rights reserved.
+// Unauthorized copying, modification, or distribution of this file,
+// via any medium, is strictly prohibited. Proprietary and confidential.
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { BookOpen } from 'lucide-react';

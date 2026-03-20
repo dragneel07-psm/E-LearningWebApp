@@ -1,3 +1,6 @@
+# Copyright (c) 2024-2026 Pramod Singh Manyal. All rights reserved.
+# Unauthorized copying, modification, or distribution of this file,
+# via any medium, is strictly prohibited. Proprietary and confidential.
 from academic.models import Student, Course, Assessment, Result, AcademicClass
 from datetime import timedelta
 from django.utils import timezone

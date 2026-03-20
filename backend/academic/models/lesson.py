@@ -1,3 +1,6 @@
+# Copyright (c) 2024-2026 Pramod Singh Manyal. All rights reserved.
+# Unauthorized copying, modification, or distribution of this file,
+# via any medium, is strictly prohibited. Proprietary and confidential.
 from django.db import models
 from .subject import Subject
 from core.utils.storage_paths import schema_from_current_connection, tenant_scoped_upload_path

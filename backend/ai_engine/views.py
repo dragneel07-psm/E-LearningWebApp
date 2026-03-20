@@ -1,3 +1,6 @@
+# Copyright (c) 2024-2026 Pramod Singh Manyal. All rights reserved.
+# Unauthorized copying, modification, or distribution of this file,
+# via any medium, is strictly prohibited. Proprietary and confidential.
 # Forced reload - V2
 from rest_framework import viewsets, status, permissions
 from rest_framework.decorators import action, api_view, permission_classes, throttle_classes

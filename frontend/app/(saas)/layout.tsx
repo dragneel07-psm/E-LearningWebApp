@@ -1,3 +1,6 @@
+// Copyright (c) 2024-2026 Pramod Singh Manyal. All rights reserved.
+// Unauthorized copying, modification, or distribution of this file,
+// via any medium, is strictly prohibited. Proprietary and confidential.
 import { SaasSidebar } from '@/components/saas/sidebar';
 import { Bell, Search } from 'lucide-react';
 import { Input } from '@/components/ui/input';

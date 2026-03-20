@@ -1,3 +1,6 @@
+# Copyright (c) 2024-2026 Pramod Singh Manyal. All rights reserved.
+# Unauthorized copying, modification, or distribution of this file,
+# via any medium, is strictly prohibited. Proprietary and confidential.
 from django.core.management.base import BaseCommand
 from academic.models import Student
 from ai_engine.services.reporting_service import ReportingService

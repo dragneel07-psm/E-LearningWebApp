@@ -1,3 +1,6 @@
+// Copyright (c) 2024-2026 Pramod Singh Manyal. All rights reserved.
+// Unauthorized copying, modification, or distribution of this file,
+// via any medium, is strictly prohibited. Proprietary and confidential.
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { FileText, Users, GraduationCap, BarChart } from 'lucide-react';

@@ -1,3 +1,6 @@
+# Copyright (c) 2024-2026 Pramod Singh Manyal. All rights reserved.
+# Unauthorized copying, modification, or distribution of this file,
+# via any medium, is strictly prohibited. Proprietary and confidential.
 """
 Django management command to seed the database with dummy data for testing.
 This creates realistic sample data including tenants, users, courses, lessons, and assessments.

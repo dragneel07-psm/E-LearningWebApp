@@ -1,3 +1,6 @@
+# Copyright (c) 2024-2026 Pramod Singh Manyal. All rights reserved.
+# Unauthorized copying, modification, or distribution of this file,
+# via any medium, is strictly prohibited. Proprietary and confidential.
 from rest_framework import viewsets, permissions, status, views
 from rest_framework.decorators import action, throttle_classes
 from rest_framework.response import Response

@@ -1,3 +1,6 @@
+# Copyright (c) 2024-2026 Pramod Singh Manyal. All rights reserved.
+# Unauthorized copying, modification, or distribution of this file,
+# via any medium, is strictly prohibited. Proprietary and confidential.
 from django.contrib.auth import get_user_model
 from django.contrib.auth.tokens import default_token_generator
 from django.test import TestCase
