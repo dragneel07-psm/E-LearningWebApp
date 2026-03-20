@@ -127,7 +127,7 @@ export function SaasSidebar() {
                         // Clear auth token
                         removeTokens();
                         // Redirect to SaaS Login
-                        window.location.href = '/login/saas';
+                        window.location.href = '/saas-login';
                     }}
                 >
                     <LogOut className="h-5 w-5 mr-3" />

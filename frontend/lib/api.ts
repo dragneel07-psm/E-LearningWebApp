@@ -1585,8 +1585,11 @@ export async function apiRequest<T>(
             if (response.status === 401 && !skipAuthRedirectOn401) {
                 if (typeof window !== 'undefined') {
                     removeTokens();
-                    if (!window.location.pathname.startsWith('/login')) {
-                        window.location.href = '/login?expired=true';
+                    const { pathname, hostname } = window.location;
+                    const onAuthPage = pathname.startsWith('/login') || pathname.startsWith('/saas-login');
+                    if (!onAuthPage) {
+                        const isSaasDomain = hostname === 'manyaltech.com' || hostname === 'www.manyaltech.com';
+                        window.location.href = isSaasDomain ? '/saas-login?expired=true' : '/login?expired=true';
                     }
                 }
             }
