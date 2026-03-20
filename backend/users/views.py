@@ -216,19 +216,41 @@ class CustomTokenObtainPairView(TokenObtainPairView):
     serializer_class = MyTokenObtainPairSerializer
     throttle_classes = [LoginRateThrottle]
 
+    # Max failed attempts before lockout; lockout duration in minutes.
+    _MAX_ATTEMPTS = 5
+    _LOCKOUT_MINUTES = 15
+
     def post(self, request, *args, **kwargs):
+        from django.utils import timezone
+        from datetime import timedelta
+
         email = (request.data.get("email") or "").strip().lower()
         password = request.data.get("password", "")
         totp_code = (request.data.get("totp_code") or "").strip()
 
+        # ── Lockout & 2FA pre-flight (only when email is provided) ───────────
         if email:
             try:
-                user = UserAccount.objects.get(email__iexact=email, role="saas_admin")
-                # Only intercept when password is correct; let serializer handle bad creds.
-                if user.check_password(password):
+                user = UserAccount.objects.get(email__iexact=email)
+
+                # Enforce account lockout before attempting auth
+                if user.locked_until and user.locked_until > timezone.now():
+                    wait = int((user.locked_until - timezone.now()).total_seconds() / 60) + 1
+                    return Response(
+                        {
+                            "code": "account_locked",
+                            "message": (
+                                f"Account temporarily locked due to too many failed login attempts. "
+                                f"Try again in {wait} minute(s)."
+                            ),
+                        },
+                        status=status.HTTP_429_TOO_MANY_REQUESTS,
+                    )
+
+                # 2FA pre-flight for saas_admin only
+                if user.role == "saas_admin" and user.check_password(password):
                     if not user.is_active:
-                        # Let the serializer surface the "not verified" message.
-                        pass
+                        pass  # Let serializer surface "not verified"
                     elif not user.is_2fa_enabled:
                         return Response(
                             {
@@ -250,11 +272,57 @@ class CustomTokenObtainPairView(TokenObtainPairView):
                             },
                             status=status.HTTP_200_OK,
                         )
-                    # Has 2FA enabled + totp_code supplied → fall through to serializer
             except UserAccount.DoesNotExist:
-                pass  # Not a saas_admin — proceed with normal serializer validation
+                pass  # Unknown email — let serializer handle
 
-        return super().post(request, *args, **kwargs)
+        # ── Delegate to DRF SimpleJWT serializer ─────────────────────────────
+        try:
+            response = super().post(request, *args, **kwargs)
+        except Exception:
+            # Serializer raised an exception (e.g. AuthenticationFailed).
+            # Increment failure counter on the account if it exists.
+            self._record_failed_attempt(email)
+            raise
+
+        # On HTTP 4xx from serializer (auth failure), record attempt.
+        if response.status_code in (400, 401):
+            self._record_failed_attempt(email)
+        else:
+            # Successful login — reset failure counter.
+            self._reset_attempts(email)
+
+        return response
+
+    def _record_failed_attempt(self, email: str) -> None:
+        from django.utils import timezone
+        from datetime import timedelta
+
+        if not email:
+            return
+        try:
+            user = UserAccount.objects.get(email__iexact=email)
+            user.failed_login_attempts += 1
+            if user.failed_login_attempts >= self._MAX_ATTEMPTS:
+                user.locked_until = timezone.now() + timedelta(minutes=self._LOCKOUT_MINUTES)
+                logger.warning(
+                    "Account locked after repeated failed login attempts",
+                    extra={"email": email, "attempts": user.failed_login_attempts},
+                )
+            user.save(update_fields=["failed_login_attempts", "locked_until"])
+        except UserAccount.DoesNotExist:
+            pass
+
+    def _reset_attempts(self, email: str) -> None:
+        if not email:
+            return
+        try:
+            user = UserAccount.objects.get(email__iexact=email)
+            if user.failed_login_attempts > 0 or user.locked_until:
+                user.failed_login_attempts = 0
+                user.locked_until = None
+                user.save(update_fields=["failed_login_attempts", "locked_until"])
+        except UserAccount.DoesNotExist:
+            pass
 
 
 class CustomTokenRefreshView(TokenRefreshView):

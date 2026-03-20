@@ -5,8 +5,8 @@ and assessment activity for the admin analytics dashboard.
 """
 from datetime import date, timedelta
 
-from django.db.models import Avg, Count, F, FloatField, Q, Sum
-from django.db.models.functions import TruncDate, TruncMonth, TruncWeek
+from django.db.models import Avg, Case, Count, F, FloatField, IntegerField, Q, Sum, When
+from django.db.models.functions import TruncMonth
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -32,7 +32,7 @@ class SchoolAnalyticsDashboardView(APIView):
 
         since = date.today() - timedelta(days=days)
 
-        # ── Attendance trends ────────────────────────────────────────────────
+        # ── Attendance trends ─────────────────────────────────────────────────
         att_qs = Attendance.objects.filter(date__gte=since)
         if tenant:
             att_qs = att_qs.filter(student__user__tenant=tenant)
@@ -62,7 +62,7 @@ class SchoolAnalyticsDashboardView(APIView):
             for row in daily_att
         ]
 
-        # ── Overall attendance rate ──────────────────────────────────────────
+        # ── Overall attendance rate ───────────────────────────────────────────
         totals = att_qs.aggregate(
             present=Count('id', filter=Q(status='present')),
             total=Count('id'),
@@ -72,37 +72,68 @@ class SchoolAnalyticsDashboardView(APIView):
             if totals['total'] else 0
         )
 
-        # ── Grade / score distribution ───────────────────────────────────────
+        # ── Grade / score distribution (DB-level bucketing) ──────────────────
         result_qs = Result.objects.filter(is_published=True)
         if tenant:
             result_qs = result_qs.filter(student__user__tenant=tenant)
         if class_id:
             result_qs = result_qs.filter(student__academic_class_id=class_id)
 
-        buckets = {'A (90-100)': 0, 'B (75-89)': 0, 'C (60-74)': 0, 'D (40-59)': 0, 'F (<40)': 0}
-        for r in result_qs.values('score', 'total_marks'):
-            if r['total_marks'] and r['total_marks'] > 0:
-                pct = (r['score'] / r['total_marks']) * 100
-                if pct >= 90:
-                    buckets['A (90-100)'] += 1
-                elif pct >= 75:
-                    buckets['B (75-89)'] += 1
-                elif pct >= 60:
-                    buckets['C (60-74)'] += 1
-                elif pct >= 40:
-                    buckets['D (40-59)'] += 1
-                else:
-                    buckets['F (<40)'] += 1
-
-        grade_distribution = [{'grade': k, 'count': v} for k, v in buckets.items()]
-
-        # ── Pass / fail rate ─────────────────────────────────────────────────
-        total_results = result_qs.count()
-        pass_count = sum(
-            1 for r in result_qs.values('score', 'total_marks')
-            if r['total_marks'] and (r['score'] / r['total_marks']) >= 0.4
+        # Compute percentage in DB and bucket with Case/When — avoids Python loop.
+        grade_counts = result_qs.filter(
+            assessment__total_marks__gt=0
+        ).aggregate(
+            grade_a=Count(Case(
+                When(score__gte=F('assessment__total_marks') * 0.90, then=1),
+                output_field=IntegerField(),
+            )),
+            grade_b=Count(Case(
+                When(
+                    score__gte=F('assessment__total_marks') * 0.75,
+                    score__lt=F('assessment__total_marks') * 0.90,
+                    then=1,
+                ),
+                output_field=IntegerField(),
+            )),
+            grade_c=Count(Case(
+                When(
+                    score__gte=F('assessment__total_marks') * 0.60,
+                    score__lt=F('assessment__total_marks') * 0.75,
+                    then=1,
+                ),
+                output_field=IntegerField(),
+            )),
+            grade_d=Count(Case(
+                When(
+                    score__gte=F('assessment__total_marks') * 0.40,
+                    score__lt=F('assessment__total_marks') * 0.60,
+                    then=1,
+                ),
+                output_field=IntegerField(),
+            )),
+            grade_f=Count(Case(
+                When(score__lt=F('assessment__total_marks') * 0.40, then=1),
+                output_field=IntegerField(),
+            )),
         )
-        pass_rate = round(pass_count / total_results * 100, 1) if total_results else 0
+        grade_distribution = [
+            {'grade': 'A (90-100)', 'count': grade_counts['grade_a']},
+            {'grade': 'B (75-89)',  'count': grade_counts['grade_b']},
+            {'grade': 'C (60-74)',  'count': grade_counts['grade_c']},
+            {'grade': 'D (40-59)',  'count': grade_counts['grade_d']},
+            {'grade': 'F (<40)',    'count': grade_counts['grade_f']},
+        ]
+
+        # ── Pass / fail rate (single DB query) ───────────────────────────────
+        pf = result_qs.filter(assessment__total_marks__gt=0).aggregate(
+            total=Count('result_id'),
+            passed=Count(Case(
+                When(score__gte=F('assessment__total_marks') * 0.40, then=1),
+                output_field=IntegerField(),
+            )),
+        )
+        total_results = pf['total']
+        pass_rate = round(pf['passed'] / total_results * 100, 1) if total_results else 0
 
         # ── Subject performance (avg score %) ────────────────────────────────
         subject_perf_qs = (
@@ -111,7 +142,7 @@ class SchoolAnalyticsDashboardView(APIView):
             .values(subject_name=F('assessment__subject__name'))
             .annotate(
                 avg_score=Avg('score'),
-                avg_total=Avg('total_marks'),
+                avg_total=Avg('assessment__total_marks'),
                 result_count=Count('result_id'),
             )
             .order_by('-avg_score')[:10]
@@ -126,14 +157,14 @@ class SchoolAnalyticsDashboardView(APIView):
             for row in subject_perf_qs
         ]
 
-        # ── Class performance (avg score %) ─────────────────────────────────
+        # ── Class performance (avg score %) ──────────────────────────────────
         class_perf_qs = (
             result_qs
             .filter(student__academic_class__isnull=False)
             .values(class_name=F('student__academic_class__name'))
             .annotate(
                 avg_score=Avg('score'),
-                avg_total=Avg('total_marks'),
+                avg_total=Avg('assessment__total_marks'),
                 student_count=Count('student_id', distinct=True),
             )
             .order_by('-avg_score')[:10]
@@ -151,9 +182,11 @@ class SchoolAnalyticsDashboardView(APIView):
         # ── Assessment activity (assessments published per month) ─────────────
         assess_qs = Assessment.objects.filter(is_published=True)
         if tenant:
+            # Filter by tenant through the subject → class chain
             assess_qs = assess_qs.filter(
-                Q(academic_class__isnull=True) | Q(academic_class__isnull=False)
-            )
+                Q(subject__academic_class__students__user__tenant=tenant)
+                | Q(section__students__user__tenant=tenant)
+            ).distinct()
         monthly_assess = (
             assess_qs
             .annotate(month=TruncMonth('created_at'))
@@ -170,11 +203,11 @@ class SchoolAnalyticsDashboardView(APIView):
             for row in monthly_assess
         ]
 
-        # ── Top performing students ──────────────────────────────────────────
+        # ── Top performing students ───────────────────────────────────────────
         top_students_qs = (
             result_qs
             .values(student_id=F('student__student_id'), student_name=F('student__user__first_name'))
-            .annotate(avg_score=Avg('score'), avg_total=Avg('total_marks'), result_count=Count('result_id'))
+            .annotate(avg_score=Avg('score'), avg_total=Avg('assessment__total_marks'), result_count=Count('result_id'))
             .filter(result_count__gte=2)
             .order_by('-avg_score')[:5]
         )
@@ -188,18 +221,23 @@ class SchoolAnalyticsDashboardView(APIView):
             for row in top_students_qs
         ]
 
-        # ── School totals snapshot ───────────────────────────────────────────
-        student_count = Student.objects.count()
-        teacher_count = Teacher.objects.count()
-        class_count = AcademicClass.objects.count()
-        subject_count = Subject.objects.count()
+        # ── School totals snapshot (tenant-scoped) ────────────────────────────
+        student_qs = Student.objects.all()
+        teacher_qs = Teacher.objects.all()
+        class_qs = AcademicClass.objects.all()
+        subject_qs = Subject.objects.all()
+        if tenant:
+            student_qs = student_qs.filter(user__tenant=tenant)
+            teacher_qs = teacher_qs.filter(user__tenant=tenant)
+            class_qs = class_qs.filter(students__user__tenant=tenant).distinct()
+            subject_qs = subject_qs.filter(academic_class__students__user__tenant=tenant).distinct()
 
         return Response({
             'snapshot': {
-                'students': student_count,
-                'teachers': teacher_count,
-                'classes': class_count,
-                'subjects': subject_count,
+                'students': student_qs.count(),
+                'teachers': teacher_qs.count(),
+                'classes': class_qs.count(),
+                'subjects': subject_qs.count(),
                 'overall_attendance_rate': overall_attendance_rate,
                 'pass_rate': pass_rate,
                 'total_results': total_results,

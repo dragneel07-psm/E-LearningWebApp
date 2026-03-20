@@ -40,6 +40,10 @@ class UserAccount(AbstractUser):
     is_2fa_enabled = models.BooleanField(default=False)
     two_factor_secret = models.CharField(max_length=255, blank=True, null=True)
 
+    # Login lockout tracking
+    failed_login_attempts = models.PositiveIntegerField(default=0)
+    locked_until = models.DateTimeField(null=True, blank=True)
+
     # Use email as the login field
     email = models.EmailField(unique=True)
     first_name = models.CharField(max_length=150, db_index=True)

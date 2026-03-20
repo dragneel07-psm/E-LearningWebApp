@@ -2,10 +2,18 @@
 AI Tutor Service
 Handles AI-powered tutoring conversations using OpenAI
 """
+import logging
 import os
 from typing import Dict, List
 from openai import OpenAI
 from .provider_config import get_ai_provider_config
+from core.circuit_breaker import CircuitBreaker, CircuitOpenError
+
+logger = logging.getLogger(__name__)
+
+# One circuit breaker shared across all AITutorService instances.
+# Opens after 5 consecutive API errors; retries after 60 s.
+_openai_breaker = CircuitBreaker(failure_threshold=5, recovery_timeout=60.0, name="openai_tutor")
 
 class AITutorService:
     def __init__(self):
@@ -97,53 +105,62 @@ class AITutorService:
                 'reason': 'fallback',
             }
         
-        try:
-            # Build system prompt with context
-            system_prompt = self._build_system_prompt(student_context)
-            
-            # Build messages for OpenAI
-            messages = [{"role": "system", "content": system_prompt}]
-            
-            # Add conversation history
-            if conversation_history:
-                for item in conversation_history:
-                    if not isinstance(item, dict):
-                        continue
-                    role = (item.get("role") or "").strip().lower()
-                    content = item.get("content")
-                    if role == "ai":
-                        role = "assistant"
-                    if role not in {"user", "assistant", "system"}:
-                        continue
-                    if not isinstance(content, str) or not content.strip():
-                        continue
-                    messages.append({"role": role, "content": content})
-            
-            # Add current message
-            messages.append({"role": "user", "content": message})
-            
-            # Call OpenAI
-            response = self.client.chat.completions.create(
+        # Build messages list
+        system_prompt = self._build_system_prompt(student_context)
+        messages = [{"role": "system", "content": system_prompt}]
+        if conversation_history:
+            for item in conversation_history:
+                if not isinstance(item, dict):
+                    continue
+                role = (item.get("role") or "").strip().lower()
+                content = item.get("content")
+                if role == "ai":
+                    role = "assistant"
+                if role not in {"user", "assistant", "system"}:
+                    continue
+                if not isinstance(content, str) or not content.strip():
+                    continue
+                messages.append({"role": role, "content": content})
+        messages.append({"role": "user", "content": message})
+
+        def _do_call():
+            return self.client.chat.completions.create(
                 model=self.model,
                 messages=messages,
                 max_tokens=500,
-                temperature=0.7
+                temperature=0.7,
             )
-            
+
+        try:
+            response = _openai_breaker.call(_do_call)
             return {
                 'response': response.choices[0].message.content,
                 'tokens_used': response.usage.total_tokens,
-                'is_demo': False
+                'is_demo': False,
             }
-            
+        except CircuitOpenError as e:
+            logger.warning(
+                "OpenAI circuit open — returning demo response",
+                extra={"circuit": "openai_tutor", "reason": str(e)},
+            )
+            return {
+                'response': self._get_demo_response(message),
+                'tokens_used': 0,
+                'is_demo': True,
+                'error': str(e),
+                'reason': 'circuit_open',
+            }
         except Exception as e:
-            # Fallback response on provider errors
             error_text = str(e)
-            if 'connection' in error_text.lower() or 'timed out' in error_text.lower():
-                print(
-                    f"AI Tutor provider connection error | provider={config.get('provider_name')} "
-                    f"base_url={config.get('base_url')} model={self.model} error={error_text}"
-                )
+            logger.error(
+                "AI Tutor provider error",
+                extra={
+                    "provider": config.get('provider_name'),
+                    "base_url": config.get('base_url'),
+                    "model": self.model,
+                    "error": error_text,
+                },
+            )
             return {
                 'response': f"I'm having trouble connecting right now. Here is a fallback explanation: {self._get_demo_response(message)}",
                 'tokens_used': 0,
@@ -301,7 +318,7 @@ Let's work through this together!"""
             return insights[:3] # Ensure at most 3 insights
 
         except Exception as e:
-            print(f"AI Teacher Insight Error: {e}")
+            logger.error("AI teacher insights error", extra={"error": str(e)})
             return ["Analysis inhibited by service interruption. Please check student risk reports manually."]
 
 # Singleton instance
