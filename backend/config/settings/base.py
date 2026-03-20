@@ -633,18 +633,14 @@ LOGGING = {
         },
     },
     "formatters": {
-        "structured": {
-            "format": (
-                "%(asctime)s level=%(levelname)s logger=%(name)s "
-                "trace_id=%(request_id)s tenant_schema=%(tenant_schema)s tenant_id=%(tenant_id)s "
-                "message=%(message)s"
-            ),
+        "json": {
+            "()": "core.logging_context.JsonFormatter",
         },
     },
     "handlers": {
         "console": {
             "class": "logging.StreamHandler",
-            "formatter": "structured",
+            "formatter": "json",
             "filters": ["request_context"],
         },
     },
