@@ -138,7 +138,15 @@ export async function proxy(request: NextRequest) {
         if (pathname === '/' && !token) {
             return buildPublicRootResponse(request, requestHeaders, hostname);
         }
-        // Always allow /login and /register to render; avoid server-side auth loops.
+        // Route login pages to the correct portal based on host:
+        //   /login      → tenant portals only (redirect to /saas-login on SaaS domain)
+        //   /saas-login → SaaS domain only   (redirect to /login on tenant hosts)
+        if (pathname.startsWith('/login') && !isTenantHost(hostname)) {
+            return NextResponse.redirect(new URL('/saas-login', request.url));
+        }
+        if (pathname.startsWith('/saas-login') && isTenantHost(hostname)) {
+            return NextResponse.redirect(new URL('/login', request.url));
+        }
         if (isAuthPage) {
             return NextResponse.next({ request: { headers: requestHeaders } });
         }
