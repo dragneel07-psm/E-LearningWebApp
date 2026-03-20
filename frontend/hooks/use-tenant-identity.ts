@@ -11,6 +11,8 @@ type TenantIdentity = {
     tenantSchema: string | null;
     isTenantContext: boolean;
     isLoading: boolean;
+    /** true = school exists in DB; false = 404 returned (school not provisioned); null = check not done yet */
+    tenantExists: boolean | null;
 };
 
 type TenantCheckResponse = {
@@ -32,6 +34,7 @@ export function useTenantIdentity(): TenantIdentity {
     const [tenantName, setTenantName] = useState<string | null>(null);
     const [tenantSchema, setTenantSchema] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState(false);
+    const [tenantExists, setTenantExists] = useState<boolean | null>(null);
 
     const tenantSubdomain = useMemo(() => {
         if (typeof window === 'undefined') return null;
@@ -69,11 +72,19 @@ export function useTenantIdentity(): TenantIdentity {
                     signal: controller.signal,
                 });
 
-                if (!response.ok) return;
+                if (!response.ok) {
+                    // 404 means the school subdomain is not provisioned in the DB
+                    if (response.status === 404) setTenantExists(false);
+                    return;
+                }
 
                 const payload = (await response.json()) as TenantCheckResponse;
-                if (!payload?.exists) return;
+                if (!payload?.exists) {
+                    setTenantExists(false);
+                    return;
+                }
 
+                setTenantExists(true);
                 const resolvedName = (payload.name || '').trim();
                 const resolvedSchema = (payload.schema_name || '').trim().toLowerCase();
 
@@ -90,7 +101,7 @@ export function useTenantIdentity(): TenantIdentity {
                     }
                 }
             } catch {
-                // Keep derived/cached tenant label when tenant-check endpoint is unavailable.
+                // Network error — don't mark as not-found, keep derived/cached state.
             } finally {
                 setIsLoading(false);
             }
@@ -101,5 +112,5 @@ export function useTenantIdentity(): TenantIdentity {
         return () => controller.abort();
     }, [isTenantContext, tenantSubdomain]);
 
-    return { tenantName, tenantSchema, isTenantContext, isLoading };
+    return { tenantName, tenantSchema, isTenantContext, isLoading, tenantExists };
 }

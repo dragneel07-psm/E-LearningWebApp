@@ -31,7 +31,7 @@ export function LoginForm({ role, title, subtitle }: LoginFormProps) {
     const searchParams = useSearchParams();
     const redirectPath = searchParams.get('redirect');
     const [isLoading, setIsLoading] = useState(false);
-    const { tenantName, tenantSchema, isTenantContext, isLoading: isTenantLoading } = useTenantIdentity();
+    const { tenantName, tenantSchema, isTenantContext, isLoading: isTenantLoading, tenantExists } = useTenantIdentity();
 
     const schema = z.object({
         email: z.string().email("Please enter a valid email address"),
@@ -177,13 +177,23 @@ export function LoginForm({ role, title, subtitle }: LoginFormProps) {
                             {subtitle || 'Sign in to access your account'}
                         </p>
                         {role !== 'saas_admin' && isTenantContext && (
-                            <div className="inline-flex items-center gap-2 rounded-full border border-cyan-400/30 bg-cyan-500/10 px-4 py-2 text-xs text-cyan-100">
-                                <Building2 className="h-4 w-4" />
-                                <span>
-                                    Tenant: <strong>{tenantName || tenantSchema || 'Unknown'}</strong>
-                                    {isTenantLoading ? ' ...' : ''}
-                                </span>
-                            </div>
+                            tenantExists === false ? (
+                                <div className="inline-flex items-center gap-2 rounded-full border border-red-500/40 bg-red-500/10 px-4 py-2 text-xs text-red-300">
+                                    <Building2 className="h-4 w-4 text-red-400" />
+                                    <span>
+                                        School <strong>&quot;{tenantSchema}&quot;</strong> is not registered.
+                                        Contact your platform administrator.
+                                    </span>
+                                </div>
+                            ) : (
+                                <div className="inline-flex items-center gap-2 rounded-full border border-cyan-400/30 bg-cyan-500/10 px-4 py-2 text-xs text-cyan-100">
+                                    <Building2 className="h-4 w-4" />
+                                    <span>
+                                        Tenant: <strong>{tenantName || tenantSchema || 'Unknown'}</strong>
+                                        {isTenantLoading ? ' ...' : ''}
+                                    </span>
+                                </div>
+                            )
                         )}
                     </div>
 
@@ -257,7 +267,7 @@ export function LoginForm({ role, title, subtitle }: LoginFormProps) {
                         <Button
                             className={`w-full h-12 text-white font-bold rounded-xl transition-all duration-300 shadow-lg hover:scale-[1.01] active:scale-[0.99] ${getButtonClass()}`}
                             type="submit"
-                            disabled={isLoading}
+                            disabled={isLoading || (isTenantContext && tenantExists === false)}
                         >
                             {isLoading ? (
                                 <Loader2 className="mr-2 h-5 w-5 animate-spin" />
