@@ -19,6 +19,27 @@ const S = {
     dim: '#5c5246',
 };
 
+// ── Static style constants (avoid recreating objects on every render) ─────────
+const SIZE_ACTIVE_STYLE = {
+    background: 'linear-gradient(135deg,#d4a34c,#a07030)',
+    color: '#0c0a08',
+} as const;
+const SIZE_INACTIVE_STYLE = {
+    background: 'rgba(212,163,76,0.06)',
+    border: `1px solid rgba(212,163,76,0.15)`,
+    color: '#9d8e7a',
+} as const;
+const INTEREST_ACTIVE_STYLE = {
+    background: 'rgba(212,163,76,0.12)',
+    border: `1.5px solid rgba(212,163,76,0.5)`,
+    color: '#f5e6c8',
+} as const;
+const INTEREST_INACTIVE_STYLE = {
+    background: 'rgba(255,255,255,0.02)',
+    border: `1px solid rgba(212,163,76,0.15)`,
+    color: '#9d8e7a',
+} as const;
+
 const institutionSizes = [
     'Under 100 students',
     '100 – 500 students',
@@ -79,14 +100,13 @@ export default function ContactPage() {
             `Message: ${form.message || 'None'}`,
         ].join('\n');
 
-        // Simulate async submission (swap for real API call)
-        await new Promise(r => setTimeout(r, 1200));
-
-        // Open mailto as fallback
-        window.location.href =
-            `mailto:demo@manyaltech.com?subject=Demo Request — ${encodeURIComponent(form.institution)}&body=${encodeURIComponent(body)}`;
-
+        // Show success screen, then open mailto so the user sees confirmation first.
+        // In production, replace with a real API call (e.g. Resend, Formspree).
         setFormState('success');
+        setTimeout(() => {
+            window.location.href =
+                `mailto:demo@manyaltech.com?subject=Demo Request — ${encodeURIComponent(form.institution)}&body=${encodeURIComponent(body)}`;
+        }, 600);
     }
 
     return (
@@ -255,14 +275,7 @@ export default function ContactPage() {
                                             type="button"
                                             onClick={() => setSelectedSize(size)}
                                             className="px-3 py-1.5 rounded-full text-xs font-medium transition-all"
-                                            style={selectedSize === size ? {
-                                                background: 'linear-gradient(135deg,#d4a34c,#a07030)',
-                                                color: '#0c0a08',
-                                            } : {
-                                                background: 'rgba(212,163,76,0.06)',
-                                                border: `1px solid ${S.border}`,
-                                                color: S.muted,
-                                            }}
+                                            style={selectedSize === size ? SIZE_ACTIVE_STYLE : SIZE_INACTIVE_STYLE}
                                         >
                                             {size}
                                         </button>
@@ -284,15 +297,7 @@ export default function ContactPage() {
                                                 type="button"
                                                 onClick={() => toggleInterest(label)}
                                                 className="flex items-center gap-2 px-4 py-3 rounded-2xl text-sm text-left transition-all"
-                                                style={active ? {
-                                                    background: 'rgba(212,163,76,0.12)',
-                                                    border: `1.5px solid rgba(212,163,76,0.5)`,
-                                                    color: S.cream,
-                                                } : {
-                                                    background: 'rgba(255,255,255,0.02)',
-                                                    border: `1px solid ${S.border}`,
-                                                    color: S.muted,
-                                                }}
+                                                style={active ? INTEREST_ACTIVE_STYLE : INTEREST_INACTIVE_STYLE}
                                             >
                                                 <Icon className="w-4 h-4 shrink-0" style={{ color: active ? S.amber : S.dim }} />
                                                 {label}
@@ -314,7 +319,7 @@ export default function ContactPage() {
                                     placeholder="Tell us about your current challenges, goals, or specific questions…"
                                     value={form.message}
                                     onChange={handleChange}
-                                    className="w-full px-4 py-3 rounded-2xl text-sm resize-none outline-none focus:ring-2 transition-all"
+                                    className="w-full px-4 py-3 rounded-2xl text-sm resize-none outline-none focus:ring-2 focus:ring-amber-500/50 transition-all"
                                     style={{
                                         background: 'rgba(255,255,255,0.04)',
                                         border: `1px solid ${S.border}`,
@@ -358,7 +363,7 @@ function Field({
     type?: string;
     placeholder?: string;
     value: string;
-    onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+    onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => void;
     required?: boolean;
 }) {
     return (
@@ -374,7 +379,7 @@ function Field({
                 value={value}
                 onChange={onChange}
                 required={required}
-                className="w-full h-11 px-4 rounded-xl text-sm outline-none focus:ring-2 transition-all"
+                className="w-full h-11 px-4 rounded-xl text-sm outline-none focus:ring-2 focus:ring-amber-500/50 transition-all"
                 style={{
                     background: 'rgba(255,255,255,0.04)',
                     border: `1px solid ${S.border}`,
