@@ -26,7 +26,7 @@ def _resolved_tenant(user):
 
 def _ensure_valid_login_tenant(user) -> None:
     role = (getattr(user, "role", "") or "").strip().lower()
-    if role == "saas_admin":
+    if role in ("saas_admin", "saas_staff"):
         return
 
     if _resolved_tenant(user) is None:
@@ -518,3 +518,54 @@ class PasswordResetConfirmSerializer(serializers.Serializer):
         self.user.set_password(self.validated_data['new_password'])
         self.user.save()
         return self.user
+
+
+class SaasStaffSerializer(serializers.ModelSerializer):
+    """Read serializer for saas_staff accounts (used by the super admin)."""
+
+    class Meta:
+        model = UserAccount
+        fields = [
+            'user_id', 'email', 'first_name', 'last_name',
+            'is_active', 'date_joined', 'last_login',
+        ]
+        read_only_fields = fields
+
+
+class SaasStaffCreateSerializer(serializers.Serializer):
+    """Write serializer — super admin creates a saas_staff account via the API."""
+    email = serializers.EmailField()
+    first_name = serializers.CharField(max_length=150)
+    last_name = serializers.CharField(max_length=150)
+    password = serializers.CharField(write_only=True, min_length=8)
+
+    def validate_email(self, value):
+        value = value.strip().lower()
+        if UserAccount.objects.filter(email=value).exists():
+            raise serializers.ValidationError("A user with this email already exists.")
+        return value
+
+    def create(self, validated_data):
+        from django.contrib.auth.password_validation import validate_password
+        from django.core.exceptions import ValidationError as DjangoValidationError
+
+        password = validated_data['password']
+        try:
+            validate_password(password)
+        except DjangoValidationError as exc:
+            raise serializers.ValidationError({'password': list(exc.messages)})
+
+        email = validated_data['email']
+        user = UserAccount.objects.create_user(
+            email=email,
+            username=email,
+            password=password,
+            first_name=validated_data['first_name'],
+            last_name=validated_data['last_name'],
+            role='saas_staff',
+            tenant=None,
+            is_staff=False,
+            is_superuser=False,
+            is_active=True,
+        )
+        return user

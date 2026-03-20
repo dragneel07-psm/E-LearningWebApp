@@ -93,7 +93,7 @@ export interface User {
     email: string;
     first_name: string;
     last_name: string;
-    role: 'student' | 'teacher' | 'parent' | 'admin' | 'staff' | 'saas_admin';
+    role: 'student' | 'teacher' | 'parent' | 'admin' | 'staff' | 'saas_admin' | 'saas_staff';
     staff_role?: '' | 'accountant' | 'librarian' | 'receptionist' | 'hr_manager' | 'hostel_warden' | 'transport_manager';
     tenant: string;
     is_active?: boolean;
@@ -3217,6 +3217,26 @@ export const saasApi = {
             failed_payments: Array<{ invoice_id: string; tenant_name: string; amount: number; issued_date: string }>;
             suspended_tenants: Array<{ tenant_id: string; tenant_name: string; subdomain: string }>;
         }>(`${BILLING_SAAS_BASE}/analytics/health/`),
+};
+
+export interface SaasStaffMember {
+    user_id: string;
+    email: string;
+    first_name: string;
+    last_name: string;
+    is_active: boolean;
+    date_joined: string;
+    last_login: string | null;
+}
+
+export const saasStaffApi = {
+    list: () => apiRequest<SaasStaffMember[]>('/users/saas-staff/'),
+    create: (data: { email: string; first_name: string; last_name: string; password: string }) =>
+        apiRequest<SaasStaffMember>('/users/saas-staff/', { method: 'POST', body: JSON.stringify(data) }),
+    update: (id: string, data: Partial<{ is_active: boolean; first_name: string; last_name: string }>) =>
+        apiRequest<SaasStaffMember>(`/users/saas-staff/${id}/`, { method: 'PATCH', body: JSON.stringify(data) }),
+    deactivate: (id: string) =>
+        apiRequest<void>(`/users/saas-staff/${id}/`, { method: 'DELETE' }),
 };
 
 export const api = {

@@ -13,6 +13,7 @@ class UserAccount(AbstractUser):
         ('admin', 'Admin'),
         ('staff', 'Staff'),
         ('saas_admin', 'SaaS Admin'),
+        ('saas_staff', 'SaaS Staff'),
     )
 
     # Distinguishes different staff functions within the school

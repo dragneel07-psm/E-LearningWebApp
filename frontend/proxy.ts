@@ -204,7 +204,11 @@ export async function proxy(request: NextRequest) {
         if (pathname.startsWith('/admin') && userRole !== 'admin' && userRole !== 'staff') {
             return NextResponse.redirect(new URL('/unauthorized', request.url));
         }
-        if (pathname.startsWith('/saas') && userRole !== 'saas_admin') {
+        if (pathname.startsWith('/saas') && userRole !== 'saas_admin' && userRole !== 'saas_staff') {
+            return NextResponse.redirect(new URL('/unauthorized', request.url));
+        }
+        // Staff management is super-admin only
+        if (pathname.startsWith('/saas/staff') && userRole !== 'saas_admin') {
             return NextResponse.redirect(new URL('/unauthorized', request.url));
         }
         if (pathname.startsWith('/teacher') && userRole !== 'teacher') {
@@ -225,6 +229,7 @@ export async function proxy(request: NextRequest) {
                 teacher: '/teacher',
                 student: '/student',
                 saas_admin: '/saas',
+                saas_staff: '/saas',
                 parent: '/parent'
             };
             const target = dashboardMap[userRole] || '/student';

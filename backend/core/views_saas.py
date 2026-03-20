@@ -42,15 +42,22 @@ def _format_time_ago(reference: datetime, now: datetime) -> str:
 
 
 class IsSaaSAdmin(permissions.BasePermission):
-    """
-    Custom permission to only allow platform-level SaaS admins.
-    Does NOT require is_staff=True, only role='saas_admin'.
-    """
+    """Super admin only (role='saas_admin'). Use for privileged operations."""
     def has_permission(self, request, view):
         return bool(request.user and request.user.is_authenticated and request.user.role == 'saas_admin')
 
+
+class IsSaaSAdminOrStaff(permissions.BasePermission):
+    """Allows both saas_admin and saas_staff. Use for read/operational views."""
+    def has_permission(self, request, view):
+        return bool(
+            request.user and request.user.is_authenticated
+            and request.user.role in ('saas_admin', 'saas_staff')
+        )
+
+
 class SaasKPIView(APIView):
-    permission_classes = [IsSaaSAdmin]
+    permission_classes = [IsSaaSAdminOrStaff]
     throttle_classes = []
 
     def get(self, request):
@@ -212,7 +219,7 @@ class SaasKPIView(APIView):
 
 
 class SaasAIUsageView(APIView):
-    permission_classes = [IsSaaSAdmin]
+    permission_classes = [IsSaaSAdminOrStaff]
     throttle_classes = []
 
     def get(self, request):

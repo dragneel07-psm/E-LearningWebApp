@@ -7,13 +7,14 @@ from .views import (
     UserAccountViewSet, GroupViewSet, PermissionViewSet,
     AdminPasswordResetView, register_user, CustomTokenObtainPairView, CustomTokenRefreshView,
     PasswordResetView, PasswordResetConfirmView, EmailVerificationView,
-    TwoFactorSetupView, TwoFactorActivateView,
+    TwoFactorSetupView, TwoFactorActivateView, SaasStaffViewSet,
 )
 
 router = DefaultRouter()
 router.register(r'accounts', UserAccountViewSet)
 router.register(r'groups', GroupViewSet)
 router.register(r'permissions', PermissionViewSet)
+router.register(r'saas-staff', SaasStaffViewSet, basename='saas-staff')
 
 urlpatterns = [
     path('', include(router.urls)),

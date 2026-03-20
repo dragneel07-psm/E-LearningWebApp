@@ -554,3 +554,71 @@ class TwoFactorActivateView(views.APIView):
             },
             status=status.HTTP_200_OK,
         )
+
+
+# ── SaaS Staff Management (super admin only) ──────────────────────────────────
+
+from .permissions import IsSaaSAdmin as _IsSaaSAdmin
+from .serializers import SaasStaffSerializer, SaasStaffCreateSerializer
+
+
+class SaasStaffViewSet(viewsets.ViewSet):
+    """
+    CRUD for saas_staff accounts.
+    Only saas_admin (super admin) can access these endpoints.
+    """
+    permission_classes = [_IsSaaSAdmin]
+
+    def _staff_qs(self):
+        return UserAccount.objects.filter(role='saas_staff').order_by('-date_joined')
+
+    def list(self, request):
+        staff = self._staff_qs()
+        return Response(SaasStaffSerializer(staff, many=True).data)
+
+    def create(self, request):
+        serializer = SaasStaffCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        user = serializer.save()
+        record_audit_event(
+            action="users.saas_staff_created",
+            user=request.user,
+            request=request,
+            details={"staff_email": user.email, "staff_id": str(user.user_id)},
+        )
+        return Response(SaasStaffSerializer(user).data, status=status.HTTP_201_CREATED)
+
+    def partial_update(self, request, pk=None):
+        try:
+            user = self._staff_qs().get(pk=pk)
+        except UserAccount.DoesNotExist:
+            return Response({'error': 'Staff member not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+        # Only allow toggling is_active and updating name fields
+        allowed = {k: v for k, v in request.data.items() if k in ('is_active', 'first_name', 'last_name')}
+        for field, value in allowed.items():
+            setattr(user, field, value)
+        user.save(update_fields=list(allowed.keys()))
+        record_audit_event(
+            action="users.saas_staff_updated",
+            user=request.user,
+            request=request,
+            details={"staff_email": user.email, "changes": allowed},
+        )
+        return Response(SaasStaffSerializer(user).data)
+
+    def destroy(self, request, pk=None):
+        try:
+            user = self._staff_qs().get(pk=pk)
+        except UserAccount.DoesNotExist:
+            return Response({'error': 'Staff member not found.'}, status=status.HTTP_404_NOT_FOUND)
+        email = user.email
+        user.is_active = False
+        user.save(update_fields=['is_active'])
+        record_audit_event(
+            action="users.saas_staff_deactivated",
+            user=request.user,
+            request=request,
+            details={"staff_email": email},
+        )
+        return Response(status=status.HTTP_204_NO_CONTENT)

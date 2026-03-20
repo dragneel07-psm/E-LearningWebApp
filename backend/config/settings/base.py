@@ -389,6 +389,10 @@ JWT_ROLE_TOKEN_LIFETIMES = {
         # Session-scoped: 8-hour workday maximum; configure via JWT_REFRESH_HOURS_SAAS_ADMIN
         "refresh": timedelta(hours=int(os.environ.get("JWT_REFRESH_HOURS_SAAS_ADMIN", "8"))),
     },
+    "saas_staff": {
+        "access": timedelta(minutes=int(os.environ.get("JWT_ACCESS_MINUTES_SAAS_STAFF", "30"))),
+        "refresh": timedelta(hours=int(os.environ.get("JWT_REFRESH_HOURS_SAAS_STAFF", "8"))),
+    },
     "admin": {
         "access": timedelta(minutes=int(os.environ.get("JWT_ACCESS_MINUTES_ADMIN", "20"))),
         "refresh": timedelta(days=int(os.environ.get("JWT_REFRESH_DAYS_ADMIN", "2"))),
