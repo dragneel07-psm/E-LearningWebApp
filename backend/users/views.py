@@ -142,8 +142,11 @@ class AdminPasswordResetView(APIView):
             else:
                 return Response({'error': 'Unauthorized role'}, status=status.HTTP_403_FORBIDDEN)
 
-            # 4. Set Password
+            # 4. Set Password and ensure account is active so they can log in immediately
             target_user.set_password(new_password)
+            target_user.is_active = True
+            target_user.failed_login_attempts = 0
+            target_user.locked_until = None
             target_user.save()
             record_audit_event(
                 action="users.admin_password_reset",

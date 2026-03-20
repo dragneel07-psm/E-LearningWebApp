@@ -430,7 +430,13 @@ class TenantAdminPasswordResetView(APIView):
                     return Response({"error": "Admin user not found for this tenant"}, status=404)
                 
                 admin_user.set_password(new_password)
-                admin_user.save(update_fields=['password'])
+                # Ensure the account is active so the admin can log in immediately
+                # after a SaaS-initiated password reset (account may have been
+                # pending email verification or previously deactivated).
+                admin_user.is_active = True
+                admin_user.failed_login_attempts = 0
+                admin_user.locked_until = None
+                admin_user.save(update_fields=['password', 'is_active', 'failed_login_attempts', 'locked_until'])
                 record_audit_event(
                     action="core.tenant_admin_password_reset",
                     user=request.user,
@@ -440,6 +446,7 @@ class TenantAdminPasswordResetView(APIView):
                         "tenant_schema": tenant.schema_name,
                         "target_user_id": str(admin_user.user_id),
                         "target_email": admin_user.email,
+                        "account_activated": True,
                     },
                 )
                 
