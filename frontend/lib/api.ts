@@ -2181,6 +2181,7 @@ export const academicAPI = {
         return normalizeArrayPayload(payload);
     },
     getTeacher: (id: string) => apiRequest<Teacher>(`/academic/teachers/${id}/`),
+    getMyTeacherProfile: () => apiRequest<Teacher>('/academic/teachers/me/'),
     getTeacherProfileOverview: (id: string) =>
         apiRequest<TeacherProfileOverview>(`/academic/teachers/${id}/profile-overview/`),
     createTeacher: (data: Partial<Teacher> & { password?: string }) => apiRequest<Teacher>('/academic/teachers/', {

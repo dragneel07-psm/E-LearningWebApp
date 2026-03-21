@@ -190,7 +190,7 @@ export function ManageScheduleDialog({ open, onOpenChange, trigger }: ManageSche
 
         setLoading(true);
         try {
-            await academicAPI.createTimetable({
+            const created = await academicAPI.createTimetable({
                 academic_class: selectedClass,
                 day_of_week: formData.day_of_week,
                 start_time: formData.start_time,
@@ -202,14 +202,49 @@ export function ManageScheduleDialog({ open, onOpenChange, trigger }: ManageSche
                 status: 'approved',
             });
 
+            // Optimistically add the new slot to overview so it appears instantly
+            setOverview((prev) => {
+                if (!prev) return prev;
+                const newSlot: Timetable = {
+                    timetable_id: created.timetable_id,
+                    day_of_week: created.day_of_week,
+                    start_time: created.start_time,
+                    end_time: created.end_time,
+                    subject_name: created.subject_name,
+                    room_number: created.room_number || '',
+                    teacher: created.teacher ?? null,
+                    teacher_name: created.teacher_name,
+                    entry_type: 'main',
+                    status: 'approved',
+                    academic_class: Number(selectedClass),
+                };
+                const dayIndex = prev.days.findIndex((d) => d.day_of_week === newSlot.day_of_week);
+                let updatedDays;
+                if (dayIndex >= 0) {
+                    updatedDays = prev.days.map((d, i) =>
+                        i === dayIndex ? { ...d, slots: [...d.slots, newSlot], total_slots: d.total_slots + 1, main_slots: d.main_slots + 1, approved_slots: d.approved_slots + 1 } : d,
+                    );
+                } else {
+                    updatedDays = [...prev.days, { day_of_week: newSlot.day_of_week, slots: [newSlot], total_slots: 1, main_slots: 1, extra_slots: 0, approved_slots: 1 }];
+                }
+                return {
+                    ...prev,
+                    days: updatedDays,
+                    total_slots: prev.total_slots + 1,
+                    main_slots: prev.main_slots + 1,
+                    approved_slots: prev.approved_slots + 1,
+                };
+            });
+
             setFormData((prev) => ({
                 ...prev,
                 subject_name: '',
                 room_number: '',
                 teacher: '',
             }));
-            await refreshClassOverview();
             toast.success('Main timetable slot created');
+            // Refresh in background to sync server state
+            void refreshClassOverview();
         } catch (error: unknown) {
             const message = error instanceof Error ? error.message : 'Unknown error';
             toast.error(`Failed to create slot: ${message}`);

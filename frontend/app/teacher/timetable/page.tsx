@@ -12,7 +12,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Calendar, Clock, Loader2, MapPin, Plus, School, Trash2 } from 'lucide-react';
-import { academicAPI, Timetable, Teacher, usersAPI, AcademicClass } from '@/lib/api';
+import { academicAPI, Timetable, Teacher, AcademicClass } from '@/lib/api';
 import { toast } from 'sonner';
 
 const WEEK_DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
@@ -86,19 +86,12 @@ export default function TeacherTimetablePage() {
     useEffect(() => {
         const loadTeacherContext = async () => {
             try {
-                const user = await usersAPI.getMe();
-                const [teachers, allClasses] = await Promise.all([
-                    academicAPI.getTeachers(),
+                const [me, allClasses] = await Promise.all([
+                    academicAPI.getMyTeacherProfile(),
                     academicAPI.getClasses(),
                 ]);
 
-                const me = teachers.find((teacher) => teacher.user_id === user.user_id) || null;
                 setTeacherProfile(me);
-
-                if (!me) {
-                    setAssignedClasses([]);
-                    return;
-                }
 
                 const classMap = new Map(allClasses.map((academicClass) => [Number(academicClass.id), academicClass]));
                 const resolvedAssigned = (me.assigned_classes || [])
@@ -119,7 +112,7 @@ export default function TeacherTimetablePage() {
                 });
             } catch (error) {
                 console.error('Failed to load teacher timetable context', error);
-                toast.error('Failed to load timetable data');
+                toast.error('Failed to load timetable data. Make sure your teacher profile has been set up by the admin.');
             } finally {
                 setLoading(false);
             }

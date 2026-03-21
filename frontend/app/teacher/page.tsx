@@ -97,7 +97,7 @@ export default function TeacherDashboard() {
                     submissionsRaw,
                     aiLogs,
                     timetableRaw,
-                    teachersRaw,
+                    teacherProfile,
                     analyticsData,
                 ] = await Promise.all([
                     academicAPI.getStudents().catch(() => []),
@@ -105,7 +105,7 @@ export default function TeacherDashboard() {
                     academicAPI.getSubmissions().catch(() => []),
                     aiAPI.getAILogs().catch(() => []),
                     academicAPI.getTimetable().catch(() => []),
-                    academicAPI.getTeachers().catch(() => []),
+                    academicAPI.getMyTeacherProfile().catch(() => null),
                     aiAPI.getTeacherAnalytics().catch(() => null),
                 ]);
 
@@ -113,10 +113,7 @@ export default function TeacherDashboard() {
                 const subjects = toList<any>(subjectsRaw);
                 const submissions = toList<any>(submissionsRaw);
                 const timetable = toList<any>(timetableRaw);
-                const teachers = toList<any>(teachersRaw);
                 const logs = Array.isArray(aiLogs) ? aiLogs : [];
-
-                const teacherProfile = teachers.find((teacher) => String(teacher.user_id) === String(me.user_id));
                 const teacherName = `${me.first_name || ''} ${me.last_name || ''}`.trim().toLowerCase();
                 const weekday = new Date().toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase();
                 const nowMinutes = (new Date().getHours() * 60) + new Date().getMinutes();

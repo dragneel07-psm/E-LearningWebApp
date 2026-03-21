@@ -12,7 +12,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ArrowLeft, Loader2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { academicAPI, usersAPI, Subject, AcademicClass } from '@/lib/api';
+import { academicAPI, Subject, AcademicClass } from '@/lib/api';
 import { toast } from 'sonner';
 
 export default function CreateAssignmentPage() {
@@ -52,19 +52,16 @@ export default function CreateAssignmentPage() {
     useEffect(() => {
         const loadData = async () => {
             try {
-                // 1. Get current user's teacher profile
-                const me = await usersAPI.getMe();
-                const teachers = await academicAPI.getTeachers(); // Assuming we can list all, or get specific. Ideally getTeacherByUserId
-                const myTeacherProfile = teachers.find(t => t.user_id === me.user_id);
+                // 1. Get current user's teacher profile and all classes in parallel
+                const [myTeacherProfile, allClasses] = await Promise.all([
+                    academicAPI.getMyTeacherProfile(),
+                    academicAPI.getClasses(),
+                ]);
 
-                if (myTeacherProfile) {
-                    // 2. Get all classes and filter by assigned_classes
-                    const allClasses = await academicAPI.getClasses();
-                    const myClasses = allClasses.filter(c =>
-                        myTeacherProfile.assigned_classes?.includes(c.id)
-                    );
-                    setClasses(myClasses);
-                }
+                const myClasses = allClasses.filter(c =>
+                    myTeacherProfile.assigned_classes?.includes(c.id)
+                );
+                setClasses(myClasses);
 
                 // 3. Get all courses (we'll filter them locally based on selected class)
                 const allCourses = await academicAPI.getSubjects();

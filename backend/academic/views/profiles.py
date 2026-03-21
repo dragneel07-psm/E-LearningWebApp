@@ -51,10 +51,17 @@ class TeacherViewSet(TenantScopedQuerysetMixin, viewsets.ModelViewSet):
     serializer_class = TeacherSerializer
     
     def get_permissions(self):
-        if self.action in ['list', 'retrieve', 'profile_overview']:
+        if self.action in ['list', 'retrieve', 'profile_overview', 'me']:
             return [IsAuthenticated()]
         return [IsAdminOrSaaSAdmin()]
     tenant_field = 'user__tenant'  # Teacher is related to tenant through user
+
+    @action(detail=False, methods=['get'])
+    def me(self, request):
+        """Return the Teacher profile for the currently authenticated teacher user."""
+        teacher = get_object_or_404(Teacher, user=request.user)
+        serializer = self.get_serializer(teacher)
+        return Response(serializer.data)
 
     @action(detail=True, methods=['get'], url_path='profile-overview')
     def profile_overview(self, request, pk=None):

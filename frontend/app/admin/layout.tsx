@@ -20,13 +20,13 @@ export default function AdminLayout({
     children: React.ReactNode;
 }) {
     const [user, setUser] = useState<UserType | null>(null);
+    const [jwtUser, setJwtUser] = useState<ReturnType<typeof getUser>>(null);
 
     useEffect(() => {
+        setJwtUser(getUser());
         usersAPI.getMe().then(setUser).catch(console.error);
     }, []);
 
-    // Resolve role label from JWT so it's available immediately (no flicker)
-    const jwtUser = getUser();
     const roleLabel = getRoleLabel(
         jwtUser?.role ?? user?.role ?? 'staff',
         (jwtUser?.staff_role ?? '') as StaffRole,
