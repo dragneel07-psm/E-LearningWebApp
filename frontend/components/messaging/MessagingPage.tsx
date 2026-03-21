@@ -70,14 +70,16 @@ export default function MessagingPage({ emptyStateMessage = "Choose a chat from 
     const loadInitialData = async () => {
         try {
             setLoading(true);
-            const [convs, me, users] = await Promise.all([
+            const [convs, me] = await Promise.all([
                 conversationsAPI.getConversations(),
                 usersAPI.getMe(),
-                usersAPI.getAccounts()
             ]);
             setConversations(convs);
             setCurrentUser(me);
-            setAllUsers(users.filter((u: UserType) => u.user_id !== me.user_id));
+            // getAccounts requires admin — fail gracefully for teachers/students
+            usersAPI.getAccounts().then(users =>
+                setAllUsers(users.filter((u: UserType) => u.user_id !== me.user_id))
+            ).catch(() => {});
         } catch {
             toast.error("Failed to load messages");
         } finally {

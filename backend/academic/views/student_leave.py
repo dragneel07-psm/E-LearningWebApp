@@ -62,10 +62,13 @@ class StudentLeaveViewSet(viewsets.ModelViewSet):
         if role in ('admin', 'staff', 'principal'):
             return qs.all()
         if role == 'teacher':
-            # Teachers see leaves for students in their classes
-            from academic.models import Student
+            # Teachers see leaves for students in their assigned classes
+            from academic.models import Student, Teacher as TeacherModel
+            teacher = TeacherModel.objects.filter(user=user).first()
+            if not teacher:
+                return qs.none()
             student_ids = Student.objects.filter(
-                academic_class__subjects__teacher__user=user
+                academic_class__in=teacher.assigned_classes.all()
             ).values_list('id', flat=True)
             return qs.filter(student__id__in=student_ids)
         if role == 'parent':
