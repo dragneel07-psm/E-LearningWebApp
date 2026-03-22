@@ -28,6 +28,7 @@ import { ConnectionIndicator } from '@/components/offline-banner';
 import { useOffline } from '@/hooks/use-offline';
 import { PWAInstallPrompt } from '@/components/pwa-install-prompt';
 import { DashboardProfileMenu } from '@/components/dashboard-profile-menu';
+import { ThemeToggle } from '@/components/theme-toggle';
 
 type NavItem = {
     label: string;
@@ -262,7 +263,7 @@ export default function StudentLayout({ children }: { children: React.ReactNode 
     return (
         <GamificationProvider>
             <PWAInstallPrompt />
-            <div className="min-h-screen bg-slate-50 flex">
+            <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex">
                 {/* Mobile Overlay */}
                 {sidebarOpen && (
                     <div
@@ -283,7 +284,7 @@ export default function StudentLayout({ children }: { children: React.ReactNode 
                 {/* Main Content */}
                 <div className="flex-1 flex flex-col min-w-0">
                     {/* Mobile Header */}
-                    <header className="lg:hidden h-14 bg-white border-b border-slate-200 flex items-center justify-between px-4 gap-2 sticky top-0 z-30">
+                    <header className="lg:hidden h-14 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between px-4 gap-2 sticky top-0 z-30">
                         <Button variant="ghost" size="icon" onClick={() => setSidebarOpen(true)} className="text-slate-600">
                             <Menu className="h-5 w-5" />
                         </Button>
@@ -291,10 +292,11 @@ export default function StudentLayout({ children }: { children: React.ReactNode 
                             <div className="h-7 w-7 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center">
                                 <GraduationCap className="h-4 w-4 text-white" />
                             </div>
-                            <span className="font-bold text-slate-900 text-sm">Student Portal</span>
+                            <span className="font-bold text-slate-900 dark:text-white text-sm">Student Portal</span>
                         </div>
                         <div className="flex items-center gap-1.5">
                             <ConnectionIndicator />
+                            <ThemeToggle />
                             <NotificationBell />
                             <DashboardProfileMenu
                                 firstName={user?.first_name}
@@ -308,13 +310,13 @@ export default function StudentLayout({ children }: { children: React.ReactNode 
                     </header>
 
                     {/* Desktop Top Bar */}
-                    <header className="hidden lg:flex h-14 bg-white border-b border-slate-100 items-center justify-between px-6 sticky top-0 z-30 shadow-sm">
+                    <header className="hidden lg:flex h-14 bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-800 items-center justify-between px-6 sticky top-0 z-30 shadow-sm dark:shadow-slate-900/50">
                         <div className="flex items-center gap-3">
                             <div>
-                                <p className="text-sm font-bold text-slate-900">
+                                <p className="text-sm font-bold text-slate-900 dark:text-white">
                                     {getTimeGreeting()}, <span className="text-indigo-600">{user?.first_name || 'Student'}</span>! 👋
                                 </p>
-                                <p className="text-[11px] text-slate-400">
+                                <p className="text-[11px] text-slate-400 dark:text-slate-500">
                                     {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
                                 </p>
                             </div>
@@ -323,6 +325,7 @@ export default function StudentLayout({ children }: { children: React.ReactNode 
                             <ConnectionIndicator />
                             <HeaderStats />
                             <LanguageSelector />
+                            <ThemeToggle />
                             <NotificationBell />
                             <DashboardProfileMenu
                                 firstName={user?.first_name}
