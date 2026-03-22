@@ -204,92 +204,88 @@ export default function StudentDashboard() {
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                 {/* Attendance */}
                 <Card
-                    className="border-0 shadow-md hover:shadow-lg transition-all cursor-pointer group overflow-hidden"
+                    className="border-0 shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all cursor-pointer overflow-hidden rounded-2xl"
                     onClick={() => router.push('/student/attendance')}
                 >
-                    <CardContent className="p-5 relative">
-                        <div className="absolute inset-0 bg-gradient-to-br from-emerald-50 to-teal-50 opacity-60" />
-                        <div className="relative">
-                            <div className="flex items-start justify-between mb-3">
-                                <div className="h-10 w-10 rounded-xl bg-emerald-100 flex items-center justify-center">
-                                    <Calendar className="h-5 w-5 text-emerald-600" />
-                                </div>
-                                <span className={`text-xs font-bold flex items-center gap-0.5 ${attendanceTrend >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
-                                    {attendanceTrend >= 0 ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
-                                    {attendanceTrend >= 0 ? '+' : ''}{attendanceTrend}%
-                                </span>
+                    <CardContent className="p-5 bg-gradient-to-br from-emerald-500 to-teal-600">
+                        <div className="flex items-start justify-between mb-4">
+                            <div className="h-10 w-10 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center">
+                                <Calendar className="h-5 w-5 text-white" />
                             </div>
-                            <p className="text-3xl font-black text-slate-900">{attendanceRate}%</p>
-                            <p className="text-xs font-medium text-slate-500 mt-1">Attendance Rate</p>
-                            <Progress value={attendanceRate} className="h-1 mt-3 bg-emerald-100 [&>div]:bg-emerald-500" />
+                            <span className="text-xs font-bold flex items-center gap-0.5 text-white/80">
+                                {attendanceTrend >= 0 ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
+                                {attendanceTrend >= 0 ? '+' : ''}{attendanceTrend}%
+                            </span>
+                        </div>
+                        <p className="text-3xl font-black text-white">{attendanceRate}%</p>
+                        <p className="text-xs font-medium text-white/70 mt-1">Attendance Rate</p>
+                        <div className="h-1 mt-3 bg-white/20 rounded-full">
+                            <div className="h-1 bg-white rounded-full transition-all" style={{ width: `${attendanceRate}%` }} />
                         </div>
                     </CardContent>
                 </Card>
 
                 {/* Pending Assignments */}
                 <Card
-                    className="border-0 shadow-md hover:shadow-lg transition-all cursor-pointer group overflow-hidden"
+                    className="border-0 shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all cursor-pointer overflow-hidden rounded-2xl"
                     onClick={() => router.push('/student/assignments')}
                 >
-                    <CardContent className="p-5 relative">
-                        <div className="absolute inset-0 bg-gradient-to-br from-orange-50 to-amber-50 opacity-60" />
-                        <div className="relative">
-                            <div className="flex items-start justify-between mb-3">
-                                <div className="h-10 w-10 rounded-xl bg-orange-100 flex items-center justify-center">
-                                    <BookOpen className="h-5 w-5 text-orange-600" />
-                                </div>
-                                {pendingAssignmentsCount > 0 && (
-                                    <span className="h-5 w-5 rounded-full bg-orange-500 text-white text-[10px] font-black flex items-center justify-center animate-pulse">
-                                        {pendingAssignmentsCount > 9 ? '9+' : pendingAssignmentsCount}
-                                    </span>
-                                )}
+                    <CardContent className="p-5 bg-gradient-to-br from-orange-500 to-amber-500">
+                        <div className="flex items-start justify-between mb-4">
+                            <div className="h-10 w-10 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center">
+                                <BookOpen className="h-5 w-5 text-white" />
                             </div>
-                            <p className="text-3xl font-black text-slate-900">{pendingAssignmentsCount}</p>
-                            <p className="text-xs font-medium text-slate-500 mt-1">Pending Tasks</p>
-                            <p className="text-[10px] text-orange-600 font-bold mt-3 uppercase tracking-wider">
-                                {pendingAssignmentsCount === 0 ? '✓ All done!' : 'Action needed'}
-                            </p>
+                            {pendingAssignmentsCount > 0 && (
+                                <span className="h-6 min-w-6 px-1.5 rounded-full bg-white text-orange-600 text-[10px] font-black flex items-center justify-center animate-pulse">
+                                    {pendingAssignmentsCount > 9 ? '9+' : pendingAssignmentsCount}
+                                </span>
+                            )}
                         </div>
+                        <p className="text-3xl font-black text-white">{pendingAssignmentsCount}</p>
+                        <p className="text-xs font-medium text-white/70 mt-1">Pending Tasks</p>
+                        <p className="text-[10px] text-white/80 font-bold mt-3 uppercase tracking-wider">
+                            {pendingAssignmentsCount === 0 ? '✓ All done!' : 'Action needed'}
+                        </p>
                     </CardContent>
                 </Card>
 
                 {/* Upcoming Exams */}
                 <Card
-                    className="border-0 shadow-md hover:shadow-lg transition-all cursor-pointer group overflow-hidden"
+                    className="border-0 shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all cursor-pointer overflow-hidden rounded-2xl"
                     onClick={() => router.push('/student/assessments')}
                 >
-                    <CardContent className="p-5 relative">
-                        <div className="absolute inset-0 bg-gradient-to-br from-blue-50 to-indigo-50 opacity-60" />
-                        <div className="relative">
-                            <div className="flex items-start justify-between mb-3">
-                                <div className="h-10 w-10 rounded-xl bg-blue-100 flex items-center justify-center">
-                                    <Trophy className="h-5 w-5 text-blue-600" />
-                                </div>
+                    <CardContent className="p-5 bg-gradient-to-br from-blue-500 to-indigo-600">
+                        <div className="flex items-start justify-between mb-4">
+                            <div className="h-10 w-10 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center">
+                                <Trophy className="h-5 w-5 text-white" />
                             </div>
-                            <p className="text-3xl font-black text-slate-900">{upcomingExamsCount}</p>
-                            <p className="text-xs font-medium text-slate-500 mt-1">Upcoming Exams</p>
-                            <p className="text-[10px] text-blue-600 font-bold mt-3 uppercase tracking-wider">Quizzes & Tests</p>
+                            {upcomingExamsCount > 0 && (
+                                <span className="h-6 min-w-6 px-1.5 rounded-full bg-white/30 text-white text-[10px] font-black flex items-center justify-center">
+                                    {upcomingExamsCount}
+                                </span>
+                            )}
                         </div>
+                        <p className="text-3xl font-black text-white">{upcomingExamsCount}</p>
+                        <p className="text-xs font-medium text-white/70 mt-1">Upcoming Exams</p>
+                        <p className="text-[10px] text-white/80 font-bold mt-3 uppercase tracking-wider">Quizzes & Tests</p>
                     </CardContent>
                 </Card>
 
                 {/* My Courses */}
                 <Card
-                    className="border-0 shadow-md hover:shadow-lg transition-all cursor-pointer overflow-hidden"
+                    className="border-0 shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all cursor-pointer overflow-hidden rounded-2xl"
                     onClick={() => router.push('/student/courses')}
                 >
-                    <CardContent className="p-5 relative">
-                        <div className="absolute inset-0 bg-gradient-to-br from-violet-50 to-purple-50 opacity-60" />
-                        <div className="relative">
-                            <div className="flex items-start justify-between mb-3">
-                                <div className="h-10 w-10 rounded-xl bg-violet-100 flex items-center justify-center">
-                                    <Zap className="h-5 w-5 text-violet-600" />
-                                </div>
+                    <CardContent className="p-5 bg-gradient-to-br from-violet-500 to-purple-600">
+                        <div className="flex items-start justify-between mb-4">
+                            <div className="h-10 w-10 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center">
+                                <Zap className="h-5 w-5 text-white" />
                             </div>
-                            <p className="text-3xl font-black text-slate-900">{courses.length}</p>
-                            <p className="text-xs font-medium text-slate-500 mt-1">Enrolled Courses</p>
-                            <p className="text-[10px] text-violet-600 font-bold mt-3 uppercase tracking-wider">{completedCourses} completed</p>
+                            <span className="text-xs font-bold text-white/70">{completedCourses} done</span>
                         </div>
+                        <p className="text-3xl font-black text-white">{courses.length}</p>
+                        <p className="text-xs font-medium text-white/70 mt-1">Enrolled Courses</p>
+                        <p className="text-[10px] text-white/80 font-bold mt-3 uppercase tracking-wider">{completedCourses} completed</p>
                     </CardContent>
                 </Card>
             </div>

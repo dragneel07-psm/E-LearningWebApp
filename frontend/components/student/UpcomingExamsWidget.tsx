@@ -24,68 +24,63 @@ export function UpcomingExamsWidget({ assessments }: UpcomingExamsWidgetProps) {
 
     if (upcoming.length === 0) {
         return (
-            <Card className="border-none shadow-sm h-full">
-                <CardHeader className="pb-2">
-                    <CardTitle className="text-lg font-bold text-slate-800 flex items-center gap-2">
-                        <Calendar className="h-5 w-5 text-indigo-600" />
-                        Upcoming Exams
-                    </CardTitle>
-                </CardHeader>
-                <CardContent className="pt-4 text-center text-slate-500 text-sm">
-                    <CheckCircle className="h-8 w-8 text-green-500 mx-auto mb-2 opacity-50" />
-                    <p>No upcoming exams scheduled.</p>
+            <Card className="border-0 shadow-md rounded-2xl">
+                <CardContent className="p-5 flex items-center gap-4">
+                    <div className="h-10 w-10 rounded-xl bg-emerald-100 flex items-center justify-center shrink-0">
+                        <CheckCircle className="h-5 w-5 text-emerald-600" />
+                    </div>
+                    <div>
+                        <p className="text-sm font-bold text-slate-800">No Upcoming Exams</p>
+                        <p className="text-xs text-slate-400 mt-0.5">You&apos;re all clear — enjoy your study time!</p>
+                    </div>
                 </CardContent>
             </Card>
         );
     }
 
     return (
-        <Card className="border-none shadow-sm h-full">
-            <CardHeader className="pb-3 border-b border-slate-50">
-                <CardTitle className="text-lg font-bold text-slate-800 flex items-center justify-between">
-                    <span className="flex items-center gap-2">
-                        <Calendar className="h-5 w-5 text-indigo-600" />
+        <Card className="border-0 shadow-md rounded-2xl overflow-hidden">
+            <CardHeader className="px-5 pt-5 pb-3 border-b border-slate-50">
+                <CardTitle className="text-base font-bold text-slate-900 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                        <div className="h-8 w-8 rounded-lg bg-blue-100 flex items-center justify-center">
+                            <Calendar className="h-4 w-4 text-blue-600" />
+                        </div>
                         Upcoming Exams
-                    </span>
-                    <Badge variant="secondary" className="bg-indigo-50 text-indigo-700">
-                        {upcoming.length} Next
+                    </div>
+                    <Badge className="bg-blue-50 text-blue-700 border-0 font-bold">
+                        {upcoming.length}
                     </Badge>
                 </CardTitle>
             </CardHeader>
-            <CardContent className="pt-4 space-y-4">
+            <CardContent className="px-5 pb-5 pt-4 space-y-3">
                 {upcoming.map((exam) => (
-                    <div key={exam.id} className="group relative pl-4 border-l-2 border-indigo-200 hover:border-indigo-600 transition-colors">
-                        <div className="flex justify-between items-start mb-1">
-                            <div>
-                                <h4 className="font-semibold text-slate-900 line-clamp-1 group-hover:text-indigo-700 transition-colors">
-                                    {exam.title}
-                                </h4>
-                                <p className="text-xs text-slate-500 font-medium">
-                                    {exam.subject_name || 'Subject'} • {new Date(exam.scheduled_at!).toLocaleDateString()}
+                    <Link key={exam.id} href={`/student/assessments/${exam.id}`}>
+                        <div className="group flex items-start gap-3 p-3 rounded-xl border border-slate-100 hover:border-indigo-200 hover:bg-indigo-50/40 transition-all cursor-pointer">
+                            <div className={`h-9 w-9 rounded-xl flex items-center justify-center shrink-0 ${exam.type === 'exam' ? 'bg-red-100' : 'bg-blue-100'}`}>
+                                <Clock className={`h-4 w-4 ${exam.type === 'exam' ? 'text-red-600' : 'text-blue-600'}`} />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                                <div className="flex items-center justify-between gap-2">
+                                    <h4 className="font-bold text-slate-900 text-sm line-clamp-1 group-hover:text-indigo-700 transition-colors">
+                                        {exam.title}
+                                    </h4>
+                                    <Badge className={`text-[9px] uppercase font-bold border-0 shrink-0 ${exam.type === 'exam' ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700'}`}>
+                                        {exam.type}
+                                    </Badge>
+                                </div>
+                                <p className="text-[10px] text-slate-400 mt-0.5">
+                                    {exam.subject_name || 'Subject'} · {new Date(exam.scheduled_at!).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                                    {exam.duration_minutes ? ` · ${exam.duration_minutes}m` : ''}
                                 </p>
                             </div>
-                            <Badge variant="outline" className={`text-[10px] uppercase font-bold ${exam.type === 'exam' ? 'border-red-200 text-red-700 bg-red-50' : 'border-blue-200 text-blue-700 bg-blue-50'
-                                }`}>
-                                {exam.type}
-                            </Badge>
                         </div>
-
-                        <div className="flex items-center gap-3 mt-2 text-xs text-slate-400">
-                            <span className="flex items-center gap-1">
-                                <Clock className="h-3 w-3" /> {exam.duration_minutes} mins
-                            </span>
-                            <span className="flex items-center gap-1">
-                                • {exam.total_marks} Marks
-                            </span>
-                        </div>
-
-                        <Link href={`/student/assessments/${exam.id}`} className="absolute inset-0" />
-                    </div>
+                    </Link>
                 ))}
 
-                <Link href="/student/assessments" className="block mt-2">
-                    <Button variant="ghost" className="w-full text-xs text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 h-8">
-                        View All Assessments <ArrowRight className="ml-1 h-3 w-3" />
+                <Link href="/student/assessments" className="block">
+                    <Button variant="ghost" size="sm" className="w-full text-xs text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 font-bold gap-1 rounded-xl">
+                        View All <ArrowRight className="h-3 w-3" />
                     </Button>
                 </Link>
             </CardContent>
