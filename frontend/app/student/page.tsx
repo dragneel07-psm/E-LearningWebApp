@@ -154,36 +154,33 @@ export default function StudentDashboard() {
         <div className="space-y-6 animate-in fade-in duration-500">
 
             {/* ── Hero Welcome Banner ─────────────────────────────────── */}
-            <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-indigo-600 via-indigo-700 to-purple-700 p-6 md:p-8 text-white shadow-xl shadow-indigo-200">
-                {/* decorative blobs */}
+            <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-indigo-600 via-indigo-700 to-purple-700 px-6 py-5 md:px-8 md:py-6 text-white shadow-xl shadow-indigo-200/50">
                 <div className="pointer-events-none absolute -top-10 -right-10 h-48 w-48 rounded-full bg-white/10 blur-3xl" />
                 <div className="pointer-events-none absolute -bottom-8 left-1/3 h-32 w-32 rounded-full bg-purple-400/20 blur-2xl" />
 
-                <div className="relative flex flex-col md:flex-row md:items-center justify-between gap-6">
+                <div className="relative flex flex-col md:flex-row md:items-center justify-between gap-4">
                     <div>
-                        <div className="flex items-center gap-2 mb-2">
-                            <Badge className="bg-white/20 text-white border-0 text-[10px] font-bold uppercase tracking-widest backdrop-blur-sm">
-                                <Star className="h-2.5 w-2.5 mr-1" /> Student Dashboard
-                            </Badge>
-                        </div>
+                        <Badge className="bg-white/20 text-white border-0 text-[10px] font-bold uppercase tracking-widest backdrop-blur-sm mb-2">
+                            <Star className="h-2.5 w-2.5 mr-1" /> Student Dashboard
+                        </Badge>
                         <h1 className="text-2xl md:text-3xl font-black leading-tight">
                             {user?.first_name ? `Hey, ${user.first_name}! 👋` : 'Welcome Back! 👋'}
                         </h1>
-                        <p className="text-indigo-200 mt-1 text-sm">
+                        <p className="text-indigo-200 mt-0.5 text-sm">
                             {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
                         </p>
-                        <div className="flex flex-wrap items-center gap-4 mt-4">
-                            <div className="flex items-center gap-1.5 text-sm text-indigo-100">
-                                <CheckCircle2 className="h-4 w-4 text-emerald-300" />
-                                <span>{completedCourses}/{courses.length} Courses Complete</span>
+                        <div className="flex flex-wrap items-center gap-3 mt-3">
+                            <div className="flex items-center gap-1.5 text-xs text-indigo-100 bg-white/10 rounded-lg px-2.5 py-1">
+                                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-300" />
+                                <span>{completedCourses}/{courses.length} Courses</span>
                             </div>
-                            <div className="flex items-center gap-1.5 text-sm text-indigo-100">
-                                <Target className="h-4 w-4 text-amber-300" />
+                            <div className="flex items-center gap-1.5 text-xs text-indigo-100 bg-white/10 rounded-lg px-2.5 py-1">
+                                <Target className="h-3.5 w-3.5 text-amber-300" />
                                 <span>{attendanceRate}% Attendance</span>
                             </div>
                             {pendingAssignmentsCount > 0 && (
-                                <div className="flex items-center gap-1.5 text-sm text-indigo-100">
-                                    <Bell className="h-4 w-4 text-rose-300" />
+                                <div className="flex items-center gap-1.5 text-xs text-indigo-100 bg-white/10 rounded-lg px-2.5 py-1">
+                                    <Bell className="h-3.5 w-3.5 text-rose-300" />
                                     <span>{pendingAssignmentsCount} Pending</span>
                                 </div>
                             )}
@@ -192,7 +189,7 @@ export default function StudentDashboard() {
                     {user?.tenant_features?.student_ai_chatbot !== false && (
                         <Button
                             onClick={() => setShowAITutor(true)}
-                            className="shrink-0 bg-white text-indigo-700 hover:bg-indigo-50 font-bold shadow-lg px-6 rounded-xl gap-2"
+                            className="shrink-0 bg-white text-indigo-700 hover:bg-indigo-50 font-bold shadow-lg px-5 rounded-xl gap-2 text-sm"
                         >
                             <BrainCircuit className="h-4 w-4" /> Ask AI Tutor
                         </Button>
@@ -302,10 +299,10 @@ export default function StudentDashboard() {
                 <div className="lg:col-span-2 space-y-6">
 
                     {/* My Courses */}
-                    <Card className="border-0 shadow-md overflow-hidden">
-                        <CardHeader className="flex flex-row items-center justify-between pb-2 px-6 pt-6">
+                    <Card className="border-0 shadow-md overflow-hidden rounded-2xl bg-white">
+                        <CardHeader className="flex flex-row items-center justify-between pb-2 px-6 pt-5 border-b border-slate-50">
                             <div>
-                                <CardTitle className="text-lg font-bold text-slate-900">My Courses</CardTitle>
+                                <CardTitle className="text-base font-bold text-slate-900">My Courses</CardTitle>
                                 <p className="text-xs text-slate-400 mt-0.5">{courses.length} subjects enrolled this term</p>
                             </div>
                             <Button
@@ -355,10 +352,10 @@ export default function StudentDashboard() {
                     </Card>
 
                     {/* Today's Schedule */}
-                    <Card className="border-0 shadow-md overflow-hidden">
-                        <CardHeader className="px-6 pt-6 pb-2 flex flex-row items-center justify-between">
+                    <Card className="border-0 shadow-md overflow-hidden rounded-2xl bg-white">
+                        <CardHeader className="px-6 pt-5 pb-2 border-b border-slate-50 flex flex-row items-center justify-between">
                             <div>
-                                <CardTitle className="text-lg font-bold text-slate-900">Today&apos;s Schedule</CardTitle>
+                                <CardTitle className="text-base font-bold text-slate-900">Today&apos;s Schedule</CardTitle>
                                 <p className="text-xs text-slate-400 mt-0.5">{new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}</p>
                             </div>
                             <Button variant="ghost" size="sm" className="text-indigo-600 hover:bg-indigo-50 rounded-lg gap-1 text-xs font-bold" onClick={() => router.push('/student/timetable')}>
@@ -419,8 +416,8 @@ export default function StudentDashboard() {
 
                     {/* AI Recommendations */}
                     {user?.tenant_features?.student_ai_chatbot !== false && recommendationItems.length > 0 && (
-                        <Card className="border-0 shadow-md overflow-hidden">
-                            <CardHeader className="pb-3 px-5 pt-5">
+                        <Card className="border-0 shadow-md overflow-hidden rounded-2xl bg-white">
+                            <CardHeader className="pb-3 px-5 pt-5 border-b border-slate-50">
                                 <div className="flex items-center gap-2">
                                     <div className="h-8 w-8 rounded-lg bg-indigo-100 flex items-center justify-center">
                                         <Sparkles className="h-4 w-4 text-indigo-600" />
@@ -477,8 +474,8 @@ export default function StudentDashboard() {
                     )}
 
                     {/* Notice Board */}
-                    <Card className="border-0 shadow-md overflow-hidden">
-                        <CardHeader className="px-5 pt-5 pb-3 flex flex-row items-center justify-between">
+                    <Card className="border-0 shadow-md overflow-hidden rounded-2xl bg-white">
+                        <CardHeader className="px-5 pt-5 pb-3 border-b border-slate-50 flex flex-row items-center justify-between">
                             <div className="flex items-center gap-2">
                                 <div className="h-8 w-8 rounded-lg bg-amber-100 flex items-center justify-center">
                                     <Megaphone className="h-4 w-4 text-amber-600" />

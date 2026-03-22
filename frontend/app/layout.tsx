@@ -87,8 +87,8 @@ export default function RootLayout({
           <LocalizationProvider>
             <ThemeProvider
               attribute="class"
-              defaultTheme="system"
-              enableSystem
+              defaultTheme="light"
+              enableSystem={false}
               disableTransitionOnChange
             >
               {/* Service Worker Registration (invisible) */}
