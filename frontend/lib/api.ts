@@ -4426,4 +4426,33 @@ export const paymentGatewayAPI = {
         apiRequest<KhaltiInitResponse>('/billing/school/khalti/initiate/', { method: 'POST', body: JSON.stringify({ student_fee_id }) }),
 };
 
+// ── Live Sessions (Online Classes via Jitsi) ──────────────────────────────────
+
+export interface LiveSession {
+    session_id: string;
+    timetable: number;
+    jitsi_room: string;
+    jitsi_url: string;
+    status: 'live' | 'ended';
+    started_at: string;
+    ended_at: string | null;
+    subject_name: string;
+    class_name: string;
+    teacher_name: string | null;
+}
+
+export const liveSessionAPI = {
+    /** Get all currently live sessions visible to the current user */
+    getActive: () => apiRequest<LiveSession[]>('/academic/live-sessions/active/'),
+    /** Teacher starts a live class for a timetable slot */
+    start: (timetable_id: number) =>
+        apiRequest<LiveSession>('/academic/live-sessions/start/', {
+            method: 'POST',
+            body: JSON.stringify({ timetable_id }),
+        }),
+    /** Teacher ends an active session */
+    end: (session_id: string) =>
+        apiRequest<LiveSession>(`/academic/live-sessions/${session_id}/end/`, { method: 'POST' }),
+};
+
 export default api;

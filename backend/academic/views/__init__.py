@@ -22,3 +22,4 @@ from .events import SchoolEventViewSet
 from .inventory import AssetViewSet, MaintenanceRequestViewSet, ConsumableStockViewSet
 from .student_leave import StudentLeaveViewSet
 from .complaint import ComplaintViewSet
+from .live_session import LiveSessionViewSet

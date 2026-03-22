@@ -17,7 +17,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { removeTokens } from '@/lib/auth';
-import { usersAPI, User } from '@/lib/api';
+import { usersAPI, liveSessionAPI, LiveSession, User } from '@/lib/api';
 import { NotificationBell } from '@/components/notification-bell';
 import { LanguageSelector } from '@/components/LanguageSelector';
 import { GamificationProvider } from '@/components/providers/gamification-provider';
@@ -32,6 +32,7 @@ export default function StudentLayout({ children }: { children: React.ReactNode 
     const router = useRouter();
     const [sidebarOpen, setSidebarOpen] = useState(false);
     const [user, setUser] = useState<User | null>(null);
+    const [activeSessions, setActiveSessions] = useState<LiveSession[]>([]);
     const { isOnline } = useOffline();
 
     const loadUser = useCallback(async () => {
@@ -43,9 +44,21 @@ export default function StudentLayout({ children }: { children: React.ReactNode 
         }
     }, []);
 
+    const loadActiveSessions = useCallback(async () => {
+        try {
+            const sessions = await liveSessionAPI.getActive();
+            setActiveSessions(sessions);
+        } catch {
+            // silently ignore — student may not have a class assigned yet
+        }
+    }, []);
+
     useEffect(() => {
         loadUser();
-    }, [loadUser]);
+        loadActiveSessions();
+        const interval = setInterval(loadActiveSessions, 30_000);
+        return () => clearInterval(interval);
+    }, [loadUser, loadActiveSessions]);
 
     const navItems = [
         { label: 'Dashboard', href: '/student', icon: LayoutDashboard },
@@ -241,8 +254,16 @@ export default function StudentLayout({ children }: { children: React.ReactNode 
                                         logoutHref="/login"
                                         showName={false}
                                     />
-                                    {isOnline && (
-                                        <Button className="bg-indigo-600 hover:bg-indigo-700 text-white rounded-full px-6 shadow-md shadow-indigo-200">
+                                    {isOnline && activeSessions.length > 0 && (
+                                        <Button
+                                            className="bg-green-600 hover:bg-green-700 text-white rounded-full px-6 shadow-md shadow-green-200 animate-pulse"
+                                            onClick={() => window.open(activeSessions[0].jitsi_url, '_blank', 'noopener,noreferrer')}
+                                        >
+                                            ● Join Live: {activeSessions[0].subject_name}
+                                        </Button>
+                                    )}
+                                    {isOnline && activeSessions.length === 0 && (
+                                        <Button disabled className="bg-indigo-200 text-indigo-500 rounded-full px-6 cursor-not-allowed">
                                             Join Online Class
                                         </Button>
                                     )}

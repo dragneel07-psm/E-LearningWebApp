@@ -29,3 +29,4 @@ from .event import SchoolEvent
 from .inventory import Asset, AssetAssignment, MaintenanceRequest, ConsumableStock
 from .student_leave import StudentLeave
 from .complaint import Complaint
+from .live_session import LiveSession

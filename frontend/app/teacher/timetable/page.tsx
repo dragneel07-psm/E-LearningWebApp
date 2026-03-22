@@ -3,7 +3,7 @@
 // via any medium, is strictly prohibited. Proprietary and confidential.
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useCallback } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -11,8 +11,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Calendar, Clock, Loader2, MapPin, Plus, School, Trash2 } from 'lucide-react';
-import { academicAPI, Timetable, Teacher, AcademicClass } from '@/lib/api';
+import { Calendar, Clock, Loader2, MapPin, Plus, School, Trash2, Video, VideoOff } from 'lucide-react';
+import { academicAPI, liveSessionAPI, LiveSession, Timetable, Teacher, AcademicClass } from '@/lib/api';
 import { toast } from 'sonner';
 
 const WEEK_DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
@@ -26,6 +26,9 @@ export default function TeacherTimetablePage() {
     const [myRequests, setMyRequests] = useState<Timetable[]>([]);
     const [activeDay, setActiveDay] = useState(new Date().toLocaleDateString('en-US', { weekday: 'long' }));
     const [requestSubmitting, setRequestSubmitting] = useState(false);
+    // Map of timetable_id → active LiveSession
+    const [activeSessions, setActiveSessions] = useState<Record<number, LiveSession>>({});
+    const [sessionLoading, setSessionLoading] = useState<Record<number, boolean>>({});
 
     const [requestForm, setRequestForm] = useState({
         academic_class: '',
@@ -83,6 +86,52 @@ export default function TeacherTimetablePage() {
         }
     };
 
+    const loadActiveSessions = useCallback(async () => {
+        try {
+            const sessions = await liveSessionAPI.getActive();
+            const map: Record<number, LiveSession> = {};
+            sessions.forEach((s) => { map[s.timetable] = s; });
+            setActiveSessions(map);
+        } catch {
+            // silently ignore — polling failures shouldn't break the page
+        }
+    }, []);
+
+    const handleStartClass = async (slot: Timetable) => {
+        setSessionLoading((prev) => ({ ...prev, [slot.timetable_id]: true }));
+        try {
+            const session = await liveSessionAPI.start(slot.timetable_id);
+            setActiveSessions((prev) => ({ ...prev, [slot.timetable_id]: session }));
+            window.open(session.jitsi_url, '_blank', 'noopener,noreferrer');
+            toast.success(`Class started — Jitsi room opened`);
+        } catch (error: unknown) {
+            const message = error instanceof Error ? error.message : 'Failed to start class';
+            toast.error(message);
+        } finally {
+            setSessionLoading((prev) => ({ ...prev, [slot.timetable_id]: false }));
+        }
+    };
+
+    const handleEndClass = async (slot: Timetable) => {
+        const session = activeSessions[slot.timetable_id];
+        if (!session) return;
+        setSessionLoading((prev) => ({ ...prev, [slot.timetable_id]: true }));
+        try {
+            await liveSessionAPI.end(session.session_id);
+            setActiveSessions((prev) => {
+                const next = { ...prev };
+                delete next[slot.timetable_id];
+                return next;
+            });
+            toast.success('Class ended');
+        } catch (error: unknown) {
+            const message = error instanceof Error ? error.message : 'Failed to end class';
+            toast.error(message);
+        } finally {
+            setSessionLoading((prev) => ({ ...prev, [slot.timetable_id]: false }));
+        }
+    };
+
     useEffect(() => {
         const loadTeacherContext = async () => {
             try {
@@ -106,10 +155,13 @@ export default function TeacherTimetablePage() {
                     setRequestForm((prev) => ({ ...prev, academic_class: defaultClass }));
                 }
 
-                await refreshMyRequests({
-                    teacherId: String(me.id),
-                    assignedClassIds: resolvedAssigned.map((academicClass) => Number(academicClass.id)),
-                });
+                await Promise.all([
+                    refreshMyRequests({
+                        teacherId: String(me.id),
+                        assignedClassIds: resolvedAssigned.map((academicClass) => Number(academicClass.id)),
+                    }),
+                    loadActiveSessions(),
+                ]);
             } catch (error) {
                 console.error('Failed to load teacher timetable context', error);
                 toast.error('Failed to load timetable data. Make sure your teacher profile has been set up by the admin.');
@@ -119,7 +171,11 @@ export default function TeacherTimetablePage() {
         };
 
         void loadTeacherContext();
-    }, []);
+
+        // Poll for active session changes every 30 s
+        const interval = setInterval(loadActiveSessions, 30_000);
+        return () => clearInterval(interval);
+    }, [loadActiveSessions]);
 
     useEffect(() => {
         if (!selectedClassId) {
@@ -269,11 +325,53 @@ export default function TeacherTimetablePage() {
                                 <TabsContent key={day} value={day} className="pt-4">
                                     {daySlots[day]?.length ? (
                                         <div className="space-y-3">
-                                            {daySlots[day].map((slot) => (
-                                                <div key={slot.timetable_id} className="border rounded-lg p-4 bg-white">
-                                                    <div className="flex flex-wrap items-center gap-2 mb-2">
-                                                        <Badge variant="outline">{slot.entry_type === 'extra' ? 'Extra' : 'Main'}</Badge>
-                                                        <Badge variant="secondary">{slot.status || 'approved'}</Badge>
+                                            {daySlots[day].map((slot) => {
+                                                const activeSession = activeSessions[slot.timetable_id];
+                                                const isLive = Boolean(activeSession);
+                                                const btnLoading = sessionLoading[slot.timetable_id];
+                                                return (
+                                                <div key={slot.timetable_id} className={`border rounded-lg p-4 bg-white ${isLive ? 'border-green-400 ring-1 ring-green-300' : ''}`}>
+                                                    <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+                                                        <div className="flex items-center gap-2">
+                                                            <Badge variant="outline">{slot.entry_type === 'extra' ? 'Extra' : 'Main'}</Badge>
+                                                            <Badge variant="secondary">{slot.status || 'approved'}</Badge>
+                                                            {isLive && (
+                                                                <Badge className="bg-green-500 text-white animate-pulse">● LIVE</Badge>
+                                                            )}
+                                                        </div>
+                                                        <div className="flex items-center gap-2">
+                                                            {isLive && (
+                                                                <Button
+                                                                    size="sm"
+                                                                    variant="outline"
+                                                                    className="text-green-700 border-green-400 hover:bg-green-50"
+                                                                    onClick={() => window.open(activeSession.jitsi_url, '_blank', 'noopener,noreferrer')}
+                                                                >
+                                                                    <Video className="h-4 w-4 mr-1" /> Rejoin
+                                                                </Button>
+                                                            )}
+                                                            {isLive ? (
+                                                                <Button
+                                                                    size="sm"
+                                                                    variant="destructive"
+                                                                    disabled={btnLoading}
+                                                                    onClick={() => handleEndClass(slot)}
+                                                                >
+                                                                    {btnLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <VideoOff className="h-4 w-4 mr-1" />}
+                                                                    End Class
+                                                                </Button>
+                                                            ) : (
+                                                                <Button
+                                                                    size="sm"
+                                                                    className="bg-indigo-600 hover:bg-indigo-700 text-white"
+                                                                    disabled={btnLoading}
+                                                                    onClick={() => handleStartClass(slot)}
+                                                                >
+                                                                    {btnLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Video className="h-4 w-4 mr-1" />}
+                                                                    Start Class
+                                                                </Button>
+                                                            )}
+                                                        </div>
                                                     </div>
                                                     <h3 className="font-semibold text-slate-900">{slot.subject_name}</h3>
                                                     <div className="text-sm text-slate-600 mt-2 flex flex-wrap items-center gap-4">
@@ -295,7 +393,8 @@ export default function TeacherTimetablePage() {
                                                         )}
                                                     </div>
                                                 </div>
-                                            ))}
+                                                );
+                                            })}
                                         </div>
                                     ) : (
                                         <div className="py-10 text-center text-slate-500">
