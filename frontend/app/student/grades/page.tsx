@@ -10,9 +10,8 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import {
-    Award, TrendingUp, Clock,
-    ChevronRight, Target, BrainCircuit, BarChart3,
-    ArrowUpRight
+    Award, TrendingUp, Clock, ChevronRight, Target, BrainCircuit,
+    BarChart3, ArrowUpRight, Sparkles, BookOpen, Trophy
 } from 'lucide-react';
 import { academicAPI, Result, Assessment, Subject } from '@/lib/api';
 
@@ -24,23 +23,25 @@ type ResultWithMeta = Result & {
 
 function toList<T>(payload: unknown): T[] {
     if (Array.isArray(payload)) return payload as T[];
-    if (payload && typeof payload === 'object' && Array.isArray((payload as any).results)) {
-        return (payload as any).results as T[];
-    }
+    if (payload && typeof payload === 'object' && Array.isArray((payload as any).results)) return (payload as any).results as T[];
     return [];
 }
+
+const GRADE_LABEL = (pct: number) => {
+    if (pct >= 90) return { label: 'A+', color: 'text-emerald-600', bg: 'bg-emerald-50' };
+    if (pct >= 80) return { label: 'A', color: 'text-teal-600', bg: 'bg-teal-50' };
+    if (pct >= 70) return { label: 'B+', color: 'text-blue-600', bg: 'bg-blue-50' };
+    if (pct >= 60) return { label: 'B', color: 'text-indigo-600', bg: 'bg-indigo-50' };
+    if (pct >= 50) return { label: 'C', color: 'text-violet-600', bg: 'bg-violet-50' };
+    return { label: 'F', color: 'text-red-600', bg: 'bg-red-50' };
+};
 
 export default function StudentGradesPage() {
     const router = useRouter();
     const [loading, setLoading] = useState(true);
     const [results, setResults] = useState<ResultWithMeta[]>([]);
     const [subjectMastery, setSubjectMastery] = useState<Array<{ name: string; progress: number }>>([]);
-    const [stats, setStats] = useState({
-        averageScore: 0,
-        completedAssessments: 0,
-        totalXp: 0,
-        topSubject: 'N/A',
-    });
+    const [stats, setStats] = useState({ averageScore: 0, completedAssessments: 0, totalXp: 0, topSubject: 'N/A' });
 
     useEffect(() => {
         async function loadData() {
@@ -51,234 +52,227 @@ export default function StudentGradesPage() {
                     academicAPI.getAssessments().catch(() => []),
                     academicAPI.getSubjects().catch(() => []),
                 ]);
-
-                const allResults = toList<Result>(allResultsRaw).filter((result) => String(result.student) === String(myStudent.id));
+                const allResults = toList<Result>(allResultsRaw).filter((r) => String(r.student) === String(myStudent.id));
                 const allAssessments = toList<Assessment>(allAssessmentsRaw);
                 const allSubjects = toList<Subject>(allSubjectsRaw);
-
-                const assessmentMap = new Map(allAssessments.map((assessment) => [String(assessment.assessment_id), assessment]));
-                const subjectMap = new Map(allSubjects.map((subject) => [Number(subject.id), subject]));
-
-                const enriched = allResults.map((result) => {
-                    const assessmentDetails = assessmentMap.get(String(result.assessment));
-                    const subjectDetails = assessmentDetails ? subjectMap.get(Number(assessmentDetails.subject)) : undefined;
-                    const totalMarks = Number(assessmentDetails?.total_marks || 0);
-                    const percentage = totalMarks > 0
-                        ? Math.round((Number(result.score || 0) / totalMarks) * 100)
-                        : Number(result.score || 0);
-
-                    return {
-                        ...result,
-                        assessmentDetails,
-                        subjectDetails,
-                        percentage,
-                    };
+                const assessmentMap = new Map(allAssessments.map((a) => [String(a.assessment_id), a]));
+                const subjectMap = new Map(allSubjects.map((s) => [Number(s.id), s]));
+                const enriched = allResults.map((r) => {
+                    const ad = assessmentMap.get(String(r.assessment));
+                    const sd = ad ? subjectMap.get(Number(ad.subject)) : undefined;
+                    const tm = Number(ad?.total_marks || 0);
+                    const pct = tm > 0 ? Math.round((Number(r.score || 0) / tm) * 100) : Number(r.score || 0);
+                    return { ...r, assessmentDetails: ad, subjectDetails: sd, percentage: pct };
                 }).sort((a, b) => new Date(b.submitted_at || '').getTime() - new Date(a.submitted_at || '').getTime());
-
                 setResults(enriched);
-
                 if (enriched.length > 0) {
-                    const averageScore = Math.round(enriched.reduce((acc, result) => acc + (result.percentage || 0), 0) / enriched.length);
-                    const totalXp = enriched.reduce((acc, result) => acc + Math.round((result.percentage || 0) * 1.5), 0);
-
-                    const subjectGroups = new Map<string, number[]>();
-                    enriched.forEach((result) => {
-                        const key = result.subjectDetails?.name || 'General';
-                        const bucket = subjectGroups.get(key) || [];
-                        bucket.push(result.percentage || 0);
-                        subjectGroups.set(key, bucket);
-                    });
-
-                    const mastery = Array.from(subjectGroups.entries()).map(([name, scores]) => ({
-                        name,
-                        progress: Math.round(scores.reduce((acc, score) => acc + score, 0) / scores.length),
-                    })).sort((a, b) => b.progress - a.progress);
-
+                    const avg = Math.round(enriched.reduce((acc, r) => acc + (r.percentage || 0), 0) / enriched.length);
+                    const xp = enriched.reduce((acc, r) => acc + Math.round((r.percentage || 0) * 1.5), 0);
+                    const groups = new Map<string, number[]>();
+                    enriched.forEach((r) => { const k = r.subjectDetails?.name || 'General'; groups.set(k, [...(groups.get(k) || []), r.percentage || 0]); });
+                    const mastery = Array.from(groups.entries()).map(([n, s]) => ({ name: n, progress: Math.round(s.reduce((a, b) => a + b, 0) / s.length) })).sort((a, b) => b.progress - a.progress);
                     setSubjectMastery(mastery.slice(0, 6));
-                    setStats({
-                        averageScore,
-                        completedAssessments: enriched.length,
-                        totalXp,
-                        topSubject: mastery[0]?.name || 'N/A',
-                    });
-                } else {
-                    setSubjectMastery([]);
-                    setStats({ averageScore: 0, completedAssessments: 0, totalXp: 0, topSubject: 'N/A' });
+                    setStats({ averageScore: avg, completedAssessments: enriched.length, totalXp: xp, topSubject: mastery[0]?.name || 'N/A' });
                 }
-            } catch (error) {
-                console.error('Failed to load grades', error);
-            } finally {
-                setLoading(false);
-            }
+            } catch (e) { console.error('Failed to load grades', e); }
+            finally { setLoading(false); }
         }
-
         loadData();
     }, []);
 
-    const passCount = useMemo(() => results.filter((result) => (result.percentage || 0) >= 50).length, [results]);
+    const passCount = useMemo(() => results.filter((r) => (r.percentage || 0) >= 50).length, [results]);
 
-    if (loading) return <div className="p-8 text-center text-slate-400">Loading your academic records...</div>;
+    if (loading) return (
+        <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
+            <div className="h-14 w-14 rounded-2xl bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center shadow-lg shadow-indigo-200 animate-pulse">
+                <Award className="h-7 w-7 text-white" />
+            </div>
+            <p className="text-slate-400 text-sm font-medium animate-pulse">Loading your academic records…</p>
+        </div>
+    );
 
     return (
-        <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+
+            {/* Header */}
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
                 <div>
-                    <h1 className="text-4xl font-black text-slate-900 tracking-tight flex items-center gap-3">
-                        <Award className="h-10 w-10 text-indigo-600" /> Academic Journey
-                    </h1>
-                    <p className="text-slate-500 font-medium">Tracking your growth, one assessment at a time.</p>
-                </div>
-                <div className="flex items-center gap-2">
-                    <Button variant="outline" className="rounded-xl border-slate-200 shadow-sm">
-                        <TrendingUp className="mr-2 h-4 w-4 text-emerald-500" /> Export Transcript
-                    </Button>
-                </div>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-                <Card className="border-none shadow-xl bg-gradient-to-br from-indigo-600 to-indigo-700 text-white overflow-hidden relative">
-                    <CardHeader className="pb-2">
-                        <CardTitle className="text-sm font-bold uppercase tracking-wider opacity-80">Average Grade</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-4xl font-black">{stats.averageScore}%</div>
-                        <div className="flex items-center mt-2 text-xs font-bold text-indigo-100 bg-white/10 w-fit px-2 py-1 rounded-full">
-                            <ArrowUpRight className="h-3 w-3 mr-1" /> CURRENT PERFORMANCE
-                        </div>
-                    </CardContent>
-                    <TrendingUp className="absolute -bottom-4 -right-4 h-24 w-24 opacity-10 rotate-12" />
-                </Card>
-
-                <Card className="border-slate-200 shadow-lg group hover:border-indigo-200 transition-all">
-                    <CardHeader className="pb-2">
-                        <CardTitle className="text-sm font-bold uppercase tracking-wider text-slate-400">XP Earned</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-4xl font-black text-slate-900">{stats.totalXp.toLocaleString()}</div>
-                        <div className="flex items-center mt-2 text-xs font-bold text-amber-600">Keep pushing for next level!</div>
-                    </CardContent>
-                </Card>
-
-                <Card className="border-slate-200 shadow-lg">
-                    <CardHeader className="pb-2">
-                        <CardTitle className="text-sm font-bold uppercase tracking-wider text-slate-400">Total Assessments</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-4xl font-black text-slate-900">{stats.completedAssessments}</div>
-                        <div className="flex items-center mt-2 text-xs font-bold text-slate-500">{passCount} Successfully Passed</div>
-                    </CardContent>
-                </Card>
-
-                <Card className="border-slate-200 shadow-lg">
-                    <CardHeader className="pb-2">
-                        <CardTitle className="text-sm font-bold uppercase tracking-wider text-slate-400">Top Mastery</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-black text-slate-900 line-clamp-1">{stats.topSubject}</div>
-                        <div className="flex items-center mt-2 text-xs font-bold text-emerald-600">Best subject based on results</div>
-                    </CardContent>
-                </Card>
-            </div>
-
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                <div className="lg:col-span-2 space-y-6">
-                    <div className="flex items-center justify-between">
-                        <h2 className="text-2xl font-bold text-slate-900">Recent Assessments</h2>
-                        <div className="flex items-center gap-2">
-                            <Badge variant="secondary" className="bg-slate-100 text-slate-600">ALL SUBJECTS</Badge>
-                        </div>
+                    <div className="flex items-center gap-2 text-indigo-600 font-bold mb-1">
+                        <Award className="h-4 w-4" />
+                        <span className="text-[10px] uppercase tracking-[0.2em]">Academic Records</span>
                     </div>
+                    <h1 className="text-3xl font-black text-slate-900 tracking-tight">My Grades</h1>
+                    <p className="text-slate-500 mt-1 text-sm">Tracking your growth, one assessment at a time.</p>
+                </div>
+                <Button variant="outline" className="rounded-xl border-slate-200 shadow-sm gap-2" onClick={() => router.push('/student/assessments')}>
+                    <TrendingUp className="h-4 w-4 text-indigo-500" /> View Assessments
+                </Button>
+            </div>
 
-                    <div className="space-y-4">
-                        {results.map((result) => (
-                            <Card
-                                key={result.id}
-                                className="group hover:shadow-xl hover:scale-[1.01] transition-all cursor-pointer border-slate-200"
-                                onClick={() => router.push(`/student/assessments/${result.assessment}/results?result_id=${result.id}`)}
-                            >
-                                <CardContent className="p-6">
-                                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            {/* Stats */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-5">
+                <Card className="border-0 shadow-xl overflow-hidden rounded-2xl col-span-2 lg:col-span-1">
+                    <CardContent className="p-0 relative">
+                        <div className="absolute inset-0 bg-gradient-to-br from-indigo-600 to-violet-700" />
+                        <div className="relative p-6">
+                            <p className="text-xs font-bold text-indigo-200 uppercase tracking-widest mb-3">Average Grade</p>
+                            <div className="flex items-end gap-2">
+                                <span className="text-5xl font-black text-white">{stats.averageScore}%</span>
+                                <span className={`text-xl font-black mb-1 ${GRADE_LABEL(stats.averageScore).color.replace('600', '200')}`}>
+                                    {GRADE_LABEL(stats.averageScore).label}
+                                </span>
+                            </div>
+                            <div className="mt-3 flex items-center gap-1.5 text-[10px] font-bold text-indigo-200 bg-white/10 w-fit px-2 py-1 rounded-full">
+                                <ArrowUpRight className="h-3 w-3" /> CURRENT PERFORMANCE
+                            </div>
+                        </div>
+                        <TrendingUp className="absolute -bottom-3 -right-3 h-20 w-20 opacity-10 rotate-12 text-white" />
+                    </CardContent>
+                </Card>
+
+                {[
+                    { label: 'XP Earned', value: stats.totalXp.toLocaleString(), sub: 'Keep pushing!', icon: Sparkles, color: 'from-amber-50 to-orange-50', icolor: 'text-amber-600', ibg: 'bg-amber-100' },
+                    { label: 'Total Assessed', value: stats.completedAssessments, sub: `${passCount} passed`, icon: Target, color: 'from-blue-50 to-indigo-50', icolor: 'text-blue-600', ibg: 'bg-blue-100' },
+                    { label: 'Top Mastery', value: stats.topSubject, sub: 'Strongest area', icon: Trophy, color: 'from-emerald-50 to-teal-50', icolor: 'text-emerald-600', ibg: 'bg-emerald-100' },
+                ].map((s) => (
+                    <Card key={s.label} className="border-0 shadow-md rounded-2xl overflow-hidden">
+                        <CardContent className="p-5 relative">
+                            <div className={`absolute inset-0 bg-gradient-to-br ${s.color}`} />
+                            <div className="relative flex flex-col gap-3">
+                                <div className={`h-10 w-10 rounded-xl ${s.ibg} flex items-center justify-center`}>
+                                    <s.icon className={`h-5 w-5 ${s.icolor}`} />
+                                </div>
+                                <div>
+                                    <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">{s.label}</p>
+                                    <p className="text-2xl font-black text-slate-900 mt-1 truncate">{s.value}</p>
+                                    <p className="text-[10px] text-slate-500 font-medium mt-1">{s.sub}</p>
+                                </div>
+                            </div>
+                        </CardContent>
+                    </Card>
+                ))}
+            </div>
+
+            {/* Results + Mastery */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+
+                {/* Recent Assessments */}
+                <div className="lg:col-span-2 space-y-4">
+                    <h2 className="text-xl font-bold text-slate-900">Recent Assessments</h2>
+                    <div className="space-y-3">
+                        {results.map((result) => {
+                            const pct = result.percentage || 0;
+                            const grade = GRADE_LABEL(pct);
+                            return (
+                                <Card
+                                    key={result.id}
+                                    className="border-0 shadow-md hover:shadow-xl transition-all cursor-pointer group rounded-xl overflow-hidden"
+                                    onClick={() => router.push(`/student/assessments/${result.assessment}/results?result_id=${result.id}`)}
+                                >
+                                    <CardContent className="p-5">
                                         <div className="flex items-center gap-4">
-                                            <div className={`h-12 w-12 rounded-2xl flex items-center justify-center ${(result.percentage || 0) >= 50 ? 'bg-indigo-50 text-indigo-600' : 'bg-red-50 text-red-600'}`}>
-                                                <Target className="h-6 w-6" />
+                                            <div className={`h-12 w-12 rounded-xl ${grade.bg} flex items-center justify-center shrink-0`}>
+                                                <span className={`font-black text-sm ${grade.color}`}>{grade.label}</span>
                                             </div>
-                                            <div>
-                                                <h4 className="font-bold text-slate-900 group-hover:text-indigo-600 transition-colors">{result.assessmentDetails?.title || result.assessment_title || `Assessment ${result.assessment}`}</h4>
-                                                <p className="text-sm text-slate-500 flex items-center gap-2">
-                                                    <Clock className="h-3 w-3" /> Submitted on {result.submitted_at ? new Date(result.submitted_at).toLocaleDateString() : 'N/A'}
-                                                </p>
+                                            <div className="flex-1 min-w-0">
+                                                <h4 className="font-bold text-slate-900 group-hover:text-indigo-600 transition-colors truncate">
+                                                    {result.assessmentDetails?.title || `Assessment ${result.assessment}`}
+                                                </h4>
+                                                <div className="flex items-center gap-3 mt-1">
+                                                    <span className="text-[10px] text-slate-400 flex items-center gap-1">
+                                                        <Clock className="h-3 w-3" />
+                                                        {result.submitted_at ? new Date(result.submitted_at).toLocaleDateString() : 'N/A'}
+                                                    </span>
+                                                    {result.subjectDetails?.name && (
+                                                        <Badge className="bg-slate-100 text-slate-500 border-0 text-[9px] font-bold">
+                                                            {result.subjectDetails.name}
+                                                        </Badge>
+                                                    )}
+                                                    {result.ai_feedback && (
+                                                        <Badge className="bg-indigo-50 text-indigo-600 border-0 text-[9px] font-bold gap-1">
+                                                            <BrainCircuit className="h-2.5 w-2.5" /> AI
+                                                        </Badge>
+                                                    )}
+                                                </div>
+                                            </div>
+                                            <div className="flex items-center gap-3 shrink-0">
+                                                <div className="text-right">
+                                                    <div className="text-2xl font-black text-slate-900">{pct}%</div>
+                                                    <Badge className={`${pct >= 50 ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'} border-0 text-[9px] font-bold`}>
+                                                        {pct >= 50 ? 'PASSED' : 'RETRY'}
+                                                    </Badge>
+                                                </div>
+                                                <ChevronRight className="h-4 w-4 text-slate-300 group-hover:text-indigo-500 group-hover:translate-x-0.5 transition-all" />
                                             </div>
                                         </div>
-                                        <div className="flex items-center gap-6">
-                                            <div className="text-right">
-                                                <div className="text-2xl font-black text-slate-900">{result.percentage || 0}%</div>
-                                                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">Performance</div>
-                                            </div>
-                                            <ChevronRight className="text-slate-300 group-hover:text-indigo-600 group-hover:translate-x-1 transition-all" />
-                                        </div>
-                                    </div>
-                                    <div className="mt-4 flex items-center gap-2">
-                                        <Badge className={(result.percentage || 0) >= 50 ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-100' : 'bg-red-100 text-red-700 hover:bg-red-100'}>
-                                            {(result.percentage || 0) >= 50 ? 'PASSED' : 'RETRY NEEDED'}
-                                        </Badge>
-                                        {result.ai_feedback && (
-                                            <Badge variant="outline" className="border-indigo-200 text-indigo-600 bg-indigo-50/30">
-                                                <BrainCircuit className="h-3 w-3 mr-1" /> AI ANALYZED
-                                            </Badge>
-                                        )}
-                                    </div>
-                                </CardContent>
-                            </Card>
-                        ))}
+                                        <Progress value={pct} className="h-1.5 mt-3 bg-slate-100" />
+                                    </CardContent>
+                                </Card>
+                            );
+                        })}
                         {results.length === 0 && (
-                            <Card className="border-slate-200">
-                                <CardContent className="p-8 text-center text-slate-500">No results published yet.</CardContent>
+                            <Card className="border-0 shadow-md rounded-xl">
+                                <CardContent className="py-16 text-center">
+                                    <BookOpen className="h-10 w-10 text-slate-200 mx-auto mb-3" />
+                                    <p className="text-slate-400 font-medium">No results published yet.</p>
+                                </CardContent>
                             </Card>
                         )}
                     </div>
                 </div>
 
+                {/* Subject Mastery */}
                 <div className="space-y-6">
-                    <h2 className="text-2xl font-bold text-slate-900">Subject Mastery</h2>
-                    <Card className="border-none shadow-xl bg-white overflow-hidden">
-                        <CardHeader className="bg-slate-50/50 border-b">
-                            <CardTitle className="text-lg flex items-center gap-2">
+                    <h2 className="text-xl font-bold text-slate-900">Subject Mastery</h2>
+                    <Card className="border-0 shadow-xl rounded-2xl overflow-hidden">
+                        <CardHeader className="bg-gradient-to-br from-slate-50 to-white border-b border-slate-50 px-6 pt-5 pb-4">
+                            <CardTitle className="text-sm font-bold flex items-center gap-2 text-slate-700">
                                 <BarChart3 className="h-4 w-4 text-indigo-600" /> Topic Progress
                             </CardTitle>
                         </CardHeader>
-                        <CardContent className="p-6 space-y-6">
-                            {subjectMastery.map((subject) => (
-                                <div key={subject.name} className="space-y-2">
-                                    <div className="flex justify-between text-sm font-bold">
-                                        <span className="text-slate-700">{subject.name}</span>
-                                        <span className="text-slate-900">{subject.progress}%</span>
+                        <CardContent className="p-6 space-y-5">
+                            {subjectMastery.map((s) => {
+                                const g = GRADE_LABEL(s.progress);
+                                return (
+                                    <div key={s.name} className="space-y-2">
+                                        <div className="flex justify-between items-center text-sm">
+                                            <span className="font-bold text-slate-700 truncate max-w-[140px]">{s.name}</span>
+                                            <div className="flex items-center gap-2">
+                                                <span className={`text-xs font-black ${g.color}`}>{g.label}</span>
+                                                <span className="font-black text-slate-900 text-sm">{s.progress}%</span>
+                                            </div>
+                                        </div>
+                                        <Progress value={s.progress} className="h-2.5 bg-slate-100" />
                                     </div>
-                                    <Progress value={subject.progress} className="h-1.5" />
-                                </div>
-                            ))}
+                                );
+                            })}
                             {subjectMastery.length === 0 && (
-                                <p className="text-sm text-slate-500">No mastery data available yet.</p>
+                                <p className="text-sm text-slate-400 text-center py-4">No mastery data yet.</p>
                             )}
                         </CardContent>
                     </Card>
 
-                    <Card className="bg-indigo-900 text-white border-none shadow-2xl relative overflow-hidden">
-                        <CardContent className="p-6 relative z-10">
-                            <div className="flex items-center gap-3 mb-4">
-                                <div className="p-2 bg-indigo-500/30 rounded-lg">
-                                    <TrendingUp className="h-5 w-5 text-indigo-300" />
+                    {/* Growth Insight */}
+                    <div className="relative rounded-2xl overflow-hidden shadow-xl" style={{ background: 'linear-gradient(135deg, #1e1b4b 0%, #312e81 50%, #3730a3 100%)' }}>
+                        <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-400/20 rounded-full -mr-16 -mt-16 blur-3xl" />
+                        <div className="relative p-6">
+                            <div className="flex items-center gap-3 mb-3">
+                                <div className="p-2 bg-indigo-500/30 rounded-xl">
+                                    <TrendingUp className="h-4 w-4 text-indigo-300" />
                                 </div>
-                                <h4 className="font-bold">Growth Insight</h4>
+                                <h4 className="font-bold text-white">Growth Insight</h4>
                             </div>
                             <p className="text-sm text-indigo-100 leading-relaxed mb-4">
-                                Your strongest area is <span className="text-emerald-400 font-bold">{stats.topSubject}</span>. Maintain this momentum while improving weaker subjects.
+                                Your strongest area is <span className="text-emerald-300 font-bold">{stats.topSubject}</span>. Maintain momentum while building weaker areas.
                             </p>
-                            <Button className="w-full bg-white text-indigo-900 hover:bg-white/90 font-bold" onClick={() => router.push('/student/learning-path')}>
+                            <Button
+                                className="w-full bg-white text-indigo-900 hover:bg-white/95 font-bold rounded-xl shadow-md"
+                                onClick={() => router.push('/student/learning-path')}
+                            >
                                 View Learning Plan
                             </Button>
-                        </CardContent>
-                        <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/20 rounded-full -mr-16 -mt-16 blur-3xl"></div>
-                    </Card>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>

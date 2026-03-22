@@ -153,56 +153,70 @@ export default function StudentFeesPage() {
     }
 
     return (
-        <div className="space-y-6">
+        <div className="space-y-8 animate-in fade-in duration-500">
             {/* Header */}
             <div>
-                <h1 className="text-3xl font-bold tracking-tight flex items-center gap-2">
-                    <Wallet className="h-8 w-8 text-indigo-600" />
-                    Fees & Payments
-                </h1>
-                <p className="text-muted-foreground">Manage your school fees and view payment history</p>
+                <div className="flex items-center gap-2 text-indigo-600 font-bold mb-1">
+                    <Wallet className="h-4 w-4" />
+                    <span className="text-[10px] uppercase tracking-[0.2em]">Finance</span>
+                </div>
+                <h1 className="text-3xl font-black text-slate-900 tracking-tight">Fees & Payments</h1>
+                <p className="text-slate-500 mt-1 text-sm">Manage your school fees and payment history.</p>
             </div>
 
             {/* Financial Summary */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <Card className="bg-indigo-600 text-white border-0 shadow-lg shadow-indigo-100">
-                    <CardContent className="p-6">
-                        <p className="text-indigo-100 text-sm font-medium">Total Fees</p>
-                        <div className="flex items-center justify-between mt-2">
-                            <h3 className="text-3xl font-bold">${totalDue.toLocaleString()}</h3>
-                            <CreditCard className="h-8 w-8 opacity-40" />
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+                <Card className="border-0 shadow-xl overflow-hidden rounded-2xl">
+                    <CardContent className="p-6 relative">
+                        <div className="absolute inset-0 bg-gradient-to-br from-indigo-600 to-violet-700" />
+                        <div className="relative">
+                            <p className="text-indigo-200 text-xs font-bold uppercase tracking-widest mb-3">Total Fees</p>
+                            <h3 className="text-4xl font-black text-white">${totalDue.toLocaleString()}</h3>
+                            <div className="mt-3 w-full bg-white/20 rounded-full h-1.5">
+                                <div className="bg-white h-1.5 rounded-full transition-all" style={{ width: `${totalDue > 0 ? Math.round((totalPaid / totalDue) * 100) : 0}%` }} />
+                            </div>
+                            <p className="text-indigo-200 text-[10px] mt-1.5 font-medium">{totalDue > 0 ? Math.round((totalPaid / totalDue) * 100) : 0}% settled</p>
                         </div>
+                        <CreditCard className="absolute bottom-4 right-4 h-10 w-10 text-white/10" />
                     </CardContent>
                 </Card>
 
-                <Card className="bg-emerald-600 text-white border-0 shadow-lg shadow-emerald-100">
-                    <CardContent className="p-6">
-                        <p className="text-emerald-100 text-sm font-medium">Total Paid</p>
-                        <div className="flex items-center justify-between mt-2">
-                            <h3 className="text-3xl font-bold">${totalPaid.toLocaleString()}</h3>
-                            <CheckCircle2 className="h-8 w-8 opacity-40" />
+                <Card className="border-0 shadow-xl overflow-hidden rounded-2xl">
+                    <CardContent className="p-6 relative">
+                        <div className="absolute inset-0 bg-gradient-to-br from-emerald-500 to-teal-600" />
+                        <div className="relative">
+                            <p className="text-emerald-100 text-xs font-bold uppercase tracking-widest mb-3">Total Paid</p>
+                            <h3 className="text-4xl font-black text-white">${totalPaid.toLocaleString()}</h3>
+                            <p className="text-emerald-100 text-[10px] mt-4 font-medium flex items-center gap-1">
+                                <CheckCircle2 className="h-3 w-3" /> Cleared successfully
+                            </p>
                         </div>
+                        <CheckCircle2 className="absolute bottom-4 right-4 h-10 w-10 text-white/10" />
                     </CardContent>
                 </Card>
 
-                <Card className={`text-white border-0 shadow-lg ${pendingAmount > 0 ? 'bg-amber-500 shadow-amber-100' : 'bg-slate-800 shadow-slate-100'}`}>
-                    <CardContent className="p-6">
-                        <p className={`${pendingAmount > 0 ? 'text-amber-50 origin-left' : 'text-slate-400'} text-sm font-medium`}>Outstanding Balance</p>
-                        <div className="flex items-center justify-between mt-2">
-                            <h3 className="text-3xl font-bold">${pendingAmount.toLocaleString()}</h3>
-                            <AlertCircle className="h-8 w-8 opacity-40" />
+                <Card className={`border-0 shadow-xl overflow-hidden rounded-2xl`}>
+                    <CardContent className="p-6 relative">
+                        <div className={`absolute inset-0 bg-gradient-to-br ${pendingAmount > 0 ? 'from-amber-500 to-orange-600' : 'from-slate-700 to-slate-800'}`} />
+                        <div className="relative">
+                            <p className={`${pendingAmount > 0 ? 'text-amber-100' : 'text-slate-400'} text-xs font-bold uppercase tracking-widest mb-3`}>Outstanding</p>
+                            <h3 className="text-4xl font-black text-white">${pendingAmount.toLocaleString()}</h3>
+                            <p className={`${pendingAmount > 0 ? 'text-amber-100' : 'text-slate-400'} text-[10px] mt-4 font-medium`}>
+                                {pendingAmount > 0 ? '⚠ Payment pending' : '✓ All cleared!'}
+                            </p>
                         </div>
+                        <AlertCircle className="absolute bottom-4 right-4 h-10 w-10 text-white/10" />
                     </CardContent>
                 </Card>
             </div>
 
             {/* Main Tabs */}
-            <Tabs defaultValue="dues" className="space-y-4">
-                <TabsList className="bg-white border p-1 rounded-xl w-full md:w-auto h-auto">
-                    <TabsTrigger value="dues" className="rounded-lg px-6 py-2 content-center gap-2">
+            <Tabs defaultValue="dues" className="space-y-6">
+                <TabsList className="bg-white border border-slate-200 p-1 rounded-2xl shadow-sm w-full md:w-auto h-auto gap-1">
+                    <TabsTrigger value="dues" className="rounded-xl px-5 py-2.5 font-bold text-sm data-[state=active]:bg-indigo-600 data-[state=active]:text-white data-[state=active]:shadow-md gap-2">
                         <DollarSign className="h-4 w-4" /> Outstanding Dues
                     </TabsTrigger>
-                    <TabsTrigger value="history" className="rounded-lg px-6 py-2 content-center gap-2">
+                    <TabsTrigger value="history" className="rounded-xl px-5 py-2.5 font-bold text-sm data-[state=active]:bg-indigo-600 data-[state=active]:text-white data-[state=active]:shadow-md gap-2">
                         <History className="h-4 w-4" /> Payment History
                     </TabsTrigger>
                 </TabsList>

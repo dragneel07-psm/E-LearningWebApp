@@ -4,12 +4,13 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import {
-    FileText, Calendar, CheckCircle, AlertCircle, BookOpen, Upload
+    FileText, Calendar, CheckCircle2, AlertCircle, BookOpen,
+    Upload, Clock, Loader2, ChevronRight, Flame, Award, Inbox
 } from 'lucide-react';
 import { academicAPI, Assessment, Submission } from '@/lib/api';
 import Link from 'next/link';
@@ -20,231 +21,257 @@ export default function AssignmentsDashboard() {
     const [assignments, setAssignments] = useState<Assessment[]>([]);
     const [submissions, setSubmissions] = useState<Submission[]>([]);
 
-    useEffect(() => {
-        loadData();
-    }, []);
+    useEffect(() => { loadData(); }, []);
 
     async function loadData() {
         try {
             setLoading(true);
-            // Fetch students to find the current student ID (temporary workaround if no 'me' endpoint for student)
-            // In a real app, use a dedicated endpoint like /api/student/me/assignments
-            // Fetch current student profile directly using "me" endpoint
             const student = await academicAPI.getMyStudent();
-            const studentId = student ? student.student_id : null;
-
-            if (!studentId) {
-                console.error("No student profile found for current user");
-                // For demo purposes, we might want to still show some data or empty state
-            }
-
+            const studentId = student?.student_id ?? null;
             const [allAssessments, allSubmissions] = await Promise.all([
                 academicAPI.getAssessments(),
-                academicAPI.getSubmissions()
+                academicAPI.getSubmissions(),
             ]);
-
-            // Filter assignments (assuming 'assignment' type check)
-            // Note: Adjust filter based on real data structure
-            const assignmentTasks = allAssessments.filter(a => a.type === 'assignment' || !a.type); // Default to include if type undefined
-            setAssignments(assignmentTasks);
-
-            // Filter submissions for this student
-            const mySubmissions = studentId
-                ? allSubmissions.filter(s => s.student === studentId)
-                : [];
-            setSubmissions(mySubmissions);
-
-        } catch (error) {
-            console.error("Failed to load assignments:", error);
-            toast.error("Failed to load assignments. Please try again.");
+            setAssignments(allAssessments.filter((a) => a.type === 'assignment' || !a.type));
+            setSubmissions(studentId ? allSubmissions.filter((s) => s.student === studentId) : []);
+        } catch {
+            toast.error('Failed to load assignments. Please try again.');
         } finally {
             setLoading(false);
         }
     }
 
-    // --- Helper Logic ---
     const getDaysUntilDue = (dueDate: string) => {
         if (!dueDate) return 999;
-        const due = new Date(dueDate);
-        const today = new Date();
-        const diffTime = due.getTime() - today.getTime();
-        return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        return Math.ceil((new Date(dueDate).getTime() - Date.now()) / 86400000);
     };
 
-    const getStatus = (assignmentId: string) => {
-        const sub = submissions.find(s => s.assessment === assignmentId);
-        if (!sub) return 'pending';
-        return sub.status; // 'submitted', 'graded', 'draft'
+    const getStatus = (id: string) => {
+        const sub = submissions.find((s) => s.assessment === id);
+        return sub ? sub.status : 'pending';
     };
 
-    const pendingAssignments = assignments.filter(a => {
-        const status = getStatus(a.assessment_id || "");
-        return status === 'pending' || status === 'draft' || !status;
-    });
+    const pending = assignments.filter((a) => { const s = getStatus(a.assessment_id ?? ''); return s === 'pending' || s === 'draft' || !s; });
+    const submitted = assignments.filter((a) => getStatus(a.assessment_id ?? '') === 'submitted');
+    const graded = assignments.filter((a) => getStatus(a.assessment_id ?? '') === 'graded');
 
-    const submittedAssignments = assignments.filter(a => {
-        const status = getStatus(a.assessment_id || "");
-        return status === 'submitted';
-    });
+    if (loading) return (
+        <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
+            <Loader2 className="h-10 w-10 animate-spin text-indigo-500" />
+            <p className="text-slate-400 text-sm">Loading assignments…</p>
+        </div>
+    );
 
-    const gradedAssignments = assignments.filter(a => {
-        const status = getStatus(a.assessment_id || "");
-        return status === 'graded';
-    });
+    const AssignmentCard = ({ assignment, status }: { assignment: Assessment; status: string }) => {
+        const days = getDaysUntilDue(assignment.due_date ?? '');
+        const isOverdue = days < 0;
+        const isDueSoon = days >= 0 && days <= 3;
+        const sub = submissions.find((s) => s.assessment === assignment.assessment_id);
+        const score = sub?.result?.score;
 
-    if (loading) {
+        let urgencyColor = 'border-slate-100';
+        if (status === 'pending') {
+            if (isOverdue) urgencyColor = 'border-l-4 border-l-red-500';
+            else if (isDueSoon) urgencyColor = 'border-l-4 border-l-orange-400';
+            else urgencyColor = 'border-l-4 border-l-indigo-400';
+        } else if (status === 'graded') {
+            urgencyColor = 'border-l-4 border-l-emerald-500';
+        } else {
+            urgencyColor = 'border-l-4 border-l-blue-400';
+        }
+
         return (
-            <div className="flex items-center justify-center min-h-screen">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
-            </div>
-        );
-    }
-
-    const AssignmentCard = ({ assignment, status }: { assignment: Assessment, status: string }) => {
-        const daysUntilDue = getDaysUntilDue(assignment.due_date || '');
-        const isOverdue = daysUntilDue < 0;
-        const isDueSoon = daysUntilDue >= 0 && daysUntilDue <= 3;
-        const sub = submissions.find(s => s.assessment === assignment.assessment_id);
-
-        return (
-            <Card className="flex flex-col hover:shadow-lg transition-all duration-200 border-l-4 border-l-indigo-500">
-                <CardHeader className="pb-3">
-                    <div className="flex justify-between items-start mb-2">
-                        {status === 'pending' && isDueSoon ? (
-                            <Badge variant="outline" className="bg-orange-50 text-orange-700 border-orange-200">
-                                Due Soon
-                            </Badge>
-                        ) : status === 'graded' ? (
-                            <Badge className="bg-green-100 text-green-700 hover:bg-green-100 border-green-200">
-                                Graded
-                            </Badge>
-                        ) : (
-                            <Badge variant="outline" className="bg-slate-50 text-slate-600 border-slate-200">
-                                Assignment
-                            </Badge>
-                        )}
+            <Card className={`flex flex-col hover:shadow-lg transition-all duration-200 border ${urgencyColor} overflow-hidden rounded-xl group`}>
+                <CardContent className="p-5 space-y-4 flex-1 flex flex-col">
+                    {/* Top row */}
+                    <div className="flex items-start justify-between gap-2">
+                        <div className="flex items-center gap-2 flex-wrap">
+                            {status === 'pending' && isOverdue && (
+                                <Badge className="bg-red-100 text-red-700 border-0 text-[10px] font-bold">OVERDUE</Badge>
+                            )}
+                            {status === 'pending' && isDueSoon && !isOverdue && (
+                                <Badge className="bg-orange-100 text-orange-700 border-0 text-[10px] font-bold gap-1">
+                                    <Flame className="h-2.5 w-2.5" /> DUE SOON
+                                </Badge>
+                            )}
+                            {status === 'graded' && (
+                                <Badge className="bg-emerald-100 text-emerald-700 border-0 text-[10px] font-bold">GRADED</Badge>
+                            )}
+                            {status === 'submitted' && (
+                                <Badge className="bg-blue-100 text-blue-700 border-0 text-[10px] font-bold">SUBMITTED</Badge>
+                            )}
+                            {status === 'pending' && !isOverdue && !isDueSoon && (
+                                <Badge className="bg-slate-100 text-slate-500 border-0 text-[10px] font-bold">PENDING</Badge>
+                            )}
+                        </div>
                         {assignment.total_marks && (
-                            <span className="text-xs font-medium text-slate-500">{assignment.total_marks} Points</span>
+                            <span className="text-xs font-black text-slate-500 shrink-0">{assignment.total_marks} pts</span>
                         )}
                     </div>
-                    <CardTitle className="text-lg line-clamp-1 text-slate-800">{assignment.title}</CardTitle>
-                    <CardDescription className="line-clamp-2 mt-1 text-sm">
-                        {assignment.description || 'No description provided.'}
-                    </CardDescription>
-                </CardHeader>
 
-                <CardContent className="space-y-3 flex-1 pb-3">
-                    <div className="flex items-center gap-2 text-sm text-slate-600">
-                        <Calendar className="h-4 w-4 text-indigo-500" />
-                        <span>Due: {assignment.due_date ? new Date(assignment.due_date).toLocaleDateString() : 'No Date'}</span>
+                    <div className="flex-1">
+                        <h3 className="font-bold text-slate-900 text-base line-clamp-2 group-hover:text-indigo-700 transition-colors">
+                            {assignment.title}
+                        </h3>
+                        {assignment.description && (
+                            <p className="text-xs text-slate-400 mt-1.5 line-clamp-2 leading-relaxed">{assignment.description}</p>
+                        )}
+                    </div>
+
+                    {/* Due date */}
+                    <div className="flex items-center gap-2 text-xs">
+                        <Calendar className="h-3.5 w-3.5 text-slate-400" />
+                        <span className="text-slate-500">
+                            {assignment.due_date ? new Date(assignment.due_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'No deadline'}
+                        </span>
                         {status === 'pending' && (
-                            <span className={`ml-auto font-medium ${isOverdue ? 'text-red-600' : isDueSoon ? 'text-orange-600' : 'text-slate-500'}`}>
-                                {isOverdue ? 'Overdue' : `${daysUntilDue} days left`}
+                            <span className={`ml-auto font-bold ${isOverdue ? 'text-red-600' : isDueSoon ? 'text-orange-600' : 'text-slate-400'}`}>
+                                {isOverdue ? `${Math.abs(days)}d late` : days === 0 ? 'Due today' : `${days}d left`}
                             </span>
                         )}
                     </div>
 
-                    {status === 'graded' && sub?.result?.score !== undefined && (
-                        <div className="flex items-center gap-2 text-sm mt-2 p-2 bg-green-50 rounded-md border border-green-100">
-                            <CheckCircle className="h-4 w-4 text-green-600" />
-                            <span className="font-semibold text-green-800">Score: {sub.result.score} / {assignment.total_marks}</span>
+                    {/* Score row for graded */}
+                    {status === 'graded' && score !== undefined && (
+                        <div className="flex items-center gap-2 p-3 bg-emerald-50 rounded-xl border border-emerald-100">
+                            <Award className="h-4 w-4 text-emerald-600 shrink-0" />
+                            <span className="text-sm font-black text-emerald-700">
+                                {score} / {assignment.total_marks} pts
+                            </span>
+                            <span className="text-xs text-emerald-500 ml-auto font-medium">
+                                {assignment.total_marks ? Math.round((Number(score) / Number(assignment.total_marks)) * 100) : 0}%
+                            </span>
                         </div>
                     )}
-                </CardContent>
 
-                <CardFooter className="pt-3 border-t bg-slate-50/50">
-                    {status === 'pending' ? (
-                        <Link href={`/student/assignments/${assignment.assessment_id}`} className="w-full">
-                            <Button className="w-full bg-indigo-600 hover:bg-indigo-700 text-white gap-2 shadow-sm">
-                                <Upload className="h-4 w-4" /> Start Assignment
+                    {/* CTA */}
+                    <div className="pt-1">
+                        {status === 'pending' ? (
+                            <Link href={`/student/assignments/${assignment.assessment_id}`} className="block">
+                                <Button className="w-full bg-indigo-600 hover:bg-indigo-700 text-white gap-2 rounded-xl font-bold">
+                                    <Upload className="h-4 w-4" />
+                                    {isOverdue ? 'Submit Now' : 'Start Assignment'}
+                                    <ChevronRight className="h-4 w-4 ml-auto" />
+                                </Button>
+                            </Link>
+                        ) : (
+                            <Button variant="outline" className="w-full border-slate-200 text-slate-600 hover:bg-slate-50 rounded-xl gap-2">
+                                <FileText className="h-4 w-4" /> View Details
                             </Button>
-                        </Link>
-                    ) : (
-                        <Button variant="outline" className="w-full border-indigo-200 text-indigo-700 hover:bg-indigo-50">
-                            View Details
-                        </Button>
-                    )}
-                </CardFooter>
+                        )}
+                    </div>
+                </CardContent>
             </Card>
         );
     };
 
     return (
-        <div className="p-6 max-w-7xl mx-auto space-y-8">
+        <div className="space-y-8 animate-in fade-in duration-500">
+
             {/* Header */}
             <div>
-                <h1 className="text-3xl font-bold text-slate-800 tracking-tight">Assignments</h1>
-                <p className="text-slate-500 mt-1">Track pending coursework, submit assignments, and view grades.</p>
+                <div className="flex items-center gap-2 text-indigo-600 font-bold mb-1">
+                    <FileText className="h-4 w-4" />
+                    <span className="text-[10px] uppercase tracking-[0.2em]">My Work</span>
+                </div>
+                <h1 className="text-3xl font-black text-slate-900 tracking-tight">Assignments</h1>
+                <p className="text-slate-500 mt-1 text-sm">Track pending coursework, submit assignments, and view grades.</p>
             </div>
 
-            {/* Summary Stats */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <Card className="p-6 bg-gradient-to-br from-orange-50 to-orange-100 border-orange-200 shadow-sm">
-                    <div className="flex items-center justify-between">
-                        <div>
-                            <p className="text-sm text-orange-700 font-medium">Pending</p>
-                            <p className="text-3xl font-bold text-orange-900 mt-1">{pendingAssignments.length}</p>
+            {/* Summary Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+                <Card className="border-0 shadow-md overflow-hidden rounded-2xl">
+                    <CardContent className="p-5 relative">
+                        <div className="absolute inset-0 bg-gradient-to-br from-orange-50 to-amber-50" />
+                        <div className="relative flex items-center justify-between">
+                            <div>
+                                <p className="text-xs font-bold text-orange-600 uppercase tracking-widest mb-1">Pending</p>
+                                <p className="text-4xl font-black text-orange-700">{pending.length}</p>
+                                <p className="text-[10px] text-orange-400 mt-2 font-medium">
+                                    {pending.filter((a) => getDaysUntilDue(a.due_date ?? '') < 0).length} overdue
+                                </p>
+                            </div>
+                            <div className="h-14 w-14 rounded-2xl bg-orange-100 flex items-center justify-center">
+                                <AlertCircle className="h-7 w-7 text-orange-500" />
+                            </div>
                         </div>
-                        <AlertCircle className="h-10 w-10 text-orange-500/80" />
-                    </div>
+                    </CardContent>
                 </Card>
 
-                <Card className="p-6 bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200 shadow-sm">
-                    <div className="flex items-center justify-between">
-                        <div>
-                            <p className="text-sm text-blue-700 font-medium">Submitted</p>
-                            <p className="text-3xl font-bold text-blue-900 mt-1">{submittedAssignments.length}</p>
+                <Card className="border-0 shadow-md overflow-hidden rounded-2xl">
+                    <CardContent className="p-5 relative">
+                        <div className="absolute inset-0 bg-gradient-to-br from-blue-50 to-indigo-50" />
+                        <div className="relative flex items-center justify-between">
+                            <div>
+                                <p className="text-xs font-bold text-blue-600 uppercase tracking-widest mb-1">Submitted</p>
+                                <p className="text-4xl font-black text-blue-700">{submitted.length}</p>
+                                <p className="text-[10px] text-blue-400 mt-2 font-medium">Awaiting grades</p>
+                            </div>
+                            <div className="h-14 w-14 rounded-2xl bg-blue-100 flex items-center justify-center">
+                                <Clock className="h-7 w-7 text-blue-500" />
+                            </div>
                         </div>
-                        <FileText className="h-10 w-10 text-blue-500/80" />
-                    </div>
+                    </CardContent>
                 </Card>
 
-                <Card className="p-6 bg-gradient-to-br from-green-50 to-green-100 border-green-200 shadow-sm">
-                    <div className="flex items-center justify-between">
-                        <div>
-                            <p className="text-sm text-green-700 font-medium">Graded</p>
-                            <p className="text-3xl font-bold text-green-900 mt-1">{gradedAssignments.length}</p>
+                <Card className="border-0 shadow-md overflow-hidden rounded-2xl">
+                    <CardContent className="p-5 relative">
+                        <div className="absolute inset-0 bg-gradient-to-br from-emerald-50 to-teal-50" />
+                        <div className="relative flex items-center justify-between">
+                            <div>
+                                <p className="text-xs font-bold text-emerald-600 uppercase tracking-widest mb-1">Graded</p>
+                                <p className="text-4xl font-black text-emerald-700">{graded.length}</p>
+                                <p className="text-[10px] text-emerald-400 mt-2 font-medium">Results available</p>
+                            </div>
+                            <div className="h-14 w-14 rounded-2xl bg-emerald-100 flex items-center justify-center">
+                                <CheckCircle2 className="h-7 w-7 text-emerald-500" />
+                            </div>
                         </div>
-                        <CheckCircle className="h-10 w-10 text-green-500/80" />
-                    </div>
+                    </CardContent>
                 </Card>
             </div>
 
-            {/* Tabs & List */}
-            <Tabs defaultValue="pending" className="w-full">
-                <TabsList className="grid w-full grid-cols-3 max-w-[600px] mb-6 bg-slate-100 p-1 rounded-xl">
-                    <TabsTrigger value="pending" className="rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm">Pending ({pendingAssignments.length})</TabsTrigger>
-                    <TabsTrigger value="submitted" className="rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm">Submitted ({submittedAssignments.length})</TabsTrigger>
-                    <TabsTrigger value="graded" className="rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm">Graded ({gradedAssignments.length})</TabsTrigger>
+            {/* Tabs */}
+            <Tabs defaultValue="pending" className="space-y-6">
+                <TabsList className="bg-white border border-slate-200 p-1 rounded-2xl shadow-sm w-full md:w-auto h-auto gap-1">
+                    <TabsTrigger value="pending" className="rounded-xl px-5 py-2.5 font-bold text-sm data-[state=active]:bg-indigo-600 data-[state=active]:text-white data-[state=active]:shadow-md">
+                        Pending ({pending.length})
+                    </TabsTrigger>
+                    <TabsTrigger value="submitted" className="rounded-xl px-5 py-2.5 font-bold text-sm data-[state=active]:bg-indigo-600 data-[state=active]:text-white data-[state=active]:shadow-md">
+                        Submitted ({submitted.length})
+                    </TabsTrigger>
+                    <TabsTrigger value="graded" className="rounded-xl px-5 py-2.5 font-bold text-sm data-[state=active]:bg-indigo-600 data-[state=active]:text-white data-[state=active]:shadow-md">
+                        Graded ({graded.length})
+                    </TabsTrigger>
                 </TabsList>
 
-                <TabsContent value="pending" className="space-y-6">
-                    {pendingAssignments.length > 0 ? (
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                            {pendingAssignments.map(a => <AssignmentCard key={a.assessment_id} assignment={a} status="pending" />)}
+                <TabsContent value="pending">
+                    {pending.length > 0 ? (
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                            {pending.map((a) => <AssignmentCard key={a.assessment_id} assignment={a} status="pending" />)}
                         </div>
                     ) : (
-                        <EmptyState message="You have no pending assignments! Time to relax." />
+                        <EmptyState message="No pending assignments — you're all caught up!" icon={CheckCircle2} color="emerald" />
                     )}
                 </TabsContent>
 
-                <TabsContent value="submitted" className="space-y-6">
-                    {submittedAssignments.length > 0 ? (
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                            {submittedAssignments.map(a => <AssignmentCard key={a.assessment_id} assignment={a} status="submitted" />)}
+                <TabsContent value="submitted">
+                    {submitted.length > 0 ? (
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                            {submitted.map((a) => <AssignmentCard key={a.assessment_id} assignment={a} status="submitted" />)}
                         </div>
                     ) : (
-                        <EmptyState message="No submitted assignments to show." icon={FileText} />
+                        <EmptyState message="Nothing submitted yet. Start with your pending work!" icon={FileText} color="blue" />
                     )}
                 </TabsContent>
 
-                <TabsContent value="graded" className="space-y-6">
-                    {gradedAssignments.length > 0 ? (
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                            {gradedAssignments.map(a => <AssignmentCard key={a.assessment_id} assignment={a} status="graded" />)}
+                <TabsContent value="graded">
+                    {graded.length > 0 ? (
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                            {graded.map((a) => <AssignmentCard key={a.assessment_id} assignment={a} status="graded" />)}
                         </div>
                     ) : (
-                        <EmptyState message="No graded assignments yet." icon={BookOpen} />
+                        <EmptyState message="No graded assignments yet. Submit work and check back soon." icon={BookOpen} color="indigo" />
                     )}
                 </TabsContent>
             </Tabs>
@@ -252,20 +279,14 @@ export default function AssignmentsDashboard() {
     );
 }
 
-function EmptyState({
-    message,
-    icon: Icon = CheckCircle,
-}: {
-    message: string;
-    icon?: React.ElementType;
-}) {
+function EmptyState({ message, icon: Icon = Inbox, color = 'slate' }: { message: string; icon?: React.ElementType; color?: string }) {
+    const bg: Record<string, string> = { emerald: 'bg-emerald-50 text-emerald-400 border-emerald-100', blue: 'bg-blue-50 text-blue-400 border-blue-100', indigo: 'bg-indigo-50 text-indigo-400 border-indigo-100', slate: 'bg-slate-50 text-slate-400 border-slate-200' };
     return (
-        <div className="flex flex-col items-center justify-center py-16 text-center bg-slate-50/50 rounded-2xl border border-dashed border-slate-200">
-            <div className="h-16 w-16 bg-slate-100 rounded-full flex items-center justify-center mb-4">
-                <Icon className="h-8 w-8 text-slate-400" />
+        <div className="flex flex-col items-center justify-center py-20 border-2 border-dashed border-slate-200 rounded-2xl bg-white">
+            <div className={`h-16 w-16 rounded-2xl flex items-center justify-center mb-4 border ${bg[color] ?? bg.slate}`}>
+                <Icon className="h-8 w-8" />
             </div>
-            <h3 className="text-xl font-medium text-slate-700 mb-1">Nothing here</h3>
-            <p className="text-slate-500 max-w-sm">{message}</p>
+            <p className="text-slate-500 font-medium max-w-xs text-center">{message}</p>
         </div>
     );
 }

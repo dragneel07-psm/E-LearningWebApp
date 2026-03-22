@@ -6,85 +6,191 @@
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { academicAPI, Notice } from '@/lib/api';
-import { Megaphone, Calendar, Info, AlertTriangle, Clock, Loader2 } from 'lucide-react';
+import {
+    Megaphone, Calendar, Info, AlertTriangle, Clock, Loader2,
+    Paperclip, Bell, ChevronDown, ChevronUp, Filter
+} from 'lucide-react';
 
 export default function StudentNoticesPage() {
     const [notices, setNotices] = useState<Notice[]>([]);
     const [loading, setLoading] = useState(true);
+    const [filter, setFilter] = useState<'all' | 'high' | 'normal' | 'low'>('all');
+    const [expanded, setExpanded] = useState<Set<string | number>>(new Set());
 
     useEffect(() => {
-        loadNotices();
+        (async () => {
+            try {
+                const data = await academicAPI.getNotices();
+                setNotices(data);
+            } catch (e) {
+                console.error(e);
+            } finally {
+                setLoading(false);
+            }
+        })();
     }, []);
 
-    const loadNotices = async () => {
-        setLoading(true);
-        try {
-            const data = await academicAPI.getNotices();
-            setNotices(data);
-        } catch (error) {
-            console.error(error);
-        } finally {
-            setLoading(false);
-        }
+    const toggle = (id: string | number | undefined) => {
+        if (id == null) return;
+        setExpanded((prev) => {
+            const next = new Set(prev);
+            next.has(id) ? next.delete(id) : next.add(id);
+            return next;
+        });
     };
 
-    if (loading) return <div className="flex h-96 items-center justify-center"><Loader2 className="animate-spin h-8 w-8 text-indigo-600" /></div>;
+    const isNew = (d?: string) => d && (Date.now() - new Date(d).getTime()) < 3 * 86400000;
+
+    const filtered = filter === 'all' ? notices : notices.filter((n) => n.priority === filter);
+    const highCount = notices.filter((n) => n.priority === 'high').length;
+    const newCount = notices.filter((n) => isNew(n.published_date)).length;
+
+    if (loading) return (
+        <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
+            <Loader2 className="h-10 w-10 animate-spin text-indigo-500" />
+            <p className="text-slate-400 text-sm">Loading notices…</p>
+        </div>
+    );
+
+    const priorityStyle: Record<string, { border: string; bg: string; badge: string; icon: React.ElementType }> = {
+        high: { border: 'border-l-red-500', bg: 'bg-red-50/60', badge: 'bg-red-100 text-red-700', icon: AlertTriangle },
+        normal: { border: 'border-l-indigo-400', bg: 'bg-white', badge: 'bg-indigo-100 text-indigo-700', icon: Info },
+        low: { border: 'border-l-slate-300', bg: 'bg-slate-50/60', badge: 'bg-slate-100 text-slate-600', icon: Info },
+    };
 
     return (
-        <div className="max-w-4xl mx-auto space-y-8 p-4 md:p-6">
-            <header className="text-center space-y-2">
-                <div className="inline-flex items-center justify-center h-16 w-16 rounded-2xl bg-indigo-50 text-indigo-600 mb-2">
-                    <Megaphone className="h-8 w-8" />
+        <div className="space-y-8 animate-in fade-in duration-500">
+
+            {/* Header */}
+            <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+                <div>
+                    <div className="flex items-center gap-2 text-indigo-600 font-bold mb-1">
+                        <Megaphone className="h-4 w-4" />
+                        <span className="text-[10px] uppercase tracking-[0.2em]">Announcements</span>
+                    </div>
+                    <h1 className="text-3xl font-black text-slate-900 tracking-tight">Notice Board</h1>
+                    <p className="text-slate-500 mt-1 text-sm">Latest announcements from your school and teachers.</p>
                 </div>
-                <h1 className="text-3xl font-black text-slate-900 tracking-tight">Notice Board</h1>
-                <p className="text-slate-500 max-w-lg mx-auto">Latest announcements from your school and teachers.</p>
-            </header>
 
-            <div className="space-y-6">
-                {notices.length > 0 ? (
-                    notices.map((notice) => (
-                        <Card key={notice.id} className={`border-none shadow-sm overflow-hidden transition-all hover:shadow-md ${notice.priority === 'high' ? 'bg-red-50/30 border-l-4 border-l-red-500' : 'bg-white border-l-4 border-l-indigo-500'}`}>
-                            <CardHeader className="pb-2">
-                                <div className="flex items-center justify-between mb-2">
-                                    <Badge variant="outline" className="capitalize text-[10px] font-bold tracking-widest px-2 py-0 border-slate-200 text-slate-500 uppercase">
-                                        {notice.category}
-                                    </Badge>
-                                    <div className="flex items-center gap-2 text-xs text-slate-400 font-medium">
-                                        <Calendar className="h-3 w-3" />
-                                        {notice.published_date ? new Date(notice.published_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : 'Recently'}
-                                    </div>
-                                </div>
-                                <CardTitle className={`text-xl font-bold ${notice.priority === 'high' ? 'text-red-900' : 'text-slate-900'}`}>{notice.title}</CardTitle>
-                            </CardHeader>
-                            <CardContent className="space-y-4">
-                                <p className="text-slate-600 leading-relaxed text-sm whitespace-pre-wrap">{notice.content}</p>
+                {/* Quick stats */}
+                <div className="flex items-center gap-3">
+                    {newCount > 0 && (
+                        <div className="flex items-center gap-2 px-4 py-2 bg-blue-50 border border-blue-100 rounded-xl">
+                            <Bell className="h-4 w-4 text-blue-500" />
+                            <span className="text-sm font-bold text-blue-700">{newCount} New</span>
+                        </div>
+                    )}
+                    {highCount > 0 && (
+                        <div className="flex items-center gap-2 px-4 py-2 bg-red-50 border border-red-100 rounded-xl">
+                            <AlertTriangle className="h-4 w-4 text-red-500" />
+                            <span className="text-sm font-bold text-red-700">{highCount} Urgent</span>
+                        </div>
+                    )}
+                    <div className="flex items-center gap-2 px-4 py-2 bg-slate-50 border border-slate-100 rounded-xl">
+                        <Megaphone className="h-4 w-4 text-slate-500" />
+                        <span className="text-sm font-bold text-slate-700">{notices.length} Total</span>
+                    </div>
+                </div>
+            </div>
 
-                                <div className="flex items-center justify-between pt-2 border-t border-slate-100/50">
-                                    <div className="flex items-center gap-4">
-                                        <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-500">
-                                            {notice.priority === 'high' ? <AlertTriangle className="h-3.5 w-3.5 text-red-500" /> : <Info className="h-3.5 w-3.5 text-indigo-500" />}
-                                            <span className="capitalize">{notice.priority} Priority</span>
+            {/* Filter pills */}
+            <div className="flex items-center gap-2 flex-wrap">
+                <Filter className="h-4 w-4 text-slate-400" />
+                {(['all', 'high', 'normal', 'low'] as const).map((f) => (
+                    <Button
+                        key={f}
+                        size="sm"
+                        variant={filter === f ? 'default' : 'outline'}
+                        onClick={() => setFilter(f)}
+                        className={`rounded-full h-8 px-4 text-xs font-bold capitalize ${filter === f ? 'bg-indigo-600 hover:bg-indigo-700 border-0' : 'border-slate-200 text-slate-500 hover:border-indigo-200 hover:text-indigo-600'}`}
+                    >
+                        {f === 'all' ? `All (${notices.length})` : `${f.charAt(0).toUpperCase() + f.slice(1)}`}
+                    </Button>
+                ))}
+            </div>
+
+            {/* Notices List */}
+            <div className="space-y-4">
+                {filtered.length > 0 ? filtered.map((notice) => {
+                    const p = notice.priority ?? 'normal';
+                    const style = priorityStyle[p] ?? priorityStyle.normal;
+                    const PriorityIcon = style.icon;
+                    const isExpanded = notice.id != null && expanded.has(notice.id);
+                    const isNewNotice = isNew(notice.published_date);
+
+                    return (
+                        <Card
+                            key={notice.id}
+                            className={`border-0 shadow-md overflow-hidden transition-all border-l-4 ${style.border} rounded-2xl`}
+                        >
+                            <CardContent className={`p-0 ${style.bg}`}>
+                                {/* Main row — always visible */}
+                                <button
+                                    className="w-full text-left p-5 hover:bg-black/[0.02] transition-colors"
+                                    onClick={() => toggle(notice.id)}
+                                >
+                                    <div className="flex items-start justify-between gap-3">
+                                        <div className="flex-1 min-w-0">
+                                            {/* Meta row */}
+                                            <div className="flex items-center gap-2 mb-2 flex-wrap">
+                                                <Badge className={`${style.badge} border-0 text-[10px] font-bold uppercase tracking-widest capitalize px-2 py-0`}>
+                                                    {notice.category || p} priority
+                                                </Badge>
+                                                {isNewNotice && (
+                                                    <Badge className="bg-blue-500 text-white border-0 text-[9px] font-bold px-1.5 py-0">NEW</Badge>
+                                                )}
+                                                <span className="flex items-center gap-1 text-[10px] text-slate-400 ml-auto">
+                                                    <Calendar className="h-3 w-3" />
+                                                    {notice.published_date ? new Date(notice.published_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'Recently'}
+                                                </span>
+                                            </div>
+                                            <h3 className={`text-base font-bold line-clamp-1 ${p === 'high' ? 'text-red-900' : 'text-slate-900'}`}>
+                                                {notice.title}
+                                            </h3>
+                                            <p className="text-xs text-slate-500 mt-1 line-clamp-2 leading-relaxed">
+                                                {notice.content}
+                                            </p>
+                                        </div>
+                                        <div className="shrink-0 flex items-start gap-2 pt-0.5">
+                                            <div className={`h-8 w-8 rounded-lg ${style.badge.split(' ')[0]} flex items-center justify-center`}>
+                                                <PriorityIcon className={`h-4 w-4 ${style.badge.split(' ')[1]}`} />
+                                            </div>
+                                            {isExpanded ? <ChevronUp className="h-4 w-4 text-slate-400 mt-1" /> : <ChevronDown className="h-4 w-4 text-slate-400 mt-1" />}
                                         </div>
                                     </div>
+                                </button>
 
-                                    {notice.attachment && (
-                                        <a href={notice.attachment} target="_blank" rel="noopener noreferrer" className="text-xs font-bold text-indigo-600 hover:text-indigo-700 underline underline-offset-4">
-                                            View Attachment
-                                        </a>
-                                    )}
-                                </div>
+                                {/* Expanded content */}
+                                {isExpanded && (
+                                    <div className="px-5 pb-5 border-t border-black/5">
+                                        <p className="text-sm text-slate-600 leading-relaxed mt-4 whitespace-pre-wrap">{notice.content}</p>
+                                        {notice.attachment && (
+                                            <a
+                                                href={notice.attachment}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="inline-flex items-center gap-2 mt-4 text-xs font-bold text-indigo-600 hover:text-indigo-700 bg-indigo-50 px-3 py-2 rounded-lg border border-indigo-100 hover:border-indigo-200 transition-all"
+                                            >
+                                                <Paperclip className="h-3.5 w-3.5" /> View Attachment
+                                            </a>
+                                        )}
+                                    </div>
+                                )}
                             </CardContent>
                         </Card>
-                    ))
-                ) : (
-                    <Card className="border-dashed border-2 border-slate-200 bg-transparent py-16 text-center">
-                        <CardContent>
-                            <div className="inline-flex h-12 w-12 items-center justify-center rounded-full bg-slate-100 text-slate-400 mb-4">
-                                <Clock className="h-6 w-6" />
+                    );
+                }) : (
+                    <Card className="border-dashed border-2 border-slate-200 bg-transparent rounded-2xl">
+                        <CardContent className="py-20 flex flex-col items-center text-center">
+                            <div className="h-16 w-16 bg-slate-100 rounded-2xl flex items-center justify-center mb-4">
+                                <Clock className="h-8 w-8 text-slate-300" />
                             </div>
-                            <h3 className="text-lg font-bold text-slate-800">No active notices</h3>
-                            <p className="text-sm text-slate-500">You&apos;re all caught up! Check back later for updates.</p>
+                            <h3 className="text-lg font-bold text-slate-700">No notices found</h3>
+                            <p className="text-sm text-slate-400 mt-1">
+                                {filter !== 'all' ? `No ${filter}-priority notices. Try a different filter.` : `You're all caught up! Check back later.`}
+                            </p>
                         </CardContent>
                     </Card>
                 )}
