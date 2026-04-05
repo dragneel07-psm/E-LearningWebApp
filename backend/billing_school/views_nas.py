@@ -16,11 +16,13 @@ Provides:
   - ConnectIPS payment gateway initiation + callback
 """
 import logging
+import re as _re
 from datetime import date
 from decimal import Decimal
 
 from django.db import transaction
-from django.db.models import Q, Sum
+from django.db.models import Count, Max, Q, Sum
+from django.db.models.deletion import ProtectedError
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated, AllowAny
@@ -152,7 +154,13 @@ class ChartOfAccountViewSet(viewsets.ViewSet):
             return Response({'error': 'Not found.'}, status=404)
         if obj.is_system:
             return Response({'error': 'System accounts cannot be deleted.'}, status=400)
-        obj.delete()
+        try:
+            obj.delete()
+        except ProtectedError:
+            return Response(
+                {'error': 'Cannot delete: this account has journal entries. Deactivate it instead.'},
+                status=400,
+            )
         return Response(status=204)
 
     @action(detail=False, methods=['post'], url_path='seed-defaults')
@@ -257,10 +265,10 @@ class JournalEntryViewSet(viewsets.ViewSet):
     def list(self, request):
         tenant = _tenant(request)
         qs = JournalEntry.objects.filter(tenant=tenant).select_related('created_by')
-        entry_type = request.query_params.get('entry_type')
+        entry_type  = request.query_params.get('entry_type')
         fiscal_year = request.query_params.get('fiscal_year')
-        from_date = request.query_params.get('from_date')
-        to_date   = request.query_params.get('to_date')
+        from_date   = request.query_params.get('from_date')
+        to_date     = request.query_params.get('to_date')
         if entry_type:
             qs = qs.filter(entry_type=entry_type)
         if fiscal_year:
@@ -269,7 +277,22 @@ class JournalEntryViewSet(viewsets.ViewSet):
             qs = qs.filter(date_ad__gte=from_date)
         if to_date:
             qs = qs.filter(date_ad__lte=to_date)
-        return Response([_je_data(je) for je in qs[:200]])
+
+        # H4: proper pagination — default 50 entries per page
+        try:
+            page      = max(1, int(request.query_params.get('page', 1)))
+            page_size = min(200, max(1, int(request.query_params.get('page_size', 50))))
+        except ValueError:
+            page, page_size = 1, 50
+        total  = qs.count()
+        offset = (page - 1) * page_size
+        items  = qs[offset:offset + page_size]
+        return Response({
+            'count':     total,
+            'page':      page,
+            'page_size': page_size,
+            'results':   [_je_data(je) for je in items],
+        })
 
     def retrieve(self, request, pk=None):
         try:
@@ -285,34 +308,59 @@ class JournalEntryViewSet(viewsets.ViewSet):
         if len(lines_data) < 2:
             return Response({'error': 'At least two journal lines required.'}, status=400)
 
-        with transaction.atomic():
-            je = JournalEntry.objects.create(
-                tenant=tenant,
-                date_ad=data['date_ad'],
-                description=data['description'],
-                entry_type=data.get('entry_type', 'manual'),
-                reference=data.get('reference', ''),
-                narration=data.get('narration', ''),
-                created_by=request.user,
-            )
-            # Auto-generate voucher number
-            count = JournalEntry.objects.filter(tenant=tenant).count()
-            y, m, _ = ad_to_bs(date.fromisoformat(data['date_ad']))
-            je.entry_number = f"JV-{y}-{count:05d}"
-            je.save(update_fields=['entry_number'])
-
-            for ln in lines_data:
-                try:
-                    account = ChartOfAccount.objects.get(pk=ln['account_id'], tenant=tenant)
-                except ChartOfAccount.DoesNotExist:
-                    raise ValueError(f"Account {ln['account_id']} not found.")
-                JournalLine.objects.create(
-                    entry=je,
-                    account=account,
-                    debit=Decimal(str(ln.get('debit', '0'))),
-                    credit=Decimal(str(ln.get('credit', '0'))),
-                    narration=ln.get('narration', ''),
+        from django.core.exceptions import ValidationError as DjangoValidationError
+        try:
+            with transaction.atomic():
+                # C1: serialize voucher number generation — lock existing entries to get
+                # the true maximum, then increment.  select_for_update() prevents any
+                # concurrent transaction from inserting until this one commits.
+                max_num = (
+                    JournalEntry.objects
+                    .select_for_update()
+                    .filter(tenant=tenant)
+                    .aggregate(m=Max('entry_number'))['m']
                 )
+                seq = 1
+                if max_num:
+                    m_obj = _re.search(r'-(\d+)$', max_num)
+                    if m_obj:
+                        seq = int(m_obj.group(1)) + 1
+
+                y, _, _ = ad_to_bs(date.fromisoformat(data['date_ad']))
+                entry_number = f"JV-{y}-{seq:05d}"
+
+                je = JournalEntry.objects.create(
+                    tenant=tenant,
+                    entry_number=entry_number,
+                    date_ad=data['date_ad'],
+                    description=data['description'],
+                    entry_type=data.get('entry_type', 'manual'),
+                    reference=data.get('reference', ''),
+                    narration=data.get('narration', ''),
+                    created_by=request.user,
+                )
+
+                for ln in lines_data:
+                    try:
+                        account = ChartOfAccount.objects.get(pk=ln['account_id'], tenant=tenant)
+                    except ChartOfAccount.DoesNotExist:
+                        raise ValueError(f"Account {ln['account_id']} not found.")
+                    # C2: call full_clean() so debit/credit validation in JournalLine.clean()
+                    # is enforced before saving (Django does NOT call clean() automatically).
+                    line = JournalLine(
+                        entry=je,
+                        account=account,
+                        debit=Decimal(str(ln.get('debit', '0'))),
+                        credit=Decimal(str(ln.get('credit', '0'))),
+                        narration=ln.get('narration', ''),
+                    )
+                    line.full_clean()
+                    line.save()
+        except ValueError as exc:
+            return Response({'error': str(exc)}, status=400)
+        except DjangoValidationError as exc:
+            msgs = exc.message_dict if hasattr(exc, 'message_dict') else {'__all__': exc.messages}
+            return Response({'error': msgs}, status=400)
 
         record_audit_event('billing.journal_entry_created', request.user, request,
                            {'entry_id': str(je.entry_id), 'entry_number': je.entry_number})
@@ -334,6 +382,71 @@ class JournalEntryViewSet(viewsets.ViewSet):
         record_audit_event('billing.journal_entry_posted', request.user, request,
                            {'entry_id': str(je.entry_id)})
         return Response({'status': 'posted', 'entry_id': str(je.entry_id)})
+
+    @action(detail=True, methods=['post'])
+    def reverse(self, request, pk=None):
+        """H1: Create a reversal journal entry (equal-and-opposite lines).
+
+        NAS compliance: corrections must be made via reversal, not deletion.
+        The original entry stays posted and immutable; a new 'reversal' entry
+        is created with all debit/credit amounts swapped.
+        """
+        from django.core.exceptions import ValidationError as DjangoValidationError
+        tenant = _tenant(request)
+        try:
+            original = JournalEntry.objects.get(pk=pk, tenant=tenant)
+        except JournalEntry.DoesNotExist:
+            return Response({'error': 'Not found.'}, status=404)
+        if not original.is_posted:
+            return Response({'error': 'Only posted entries can be reversed.'}, status=400)
+
+        reversal_date = request.data.get('date_ad') or str(date.today())
+        reversal_desc = request.data.get('description') or f"Reversal of {original.entry_number}"
+
+        from django.core.exceptions import ValidationError as DjangoValidationError
+        try:
+            with transaction.atomic():
+                max_num = (
+                    JournalEntry.objects
+                    .select_for_update()
+                    .filter(tenant=tenant)
+                    .aggregate(m=Max('entry_number'))['m']
+                )
+                seq = 1
+                if max_num:
+                    m_obj = _re.search(r'-(\d+)$', max_num)
+                    if m_obj:
+                        seq = int(m_obj.group(1)) + 1
+
+                y, _, _ = ad_to_bs(date.fromisoformat(reversal_date))
+                rev = JournalEntry.objects.create(
+                    tenant=tenant,
+                    entry_number=f"JV-{y}-{seq:05d}",
+                    date_ad=reversal_date,
+                    description=reversal_desc,
+                    entry_type='manual',
+                    reference=original.entry_number,
+                    narration=f"Auto-reversal of {original.entry_number}",
+                    created_by=request.user,
+                )
+                for orig_line in original.lines.all():
+                    line = JournalLine(
+                        entry=rev,
+                        account=orig_line.account,
+                        debit=orig_line.credit,   # swap
+                        credit=orig_line.debit,   # swap
+                        narration=f"Reversal: {orig_line.narration}",
+                    )
+                    line.full_clean()
+                    line.save()
+                rev.post()
+        except DjangoValidationError as exc:
+            msgs = exc.message_dict if hasattr(exc, 'message_dict') else {'__all__': exc.messages}
+            return Response({'error': msgs}, status=400)
+
+        record_audit_event('billing.journal_entry_reversed', request.user, request,
+                           {'original_id': str(original.entry_id), 'reversal_id': str(rev.entry_id)})
+        return Response(_je_data(rev), status=201)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -418,7 +531,17 @@ class TDSEntryViewSet(viewsets.ViewSet):
         d = request.data
         gross = Decimal(str(d['gross_amount']))
         ptype = d['payment_type']
-        calc  = calculate_tds(gross, ptype)
+        # C4: look up prior payments to this vendor in the current fiscal year
+        # so the cumulative threshold is applied correctly (not per-transaction).
+        from billing_school.utils_bs_calendar import fiscal_year_bs
+        fy_now = fiscal_year_bs(date.fromisoformat(d.get('payment_date', str(date.today()))))
+        prior_fy = TDSEntry.objects.filter(
+            tenant=tenant,
+            vendor_name=d['vendor_name'],
+            payment_type=ptype,
+            fiscal_year=fy_now,
+        ).aggregate(s=Sum('gross_amount'))['s'] or Decimal('0')
+        calc = calculate_tds(gross, ptype, prior_payments_fy=prior_fy)
         obj = TDSEntry.objects.create(
             tenant=tenant,
             vendor_name=d['vendor_name'],
@@ -450,9 +573,10 @@ class TDSEntryViewSet(viewsets.ViewSet):
         deposited_tds = qs.filter(is_deposited=True).aggregate(s=Sum('tds_amount'))['s'] or Decimal('0')
         pending_tds   = total_tds - deposited_tds
         by_type = {}
-        for row in qs.values('payment_type').annotate(total=Sum('tds_amount'), count=Sum('tds_id')):
+        for row in qs.values('payment_type').annotate(total=Sum('tds_amount'), count=Count('tds_id')):
             by_type[row['payment_type']] = {
                 'total': float(row['total'] or 0),
+                'count': row['count'],
             }
         return Response({
             'fiscal_year':     fy,
@@ -488,6 +612,10 @@ class TDSEntryViewSet(viewsets.ViewSet):
         obj.deposit_date = request.data.get('deposit_date') or date.today()
         obj.deposit_ref  = request.data.get('deposit_ref', '')
         obj.save()
+        # L4: audit log — TDS deposit to IRD is a compliance-sensitive write
+        record_audit_event('billing.tds_marked_deposited', request.user, request,
+                           {'tds_id': str(obj.tds_id), 'deposit_date': str(obj.deposit_date),
+                            'deposit_ref': obj.deposit_ref, 'tds_amount': float(obj.tds_amount)})
         return Response({'status': 'deposited', 'deposit_date': str(obj.deposit_date)})
 
 
@@ -659,136 +787,183 @@ class NASFinancialStatementsView(APIView):
     # ── Income & Expenditure ───────────────────────────────────────────────
 
     def _income_expenditure(self, tenant, from_d, to_d, fy):
-        """Statement of Income & Expenditure (NAS NPO 2018 Section 5)."""
-        payments_qs = Payment.objects.filter(tenant=tenant)
-        expenses_qs = Expense.objects.filter(tenant=tenant)
+        """Statement of Income & Expenditure (NAS NPO 2018 Section 5).
+
+        C3 / M4 fix: now sourced from posted JournalLine records so that
+        grant income, donations, and all manually-journalized entries are
+        captured — not just the raw Payment/Expense tables.
+        """
+        je_qs = JournalEntry.objects.filter(tenant=tenant, is_posted=True)
         if from_d:
-            payments_qs = payments_qs.filter(payment_date__date__gte=from_d)
-            expenses_qs = expenses_qs.filter(date__gte=from_d)
+            je_qs = je_qs.filter(date_ad__gte=from_d)
         if to_d:
-            payments_qs = payments_qs.filter(payment_date__date__lte=to_d)
-            expenses_qs = expenses_qs.filter(date__lte=to_d)
+            je_qs = je_qs.filter(date_ad__lte=to_d)
 
-        fee_income    = float(payments_qs.aggregate(s=Sum('amount'))['s'] or 0)
-        total_income  = fee_income
-
-        exp_by_cat = {
-            row['category']: float(row['total'] or 0)
-            for row in expenses_qs.values('category').annotate(total=Sum('amount'))
-        }
-        salary_exp   = exp_by_cat.get('salary', 0)
-        maint_exp    = exp_by_cat.get('maintenance', 0)
-        util_exp     = exp_by_cat.get('utilities', 0)
-        supply_exp   = exp_by_cat.get('supplies', 0)
-        events_exp   = exp_by_cat.get('events', 0)
-        transport_exp = exp_by_cat.get('transport', 0)
-        other_exp    = exp_by_cat.get('other', 0)
-
-        # MSF from gateway payments
-        msf_total = float(
-            MerchantServiceFee.objects.filter(
-                tenant=tenant,
-                payment__payment_date__date__lte=to_d,
-            ).aggregate(s=Sum('msf_amount'))['s'] or 0
+        rows = (
+            JournalLine.objects
+            .filter(entry__in=je_qs, account__account_type__in=['income', 'expenditure'])
+            .values('account__account_type', 'account__sub_type')
+            .annotate(total_debit=Sum('debit'), total_credit=Sum('credit'))
         )
 
-        total_exp = sum(exp_by_cat.values()) + msf_total
-        surplus   = total_income - total_exp
+        income_by_sub: dict[str, Decimal] = {}
+        exp_by_sub:    dict[str, Decimal] = {}
+
+        for row in rows:
+            d = row['total_debit']  or Decimal('0')
+            c = row['total_credit'] or Decimal('0')
+            sub = row['account__sub_type'] or 'other'
+            if row['account__account_type'] == 'income':
+                # Income is credit-normal
+                income_by_sub[sub] = income_by_sub.get(sub, Decimal('0')) + (c - d)
+            else:
+                # Expenditure is debit-normal
+                exp_by_sub[sub] = exp_by_sub.get(sub, Decimal('0')) + (d - c)
+
+        def _f(v: Decimal) -> float:
+            return float(max(Decimal('0'), v).quantize(Decimal('0.01')))
+
+        fee_income   = income_by_sub.get('fee_income', Decimal('0'))
+        grant_income = income_by_sub.get('grant_income', Decimal('0'))
+        donations    = income_by_sub.get('donation_income', Decimal('0'))
+        other_inc    = sum(
+            v for k, v in income_by_sub.items()
+            if k not in ('fee_income', 'grant_income', 'donation_income')
+        )
+        total_income = sum(income_by_sub.values(), Decimal('0'))
+
+        staff_exp    = exp_by_sub.get('staff_expense', Decimal('0'))
+        prog_exp     = exp_by_sub.get('program_expense', Decimal('0'))
+        admin_exp    = exp_by_sub.get('admin_expense', Decimal('0'))
+        bank_charge  = exp_by_sub.get('bank_charge', Decimal('0'))
+        dep_exp      = exp_by_sub.get('depreciation', Decimal('0'))
+        tax_exp      = exp_by_sub.get('tax_expense', Decimal('0'))
+        other_exp    = sum(
+            v for k, v in exp_by_sub.items()
+            if k not in ('staff_expense', 'program_expense', 'admin_expense',
+                         'bank_charge', 'depreciation', 'tax_expense')
+        )
+        total_exp    = sum(exp_by_sub.values(), Decimal('0'))
+        surplus      = total_income - total_exp
 
         return {
             'income': {
-                'fee_income':      fee_income,
-                'government_grant': 0,
-                'donations':       0,
-                'other_income':    0,
-                'total':           total_income,
+                'fee_income':       _f(fee_income),
+                'government_grant': _f(grant_income),
+                'donations':        _f(donations),
+                'other_income':     _f(other_inc),
+                'total':            _f(total_income),
             },
             'expenditure': {
-                'staff_salary':    salary_exp,
-                'maintenance':     maint_exp,
-                'utilities':       util_exp,
-                'supplies':        supply_exp,
-                'events':          events_exp,
-                'transport':       transport_exp,
-                'bank_charges_msf': msf_total,
-                'other':           other_exp,
-                'total':           total_exp,
+                'staff_salary':     _f(staff_exp),
+                'programme':        _f(prog_exp),
+                'administration':   _f(admin_exp),
+                'bank_charges_msf': _f(bank_charge),
+                'depreciation':     _f(dep_exp),
+                'tax_expense':      _f(tax_exp),
+                'other':            _f(other_exp),
+                'total':            _f(total_exp),
             },
-            'surplus_deficit':     surplus,
-            'label_surplus':       'Surplus' if surplus >= 0 else 'Deficit',
+            'surplus_deficit': _f(surplus) if surplus >= 0 else -_f(-surplus),
+            'label_surplus':   'Surplus' if surplus >= 0 else 'Deficit',
+            'source':          'journal_entries',
         }
 
     # ── Balance Sheet ──────────────────────────────────────────────────────
 
     def _balance_sheet(self, tenant, to_d):
-        """Statement of Financial Position (NAS NPO 2018 Section 4)."""
-        payments_qs = Payment.objects.filter(tenant=tenant)
-        expenses_qs = Expense.objects.filter(tenant=tenant)
+        """Statement of Financial Position (NAS NPO 2018 Section 4).
+
+        C3 fix: derived from posted JournalLine aggregates per ChartOfAccount
+        sub_type — consistent with the double-entry ledger.
+        """
+        je_qs = JournalEntry.objects.filter(tenant=tenant, is_posted=True)
         if to_d:
-            payments_qs = payments_qs.filter(payment_date__date__lte=to_d)
-            expenses_qs = expenses_qs.filter(date__lte=to_d)
+            je_qs = je_qs.filter(date_ad__lte=to_d)
 
-        total_received = float(payments_qs.aggregate(s=Sum('amount'))['s'] or 0)
-        total_spent    = float(expenses_qs.aggregate(s=Sum('amount'))['s'] or 0)
-        cash_balance   = total_received - total_spent
-
-        fees_receivable = float(
-            StudentFee.objects.filter(
-                tenant=tenant, status__in=['pending', 'partial', 'overdue']
-            ).aggregate(
-                s=Sum('amount_due') - Sum('amount_paid')
-            )['s'] or 0
+        rows = (
+            JournalLine.objects
+            .filter(entry__in=je_qs)
+            .values('account__account_type', 'account__sub_type')
+            .annotate(total_debit=Sum('debit'), total_credit=Sum('credit'))
         )
 
-        # Fixed assets book value from inventory
-        fixed_assets = float(
-            sum(i.current_book_value for i in
-                InventoryItem.objects.filter(tenant=tenant, form_type='401'))
+        balances: dict[tuple, Decimal] = {}
+        for row in rows:
+            d    = row['total_debit']  or Decimal('0')
+            c    = row['total_credit'] or Decimal('0')
+            atype = row['account__account_type']
+            sub   = row['account__sub_type'] or ''
+            net   = (d - c) if atype in ('asset', 'expenditure') else (c - d)
+            key   = (atype, sub)
+            balances[key] = balances.get(key, Decimal('0')) + net
+
+        def _sub(*keys) -> Decimal:
+            return sum(balances.get(k, Decimal('0')) for k in keys)
+
+        def _f(v: Decimal) -> float:
+            return float(v.quantize(Decimal('0.01')))
+
+        cash_and_bank  = _sub(('asset', 'cash_equivalent'))
+        receivables    = _sub(('asset', 'receivable'))
+        other_current  = _sub(('asset', 'current_asset'))
+        total_current  = cash_and_bank + receivables + other_current
+
+        fixed_gross    = _sub(('asset', 'fixed_asset'))
+        fixed_net      = max(Decimal('0'), fixed_gross)
+
+        total_assets   = total_current + fixed_net
+
+        tds_payable    = _sub(('liability', 'tds_payable'))
+        other_curr_lib = _sub(('liability', 'current_liability'))
+        total_curr_lib = tds_payable + other_curr_lib
+        long_term_lib  = _sub(('liability', 'long_term_liability'))
+        total_liab     = total_curr_lib + long_term_lib
+
+        total_equity   = sum(
+            v for (atype, _), v in balances.items() if atype == 'equity'
         )
+        total_fund     = total_equity
+        check_sum      = total_liab + total_fund
 
-        tds_payable = float(
-            TDSEntry.objects.filter(tenant=tenant, is_deposited=False)
-            .aggregate(s=Sum('tds_amount'))['s'] or 0
-        )
-
-        total_assets   = cash_balance + fees_receivable + fixed_assets
-        total_liab     = tds_payable
-        accum_fund     = total_assets - total_liab
-
-        # Fund breakdown
-        fund_accounts = FundAccount.objects.filter(tenant=tenant, is_active=True)
+        fund_accounts  = FundAccount.objects.filter(tenant=tenant, is_active=True)
 
         return {
             'assets': {
                 'current_assets': {
-                    'cash_and_bank':     cash_balance,
-                    'fees_receivable':   fees_receivable,
-                    'total_current':     cash_balance + fees_receivable,
+                    'cash_and_bank':  _f(cash_and_bank),
+                    'fees_receivable': _f(receivables),
+                    'other_current':  _f(other_current),
+                    'total_current':  _f(total_current),
                 },
                 'non_current_assets': {
-                    'fixed_assets_net':  fixed_assets,
+                    'fixed_assets_net': _f(fixed_net),
                 },
-                'total_assets':          total_assets,
+                'total_assets': _f(total_assets),
             },
             'liabilities': {
                 'current_liabilities': {
-                    'tds_payable':       tds_payable,
+                    'tds_payable':   _f(tds_payable),
+                    'other_current': _f(other_curr_lib),
+                    'total_current': _f(total_curr_lib),
                 },
-                'total_liabilities':     total_liab,
+                'long_term_liabilities': _f(long_term_lib),
+                'total_liabilities':     _f(total_liab),
             },
             'accumulated_fund': {
-                'total':                 accum_fund,
+                'total': _f(total_fund),
                 'restricted_funds': [
                     {
                         'name':    f.name,
-                        'balance': float(f.current_balance),
+                        'balance': _f(Decimal(str(f.current_balance))),
                         'type':    f.fund_type,
                     }
-                    for f in fund_accounts
+                    for f in fund_accounts if f.fund_type in ('restricted', 'endowment')
                 ],
             },
-            'total_liabilities_and_fund': total_liab + accum_fund,
-            'balanced': abs(total_assets - (total_liab + accum_fund)) < 0.01,
+            'total_liabilities_and_fund': _f(check_sum),
+            'balanced': abs(total_assets - check_sum) < Decimal('0.01'),
+            'source':   'journal_entries',
         }
 
     # ── Cash Flow (Direct Method) ──────────────────────────────────────────
@@ -815,10 +990,13 @@ class NASFinancialStatementsView(APIView):
         payments_utilities = float(
             eq.filter(category='utilities').aggregate(s=Sum('amount'))['s'] or 0
         )
-        msf_paid = float(
-            MerchantServiceFee.objects.filter(tenant=tenant)
-            .aggregate(s=Sum('msf_amount'))['s'] or 0
-        )
+        msf_qs = MerchantServiceFee.objects.filter(tenant=tenant)
+        if from_d:
+            msf_qs = msf_qs.filter(payment__payment_date__date__gte=from_d)
+        if to_d:
+            msf_qs = msf_qs.filter(payment__payment_date__date__lte=to_d)
+        msf_paid = float(msf_qs.aggregate(s=Sum('msf_amount'))['s'] or 0)
+
         tds_deposited = float(
             TDSEntry.objects.filter(tenant=tenant, is_deposited=True, fiscal_year=fy)
             .aggregate(s=Sum('tds_amount'))['s'] or 0
@@ -828,12 +1006,13 @@ class NASFinancialStatementsView(APIView):
         op_outflow  = payments_to_vendors + payments_to_staff + payments_utilities + msf_paid + tds_deposited
         net_op_cf   = op_inflow - op_outflow
 
-        # Investing: asset purchases (from inventory)
-        asset_purchases = float(
-            InventoryItem.objects.filter(tenant=tenant).aggregate(
-                s=Sum('purchase_price')
-            )['s'] or 0
-        )
+        # H6: date-filter asset purchases so cash flow reflects the requested period
+        inv_qs = InventoryItem.objects.filter(tenant=tenant)
+        if from_d:
+            inv_qs = inv_qs.filter(purchase_date__gte=from_d)
+        if to_d:
+            inv_qs = inv_qs.filter(purchase_date__lte=to_d)
+        asset_purchases = float(inv_qs.aggregate(s=Sum('purchase_price'))['s'] or 0)
         net_inv_cf  = -asset_purchases
 
         return {
@@ -865,34 +1044,77 @@ class NASFinancialStatementsView(APIView):
     # ── Changes in Reserves ────────────────────────────────────────────────
 
     def _changes_in_reserves(self, tenant, fy):
-        """Statement of Changes in Reserves — Restricted vs Unrestricted."""
-        funds = FundAccount.objects.filter(tenant=tenant, is_active=True)
+        """Statement of Changes in Reserves — Restricted vs Unrestricted.
+
+        M1 fix: calculates real additions/utilised amounts from posted journal
+        entries tagged to the fund's linked ChartOfAccount, and derives the
+        surplus/deficit for the fiscal year from I&E journal lines.
+        """
+        funds = FundAccount.objects.filter(
+            tenant=tenant, is_active=True
+        ).select_related('linked_account')
         restricted   = [f for f in funds if f.fund_type == 'restricted']
         unrestricted = [f for f in funds if f.fund_type == 'unrestricted']
 
+        je_qs_fy = JournalEntry.objects.filter(tenant=tenant, is_posted=True, fiscal_year=fy)
+
+        # Surplus / deficit for the year from I&E journal lines
+        ie_agg = JournalLine.objects.filter(
+            entry__in=je_qs_fy,
+            account__account_type__in=['income', 'expenditure'],
+        ).aggregate(
+            income_cr=Sum('credit', filter=Q(account__account_type='income')),
+            income_dr=Sum('debit',  filter=Q(account__account_type='income')),
+            exp_dr=Sum('debit',     filter=Q(account__account_type='expenditure')),
+            exp_cr=Sum('credit',    filter=Q(account__account_type='expenditure')),
+        )
+        total_income = (ie_agg['income_cr'] or Decimal('0')) - (ie_agg['income_dr'] or Decimal('0'))
+        total_exp    = (ie_agg['exp_dr']    or Decimal('0')) - (ie_agg['exp_cr']    or Decimal('0'))
+        surplus_fy   = total_income - total_exp
+
+        def _fund_movements(fund: FundAccount) -> tuple[Decimal, Decimal]:
+            """Return (additions, utilised) for a fund from its linked account's journal lines."""
+            if not fund.linked_account:
+                return Decimal('0'), Decimal('0')
+            agg = JournalLine.objects.filter(
+                entry__in=je_qs_fy,
+                account=fund.linked_account,
+            ).aggregate(dr=Sum('debit'), cr=Sum('credit'))
+            # Equity account is credit-normal: credits = additions, debits = utilised
+            additions = agg['cr'] or Decimal('0')
+            utilised  = agg['dr'] or Decimal('0')
+            return additions, utilised
+
+        def _f(v: Decimal) -> float:
+            return float(v.quantize(Decimal('0.01')))
+
+        restricted_rows = []
+        for f in restricted:
+            adds, used = _fund_movements(f)
+            restricted_rows.append({
+                'name':            f.name,
+                'opening_balance': _f(f.opening_balance),
+                'additions':       _f(adds),
+                'utilised':        _f(used),
+                'closing_balance': _f(Decimal(str(f.current_balance))),
+            })
+
+        unrestricted_rows = []
+        for f in unrestricted:
+            unrestricted_rows.append({
+                'name':             f.name,
+                'opening_balance':  _f(f.opening_balance),
+                'surplus_for_year': _f(surplus_fy),
+                'closing_balance':  _f(Decimal(str(f.current_balance))),
+            })
+
         return {
-            'fiscal_year': fy,
-            'restricted_funds': [
-                {
-                    'name':            f.name,
-                    'opening_balance': float(f.opening_balance),
-                    'additions':       0,
-                    'utilised':        0,
-                    'closing_balance': float(f.current_balance),
-                }
-                for f in restricted
-            ],
-            'unrestricted_funds': [
-                {
-                    'name':            f.name,
-                    'opening_balance': float(f.opening_balance),
-                    'surplus_for_year': 0,
-                    'closing_balance': float(f.current_balance),
-                }
-                for f in unrestricted
-            ],
-            'total_restricted':   sum(float(f.current_balance) for f in restricted),
-            'total_unrestricted': sum(float(f.current_balance) for f in unrestricted),
+            'fiscal_year':        fy,
+            'restricted_funds':   restricted_rows,
+            'unrestricted_funds': unrestricted_rows,
+            'total_restricted':   _f(sum(Decimal(str(f.current_balance)) for f in restricted)),
+            'total_unrestricted': _f(sum(Decimal(str(f.current_balance)) for f in unrestricted)),
+            'surplus_deficit_fy': _f(surplus_fy),
         }
 
 

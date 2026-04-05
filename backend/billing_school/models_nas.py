@@ -100,9 +100,9 @@ class ChartOfAccount(models.Model):
     def balance(self) -> Decimal:
         """Net balance: debit-normal for assets/expenditure, credit-normal for others."""
         from django.db.models import Sum
-        lines = self.journal_lines.all()
-        debits  = lines.aggregate(s=Sum('debit'))['s']  or Decimal('0')
-        credits = lines.aggregate(s=Sum('credit'))['s'] or Decimal('0')
+        agg = self.journal_lines.aggregate(d=Sum('debit'), c=Sum('credit'))
+        debits  = agg['d'] or Decimal('0')
+        credits = agg['c'] or Decimal('0')
         if self.account_type in ('asset', 'expenditure'):
             return debits - credits
         return credits - debits
@@ -157,13 +157,21 @@ class JournalEntry(models.Model):
             models.Index(fields=['tenant', 'date_ad'], name='je_tenant_date_idx'),
             models.Index(fields=['tenant', 'entry_type'], name='je_tenant_type_idx'),
         ]
+        constraints = [
+            # Prevent duplicate voucher numbers per tenant (L6 + C1 guard)
+            models.UniqueConstraint(
+                fields=['tenant', 'entry_number'],
+                condition=~models.Q(entry_number=''),
+                name='je_tenant_entry_number_uniq',
+            ),
+        ]
 
     def __str__(self):
         return f"{self.entry_number or self.entry_id} | {self.date_ad} | {self.description[:50]}"
 
     def save(self, *args, **kwargs):
-        # Auto-fill BS date and fiscal year
-        if self.date_ad and not self.date_bs:
+        # Always recompute BS date/fiscal year from date_ad so stale values can't persist (L3)
+        if self.date_ad:
             from billing_school.utils_bs_calendar import bs_date_str, fiscal_year_bs
             self.date_bs    = bs_date_str(self.date_ad)
             self.fiscal_year = fiscal_year_bs(self.date_ad)
@@ -253,9 +261,13 @@ class FundAccount(models.Model):
 
     @property
     def current_balance(self) -> Decimal:
-        from django.db.models import Sum
+        """Return balance from the linked COA account, or opening_balance as fallback.
+
+        opening_balance should be recorded as an 'opening' journal entry so that
+        linked_account.balance already includes it — avoids double-counting (H5).
+        """
         if self.linked_account:
-            return self.linked_account.balance + self.opening_balance
+            return self.linked_account.balance
         return self.opening_balance
 
 

@@ -75,9 +75,22 @@ SALARY_SLABS: list[tuple[Decimal, Decimal]] = [
 ]
 
 
-def calculate_tds(gross_amount: Decimal, payment_type: str) -> dict:
+def calculate_tds(
+    gross_amount: Decimal,
+    payment_type: str,
+    prior_payments_fy: Decimal = Decimal('0'),
+) -> dict:
     """
     Calculate TDS for a given payment amount and type.
+
+    Args:
+        gross_amount:      Current payment amount.
+        payment_type:      Payment category (must be a key in TDS_RULES).
+        prior_payments_fy: Total payments already made to this vendor in the current
+                           fiscal year (same payment_type).  Used to evaluate the
+                           cumulative threshold correctly — e.g. vendor_supply threshold
+                           is NPR 50,000 *per fiscal year per vendor*, not per transaction
+                           (C4 fix).
 
     Returns:
         {
@@ -90,6 +103,7 @@ def calculate_tds(gross_amount: Decimal, payment_type: str) -> dict:
         }
     """
     gross = Decimal(str(gross_amount))
+    prior = Decimal(str(prior_payments_fy))
     rules = TDS_RULES.get(payment_type)
     if not rules:
         return {
@@ -116,18 +130,31 @@ def calculate_tds(gross_amount: Decimal, payment_type: str) -> dict:
         }
 
     threshold = rules['threshold']
-    if gross <= threshold:
+    cumulative = prior + gross
+
+    if threshold > 0 and cumulative <= threshold:
         return {
             'applicable': False,
             'rate': rules['rate'],
             'tds_amount': Decimal('0'),
             'net_amount': gross,
             'section': rules['section'],
-            'description': f"{rules['description']} — below threshold NPR {threshold:,.0f}",
+            'description': (
+                f"{rules['description']} — cumulative NPR {cumulative:,.0f} "
+                f"below threshold NPR {threshold:,.0f}"
+            ),
         }
 
+    # If the current payment crosses the threshold, only the portion above the
+    # threshold that hasn't been previously accounted for is taxable.
+    if threshold > 0 and prior < threshold:
+        # Only the amount above threshold is newly taxable in this payment
+        taxable = cumulative - threshold
+    else:
+        taxable = gross
+
     rate = rules['rate'] / 100
-    tds_amount = (gross * rate).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+    tds_amount = (taxable * rate).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
     return {
         'applicable': True,
         'rate': rules['rate'],
