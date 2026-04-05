@@ -12,6 +12,12 @@ from .views_payment_gateway import (
     EsewaInitiateView, EsewaCallbackView,
     KhaltiInitiateView, KhaltiCallbackView,
 )
+from .views_nas import (
+    ChartOfAccountViewSet, JournalEntryViewSet,
+    FundAccountViewSet, TDSEntryViewSet, InventoryItemViewSet,
+    NASFinancialStatementsView, BSCalendarView,
+    ConnectIPSInitiateView, ConnectIPSCallbackView,
+)
 
 router = DefaultRouter()
 router.register(r"fee-structures", FeeStructureViewSet)
@@ -23,11 +29,26 @@ router.register(r"reports", BillingReportViewSet, basename="billing-reports")
 router.register(r"discounts", FeeDiscountViewSet, basename="fee-discount")
 router.register(r"ledger-accounts", LedgerAccountViewSet, basename="ledger-account")
 router.register(r"ledger-entries", LedgerEntryViewSet, basename="ledger-entry")
+# NAS Accounting
+router.register(r"nas/chart-of-accounts", ChartOfAccountViewSet, basename="nas-coa")
+router.register(r"nas/journal-entries",    JournalEntryViewSet,   basename="nas-je")
+router.register(r"nas/fund-accounts",      FundAccountViewSet,    basename="nas-fund")
+router.register(r"nas/tds",                TDSEntryViewSet,       basename="nas-tds")
+router.register(r"nas/inventory",          InventoryItemViewSet,  basename="nas-inventory")
 
 urlpatterns = [
     path("", include(router.urls)),
+    # eSewa
     path("esewa/initiate/", EsewaInitiateView.as_view(), name="esewa-initiate"),
     path("esewa/callback/", EsewaCallbackView.as_view(), name="esewa-callback"),
+    # Khalti
     path("khalti/initiate/", KhaltiInitiateView.as_view(), name="khalti-initiate"),
     path("khalti/callback/", KhaltiCallbackView.as_view(), name="khalti-callback"),
+    # ConnectIPS
+    path("connectips/initiate/", ConnectIPSInitiateView.as_view(), name="connectips-initiate"),
+    path("connectips/callback/", ConnectIPSCallbackView.as_view(), name="connectips-callback"),
+    # NAS Financial Statements
+    path("nas/financial-statements/", NASFinancialStatementsView.as_view(), name="nas-financial-statements"),
+    # BS Calendar utility
+    path("nas/bs-calendar/", BSCalendarView.as_view(), name="nas-bs-calendar"),
 ]

@@ -112,3 +112,153 @@ class KhaltiGateway:
         )
         resp.raise_for_status()
         return resp.json()  # {'pidx': '...', 'status': 'Completed', 'total_amount': ...}
+
+
+class ConnectIPSGateway:
+    """
+    ConnectIPS (NEPALPAY) payment integration.
+    ConnectIPS is an inter-bank payment switch operated by Nepal Clearing House Ltd (NCHL).
+    Uses HMAC-SHA256 signed token for security.
+    """
+
+    PAYMENT_URL = 'https://connect.nepalpay.com.np/payment/request'
+    VERIFY_URL  = 'https://connect.nepalpay.com.np/payment/statuscheck'
+    # Sandbox:
+    SANDBOX_PAYMENT_URL = 'https://uat.connectips.com/connectipswebws/api/creditor/generatetokenformpayment'
+    SANDBOX_VERIFY_URL  = 'https://uat.connectips.com/connectipswebws/api/creditor/getStatementDetailRequest'
+
+    @staticmethod
+    def _is_sandbox() -> bool:
+        return getattr(settings, 'CONNECTIPS_SANDBOX', True)
+
+    @staticmethod
+    def get_merchant_id() -> str:
+        return getattr(settings, 'CONNECTIPS_MERCHANT_ID', 'TEST_MERCHANT')
+
+    @staticmethod
+    def get_app_id() -> str:
+        return getattr(settings, 'CONNECTIPS_APP_ID', 'TEST_APP')
+
+    @staticmethod
+    def get_app_name() -> str:
+        return getattr(settings, 'CONNECTIPS_APP_NAME', 'SikshyaSetu')
+
+    @staticmethod
+    def get_password() -> str:
+        return getattr(settings, 'CONNECTIPS_PASSWORD', '')
+
+    @staticmethod
+    def _build_token(merchant_id: str, app_id: str, app_name: str,
+                     txn_id: str, txn_date: str, txn_currency: str,
+                     txn_amount: int, reference_id: str,
+                     remarks: str, particulars: str) -> str:
+        """
+        Build HMAC-SHA256 signed token as per ConnectIPS spec.
+        Token string: MERCHANTID=x,APPID=x,APPNAME=x,TXNID=x,TXNDATE=x,
+                      TXNCRNCY=x,TXNAMT=x,REFERENCEID=x,REMARKS=x,PARTICULARS=x,TOKEN=TOKEN
+        """
+        import base64
+        import hashlib
+        import hmac
+
+        password = ConnectIPSGateway.get_password()
+        message = (
+            f"MERCHANTID={merchant_id},"
+            f"APPID={app_id},"
+            f"APPNAME={app_name},"
+            f"TXNID={txn_id},"
+            f"TXNDATE={txn_date},"
+            f"TXNCRNCY={txn_currency},"
+            f"TXNAMT={txn_amount},"
+            f"REFERENCEID={reference_id},"
+            f"REMARKS={remarks},"
+            f"PARTICULARS={particulars},"
+            f"TOKEN=TOKEN"
+        )
+        key = password.encode('utf-8')
+        signature = hmac.new(key, message.encode('utf-8'), hashlib.sha256).digest()
+        return base64.b64encode(signature).decode('utf-8')
+
+    @staticmethod
+    def initiate(amount_paisa: int, purchase_order_id: str, return_url: str,
+                 remarks: str = 'School Fee Payment') -> dict:
+        """
+        Initiate a ConnectIPS payment.
+        amount_paisa: amount in paisa (NPR × 100)
+        Returns form fields to POST to ConnectIPS payment page.
+        """
+        import uuid
+        from datetime import date
+
+        merchant_id  = ConnectIPSGateway.get_merchant_id()
+        app_id       = ConnectIPSGateway.get_app_id()
+        app_name     = ConnectIPSGateway.get_app_name()
+        txn_id       = f"TXN{uuid.uuid4().hex[:12].upper()}"
+        txn_date     = date.today().strftime('%m/%d/%Y')
+        currency     = 'NPR'
+        reference_id = str(purchase_order_id)[:20]
+        particulars  = 'School Fee'
+
+        token = ConnectIPSGateway._build_token(
+            merchant_id, app_id, app_name,
+            txn_id, txn_date, currency,
+            amount_paisa, reference_id,
+            remarks, particulars,
+        )
+
+        payment_url = (ConnectIPSGateway.SANDBOX_PAYMENT_URL
+                       if ConnectIPSGateway._is_sandbox()
+                       else ConnectIPSGateway.PAYMENT_URL)
+
+        return {
+            'payment_url': payment_url,
+            'form_fields': {
+                'MERCHANTID':  merchant_id,
+                'APPID':       app_id,
+                'APPNAME':     app_name,
+                'TXNID':       txn_id,
+                'TXNDATE':     txn_date,
+                'TXNCRNCY':    currency,
+                'TXNAMT':      str(amount_paisa),
+                'REFERENCEID': reference_id,
+                'REMARKS':     remarks,
+                'PARTICULARS': particulars,
+                'TOKEN':       token,
+            },
+            '_txn_id':       txn_id,
+            '_reference_id': reference_id,
+        }
+
+    @staticmethod
+    def verify(txn_id: str, reference_id: str) -> dict:
+        """Verify a ConnectIPS payment status."""
+        import base64
+        import hashlib
+        import hmac
+
+        merchant_id = ConnectIPSGateway.get_merchant_id()
+        app_id      = ConnectIPSGateway.get_app_id()
+        password    = ConnectIPSGateway.get_password()
+
+        message   = f"MERCHANTID={merchant_id},APPID={app_id},REFERENCEID={reference_id},TXNID={txn_id},TOKEN=TOKEN"
+        key       = password.encode('utf-8')
+        signature = hmac.new(key, message.encode('utf-8'), hashlib.sha256).digest()
+        token     = base64.b64encode(signature).decode('utf-8')
+
+        verify_url = (ConnectIPSGateway.SANDBOX_VERIFY_URL
+                      if ConnectIPSGateway._is_sandbox()
+                      else ConnectIPSGateway.VERIFY_URL)
+
+        try:
+            resp = requests.post(verify_url, json={
+                'merchantId':  merchant_id,
+                'appId':       app_id,
+                'referenceId': reference_id,
+                'txnId':       txn_id,
+                'token':       token,
+            }, timeout=15)
+            resp.raise_for_status()
+            return resp.json()
+        except Exception as exc:
+            logger.error("ConnectIPS verification error: %s", exc)
+            return {'status': 'ERROR', 'message': str(exc)}
