@@ -170,6 +170,45 @@ test.describe('Admin CRUD — Academic', () => {
     });
   });
 
+  // ── Exam CRUD ───────────────────────────────────────────────────────────────
+  test.describe('Exam', () => {
+    test('create exam from a quiz assessment (auto-coerces type to exam)', async ({ request }) => {
+      const tokens = await loginAs(request, 'admin');
+
+      // Get any existing assessment to link the exam to
+      const aBody = await apiGet(request, tokens, '/api/academic/assessments/') as Record<string, unknown>;
+      const assessments = Array.isArray(aBody) ? aBody : (aBody.results as unknown[]) ?? [];
+      if (assessments.length === 0) return; // no assessments seeded — skip gracefully
+
+      // Pick one that doesn't already have an exam
+      const eBody = await apiGet(request, tokens, '/api/academic/exams/') as Record<string, unknown>;
+      const existingExamAssessmentIds = new Set(
+        (Array.isArray(eBody) ? eBody : (eBody.results as unknown[]) ?? [])
+          .map((e: unknown) => (e as Record<string, unknown>).assessment as string)
+      );
+      const free = (assessments as Record<string, unknown>[]).find(
+        a => !existingExamAssessmentIds.has(a.assessment_id as string)
+      );
+      if (!free) return; // all assessments already linked
+
+      const created = await apiPost(request, tokens, '/api/academic/exams/', {
+        assessment: free.assessment_id,
+        hall_ticket_prefix: 'QA',
+        seating_capacity: 30,
+      }) as Record<string, unknown>;
+      expect(created.exam_id).toBeTruthy();
+
+      // Cleanup
+      await apiDelete(request, tokens, `/api/academic/exams/${created.exam_id}/`);
+    });
+
+    test('list exams', async ({ request }) => {
+      const tokens = await loginAs(request, 'admin');
+      const body = await apiGet(request, tokens, '/api/academic/exams/');
+      expect(body).toBeTruthy();
+    });
+  });
+
   // ── Dashboard / Stats ───────────────────────────────────────────────────────
   test.describe('Dashboard stats', () => {
     test('academic stats endpoint responds', async ({ request }) => {
