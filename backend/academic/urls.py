@@ -20,6 +20,7 @@ from .views import (
 )
 from .views.stats import AcademicStatsView
 from .views.analytics import SchoolAnalyticsDashboardView
+from .views.admin_actions import SeedAttendanceView, GenerateAIReportsView
 
 router = DefaultRouter()
 router.register(r'years', AcademicYearViewSet) # /api/academic/years/
@@ -60,5 +61,7 @@ urlpatterns = [
     path('stats/', AcademicStatsView.as_view(), name='academic-stats'),
     path('erp/overview/', SchoolERPOverviewView.as_view(), name='school-erp-overview'),
     path('analytics/dashboard/', SchoolAnalyticsDashboardView.as_view(), name='analytics-dashboard'),
+    path('admin/actions/seed-attendance/', SeedAttendanceView.as_view(), name='admin-seed-attendance'),
+    path('admin/actions/generate-ai-reports/', GenerateAIReportsView.as_view(), name='admin-generate-ai-reports'),
     path('', include(router.urls)),
 ]
