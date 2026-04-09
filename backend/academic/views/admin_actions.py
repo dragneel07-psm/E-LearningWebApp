@@ -136,7 +136,6 @@ class SeedResultsView(APIView):
             deleted = 0
 
         current_year = ensure_current_academic_year()
-        now = timezone.now()
 
         base_qs = Assessment.objects.select_related('subject', 'subject__academic_class')
         if current_year:
