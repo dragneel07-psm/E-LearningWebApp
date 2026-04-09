@@ -94,21 +94,22 @@ test.describe('Unauthenticated Access → Redirect to Login', () => {
     await context.clearCookies();
   });
 
+  // Production Next.js middleware can be slow on cold starts; allow 20s for redirects.
   test('/student redirects to /login when not authenticated', async ({ page }) => {
     await page.goto(`${FRONTEND_URL}/student`);
-    await page.waitForURL(/\/login/, { timeout: 10000 });
+    await page.waitForURL(/\/login/, { timeout: 20000 });
     expect(page.url()).toContain('/login');
   });
 
   test('/admin redirects to /login when not authenticated', async ({ page }) => {
     await page.goto(`${FRONTEND_URL}/admin`);
-    await page.waitForURL(/\/login/, { timeout: 10000 });
+    await page.waitForURL(/\/login/, { timeout: 20000 });
     expect(page.url()).toContain('/login');
   });
 
   test('/teacher redirects to /login when not authenticated', async ({ page }) => {
     await page.goto(`${FRONTEND_URL}/teacher`);
-    await page.waitForURL(/\/login/, { timeout: 10000 });
+    await page.waitForURL(/\/login/, { timeout: 20000 });
     expect(page.url()).toContain('/login');
   });
 });

@@ -50,8 +50,8 @@ test.describe('Teacher CRUD', () => {
     let chapterId: number;
 
     test.beforeAll(async ({ request }) => {
-      // Get first available subject
-      const tokens = await loginAs(request, 'admin');
+      // Use teacher token so subjectId is one the teacher can actually manage
+      const tokens = await loginAs(request, 'teacher');
       const body = await apiGet(request, tokens, '/api/academic/subjects/') as Record<string, unknown>;
       const subjects = Array.isArray(body) ? body : (body.results as unknown[]) ?? [];
       if (subjects.length === 0) test.skip();
@@ -92,8 +92,8 @@ test.describe('Teacher CRUD', () => {
     let lessonId: number;
 
     test.beforeAll(async ({ request }) => {
-      // Use admin to get a chapter
-      const tokens = await loginAs(request, 'admin');
+      // Use teacher token so the chapter belongs to a subject the teacher can manage
+      const tokens = await loginAs(request, 'teacher');
       const body = await apiGet(request, tokens, '/api/academic/chapters/') as Record<string, unknown>;
       const chapters = Array.isArray(body) ? body : (body.results as unknown[]) ?? [];
       if (chapters.length === 0) test.skip();
@@ -137,7 +137,8 @@ test.describe('Teacher CRUD', () => {
     let assessmentId: string;
 
     test.beforeAll(async ({ request }) => {
-      const tokens = await loginAs(request, 'admin');
+      // Use teacher token so the subject is one the teacher can actually manage
+      const tokens = await loginAs(request, 'teacher');
       const body = await apiGet(request, tokens, '/api/academic/subjects/') as Record<string, unknown>;
       const subjects = Array.isArray(body) ? body : (body.results as unknown[]) ?? [];
       if (subjects.length === 0) test.skip();
