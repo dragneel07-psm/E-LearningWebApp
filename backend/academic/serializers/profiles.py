@@ -185,18 +185,22 @@ class StudentListSerializer(StudentAccountFieldsMixin, serializers.ModelSerializ
     def get_upcoming_assessments(self, obj):
         from academic.models import Assessment
         from django.utils import timezone
+        from django.db.models import Q, Coalesce
+        now = timezone.now()
+        # Match on scheduled_at OR due_date — whichever is set and in the future
         upcoming = Assessment.objects.filter(
             subject__academic_class=obj.academic_class,
-            scheduled_at__gte=timezone.now()
+        ).filter(
+            Q(scheduled_at__gte=now) | Q(due_date__gte=now)
         )
         current_year = ensure_current_academic_year()
         if current_year:
             upcoming = upcoming.filter(academic_year=current_year)
-        upcoming = upcoming.order_by('scheduled_at')[:2]
+        upcoming = upcoming.order_by('scheduled_at', 'due_date')[:3]
         return [{
             'title': a.title,
             'subject': a.subject.name,
-            'date': a.scheduled_at,
+            'date': a.scheduled_at or a.due_date,
             'type': a.type
         } for a in upcoming]
 

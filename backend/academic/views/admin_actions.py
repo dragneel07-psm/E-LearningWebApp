@@ -11,15 +11,17 @@ Both require an authenticated admin/staff session.  These exist so
 demo/setup tasks can be triggered from the API without SSH access.
 """
 import random
+import uuid
 from datetime import date, timedelta
 
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from core.permissions import IsAdminOrStaff
-from academic.models import Attendance, Student, Subject
+from academic.models import Assessment, Attendance, Result, Student, Subject
 from academic.services.academic_year_service import ensure_current_academic_year
 
 
@@ -115,6 +117,89 @@ class SeedAttendanceView(APIView):
             'subjects': len(subjects),
             'days': days_count,
             'academic_year': current_year.name if current_year else None,
+        })
+
+
+class SeedResultsView(APIView):
+    """
+    POST /api/academic/admin/actions/seed-results/
+    Body (optional): { "clear": false }
+    Creates realistic Result records so grades appear on dashboards.
+    Each student gets a result for every past assessment in their class.
+    """
+    permission_classes = [IsAuthenticated, IsAdminOrStaff]
+
+    def post(self, request):
+        do_clear = bool(request.data.get('clear', False))
+
+        if do_clear:
+            deleted, _ = Result.objects.all().delete()
+        else:
+            deleted = 0
+
+        current_year = ensure_current_academic_year()
+        now = timezone.now()
+
+        assessments = list(
+            Assessment.objects.select_related('subject', 'subject__academic_class')
+            .filter(academic_year=current_year if current_year else Assessment.objects.none().__class__)
+            .exclude(due_date__gt=now)  # only past/current assessments
+            .exclude(due_date=None)
+        ) if current_year else list(
+            Assessment.objects.select_related('subject', 'subject__academic_class')
+            .filter(due_date__lte=now)
+            .exclude(due_date=None)
+        )
+
+        if not assessments:
+            # Fallback: all assessments without future due_date
+            assessments = list(
+                Assessment.objects.select_related('subject', 'subject__academic_class')
+                .filter(due_date__isnull=False)
+            )
+
+        if not assessments:
+            return Response({'detail': 'No past assessments found to seed results for.'})
+
+        class_to_assessments: dict = {}
+        for a in assessments:
+            class_to_assessments.setdefault(a.subject.academic_class_id, []).append(a)
+
+        students = list(Student.objects.filter(academic_class_id__in=class_to_assessments.keys()))
+
+        existing = set(
+            Result.objects.filter(
+                student__in=students
+            ).values_list('assessment_id', 'student_id')
+        )
+
+        records = []
+        for student in students:
+            for assessment in class_to_assessments.get(student.academic_class_id, []):
+                if (assessment.pk, student.pk) in existing:
+                    continue
+                total = assessment.total_marks
+                # Normally-distributed score: mean 72%, std 15%
+                raw = random.gauss(0.72, 0.15)
+                score = max(0, min(total, round(raw * total)))
+                records.append(Result(
+                    student=student,
+                    assessment=assessment,
+                    score=score,
+                    time_taken_minutes=random.randint(20, assessment.duration_minutes or 60),
+                ))
+
+        created_count = 0
+        for i in range(0, len(records), 500):
+            objs = Result.objects.bulk_create(records[i:i + 500], ignore_conflicts=True)
+            created_count += len(objs)
+
+        return Response({
+            'status': 'ok',
+            'deleted': deleted,
+            'created': created_count,
+            'students': len(students),
+            'assessments': len(assessments),
         })
 
 
