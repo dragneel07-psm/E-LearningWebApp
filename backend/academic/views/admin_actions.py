@@ -188,6 +188,79 @@ class SeedResultsView(APIView):
         })
 
 
+class YearAlignmentCheckView(APIView):
+    """
+    GET /api/academic/admin/actions/check-year-alignment/
+    Reports whether seeded subjects, chapters, lessons, assessments and
+    attendance records are aligned with the current academic year.
+    Returns counts per year so mismatches are immediately visible.
+    """
+    permission_classes = [IsAuthenticated, IsAdminOrStaff]
+
+    def get(self, request):
+        from academic.models import Assessment, Attendance, Chapter, Lesson, Subject
+        from django.db.models import Count
+
+        current_year = ensure_current_academic_year()
+        current_year_id = current_year.pk if current_year else None
+
+        def _year_counts(qs, year_field='academic_year'):
+            rows = (
+                qs.values(year_field)
+                .annotate(count=Count('pk'))
+                .order_by('-count')
+            )
+            return [
+                {'year_id': r[year_field], 'count': r['count'],
+                 'is_current': r[year_field] == current_year_id}
+                for r in rows
+            ]
+
+        subjects_by_year = _year_counts(Subject.objects.all())
+        chapters_by_year = _year_counts(Chapter.objects.all())
+        lessons_by_year = _year_counts(Lesson.objects.all())
+        assessments_by_year = _year_counts(Assessment.objects.all())
+
+        # Attendance links to subject → derive year via subject
+        att_by_year = (
+            Attendance.objects.select_related('subject')
+            .values('subject__academic_year')
+            .annotate(count=Count('pk'))
+            .order_by('-count')
+        )
+        attendance_by_year = [
+            {'year_id': r['subject__academic_year'], 'count': r['count'],
+             'is_current': r['subject__academic_year'] == current_year_id}
+            for r in att_by_year
+        ]
+
+        def _aligned(rows):
+            if not rows:
+                return None  # no data
+            return all(r['is_current'] for r in rows)
+
+        return Response({
+            'current_year': {
+                'id': current_year_id,
+                'name': current_year.name if current_year else None,
+            },
+            'alignment': {
+                'subjects': _aligned(subjects_by_year),
+                'chapters': _aligned(chapters_by_year),
+                'lessons': _aligned(lessons_by_year),
+                'assessments': _aligned(assessments_by_year),
+                'attendance': _aligned(attendance_by_year),
+            },
+            'counts_by_year': {
+                'subjects': subjects_by_year,
+                'chapters': chapters_by_year,
+                'lessons': lessons_by_year,
+                'assessments': assessments_by_year,
+                'attendance': attendance_by_year,
+            },
+        })
+
+
 class GenerateAIReportsView(APIView):
     """
     POST /api/academic/admin/actions/generate-ai-reports/

@@ -110,6 +110,9 @@ class SecurityHeadersMiddleware:
         if permissions_policy and "Permissions-Policy" not in response:
             response["Permissions-Policy"] = permissions_policy
 
+        if getattr(request, "_tenant_header_ignored", False):
+            response["X-Tenant-Header-Ignored"] = "true"
+
         return response
 
 
@@ -336,3 +339,7 @@ class TenantFromHeaderMiddleware(TenantMainMiddleware):
         request.tenant = tenant
         connection.set_tenant(request.tenant)
         self.setup_url_routing(request)
+
+        # Warn callers when they sent x-tenant-id but it was ignored (prod / non-local).
+        if tenant_id and not trust_header:
+            request._tenant_header_ignored = True

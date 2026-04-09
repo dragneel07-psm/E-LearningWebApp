@@ -20,7 +20,7 @@ from .views import (
 )
 from .views.stats import AcademicStatsView
 from .views.analytics import SchoolAnalyticsDashboardView
-from .views.admin_actions import SeedAttendanceView, SeedResultsView, GenerateAIReportsView
+from .views.admin_actions import SeedAttendanceView, SeedResultsView, GenerateAIReportsView, YearAlignmentCheckView
 
 router = DefaultRouter()
 router.register(r'years', AcademicYearViewSet) # /api/academic/years/
@@ -64,5 +64,6 @@ urlpatterns = [
     path('admin/actions/seed-attendance/', SeedAttendanceView.as_view(), name='admin-seed-attendance'),
     path('admin/actions/seed-results/', SeedResultsView.as_view(), name='admin-seed-results'),
     path('admin/actions/generate-ai-reports/', GenerateAIReportsView.as_view(), name='admin-generate-ai-reports'),
+    path('admin/actions/check-year-alignment/', YearAlignmentCheckView.as_view(), name='admin-check-year-alignment'),
     path('', include(router.urls)),
 ]

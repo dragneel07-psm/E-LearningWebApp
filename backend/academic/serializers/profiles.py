@@ -178,7 +178,7 @@ class StudentListSerializer(StudentAccountFieldsMixin, serializers.ModelSerializ
             'subject': r.assessment.subject.name,
             'score': r.score,
             'total_marks': r.assessment.total_marks,
-            'percentage': round((r.score / r.assessment.total_marks) * 100, 1),
+            'percentage': round((r.score / r.assessment.total_marks) * 100, 1) if r.assessment.total_marks else 0,
             'date': r.submitted_at.date()
         } for r in results]
 
