@@ -11,10 +11,8 @@ Both require an authenticated admin/staff session.  These exist so
 demo/setup tasks can be triggered from the API without SSH access.
 """
 import random
-import uuid
 from datetime import date, timedelta
 
-from django.utils import timezone
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -140,26 +138,14 @@ class SeedResultsView(APIView):
         current_year = ensure_current_academic_year()
         now = timezone.now()
 
-        assessments = list(
-            Assessment.objects.select_related('subject', 'subject__academic_class')
-            .filter(academic_year=current_year if current_year else Assessment.objects.none().__class__)
-            .exclude(due_date__gt=now)  # only past/current assessments
-            .exclude(due_date=None)
-        ) if current_year else list(
-            Assessment.objects.select_related('subject', 'subject__academic_class')
-            .filter(due_date__lte=now)
-            .exclude(due_date=None)
-        )
+        base_qs = Assessment.objects.select_related('subject', 'subject__academic_class')
+        if current_year:
+            assessments = list(base_qs.filter(academic_year=current_year))
+        else:
+            assessments = list(base_qs.all())
 
         if not assessments:
-            # Fallback: all assessments without future due_date
-            assessments = list(
-                Assessment.objects.select_related('subject', 'subject__academic_class')
-                .filter(due_date__isnull=False)
-            )
-
-        if not assessments:
-            return Response({'detail': 'No past assessments found to seed results for.'})
+            return Response({'detail': 'No assessments found to seed results for.'})
 
         class_to_assessments: dict = {}
         for a in assessments:
