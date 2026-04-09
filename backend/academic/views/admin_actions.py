@@ -171,7 +171,7 @@ class SeedResultsView(APIView):
                     student=student,
                     assessment=assessment,
                     score=score,
-                    time_taken_minutes=random.randint(20, assessment.duration_minutes or 60),
+                    time_taken_minutes=random.randint(5, max(5, assessment.duration_minutes or 60)),
                 ))
 
         created_count = 0
