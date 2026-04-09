@@ -191,14 +191,15 @@ class SeedResultsView(APIView):
 class YearAlignmentCheckView(APIView):
     """
     GET /api/academic/admin/actions/check-year-alignment/
-    Reports whether seeded subjects, chapters, lessons, assessments and
-    attendance records are aligned with the current academic year.
-    Returns counts per year so mismatches are immediately visible.
+    Reports whether seeded subjects, assessments and attendance records are
+    aligned with the current academic year.  Returns counts per year so
+    mismatches are immediately visible.
+    Note: Chapter/Lesson don't carry their own academic_year — they inherit it
+    via Subject, so only Subject/Assessment/Attendance are checked here.
     """
     permission_classes = [IsAuthenticated, IsAdminOrStaff]
 
     def get(self, request):
-        from academic.models import Assessment, Attendance, Chapter, Lesson, Subject
         from django.db.models import Count
 
         current_year = ensure_current_academic_year()
@@ -217,14 +218,11 @@ class YearAlignmentCheckView(APIView):
             ]
 
         subjects_by_year = _year_counts(Subject.objects.all())
-        chapters_by_year = _year_counts(Chapter.objects.all())
-        lessons_by_year = _year_counts(Lesson.objects.all())
         assessments_by_year = _year_counts(Assessment.objects.all())
 
         # Attendance links to subject → derive year via subject
         att_by_year = (
-            Attendance.objects.select_related('subject')
-            .values('subject__academic_year')
+            Attendance.objects.values('subject__academic_year')
             .annotate(count=Count('pk'))
             .order_by('-count')
         )
@@ -232,6 +230,18 @@ class YearAlignmentCheckView(APIView):
             {'year_id': r['subject__academic_year'], 'count': r['count'],
              'is_current': r['subject__academic_year'] == current_year_id}
             for r in att_by_year
+        ]
+
+        # Results: derive year via assessment
+        results_by_year = (
+            Result.objects.values('assessment__academic_year')
+            .annotate(count=Count('pk'))
+            .order_by('-count')
+        )
+        results_by_year_list = [
+            {'year_id': r['assessment__academic_year'], 'count': r['count'],
+             'is_current': r['assessment__academic_year'] == current_year_id}
+            for r in results_by_year
         ]
 
         def _aligned(rows):
@@ -246,17 +256,15 @@ class YearAlignmentCheckView(APIView):
             },
             'alignment': {
                 'subjects': _aligned(subjects_by_year),
-                'chapters': _aligned(chapters_by_year),
-                'lessons': _aligned(lessons_by_year),
                 'assessments': _aligned(assessments_by_year),
                 'attendance': _aligned(attendance_by_year),
+                'results': _aligned(results_by_year_list),
             },
             'counts_by_year': {
                 'subjects': subjects_by_year,
-                'chapters': chapters_by_year,
-                'lessons': lessons_by_year,
                 'assessments': assessments_by_year,
                 'attendance': attendance_by_year,
+                'results': results_by_year_list,
             },
         })
 
