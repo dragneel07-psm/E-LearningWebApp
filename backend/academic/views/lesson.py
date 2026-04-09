@@ -71,11 +71,11 @@ class ChapterViewSet(viewsets.ModelViewSet):
                 queryset = queryset.filter(subject__academic_year_id=academic_year_param)
             else:
                 queryset = queryset.filter(subject__academic_year__name=academic_year_param)
-        else:
+        elif role != 'teacher':
             current_year = ensure_current_academic_year()
             if current_year:
                 queryset = queryset.filter(subject__academic_year=current_year)
-        
+
         # Role-based visibility
         if role == 'student':
             queryset = queryset.filter(is_published=True)
@@ -146,7 +146,7 @@ class LessonViewSet(viewsets.ModelViewSet):
                 queryset = queryset.filter(chapter__subject__academic_year_id=academic_year_param)
             else:
                 queryset = queryset.filter(chapter__subject__academic_year__name=academic_year_param)
-        else:
+        elif role != 'teacher':
             current_year = ensure_current_academic_year()
             if current_year:
                 queryset = queryset.filter(chapter__subject__academic_year=current_year)

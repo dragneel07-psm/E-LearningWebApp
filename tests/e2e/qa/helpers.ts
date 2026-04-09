@@ -12,12 +12,13 @@ export const FRONTEND_URL = (process.env.E2E_BASE_URL      || 'http://127.0.0.1:
 export const QA_TENANT    = process.env.E2E_QA_TENANT      || 'qa';
 
 // ── Fixed credentials (must match setup_qa_tenant management command) ─────────
+// Override per-role via env vars: E2E_ADMIN_EMAIL / E2E_ADMIN_PASS, etc.
 export const CREDENTIALS = {
-  admin:    { email: 'admin@qa.test',    password: 'QAAdmin123!',   role: 'admin' },
-  staff:    { email: 'staff@qa.test',    password: 'QAStaff123!',   role: 'staff' },
-  teacher:  { email: 'teacher@qa.test',  password: 'QATeacher123!', role: 'teacher' },
-  student:  { email: 'student@qa.test',  password: 'QAStudent123!', role: 'student' },
-  parent:   { email: 'parent@qa.test',   password: 'QAParent123!',  role: 'parent' },
+  admin:    { email: process.env.E2E_ADMIN_EMAIL   || 'admin@qa.test',    password: process.env.E2E_ADMIN_PASS   || 'QAAdmin123!',   role: 'admin' },
+  staff:    { email: process.env.E2E_STAFF_EMAIL   || 'staff@qa.test',    password: process.env.E2E_STAFF_PASS   || 'QAStaff123!',   role: 'staff' },
+  teacher:  { email: process.env.E2E_TEACHER_EMAIL || 'teacher@qa.test',  password: process.env.E2E_TEACHER_PASS || 'QATeacher123!', role: 'teacher' },
+  student:  { email: process.env.E2E_STUDENT_EMAIL || 'student@qa.test',  password: process.env.E2E_STUDENT_PASS || 'QAStudent123!', role: 'student' },
+  parent:   { email: process.env.E2E_PARENT_EMAIL  || 'parent@qa.test',   password: process.env.E2E_PARENT_PASS  || 'QAParent123!',  role: 'parent' },
 } as const;
 
 export type RoleKey = keyof typeof CREDENTIALS;

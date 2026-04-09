@@ -292,7 +292,9 @@ class SubjectViewSet(viewsets.ModelViewSet):
                 queryset = queryset.filter(academic_year_id=academic_year_param)
             else:
                 queryset = queryset.filter(academic_year__name=academic_year_param)
-        else:
+        elif role != 'teacher':
+            # Teachers see all their assigned subjects regardless of academic year;
+            # other roles default to the current year to avoid listing historical subjects.
             current_year = ensure_current_academic_year()
             if current_year:
                 queryset = queryset.filter(academic_year=current_year)

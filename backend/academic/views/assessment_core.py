@@ -50,10 +50,13 @@ class AssessmentViewSet(AssessmentPublishingMixin, AssessmentPromotionMixin, vie
         queryset = Assessment.objects.select_related(
             'academic_year', 'subject', 'subject__academic_class', 'section'
         ).all()
+        role = _role(self.request.user)
         requested_year, has_year_filter = _resolve_request_year(self.request)
         if has_year_filter and not requested_year:
             return queryset.none()
-        if requested_year:
+        # Teachers see assessments for all their assigned years unless an explicit year is requested;
+        # other roles default-filter to the current academic year.
+        if requested_year and (has_year_filter or role != 'teacher'):
             queryset = queryset.filter(academic_year=requested_year)
 
         subject_id = self.request.query_params.get('subject')
@@ -62,8 +65,6 @@ class AssessmentViewSet(AssessmentPublishingMixin, AssessmentPromotionMixin, vie
             queryset = queryset.filter(subject_id=subject_id)
         if section_id:
             queryset = queryset.filter(section_id=section_id)
-
-        role = _role(self.request.user)
         if role == "student":
             student = Student.objects.select_related("section").filter(user=self.request.user).first()
             if not student or not student.academic_class_id:
