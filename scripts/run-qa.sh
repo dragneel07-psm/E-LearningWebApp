@@ -32,6 +32,17 @@ TESTS_ONLY=false
 CLEAR_FLAG=""
 PROD_MODE=false
 
+# Auto-load .env.local from repo root if it exists (gitignored credentials file)
+ENV_LOCAL="$(cd "$(dirname "$0")/.." && pwd)/.env.local"
+if [ -f "$ENV_LOCAL" ]; then
+  # shellcheck disable=SC1090
+  set -a; source "$ENV_LOCAL"; set +a
+  # Re-apply overrides in case .env.local changes them
+  API_URL="${E2E_API_URL:-$API_URL}"
+  BASE_URL="${E2E_BASE_URL:-$BASE_URL}"
+  QA_TENANT="${E2E_QA_TENANT:-$QA_TENANT}"
+fi
+
 # ── Parse args ────────────────────────────────────────────────────────────────
 for arg in "$@"; do
   case $arg in

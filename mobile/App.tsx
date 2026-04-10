@@ -25,6 +25,7 @@ import AssignmentsScreen from './screens/AssignmentsScreen';
 import OfflineScreen from './screens/OfflineScreen';
 import ProfileScreen from './screens/ProfileScreen';
 import FeesScreen from './screens/FeesScreen';
+import MessagingScreen from './screens/MessagingScreen';
 import {
   AdminDashboardScreen,
   AdminPeopleScreen,
@@ -59,6 +60,7 @@ function tabIcon(name: string, focused: boolean) {
     Grades: ['📊', '📈'],
     Assignments: ['📝', '✏️'],
     Fees: ['💳', '💰'],
+    Messages: ['💬', '🗨️'],
     Timetable: ['🗓️', '📆'],
     People: ['👥', '🧑‍🤝‍🧑'],
     Children: ['👶', '🧒'],
@@ -146,6 +148,7 @@ function StudentTabs({
       <Tab.Screen name="Timetable">
         {() => <TimetableScreen role="student" />}
       </Tab.Screen>
+      <Tab.Screen name="Messages" component={MessagingScreen} />
       <Tab.Screen
         name="Offline"
         component={OfflineScreen}
@@ -177,6 +180,7 @@ function TeacherTabs({
       <Tab.Screen name="Notices">
         {() => <NoticeBoardScreen role="teacher" />}
       </Tab.Screen>
+      <Tab.Screen name="Messages" component={MessagingScreen} />
       <Tab.Screen name="Offline" component={OfflineScreen} />
       <Tab.Screen name="Profile">
         {() => <ProfileScreen user={user} onLogout={onLogout} onUserUpdated={onUserUpdated} />}
@@ -205,6 +209,7 @@ function ParentTabs({
       <Tab.Screen name="Timetable">
         {() => <TimetableScreen role="parent" />}
       </Tab.Screen>
+      <Tab.Screen name="Messages" component={MessagingScreen} />
       <Tab.Screen name="Offline" component={OfflineScreen} />
       <Tab.Screen name="Profile">
         {() => <ProfileScreen user={user} onLogout={onLogout} onUserUpdated={onUserUpdated} />}

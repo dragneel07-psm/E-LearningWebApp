@@ -7,6 +7,10 @@ import { withSentryConfig } from "@sentry/nextjs";
 const nextConfig: NextConfig = {
   output: 'standalone',
 
+  // Preserve trailing slashes so Django REST Framework's URL routing
+  // receives them intact (Vercel default strips them → 308 redirect).
+  trailingSlash: true,
+
   // Headers for PWA / Service Worker support
   async headers() {
     return [

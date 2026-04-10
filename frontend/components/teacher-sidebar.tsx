@@ -10,7 +10,6 @@ import {
     BookOpen,
     Users,
     ClipboardList,
-    FileText,
     Calendar,
     MessageSquare,
     User,
@@ -19,24 +18,34 @@ import {
     School,
     Bell,
     Award,
-    CalendarClock
+    CalendarClock,
+    BookMarked,
+    BarChart2,
+    ClipboardCheck,
+    HelpCircle,
+    MessageCircle,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 const navigation = [
-    { name: 'Dashboard', href: '/teacher', icon: LayoutDashboard },
-    { name: 'Courses', href: '/teacher/courses', icon: BookOpen },
-    { name: 'My Classes', href: '/teacher/classes', icon: School },
-    { name: 'Students', href: '/teacher/students', icon: Users }, // Enhance later
-    { name: 'Assessments', href: '/teacher/assessments', icon: ClipboardList },
-    { name: 'Grading', href: '/teacher/grading', icon: FileText },
-    { name: 'Gradebook', href: '/teacher/grades', icon: Award },
-    { name: 'Timetable', href: '/teacher/timetable', icon: Calendar },
-    { name: 'Library', href: '/teacher/library', icon: BookOpen },
-    { name: 'Student Leaves', href: '/teacher/leaves', icon: CalendarClock },
-    { name: 'Notices', href: '/teacher/notices', icon: Bell },
-    { name: 'Messages', href: '/teacher/messages', icon: MessageSquare },
-    { name: 'Profile', href: '/teacher/profile', icon: User },
+    { name: 'Dashboard',      href: '/teacher',              icon: LayoutDashboard },
+    { name: 'Courses',        href: '/teacher/courses',      icon: BookOpen },
+    { name: 'My Classes',     href: '/teacher/classes',      icon: School },
+    { name: 'Students',       href: '/teacher/students',     icon: Users },
+    { name: 'Attendance',     href: '/teacher/attendance',   icon: ClipboardCheck },
+    { name: 'Assessments',    href: '/teacher/assessments',  icon: ClipboardList },
+    { name: 'Assignments',    href: '/teacher/assignments',  icon: FileText },
+    { name: 'Grading',        href: '/teacher/grading',      icon: Award },
+    { name: 'Gradebook',      href: '/teacher/grades',       icon: GraduationCap },
+    { name: 'Question Bank',  href: '/teacher/questions',    icon: HelpCircle },
+    { name: 'Timetable',      href: '/teacher/timetable',    icon: Calendar },
+    { name: 'Student Leaves', href: '/teacher/leaves',       icon: CalendarClock },
+    { name: 'Library',        href: '/teacher/library',      icon: BookMarked },
+    { name: 'Notices',        href: '/teacher/notices',      icon: Bell },
+    { name: 'Messages',       href: '/teacher/messages',     icon: MessageSquare },
+    { name: 'Communication',  href: '/teacher/communication', icon: MessageCircle },
+    { name: 'Reports',        href: '/teacher/reports',      icon: BarChart2 },
+    { name: 'Profile',        href: '/teacher/profile',      icon: User },
 ];
 
 import { useState, useEffect } from 'react';
@@ -52,14 +61,13 @@ export function TeacherSidebar() {
 
     const filteredNavigation = [...navigation];
 
-    // Check for advanced reports feature
+    // Insert Analytics before Library when feature is available
     if (user?.tenant_features?.teacher_reports !== false) {
-        // Insert Analytics before Library
         const libraryIndex = filteredNavigation.findIndex(n => n.name === 'Library');
         if (libraryIndex !== -1) {
-            filteredNavigation.splice(libraryIndex, 0, { name: 'Analytics', href: '/teacher/analytics', icon: LayoutDashboard });
+            filteredNavigation.splice(libraryIndex, 0, { name: 'Analytics', href: '/teacher/analytics', icon: BarChart2 });
         } else {
-            filteredNavigation.push({ name: 'Analytics', href: '/teacher/analytics', icon: LayoutDashboard });
+            filteredNavigation.push({ name: 'Analytics', href: '/teacher/analytics', icon: BarChart2 });
         }
     }
 

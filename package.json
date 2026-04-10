@@ -18,6 +18,8 @@
     "test:qa:student": "playwright test --config=tests/qa.config.ts tests/e2e/qa/04-student-flows.spec.ts",
     "test:qa:library": "playwright test --config=tests/qa.config.ts tests/e2e/qa/05-library.spec.ts",
     "test:qa:health": "playwright test --config=tests/qa.config.ts tests/e2e/qa/10-api-health.spec.ts",
+    "test:qa:gamification": "playwright test --config=tests/qa.config.ts tests/e2e/qa/14-gamification-admin.spec.ts",
+    "test:qa:fees": "playwright test --config=tests/qa.config.ts tests/e2e/qa/15-fees-billing.spec.ts",
     "test:qa:full": "bash scripts/run-qa.sh",
     "test:qa:prod": "bash scripts/run-qa.sh --prod",
     "api:types": "bash scripts/generate-openapi-types.sh"
@@ -27,7 +29,8 @@
   "license": "ISC",
   "devDependencies": {
     "@playwright/test": "^1.58.2",
-    "@types/node": "^25.3.3"
+    "@types/node": "^25.3.3",
+    "dotenv": "^17.4.1"
   },
   "dependencies": {
     "react-dom": "^19.2.4",

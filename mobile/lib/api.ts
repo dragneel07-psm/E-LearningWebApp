@@ -718,6 +718,62 @@ export const academicAPI = {
         }),
 };
 
+// ─── Conversations API ────────────────────────────────────────
+export interface ConversationParticipant {
+    user: { id: number; first_name: string; last_name: string; email: string };
+    joined_at: string;
+    last_read_at: string;
+}
+
+export interface Conversation {
+    conversation_id: string;
+    type: 'direct' | 'group';
+    title: string | null;
+    updated_at: string;
+    participants: ConversationParticipant[];
+    last_message?: { content: string; sender_name: string; created_at: string } | null;
+    unread_count?: number;
+}
+
+export interface ConversationMessage {
+    message_id: string;
+    sender: { id: number; first_name: string; last_name: string };
+    content: string;
+    is_system_message: boolean;
+    created_at: string;
+}
+
+export const conversationsAPI = {
+    list: (): Promise<Conversation[]> =>
+        apiRequest<unknown>('/conversations/conversations/').then(r => {
+            if (Array.isArray(r)) return r as Conversation[];
+            return ((r as any).results || []) as Conversation[];
+        }),
+
+    getMessages: (conversationId: string): Promise<ConversationMessage[]> =>
+        apiRequest<unknown>(`/conversations/messages/?conversation=${conversationId}`).then(r => {
+            if (Array.isArray(r)) return r as ConversationMessage[];
+            return ((r as any).results || []) as ConversationMessage[];
+        }),
+
+    sendMessage: (conversationId: string, content: string): Promise<ConversationMessage> =>
+        apiRequest<ConversationMessage>('/conversations/messages/', {
+            method: 'POST',
+            body: JSON.stringify({ conversation: conversationId, content }),
+        }),
+
+    markAsRead: (conversationId: string): Promise<void> =>
+        apiRequest<void>(`/conversations/conversations/${conversationId}/mark_as_read/`, {
+            method: 'POST',
+        }),
+
+    startDirectMessage: (recipientId: number): Promise<Conversation> =>
+        apiRequest<Conversation>('/conversations/conversations/start_direct_message/', {
+            method: 'POST',
+            body: JSON.stringify({ recipient_id: recipientId }),
+        }),
+};
+
 export const billingAPI = {
     getMyFees: (): Promise<MyFeesResponse> =>
         apiRequest<MyFeesResponse>('/billing/school/student-fees/my_fees/'),

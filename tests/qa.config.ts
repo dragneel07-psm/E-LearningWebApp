@@ -12,6 +12,11 @@
  *   npm run test:qa:prod
  */
 import { defineConfig, devices } from '@playwright/test';
+import dotenv from 'dotenv';
+import path from 'path';
+
+// Load .env.local from repo root (gitignored — copy .env.example and fill in)
+dotenv.config({ path: path.resolve(__dirname, '../.env.local') });
 
 const API_URL  = process.env.E2E_API_URL  || 'http://127.0.0.1:8000';
 const BASE_URL = process.env.E2E_BASE_URL || 'http://127.0.0.1:3000';
