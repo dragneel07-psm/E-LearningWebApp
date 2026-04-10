@@ -382,21 +382,18 @@ class SeedDemoDataView(APIView):
                     ('Open House', 'Parents visit classrooms and meet teachers.', 'ptm', 'parents', 10),
                 ]
                 for title, desc, etype, audience, offset_days in events_data:
-                    start = today + timedelta(days=offset_days)
-                    end = start + timedelta(days=1)
-                    _, created = SchoolEvent.objects.get_or_create(
-                        tenant=tenant,
-                        title=title,
-                        defaults={
-                            'description': desc,
-                            'event_type': etype,
-                            'audience': audience,
-                            'start_date': start,
-                            'end_date': end,
-                            'created_by': request.user,
-                        },
-                    )
-                    if created:
+                    if not SchoolEvent.objects.filter(tenant=tenant, title=title).exists():
+                        start = today + timedelta(days=offset_days)
+                        SchoolEvent.objects.create(
+                            tenant=tenant,
+                            title=title,
+                            description=desc,
+                            event_type=etype,
+                            audience=audience,
+                            start_date=start,
+                            end_date=start + timedelta(days=1),
+                            created_by=request.user,
+                        )
                         ev_created += 1
             counts['events'] = ev_created
         except Exception as e:
@@ -413,23 +410,21 @@ class SeedDemoDataView(APIView):
                 ('Sports Day Practice Schedule', 'Practice sessions begin Monday 4pm.', 'Sports', 'normal'),
                 ('School Holiday Announcement', 'School closed on upcoming national holiday.', 'General', 'high'),
                 ('Admissions Open 2025-26', 'Applications for new academic year now open.', 'Admission', 'normal'),
-                ('Educational Trip — Grade 7', 'Grade 7 trip to Science Museum next week.', 'Event', 'normal'),
+                ('Educational Trip Grade 7', 'Grade 7 trip to Science Museum next week.', 'Event', 'normal'),
                 ('Parent Workshop on Learning', 'Child development workshop Saturday 10am.', 'General', 'normal'),
                 ('Canteen Menu Update', 'Updated healthy menu effective from Monday.', 'General', 'low'),
             ]
             not_created = 0
             for title, content, cat, priority in notices_data:
-                _, created = Notice.objects.get_or_create(
-                    title=title,
-                    defaults={
-                        'content': content,
-                        'category': cat,
-                        'priority': priority,
-                        'target_audience': 'school',
+                if not Notice.objects.filter(title=title).exists():
+                    Notice.objects.create(
+                        title=title,
+                        content=content,
+                        category=cat,
+                        priority=priority,
+                        target_audience='school',
                         **({"tenant": tenant} if tenant else {}),
-                    },
-                )
-                if created:
+                    )
                     not_created += 1
             counts['notices'] = not_created
         except Exception as e:
