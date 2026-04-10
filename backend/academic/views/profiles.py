@@ -54,7 +54,14 @@ class TeacherViewSet(TenantScopedQuerysetMixin, viewsets.ModelViewSet):
         if self.action in ['list', 'retrieve', 'profile_overview', 'me']:
             return [IsAuthenticated()]
         return [IsAdminOrSaaSAdmin()]
-    tenant_field = 'user__tenant'  # Teacher is related to tenant through user
+    tenant_field = 'user__tenant'
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        class_id = self.request.query_params.get('class_id')
+        if class_id:
+            qs = qs.filter(assigned_classes__id=class_id)
+        return qs
 
     @action(detail=False, methods=['get'])
     def me(self, request):
@@ -209,6 +216,37 @@ class TeacherViewSet(TenantScopedQuerysetMixin, viewsets.ModelViewSet):
             'subjects': subject_rows,
             'class_sections_progress': class_rows,
             'summary': summary,
+        })
+
+    @action(detail=True, methods=['post'], url_path='assign-classes')
+    def assign_classes(self, request, pk=None):
+        """
+        POST /api/academic/teachers/{id}/assign-classes/
+        Body: { "class_ids": [1, 2, 3], "mode": "set" | "add" | "remove" }
+        mode defaults to "set" (replaces all assignments).
+        """
+        from academic.models import AcademicClass
+        teacher = self.get_object()
+        class_ids = request.data.get('class_ids', [])
+        mode = request.data.get('mode', 'set')
+
+        if not isinstance(class_ids, list):
+            return Response({'detail': 'class_ids must be a list.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        classes = AcademicClass.objects.filter(pk__in=class_ids)
+
+        if mode == 'set':
+            teacher.assigned_classes.set(classes)
+        elif mode == 'add':
+            teacher.assigned_classes.add(*classes)
+        elif mode == 'remove':
+            teacher.assigned_classes.remove(*classes)
+        else:
+            return Response({'detail': 'mode must be set, add, or remove.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        return Response({
+            'teacher_id': str(teacher.teacher_id),
+            'assigned_classes': list(teacher.assigned_classes.values_list('pk', flat=True)),
         })
 
 
