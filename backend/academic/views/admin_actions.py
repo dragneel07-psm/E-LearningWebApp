@@ -294,3 +294,191 @@ class GenerateAIReportsView(APIView):
                     {'detail': f'Failed: {e2}'},
                     status=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 )
+
+
+class SeedDemoDataView(APIView):
+    """
+    POST /api/academic/admin/actions/seed-demo-data/
+    Seeds supplementary demo data: timetable, events, notices, student leaves, complaints.
+    Safe to call multiple times (uses get_or_create / ignore_conflicts where possible).
+    Body (optional): { "clear": false }
+    """
+    permission_classes = [IsAuthenticated, IsAdminOrStaff]
+
+    def post(self, request):
+        from academic.models import AcademicClass, AcademicYear, Subject
+        from academic.models.event import SchoolEvent
+        from academic.models.notice import Notice
+        from academic.models.timetable import Timetable
+        from academic.models.student_leave import StudentLeave
+        from academic.models.complaint import Complaint
+        from core.models.tenant import Tenant
+        from django.db import connection
+
+        tenant_schema = connection.schema_name
+        tenant = None
+        try:
+            tenant = Tenant.objects.get(schema_name=tenant_schema)
+        except Exception:
+            pass
+
+        counts = {}
+
+        # ── Timetable ────────────────────────────────────────────────────────
+        classes = list(AcademicClass.objects.all()[:8])
+        subjects = list(Subject.objects.all()[:20])
+        current_year = ensure_current_academic_year()
+        days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']
+        slots = [('08:00', '08:45'), ('08:50', '09:35'), ('09:40', '10:25'),
+                 ('10:40', '11:25'), ('11:30', '12:15'), ('13:00', '13:45')]
+        tt_created = 0
+        if classes and subjects:
+            for cls in classes:
+                for di, day in enumerate(days):
+                    for si, (st, en) in enumerate(slots):
+                        if not subjects:
+                            break
+                        subj = subjects[(cls.pk + di * 3 + si) % len(subjects)]
+                        _, created = Timetable.objects.get_or_create(
+                            academic_class=cls,
+                            day_of_week=day,
+                            start_time=st,
+                            end_time=en,
+                            defaults={
+                                'subject_name': subj.name,
+                                'academic_year': current_year,
+                                'status': 'approved',
+                            },
+                        )
+                        if created:
+                            tt_created += 1
+        counts['timetable'] = tt_created
+
+        # ── Events ───────────────────────────────────────────────────────────
+        today = date.today()
+        ev_created = 0
+        if tenant:
+            events_data = [
+                ('Annual Sports Day', 'Grand annual sports and athletics event for all students.', 'sports', 'all', 7),
+                ('Science Exhibition 2025', 'Student science project showcase — all grades invited.', 'academic', 'all', 14),
+                ('Parent-Teacher Meeting Q1', 'First quarter parent-teacher interaction session.', 'ptm', 'parents', 21),
+                ('Cultural Programme', 'Annual cultural show and talent competition.', 'cultural', 'all', 35),
+                ('Independence Day Celebration', 'National flag hoisting and cultural programme.', 'holiday', 'all', -5),
+                ('Math Olympiad', 'Inter-school mathematics competition for Grades 8-12.', 'academic', 'students', 42),
+                ('Library Reading Week', 'Week-long reading and literacy activities.', 'academic', 'students', 50),
+                ('Teachers Day Celebration', 'Celebrating our dedicated teachers.', 'cultural', 'all', 60),
+                ('Prize Distribution Ceremony', 'Annual prize distribution for academic achievers.', 'cultural', 'all', 65),
+                ('Open House', 'Parents visit classrooms and meet teachers informally.', 'ptm', 'parents', 10),
+            ]
+            for title, desc, etype, audience, offset_days in events_data:
+                start = today + timedelta(days=offset_days)
+                end = start + timedelta(days=1)
+                _, created = SchoolEvent.objects.get_or_create(
+                    tenant=tenant,
+                    title=title,
+                    defaults={
+                        'description': desc,
+                        'event_type': etype,
+                        'audience': audience,
+                        'start_date': start,
+                        'end_date': end,
+                        'created_by': request.user,
+                    },
+                )
+                if created:
+                    ev_created += 1
+        counts['events'] = ev_created
+
+        # ── Notices ──────────────────────────────────────────────────────────
+        notices_data = [
+            ('Exam Schedule Released', 'Final exam schedule for Term 2 is now available on the school portal.', 'Academic', 'high'),
+            ('Annual Day Registration Open', 'Students can register for Annual Day performances until this Friday.', 'Event', 'normal'),
+            ('Fee Payment Reminder', 'Last date for fee payment is the 15th. Please clear dues promptly.', 'Finance', 'high'),
+            ('Library Book Return Deadline', 'All library books must be returned before end of the month.', 'General', 'normal'),
+            ('Sports Day Practice Schedule', 'Practice sessions for Sports Day begin Monday 4pm onwards.', 'Sports', 'normal'),
+            ('School Holiday Announcement', 'School will remain closed on the upcoming national holiday.', 'General', 'high'),
+            ('Admissions Open 2025-26', 'Applications for new academic year are now open. Apply online.', 'Admission', 'normal'),
+            ('Educational Trip — Grade 7', 'Grade 7 trip to Science Museum scheduled for next week.', 'Event', 'normal'),
+            ('Parent Workshop on Learning', 'Workshop on child development for parents on Saturday 10am.', 'General', 'normal'),
+            ('Canteen Menu Update', 'Updated healthy menu effective from Monday. Previous menu discontinued.', 'General', 'low'),
+        ]
+        not_created = 0
+        for title, content, cat, priority in notices_data:
+            _, created = Notice.objects.get_or_create(
+                title=title,
+                defaults={
+                    'content': content,
+                    'category': cat,
+                    'priority': priority,
+                    'target_audience': 'school',
+                    **({"tenant": tenant} if tenant else {}),
+                },
+            )
+            if created:
+                not_created += 1
+        counts['notices'] = not_created
+
+        # ── Student Leaves ───────────────────────────────────────────────────
+        students = list(Student.objects.select_related('user').all()[:40])
+        leave_types = ['sick', 'personal', 'family', 'other']
+        leave_reasons = {
+            'sick': 'Medical appointment / illness',
+            'personal': 'Personal work',
+            'family': 'Family function',
+            'other': 'Other reason',
+        }
+        leave_statuses = ['pending', 'approved', 'approved', 'rejected']
+        lv_created = 0
+        for idx, student in enumerate(students):
+            lt = leave_types[idx % len(leave_types)]
+            start = today + timedelta(days=(idx % 20) - 10)
+            end = start + timedelta(days=1)
+            _, created = StudentLeave.objects.get_or_create(
+                student=student,
+                start_date=start,
+                defaults={
+                    'applied_by': student.user,
+                    'leave_type': lt,
+                    'end_date': end,
+                    'reason': leave_reasons[lt],
+                    'status': leave_statuses[idx % len(leave_statuses)],
+                },
+            )
+            if created:
+                lv_created += 1
+        counts['student_leaves'] = lv_created
+
+        # ── Complaints ───────────────────────────────────────────────────────
+        complaints_data = [
+            ('academic', 'Exam Paper Ambiguity', 'Question 5 in the Math exam had two valid interpretations.', 'open'),
+            ('facility', 'Broken Desks — Room 103', 'Several desks in Room 103 are damaged and need repair.', 'under_review'),
+            ('academic', 'Excessive Homework Load', 'The volume of weekly homework is too high for younger grades.', 'open'),
+            ('academic', 'Grading Discrepancy', 'Science assignment appears to be incorrectly marked.', 'resolved'),
+            ('facility', 'Water Cooler Malfunction', 'Water cooler on 2nd floor has not been working for 3 days.', 'under_review'),
+            ('transport', 'Bus Route 3 Delay', 'Route 3 bus is consistently 20 minutes late.', 'open'),
+            ('facility', 'Projector Replacement Needed', 'Projector in Room 201 needs immediate replacement.', 'resolved'),
+            ('academic', 'Substitute Teacher Coverage', 'Substitute teacher has not covered the full syllabus.', 'open'),
+        ]
+        admin_user = request.user
+        comp_created = 0
+        for cat, title, desc, comp_status in complaints_data:
+            _, created = Complaint.objects.get_or_create(
+                title=title,
+                defaults={
+                    'tenant_schema': tenant_schema,
+                    'submitted_by': admin_user,
+                    'category': cat,
+                    'description': desc,
+                    'status': comp_status,
+                    'anonymous': False,
+                },
+            )
+            if created:
+                comp_created += 1
+        counts['complaints'] = comp_created
+
+        return Response({
+            'status': 'ok',
+            'created': counts,
+            'total': sum(counts.values()),
+        })
