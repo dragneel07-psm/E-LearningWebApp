@@ -1017,10 +1017,14 @@ class ParentTeacherMeetingViewSet(TenantScopedQuerysetMixin, viewsets.ModelViewS
         return qs
 
     def perform_create(self, serializer):
-        from ..models.meeting import ParentTeacherMeeting as PTM
         user = self.request.user
-        parent = get_object_or_404(Parent, user=user)
-        serializer.save(parent=parent)
+        role = (getattr(user, 'role', '') or '').lower()
+        if role in ('admin', 'staff', 'saas_admin') or user.is_superuser or user.is_staff:
+            # Admin/staff supply parent explicitly in the request body.
+            serializer.save()
+        else:
+            parent = get_object_or_404(Parent, user=user)
+            serializer.save(parent=parent)
 
     @action(detail=True, methods=['post'], url_path='confirm')
     def confirm(self, request, pk=None):
