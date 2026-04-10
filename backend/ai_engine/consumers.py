@@ -180,6 +180,8 @@ class TutorStreamConsumer(AsyncWebsocketConsumer):
 
         # Run synchronous generator in thread pool, sending each chunk to client
         def _generate():
+            from django.db import connection
+            connection.set_tenant(tenant)
             return list(service.stream_answer(
                 message, context=context, conversation_history=history,
                 student=student, using=db_alias,
@@ -380,6 +382,8 @@ class ProgressReportStreamConsumer(AsyncWebsocketConsumer):
         await self.send_json({"type": "status", "message": "Generating AI insights (this may take a moment)..."})
 
         def _generate():
+            from django.db import connection
+            connection.set_tenant(tenant)
             svc = ProgressReportService(tenant=tenant, db_alias=db_alias)
             return svc.generate(student, report_type=report_type, save=True, is_automated=False)
 

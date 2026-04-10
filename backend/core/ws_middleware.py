@@ -33,27 +33,45 @@ logger = logging.getLogger(__name__)
 @database_sync_to_async
 def _get_user_from_token(token_str: str):
     from django.contrib.auth import get_user_model
+    from django.db import connection
+    from core.models.tenant import Tenant
     User = get_user_model()
     try:
+        connection.set_schema_to_public()
         token = AccessToken(token_str)
         user_id = token["user_id"]
-        return User.objects.get(pk=user_id)
+        tenant_schema = token.get("tenant_schema", "public")
+        
+        tenant = None
+        if tenant_schema != "public":
+            try:
+                tenant = Tenant.objects.get(schema_name=tenant_schema)
+                connection.set_tenant(tenant)
+            except Tenant.DoesNotExist:
+                logger.debug("WS JWT auth failed: Tenant %s not found", tenant_schema)
+                return AnonymousUser(), None
+
+        user = User.objects.get(pk=user_id)
+        return user, tenant
     except (InvalidToken, TokenError, User.DoesNotExist, KeyError) as exc:
         logger.debug("WS JWT auth failed: %s", exc)
-        return AnonymousUser()
+        return AnonymousUser(), None
 
 
 class JWTAuthMiddleware(BaseMiddleware):
     """
     Reads ?token=<jwt> from the WebSocket URL query string and resolves
-    the user, injecting it into scope["user"].
+    the user and tenant, injecting them into scope["user"] and scope["tenant"].
     """
     async def __call__(self, scope, receive, send):
         query_string = scope.get("query_string", b"").decode("utf-8")
         params = parse_qs(query_string)
         token_list = params.get("token", [])
         if token_list:
-            scope["user"] = await _get_user_from_token(token_list[0])
+            user, tenant = await _get_user_from_token(token_list[0])
+            scope["user"] = user
+            scope["tenant"] = tenant
         else:
             scope["user"] = AnonymousUser()
+            scope["tenant"] = None
         return await super().__call__(scope, receive, send)

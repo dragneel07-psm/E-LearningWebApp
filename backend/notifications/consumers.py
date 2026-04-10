@@ -90,7 +90,14 @@ class NotificationConsumer(AsyncWebsocketConsumer):
     @sync_to_async
     def _mark_notification_read(self, notification_id: str):
         from notifications.models import Notification
+        from django.db import connection
         user = self.scope["user"]
+        tenant = self.scope.get("tenant")
+        if tenant:
+            connection.set_tenant(tenant)
+        else:
+            connection.set_schema_to_public()
+            
         try:
             Notification.objects.filter(
                 pk=notification_id, recipient=user
