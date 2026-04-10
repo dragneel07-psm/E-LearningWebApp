@@ -325,20 +325,25 @@ class SeedDemoDataView(APIView):
         counts = {}
 
         # ── Timetable ────────────────────────────────────────────────────────
+        from datetime import time as dt_time
         classes = list(AcademicClass.objects.all()[:8])
         subjects = list(Subject.objects.all()[:20])
         current_year = ensure_current_academic_year()
         days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']
-        slots = [('08:00', '08:45'), ('08:50', '09:35'), ('09:40', '10:25'),
-                 ('10:40', '11:25'), ('11:30', '12:15'), ('13:00', '13:45')]
+        slots = [
+            (dt_time(8, 0),  dt_time(8, 45)),
+            (dt_time(8, 50), dt_time(9, 35)),
+            (dt_time(9, 40), dt_time(10, 25)),
+            (dt_time(10, 40), dt_time(11, 25)),
+            (dt_time(11, 30), dt_time(12, 15)),
+            (dt_time(13, 0), dt_time(13, 45)),
+        ]
         tt_created = 0
         if classes and subjects:
-            for cls in classes:
+            for ci, cls in enumerate(classes):
                 for di, day in enumerate(days):
                     for si, (st, en) in enumerate(slots):
-                        if not subjects:
-                            break
-                        subj = subjects[(cls.pk + di * 3 + si) % len(subjects)]
+                        subj = subjects[(ci * 7 + di * 3 + si) % len(subjects)]
                         _, created = Timetable.objects.get_or_create(
                             academic_class=cls,
                             day_of_week=day,
