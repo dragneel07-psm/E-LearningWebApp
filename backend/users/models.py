@@ -48,6 +48,9 @@ class UserAccount(AbstractUser):
     failed_login_attempts = models.PositiveIntegerField(default=0)
     locked_until = models.DateTimeField(null=True, blank=True)
 
+    # Expo push notifications
+    expo_push_token = models.CharField(max_length=200, blank=True, null=True)
+
     # Use email as the login field
     email = models.EmailField(unique=True)
     first_name = models.CharField(max_length=150, db_index=True)

@@ -90,6 +90,21 @@ class UserAccountViewSet(TenantScopedQuerysetMixin, viewsets.ModelViewSet):
         except Exception as e:
             return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+    @action(detail=False, methods=['post'], permission_classes=[permissions.IsAuthenticated])
+    def push_token(self, request):
+        """
+        POST /api/users/users/push-token/
+        Body: { "token": "ExponentPushToken[...]" }
+        Registers or updates the Expo push token for the authenticated user.
+        """
+        token = (request.data.get('token') or '').strip()
+        if not token:
+            return Response({'detail': 'token is required.'}, status=status.HTTP_400_BAD_REQUEST)
+        request.user.expo_push_token = token
+        request.user.save(update_fields=['expo_push_token'])
+        return Response({'status': 'registered'})
+
+
 class GroupViewSet(viewsets.ModelViewSet):
     queryset = Group.objects.all()
     serializer_class = GroupSerializer

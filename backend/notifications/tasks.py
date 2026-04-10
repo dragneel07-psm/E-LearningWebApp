@@ -34,6 +34,54 @@ def send_sms_notification_task(recipient_phone: str, message: str):
     return SMSService.send_sms(recipient_phone=recipient_phone, message=message)
 
 
+@shared_task(name="notifications.send_push")
+def send_expo_push_task(
+    *,
+    recipient_id: str,
+    title: str,
+    body: str,
+    data: dict | None = None,
+):
+    """
+    Send an Expo push notification to a single user.
+    Uses the Expo Push API directly (no SDK needed — just HTTP).
+    Silently skips if the user has no registered push token.
+    """
+    import json, urllib.request, urllib.error
+
+    user_model = get_user_model()
+    user = user_model.objects.filter(pk=recipient_id).first()
+    if not user:
+        return {'skipped': 'user_not_found'}
+
+    token = getattr(user, 'expo_push_token', None)
+    if not token:
+        return {'skipped': 'no_push_token'}
+
+    payload = json.dumps({
+        'to': token,
+        'title': title,
+        'body': body,
+        'data': data or {},
+        'sound': 'default',
+    }).encode('utf-8')
+
+    req = urllib.request.Request(
+        'https://exp.host/--/api/v2/push/send',
+        data=payload,
+        headers={
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            'Accept-Encoding': 'gzip, deflate',
+        },
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            return json.loads(resp.read().decode('utf-8'))
+    except urllib.error.URLError as exc:
+        return {'error': str(exc)}
+
+
 @shared_task(name="notifications.send_notification")
 def send_notification_task(
     *,

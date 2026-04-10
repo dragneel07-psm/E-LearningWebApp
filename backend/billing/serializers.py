@@ -164,15 +164,26 @@ class InvoiceSerializer(serializers.ModelSerializer):
 # ==========================================
 
 class FeeStructureSerializer(serializers.ModelSerializer):
-    class_name = serializers.CharField(source='academic_class.__str__', read_only=True)
-    
+    class_name = serializers.SerializerMethodField()
+
+    def get_class_name(self, obj):
+        cls = getattr(obj, 'academic_class', None)
+        return str(cls) if cls else ''
+
     class Meta:
         model = FeeStructure
         fields = '__all__'
         read_only_fields = ['tenant']
 
 class StudentFeeSerializer(serializers.ModelSerializer):
-    student_name = serializers.CharField(source='student.user.get_full_name', read_only=True)
+    student_name = serializers.SerializerMethodField()
+
+    def get_student_name(self, obj):
+        try:
+            u = obj.student.user
+            return f"{u.first_name} {u.last_name}".strip() or u.username
+        except Exception:
+            return ''
     fee_name = serializers.CharField(source='fee_structure.name', read_only=True)
     balance = serializers.SerializerMethodField()
     

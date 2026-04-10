@@ -33,23 +33,13 @@ export default function StudentFeesPage() {
     const loadData = async () => {
         try {
             setLoading(true);
-            const [currentUser, currentStudent] = await Promise.all([
+            const [currentUser, feesResponse] = await Promise.all([
                 usersAPI.getMe(),
-                academicAPI.getMyStudent(),
+                billingAPI.getMyFees(),
             ]);
             setUser(currentUser);
-
-            const [feesData, paymentsData] = await Promise.all([
-                billingAPI.getStudentFees(),
-                billingAPI.getPayments()
-            ]);
-
-            const studentId = currentStudent.id;
-            const myFees = (Array.isArray(feesData) ? feesData : []).filter((f) => f.student === studentId);
-            const myPayments = (Array.isArray(paymentsData) ? paymentsData : []).filter((p) => p.student === studentId);
-
-            setFees(myFees);
-            setPayments(myPayments);
+            setFees(feesResponse.fees || []);
+            setPayments(feesResponse.payments || []);
         } catch (error) {
             console.error('Failed to load fee data:', error);
             toast.error('Failed to load fee data');

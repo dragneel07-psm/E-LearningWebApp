@@ -44,6 +44,7 @@ import {
   usersAPI,
 } from './lib/api';
 import { Colors } from './constants/theme';
+import { configureNotificationBehavior, registerForPushNotificationsAsync } from './lib/notifications';
 
 const RootStack = createNativeStackNavigator();
 const InnerStack = createNativeStackNavigator();
@@ -264,6 +265,9 @@ function RoleTabs({
 }
 
 // ─── Root App ─────────────────────────────────────────────────
+// Configure foreground notification behaviour once at module load.
+configureNotificationBehavior();
+
 export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -293,6 +297,8 @@ export default function App() {
       await saveCurrentUser(freshUser);
       setCurrentUser(freshUser);
       setIsAuthenticated(true);
+      // Register for push notifications after a confirmed authenticated session.
+      registerForPushNotificationsAsync().catch(() => {});
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message.toLowerCase() : '';
       const authError =

@@ -16,6 +16,7 @@ from rest_framework.response import Response
 
 from billing.models_school import Expense, FeeStructure, Payment, StudentFee
 from billing.permissions import IsSchoolFinanceManager
+from rest_framework.permissions import IsAuthenticated
 from billing.serializers import ExpenseSerializer, FeeStructureSerializer, PaymentSerializer, StudentFeeSerializer
 from billing.shared_views import BillingIdempotencyMixin, BillingSchemaGuardMixin
 from core.mixins import TenantScopedQuerysetMixin
@@ -169,6 +170,60 @@ class StudentFeeViewSet(BillingIdempotencyMixin, BillingSchemaGuardMixin, Tenant
             request=self.request,
             details=payload,
         )
+
+    @action(detail=False, methods=["get"], permission_classes=[IsAuthenticated])
+    def my_fees(self, request):
+        """
+        GET /api/billing/school/student-fees/my-fees/
+        Returns the authenticated student's own fee records and payment history.
+        """
+        from academic.models import Student
+        from billing.models_school import Payment
+
+        try:
+            student = Student.objects.get(user=request.user)
+        except Student.DoesNotExist:
+            return Response({'detail': 'No student profile found.'}, status=status.HTTP_404_NOT_FOUND)
+
+        fees = StudentFee.objects.filter(student=student).select_related('fee_structure').order_by('-due_date')
+        payments = Payment.objects.filter(student=student).order_by('-payment_date')
+
+        from decimal import Decimal as D
+        total_due = sum(D(str(f.amount_due or 0)) for f in fees)
+        total_paid = sum(D(str(f.amount_paid or 0)) for f in fees)
+
+        return Response({
+            'fees': StudentFeeSerializer(fees, many=True).data,
+            'payments': PaymentSerializer(payments, many=True).data,
+            'summary': {
+                'total_due': float(total_due),
+                'total_paid': float(total_paid),
+                'outstanding': float(total_due - total_paid),
+            },
+        })
+
+    @action(detail=True, methods=["post"])
+    def send_invoice(self, request, pk=None):
+        """
+        POST /api/billing/school/student-fees/{id}/send-invoice/
+        Sends an in-app notification to the student about their fee.
+        """
+        fee = self.get_object()
+        try:
+            from notifications.services import NotificationService
+            NotificationService.create_notification(
+                recipient=fee.student.user,
+                title=f"Fee Invoice: {fee.fee_structure.name}",
+                message=(
+                    f"Dear {fee.student.user.first_name}, your fee "
+                    f"'{fee.fee_structure.name}' of {fee.amount_due} is due on "
+                    f"{fee.due_date}. Outstanding balance: {fee.balance}."
+                ),
+                notification_type='fee_invoice',
+            )
+        except Exception as e:
+            return Response({'detail': f'Invoice notification failed: {e}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        return Response({'status': 'invoice_sent', 'student': str(fee.student_id)})
 
     @action(detail=False, methods=["post"])
     def assign_bulk(self, request):

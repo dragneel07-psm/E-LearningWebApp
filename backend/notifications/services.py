@@ -109,6 +109,14 @@ class NotificationService:
             else:
                 logger.warning(f"Could not send SMS to {recipient.email}: No phone number found.")
 
+        # 4. Expo push notification (fires whenever the user has a token)
+        if getattr(recipient, 'expo_push_token', None):
+            from notifications.tasks import send_expo_push_task
+            enqueue(send_expo_push_task,
+                    recipient_id=str(recipient.pk),
+                    title=title,
+                    body=message)
+
         return notification
 
     @staticmethod

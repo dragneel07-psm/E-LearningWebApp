@@ -964,10 +964,34 @@ class ParentTeacherMeetingViewSet(TenantScopedQuerysetMixin, viewsets.ModelViewS
         from rest_framework import serializers
         from ..models.meeting import ParentTeacherMeeting as PTM
 
+        from ..models import Parent as _Parent, Student as _Student, Teacher as _Teacher
+
         class PTMSerializer(serializers.ModelSerializer):
-            parent_name = serializers.CharField(source='parent.user.get_full_name', read_only=True)
-            student_name = serializers.CharField(source='student.user.get_full_name', read_only=True)
-            teacher_name = serializers.CharField(source='teacher.user.get_full_name', read_only=True)
+            parent_name = serializers.SerializerMethodField()
+            student_name = serializers.SerializerMethodField()
+            teacher_name = serializers.SerializerMethodField()
+            # Explicit querysets so FK validation works regardless of custom managers.
+            parent = serializers.PrimaryKeyRelatedField(queryset=_Parent.objects.all(), pk_field=serializers.UUIDField(format='hex_verbose'))
+            student = serializers.PrimaryKeyRelatedField(queryset=_Student.objects.all(), pk_field=serializers.UUIDField(format='hex_verbose'))
+            teacher = serializers.PrimaryKeyRelatedField(queryset=_Teacher.objects.all())
+
+            def get_parent_name(self, obj):
+                try:
+                    return obj.parent.user.get_full_name()
+                except Exception:
+                    return None
+
+            def get_student_name(self, obj):
+                try:
+                    return obj.student.user.get_full_name()
+                except Exception:
+                    return None
+
+            def get_teacher_name(self, obj):
+                try:
+                    return obj.teacher.user.get_full_name()
+                except Exception:
+                    return None
 
             class Meta:
                 model = PTM

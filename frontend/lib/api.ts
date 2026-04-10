@@ -2545,6 +2545,8 @@ export const billingAPI = {
     }),
 
     getStudentFees: () => apiRequest<StudentFee[]>(`${BILLING_SCHOOL_BASE}/student-fees/`),
+    getMyFees: () => apiRequest<{ fees: StudentFee[]; payments: Payment[]; summary: { total_due: number; total_paid: number; outstanding: number } }>(`${BILLING_SCHOOL_BASE}/student-fees/my_fees/`),
+    sendInvoice: (id: string) => apiRequest<{ status: string }>(`${BILLING_SCHOOL_BASE}/student-fees/${id}/send_invoice/`, { method: 'POST' }),
     assignBulkFees: (data: { fee_structure_id: string; academic_class_id: string; due_date: string }) =>
         apiRequest<{ message: string }>(`${BILLING_SCHOOL_BASE}/student-fees/assign_bulk/`, {
             method: 'POST',
