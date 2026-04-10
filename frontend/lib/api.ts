@@ -2192,6 +2192,11 @@ export const academicAPI = {
         method: 'PATCH',
         body: JSON.stringify(data)
     }),
+    assignTeacherClasses: (id: string, classIds: number[], mode: 'set' | 'add' | 'remove' = 'set') =>
+        apiRequest<{ teacher_id: string; assigned_classes: number[] }>(`/academic/teachers/${id}/assign-classes/`, {
+            method: 'POST',
+            body: JSON.stringify({ class_ids: classIds, mode }),
+        }),
 
     // Stats
     getStats: () => apiRequest<{

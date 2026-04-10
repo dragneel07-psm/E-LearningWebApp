@@ -62,6 +62,12 @@ export default function TeachersPage() {
         open: false, userId: '', userName: ''
     });
 
+    // Assign Classes Dialog State
+    const [assignDialog, setAssignDialog] = useState<{ open: boolean; teacher: Teacher | null; selectedIds: number[] }>({
+        open: false, teacher: null, selectedIds: []
+    });
+    const [assignSaving, setAssignSaving] = useState(false);
+
     useEffect(() => {
         loadData();
     }, []);
@@ -214,6 +220,26 @@ export default function TeachersPage() {
         } catch (e) {
             console.error(e);
             toast.error('Failed to update teacher');
+        }
+    };
+
+    const handleAssignClasses = async () => {
+        if (!assignDialog.teacher) return;
+        setAssignSaving(true);
+        try {
+            await academicAPI.assignTeacherClasses(assignDialog.teacher.id, assignDialog.selectedIds, 'set');
+            setTeachers(teachers.map(t =>
+                t.id === assignDialog.teacher!.id
+                    ? { ...t, assigned_classes: assignDialog.selectedIds }
+                    : t
+            ));
+            toast.success('Classes assigned successfully!');
+            setAssignDialog({ open: false, teacher: null, selectedIds: [] });
+        } catch (e) {
+            console.error(e);
+            toast.error('Failed to assign classes.');
+        } finally {
+            setAssignSaving(false);
         }
     };
 
@@ -417,6 +443,16 @@ export default function TeachersPage() {
                                                             className="rounded-lg cursor-pointer focus:bg-indigo-50 focus:text-indigo-600"
                                                         >
                                                             <Edit className="mr-2 h-4 w-4" /> Edit Designation
+                                                        </DropdownMenuItem>
+                                                        <DropdownMenuItem
+                                                            onClick={() => setAssignDialog({
+                                                                open: true,
+                                                                teacher,
+                                                                selectedIds: [...(teacher.assigned_classes || [])]
+                                                            })}
+                                                            className="rounded-lg cursor-pointer focus:bg-indigo-50 focus:text-indigo-600"
+                                                        >
+                                                            <BookOpen className="mr-2 h-4 w-4" /> Assign Classes
                                                         </DropdownMenuItem>
                                                         <DropdownMenuItem
                                                             onClick={() => setPasswordDialog({
@@ -828,6 +864,60 @@ export default function TeachersPage() {
                 userId={passwordDialog.userId}
                 userName={passwordDialog.userName}
             />
+
+            {/* Assign Classes Dialog */}
+            {assignDialog.open && assignDialog.teacher && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+                    <Card className="w-full max-w-md bg-white dark:bg-slate-900 shadow-2xl rounded-2xl border-0 ring-1 ring-slate-900/5">
+                        <div className="p-6 space-y-5">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <h2 className="text-lg font-bold text-slate-900 dark:text-slate-100">Assign Classes</h2>
+                                    <p className="text-sm text-slate-500 mt-0.5">
+                                        {assignDialog.teacher.first_name} {assignDialog.teacher.last_name}
+                                    </p>
+                                </div>
+                                <Button variant="ghost" size="icon" onClick={() => setAssignDialog({ open: false, teacher: null, selectedIds: [] })}>
+                                    <X className="h-4 w-4" />
+                                </Button>
+                            </div>
+
+                            <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
+                                {classes.map(c => (
+                                    <label key={c.id} className="flex items-center gap-3 p-3 rounded-lg border border-slate-200 hover:bg-slate-50 cursor-pointer">
+                                        <input
+                                            type="checkbox"
+                                            className="h-4 w-4 rounded border-slate-300 text-indigo-600 accent-indigo-600"
+                                            checked={assignDialog.selectedIds.includes(c.id)}
+                                            onChange={(e) => {
+                                                if (e.target.checked) {
+                                                    setAssignDialog(d => ({ ...d, selectedIds: [...d.selectedIds, c.id] }));
+                                                } else {
+                                                    setAssignDialog(d => ({ ...d, selectedIds: d.selectedIds.filter(id => id !== c.id) }));
+                                                }
+                                            }}
+                                        />
+                                        <span className="text-sm font-medium text-slate-800 dark:text-slate-200">{c.name}</span>
+                                    </label>
+                                ))}
+                            </div>
+
+                            <div className="flex justify-end gap-3 pt-2">
+                                <Button variant="ghost" onClick={() => setAssignDialog({ open: false, teacher: null, selectedIds: [] })}>
+                                    Cancel
+                                </Button>
+                                <Button
+                                    onClick={handleAssignClasses}
+                                    disabled={assignSaving}
+                                    className="bg-indigo-600 hover:bg-indigo-700 text-white px-6"
+                                >
+                                    {assignSaving ? 'Saving...' : 'Save Assignments'}
+                                </Button>
+                            </div>
+                        </div>
+                    </Card>
+                </div>
+            )}
         </div>
     );
 }
