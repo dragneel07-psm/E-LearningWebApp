@@ -122,6 +122,32 @@ export interface Grade {
     ai_feedback?: string;
 }
 
+export interface StudentFee {
+    student_fee_id: string;
+    fee_name: string;
+    amount: number;
+    amount_paid: number;
+    discount_amount: number;
+    due_date: string;
+    status: 'pending' | 'partial' | 'paid' | 'overdue' | 'waived';
+    student_name?: string;
+}
+
+export interface FeePayment {
+    payment_id: string;
+    student_fee: string;
+    amount: number;
+    payment_date: string;
+    payment_method: string;
+    transaction_ref?: string;
+}
+
+export interface MyFeesResponse {
+    fees: StudentFee[];
+    payments: FeePayment[];
+    summary: { total_due: number; total_paid: number; outstanding: number };
+}
+
 export interface LoginResponse {
     access: string;
     refresh: string;
@@ -690,4 +716,19 @@ export const academicAPI = {
         apiRequest<{ completed: boolean }>(`/academic/lessons/${lessonId}/toggle_progress/`, {
             method: 'POST',
         }),
+};
+
+export const billingAPI = {
+    getMyFees: (): Promise<MyFeesResponse> =>
+        apiRequest<MyFeesResponse>('/billing/school/student-fees/my_fees/'),
+
+    getStudentFees: async (studentId?: string): Promise<StudentFee[]> => {
+        const url = studentId
+            ? `/billing/school/student-fees/?student=${studentId}`
+            : '/billing/school/student-fees/';
+        const response = await apiRequest<unknown>(url);
+        if (Array.isArray(response)) return response as StudentFee[];
+        const r = response as { results?: StudentFee[] };
+        return r.results || [];
+    },
 };

@@ -118,11 +118,24 @@ class LeaderboardViewSet(viewsets.ViewSet):
             'entries': results,
         })
 
-class BadgeViewSet(TenantScopedQuerysetMixin, viewsets.ReadOnlyModelViewSet):
+def _is_admin(user) -> bool:
+    return (getattr(user, 'role', '') or '').lower() in {'admin', 'staff', 'saas_admin'} or user.is_superuser
+
+class BadgeViewSet(TenantScopedQuerysetMixin, viewsets.ModelViewSet):
     queryset = Badge.objects.all()
     serializer_class = BadgeSerializer
     permission_classes = [permissions.IsAuthenticated]
     tenant_field = 'tenant'
+
+    def initial(self, request, *args, **kwargs):
+        super().initial(request, *args, **kwargs)
+        if self.action in {'create', 'update', 'partial_update', 'destroy'} and not _is_admin(request.user):
+            from rest_framework.exceptions import PermissionDenied
+            raise PermissionDenied('Only admins can manage badges.')
+
+    def perform_create(self, serializer):
+        tenant = getattr(self.request, 'tenant', None) or getattr(self.request.user, 'tenant', None)
+        serializer.save(tenant=tenant)
 
 from .models import GamificationProfile
 from .serializers import GamificationProfileSerializer

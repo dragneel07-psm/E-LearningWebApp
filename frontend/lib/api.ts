@@ -3408,9 +3408,19 @@ export const api = {
             return normalizeArrayPayload(payload);
         },
         getLeaderboard: async (scope: 'class' | 'school' = 'class') => {
-            const payload = await apiRequest<any[] | PaginatedResponse<any>>(`/gamification/leaderboard/?scope=${scope}`);
-            return normalizeArrayPayload(payload);
+            return apiRequest<{ scope: string; total_participants: number; my_rank: number | null; entries: any[] }>(`/gamification/leaderboard/?scope=${scope}`);
         },
+        createBadge: (data: any) => apiRequest<any>('/gamification/available-badges/', {
+            method: 'POST',
+            body: JSON.stringify(data),
+        }),
+        updateBadge: (id: string, data: any) => apiRequest<any>(`/gamification/available-badges/${id}/`, {
+            method: 'PATCH',
+            body: JSON.stringify(data),
+        }),
+        deleteBadge: (id: string) => apiRequest<void>(`/gamification/available-badges/${id}/`, {
+            method: 'DELETE',
+        }),
         getMyStats: () => apiRequest<any>('/gamification/profile/my_stats/'),
         updateProfile: (id: string, data: any) => apiRequest<any>(`/gamification/profile/${id}/`, {
             method: 'PATCH',

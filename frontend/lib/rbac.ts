@@ -32,6 +32,7 @@ export type AdminModule =
     | '/admin/academic/students'
     | '/admin/academic/teachers'
     | '/admin/library'
+    | '/admin/gamification'
     | '/admin/finance'
     | '/admin/finance/fees'
     | '/admin/finance/collect'
@@ -70,6 +71,7 @@ const ADMIN_FULL: AdminModule[] = [
     '/admin/academic/students',
     '/admin/academic/teachers',
     '/admin/library',
+    '/admin/gamification',
     '/admin/finance',
     '/admin/finance/fees',
     '/admin/finance/collect',

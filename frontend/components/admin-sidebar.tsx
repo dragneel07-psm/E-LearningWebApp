@@ -10,7 +10,7 @@ import {
     LayoutDashboard, Users, GraduationCap, School, CreditCard, BarChart3,
     Settings, LogOut, Bell, BookOpen, Calendar, Library, Wallet, DollarSign,
     ClipboardList, FileText, MessageSquare, UserRoundPlus, ShieldAlert,
-    Sparkles, Bus, Building2, UserCog, ChevronDown, type LucideIcon,
+    Sparkles, Bus, Building2, UserCog, ChevronDown, Trophy, type LucideIcon,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -63,7 +63,8 @@ const NAV: NavItem[] = [
         ],
     },
 
-    { kind: 'leaf', name: 'Library',          href: '/admin/library',   icon: Library },
+    { kind: 'leaf', name: 'Library',          href: '/admin/library',       icon: Library },
+    { kind: 'leaf', name: 'Gamification',      href: '/admin/gamification',  icon: Trophy },
 
     {
         kind: 'group',

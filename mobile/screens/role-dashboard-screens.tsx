@@ -16,9 +16,11 @@ import {
 import {
     AcademicClass,
     academicAPI,
+    billingAPI,
     Notice,
     ParentMeResponse,
     Section,
+    StudentFee,
     StudentListItem,
     StudentProfileOverview,
     TeacherProfile,
@@ -1541,6 +1543,117 @@ export function ParentChildrenScreen() {
                     );
                 })
             )}
+        </ScrollView>
+    );
+}
+
+// ─── Parent Fees Screen ────────────────────────────────────────
+const FEE_STATUS_COLOR: Record<string, string> = {
+    paid: Colors.success, partial: Colors.warning,
+    pending: Colors.primary, overdue: Colors.error, waived: Colors.gray400,
+};
+
+export function ParentFeesScreen() {
+    const [children, setChildren] = useState<Array<{ id: string; name: string }>>([]);
+    const [feesByChild, setFeesByChild] = useState<Record<string, StudentFee[]>>({});
+    const [loading, setLoading] = useState(true);
+    const [refreshing, setRefreshing] = useState(false);
+    const [expandedId, setExpandedId] = useState<string | null>(null);
+
+    const load = useCallback(async () => {
+        try {
+            const parent = await academicAPI.getParentMe();
+            const kids = (parent.students || []).map((s: any) => ({
+                id: s.id || s.student_id,
+                name: `${s.first_name || ''} ${s.last_name || ''}`.trim() || 'Student',
+            }));
+            setChildren(kids);
+
+            const feesMap: Record<string, StudentFee[]> = {};
+            await Promise.all(kids.map(async (kid: { id: string; name: string }) => {
+                const fees = await billingAPI.getStudentFees(kid.id).catch(() => []);
+                feesMap[kid.id] = fees;
+            }));
+            setFeesByChild(feesMap);
+        } catch (err) {
+            console.error('Failed to load fees', err);
+        } finally {
+            setLoading(false);
+            setRefreshing(false);
+        }
+    }, []);
+
+    useEffect(() => { load(); }, [load]);
+    const onRefresh = () => { setRefreshing(true); load(); };
+
+    if (loading) return (
+        <View style={styles.centered}>
+            <ActivityIndicator color={Colors.primary} size="large" />
+            <Text style={styles.loadingText}>Loading fees...</Text>
+        </View>
+    );
+
+    return (
+        <ScrollView
+            style={styles.screen}
+            contentContainerStyle={styles.scrollBody}
+            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+        >
+            <Text style={{ fontSize: 22, fontWeight: '800', color: Colors.gray900, marginBottom: 14 }}>
+                Children's Fees
+            </Text>
+
+            {children.length === 0 ? (
+                <SectionCard title="Fees">
+                    <EmptyState message="No children linked to your account." />
+                </SectionCard>
+            ) : children.map(kid => {
+                const fees = feesByChild[kid.id] || [];
+                const outstanding = fees.reduce((s, f) => s + (f.amount - f.amount_paid - f.discount_amount), 0);
+                const isOpen = expandedId === kid.id;
+
+                return (
+                    <TouchableOpacity
+                        key={kid.id}
+                        style={styles.expandCard}
+                        onPress={() => setExpandedId(isOpen ? null : kid.id)}
+                    >
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <Text style={styles.childName}>{kid.name}</Text>
+                            <Text style={{ color: outstanding > 0 ? Colors.error : Colors.success, fontWeight: '800', fontSize: 13 }}>
+                                {outstanding > 0 ? `Rs ${outstanding.toLocaleString()} due` : '✓ Clear'}
+                            </Text>
+                        </View>
+                        <Text style={styles.childMeta}>{fees.length} fee record{fees.length !== 1 ? 's' : ''}</Text>
+
+                        {isOpen && (
+                            <View style={styles.expandBody}>
+                                {fees.length === 0 ? (
+                                    <Text style={styles.smallText}>No fee records found.</Text>
+                                ) : fees.map(fee => {
+                                    const color = FEE_STATUS_COLOR[fee.status] || Colors.gray400;
+                                    return (
+                                        <View key={fee.student_fee_id} style={{
+                                            borderLeftWidth: 3, borderLeftColor: color,
+                                            paddingLeft: 10, marginTop: 10,
+                                        }}>
+                                            <Text style={{ fontWeight: '700', color: Colors.gray900, fontSize: 13 }}>
+                                                {fee.fee_name}
+                                            </Text>
+                                            <Text style={styles.smallText}>
+                                                Due: {new Date(fee.due_date).toLocaleDateString()} • Total: Rs {fee.amount.toLocaleString()}
+                                            </Text>
+                                            <Text style={[styles.smallText, { color, fontWeight: '700' }]}>
+                                                {fee.status.toUpperCase()} — Rs {fee.amount_paid.toLocaleString()} paid
+                                            </Text>
+                                        </View>
+                                    );
+                                })}
+                            </View>
+                        )}
+                    </TouchableOpacity>
+                );
+            })}
         </ScrollView>
     );
 }

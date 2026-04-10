@@ -29,7 +29,7 @@ export default function AchievementsPage() {
             ]);
             setAllBadges((badges as any).results || badges);
             setMyBadges((earned as any).results || earned);
-            setLeaderboard(leaders);
+            setLeaderboard((leaders as any)?.entries || leaders);
         } catch (error) {
             console.error("Failed to load gamification data", error);
         } finally {

@@ -24,12 +24,14 @@ import GradesScreen from './screens/GradesScreen';
 import AssignmentsScreen from './screens/AssignmentsScreen';
 import OfflineScreen from './screens/OfflineScreen';
 import ProfileScreen from './screens/ProfileScreen';
+import FeesScreen from './screens/FeesScreen';
 import {
   AdminDashboardScreen,
   AdminPeopleScreen,
   NoticeBoardScreen,
   ParentChildrenScreen,
   ParentDashboardScreen,
+  ParentFeesScreen,
   TeacherStudentsScreen,
   TeacherDashboardScreen,
   TimetableScreen,
@@ -56,6 +58,7 @@ function tabIcon(name: string, focused: boolean) {
     Courses: ['📚', '📖'],
     Grades: ['📊', '📈'],
     Assignments: ['📝', '✏️'],
+    Fees: ['💳', '💰'],
     Timetable: ['🗓️', '📆'],
     People: ['👥', '🧑‍🤝‍🧑'],
     Children: ['👶', '🧒'],
@@ -135,6 +138,7 @@ function StudentTabs({
       <Tab.Screen name="Home" component={DashboardStackNavigator} />
       <Tab.Screen name="Courses" component={CoursesStackNavigator} />
       <Tab.Screen name="Grades" component={GradesScreen} />
+      <Tab.Screen name="Fees" component={FeesScreen} />
       <Tab.Screen name="Assignments" component={AssignmentsScreen} />
       <Tab.Screen name="Notices">
         {() => <NoticeBoardScreen role="student" />}
@@ -194,6 +198,7 @@ function ParentTabs({
     <Tab.Navigator screenOptions={({ route }) => commonTabOptions(route.name)}>
       <Tab.Screen name="Home" component={ParentDashboardScreen} />
       <Tab.Screen name="Children" component={ParentChildrenScreen} />
+      <Tab.Screen name="Fees" component={ParentFeesScreen} />
       <Tab.Screen name="Notices">
         {() => <NoticeBoardScreen role="parent" />}
       </Tab.Screen>
