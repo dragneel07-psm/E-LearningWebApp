@@ -7,10 +7,6 @@ import { withSentryConfig } from "@sentry/nextjs";
 const nextConfig: NextConfig = {
   output: 'standalone',
 
-  // Preserve trailing slashes so Django REST Framework's URL routing
-  // receives them intact (Vercel default strips them → 308 redirect).
-  trailingSlash: true,
-
   // Headers for PWA / Service Worker support
   async headers() {
     return [
@@ -68,6 +64,11 @@ const nextConfig: NextConfig = {
 
   // Power-efficient settings for rural devices
   experimental: {
+    // Prevent Next.js from stripping trailing slashes on proxied /api/ requests.
+    // Django REST Framework requires trailing slashes; without this, Vercel sends
+    // a 308 redirect which DRF answers with another redirect → infinite loop.
+    skipTrailingSlashRedirect: true,
+
     optimizePackageImports: [
       'lucide-react',
       '@radix-ui/react-dialog',
