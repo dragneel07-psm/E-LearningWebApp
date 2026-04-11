@@ -24,6 +24,7 @@ import {
     ClipboardCheck,
     HelpCircle,
     MessageCircle,
+    Video,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
@@ -38,7 +39,7 @@ const navigation = [
     { name: 'Grading',        href: '/teacher/grading',      icon: Award },
     { name: 'Gradebook',      href: '/teacher/grades',       icon: GraduationCap },
     { name: 'Question Bank',  href: '/teacher/questions',    icon: HelpCircle },
-    { name: 'Timetable',      href: '/teacher/timetable',    icon: Calendar },
+    { name: 'Live Classes',   href: '/teacher/timetable',    icon: Video },
     { name: 'Student Leaves', href: '/teacher/leaves',       icon: CalendarClock },
     { name: 'Library',        href: '/teacher/library',      icon: BookMarked },
     { name: 'Notices',        href: '/teacher/notices',      icon: Bell },

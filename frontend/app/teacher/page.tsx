@@ -355,7 +355,9 @@ export default function TeacherDashboard() {
                                             </div>
                                             <div className="mt-4 sm:mt-0 flex gap-2">
                                                 <Button size="sm" variant="outline" className="bg-white">View Materials</Button>
-                                                <Button size="sm" className="bg-indigo-600 hover:bg-indigo-700">Start Class</Button>
+                                                <Link href="/teacher/timetable">
+                                                    <Button size="sm" className="bg-indigo-600 hover:bg-indigo-700">Manage Live Class</Button>
+                                                </Link>
                                             </div>
                                         </div>
                                     </div>
