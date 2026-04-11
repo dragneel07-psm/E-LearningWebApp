@@ -17,6 +17,7 @@ import { academicAPI, AtRiskStudent, User, usersAPI, aiAPI } from '@/lib/api';
 import { AITeachingAssistant } from '@/components/ai-teaching-assistant';
 import { MyProfileDialog } from '@/components/my-profile-dialog';
 import { AttendanceTrends } from '@/components/attendance-trends';
+import { StartInstantLiveClassDialog } from '@/components/start-instant-live-class-dialog';
 import Link from 'next/link';
 import { BarChart, Bar, XAxis, CartesianGrid, Tooltip } from 'recharts';
 import { SafeResponsiveContainer } from '@/components/ui/safe-responsive-container';
@@ -401,6 +402,11 @@ export default function TeacherDashboard() {
                             <CardTitle className="text-sm font-bold uppercase tracking-wider text-indigo-900">Quick Actions</CardTitle>
                         </CardHeader>
                         <CardContent className="space-y-3">
+                            <StartInstantLiveClassDialog trigger={
+                                <Button className="w-full justify-start text-indigo-700 bg-white hover:bg-indigo-50 border border-indigo-100 shadow-sm h-12 text-base">
+                                    <Video className="mr-3 h-5 w-5 text-indigo-500" /> Start Live Class
+                                </Button>
+                            } />
                             <Link href="/teacher/attendance" className="block">
                                 <Button className="w-full justify-start text-indigo-700 bg-white hover:bg-indigo-50 border border-indigo-100 shadow-sm h-12 text-base">
                                     <CheckCircle className="mr-3 h-5 w-5 text-indigo-500" /> Take Attendance
