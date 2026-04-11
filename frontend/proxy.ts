@@ -215,7 +215,12 @@ export async function proxy(request: NextRequest) {
             return NextResponse.redirect(new URL('/unauthorized', request.url));
         }
         if (pathname.startsWith('/student') && userRole !== 'student') {
-            return NextResponse.redirect(new URL('/unauthorized', request.url));
+            // Allow teachers to access the student course view for previewing lessons
+            if (userRole === 'teacher' && pathname.startsWith('/student/courses')) {
+                // Allowed
+            } else {
+                return NextResponse.redirect(new URL('/unauthorized', request.url));
+            }
         }
         if (pathname.startsWith('/parent') && userRole !== 'parent') {
             return NextResponse.redirect(new URL('/unauthorized', request.url));
