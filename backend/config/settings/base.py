@@ -60,6 +60,26 @@ def _normalize_origins(origins: list[str]) -> list[str]:
     return normalized
 
 
+def _csrf_safe_origins(origins: list[str]) -> list[str]:
+    """Filter CSRF_TRUSTED_ORIGINS to entries Django can match.
+
+    Django requires ``scheme://host`` form; subdomain wildcards like
+    ``https://*.example.com`` are supported, but bare ``*`` or entries with no
+    scheme are rejected silently at runtime. Drop them at startup instead so
+    the list is useful.
+    """
+    safe: list[str] = []
+    for origin in origins:
+        value = (origin or "").strip()
+        if not value or value == "*" or "://" not in value:
+            continue
+        scheme, _, rest = value.partition("://")
+        if not scheme or not rest or rest.startswith("*") and not rest.startswith("*."):
+            continue
+        safe.append(value)
+    return safe
+
+
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.1/howto/deployment/checklist/
 
@@ -339,7 +359,9 @@ CORS_ALLOW_ALL_ORIGINS = os.environ.get("CORS_ALLOW_ALL_ORIGINS", "false").lower
 CORS_ALLOW_CREDENTIALS = True
 
 _csrf_trusted_from_env = _csv_env_list("CSRF_TRUSTED_ORIGINS", [])
-CSRF_TRUSTED_ORIGINS = _normalize_origins(_csrf_trusted_from_env or list(CORS_ALLOWED_ORIGINS))
+CSRF_TRUSTED_ORIGINS = _csrf_safe_origins(
+    _normalize_origins(_csrf_trusted_from_env or list(CORS_ALLOWED_ORIGINS))
+)
 
 from corsheaders.defaults import default_headers
 CORS_ALLOW_HEADERS = list(default_headers) + [
