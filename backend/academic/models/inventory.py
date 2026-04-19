@@ -102,6 +102,10 @@ class AssetAssignment(models.Model):
             models.Index(fields=['asset', 'is_active'], name='assignment_asset_active_idx'),
         ]
 
+    def __str__(self):
+        target = self.assigned_to_user or self.assigned_to_location or "unassigned"
+        return f"{self.asset} → {target}"
+
 
 class MaintenanceRequest(models.Model):
     request_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -137,6 +141,9 @@ class MaintenanceRequest(models.Model):
             models.Index(fields=['tenant', 'status'], name='maint_tenant_status_idx'),
         ]
 
+    def __str__(self):
+        return f"{self.title} [{self.status}]"
+
 
 class ConsumableStock(models.Model):
     stock_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -163,3 +170,6 @@ class ConsumableStock(models.Model):
     @property
     def is_low(self):
         return self.current_quantity <= self.minimum_quantity
+
+    def __str__(self):
+        return f"{self.name} ({self.current_quantity} {self.unit})"

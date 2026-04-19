@@ -44,6 +44,9 @@ class ConversationParticipant(models.Model):
     class Meta:
         unique_together = ['conversation', 'user']
 
+    def __str__(self):
+        return f"{self.user} in {self.conversation}"
+
 class Message(models.Model):
     message_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     conversation = models.ForeignKey(Conversation, on_delete=models.CASCADE, related_name='messages')
