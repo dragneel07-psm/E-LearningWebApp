@@ -63,11 +63,20 @@ def _normalize_origins(origins: list[str]) -> list[str]:
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.1/howto/deployment/checklist/
 
-# SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = os.environ.get("SECRET_KEY", "django-insecure-3lap^-36=51#lal1a^aaimkz_@a9tb=j##w!zj@n@r%7b)ypgf")
-
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.environ.get("DEBUG", "False").lower() == "true"
+
+# SECURITY WARNING: keep the secret key used in production secret!
+# Never ship with a hardcoded fallback — reject missing keys in non-debug envs.
+SECRET_KEY = (os.environ.get("SECRET_KEY", "") or "").strip()
+if not SECRET_KEY:
+    if DEBUG:
+        SECRET_KEY = "django-insecure-dev-only-do-not-use-in-production"
+        logger.warning("SECRET_KEY is not set; using insecure dev default (DEBUG=True).")
+    else:
+        raise ImproperlyConfigured(
+            "SECRET_KEY environment variable must be set when DEBUG=False."
+        )
 
 if DEBUG:
     ALLOWED_HOSTS = _csv_env_list("ALLOWED_HOSTS", ["localhost", "127.0.0.1"])
