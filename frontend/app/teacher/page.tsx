@@ -10,7 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import {
     BookOpen, Users, FileText, Calendar, MapPin, AlertTriangle,
-    ChevronRight, ClipboardList, CheckCircle, TrendingUp
+    ChevronRight, ClipboardList, CheckCircle, TrendingUp, Video
 } from 'lucide-react';
 import { CreateLessonDialog } from '@/components/create-lesson-dialog';
 import { academicAPI, AtRiskStudent, User, usersAPI, aiAPI } from '@/lib/api';

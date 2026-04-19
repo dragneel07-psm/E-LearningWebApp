@@ -11,6 +11,7 @@ import {
     Users,
     ClipboardList,
     Calendar,
+    FileText,
     MessageSquare,
     User,
     LogOut,
