@@ -612,8 +612,8 @@ class SaasStaffViewSet(viewsets.ViewSet):
         except UserAccount.DoesNotExist:
             return Response({'error': 'Staff member not found.'}, status=status.HTTP_404_NOT_FOUND)
 
-        # Only allow toggling is_active and updating name fields
-        allowed = {k: v for k, v in request.data.items() if k in ('is_active', 'first_name', 'last_name')}
+        # Only allow toggling is_active, updating name fields, and assigning saas sub-role
+        allowed = {k: v for k, v in request.data.items() if k in ('is_active', 'first_name', 'last_name', 'saas_staff_role')}
         for field, value in allowed.items():
             setattr(user, field, value)
         user.save(update_fields=list(allowed.keys()))

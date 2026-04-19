@@ -3227,11 +3227,14 @@ export const saasApi = {
         }>(`${BILLING_SAAS_BASE}/analytics/health/`),
 };
 
+export type SaasStaffRole = '' | 'support' | 'billing' | 'schools_manager' | 'reports';
+
 export interface SaasStaffMember {
     user_id: string;
     email: string;
     first_name: string;
     last_name: string;
+    saas_staff_role: SaasStaffRole;
     is_active: boolean;
     date_joined: string;
     last_login: string | null;
@@ -3239,9 +3242,9 @@ export interface SaasStaffMember {
 
 export const saasStaffApi = {
     list: () => apiRequest<SaasStaffMember[]>('/users/saas-staff/'),
-    create: (data: { email: string; first_name: string; last_name: string; password: string }) =>
+    create: (data: { email: string; first_name: string; last_name: string; password: string; saas_staff_role?: SaasStaffRole }) =>
         apiRequest<SaasStaffMember>('/users/saas-staff/', { method: 'POST', body: JSON.stringify(data) }),
-    update: (id: string, data: Partial<{ is_active: boolean; first_name: string; last_name: string }>) =>
+    update: (id: string, data: Partial<{ is_active: boolean; first_name: string; last_name: string; saas_staff_role: SaasStaffRole }>) =>
         apiRequest<SaasStaffMember>(`/users/saas-staff/${id}/`, { method: 'PATCH', body: JSON.stringify(data) }),
     deactivate: (id: string) =>
         apiRequest<void>(`/users/saas-staff/${id}/`, { method: 'DELETE' }),

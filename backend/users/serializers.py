@@ -527,9 +527,9 @@ class SaasStaffSerializer(serializers.ModelSerializer):
         model = UserAccount
         fields = [
             'user_id', 'email', 'first_name', 'last_name',
-            'is_active', 'date_joined', 'last_login',
+            'saas_staff_role', 'is_active', 'date_joined', 'last_login',
         ]
-        read_only_fields = fields
+        read_only_fields = ['user_id', 'email', 'date_joined', 'last_login']
 
 
 class SaasStaffCreateSerializer(serializers.Serializer):
@@ -538,6 +538,11 @@ class SaasStaffCreateSerializer(serializers.Serializer):
     first_name = serializers.CharField(max_length=150)
     last_name = serializers.CharField(max_length=150)
     password = serializers.CharField(write_only=True, min_length=8)
+    saas_staff_role = serializers.ChoiceField(
+        choices=['', 'support', 'billing', 'schools_manager', 'reports'],
+        default='',
+        required=False,
+    )
 
     def validate_email(self, value):
         value = value.strip().lower()
@@ -563,6 +568,7 @@ class SaasStaffCreateSerializer(serializers.Serializer):
             first_name=validated_data['first_name'],
             last_name=validated_data['last_name'],
             role='saas_staff',
+            saas_staff_role=validated_data.get('saas_staff_role', ''),
             tenant=None,
             is_staff=False,
             is_superuser=False,

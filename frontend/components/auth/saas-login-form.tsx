@@ -87,9 +87,14 @@ export function SaasLoginForm() {
         if (typeof window !== 'undefined') {
             localStorage.setItem('tenant_id', 'public');
             document.cookie = `tenant_id=public; path=/; samesite=lax`;
+            // Full page navigation ensures the newly-set cookie is included in
+            // the next request to the middleware — client-side router.replace
+            // can race with cookie propagation in some browsers.
+            window.location.href = '/saas';
+        } else {
+            router.replace('/saas');
         }
         toast.success('Welcome back! Signed in to SaaS Admin.');
-        router.replace('/saas');
     }
 
     // ── Step 1: email + password ──────────────────────────────────────────

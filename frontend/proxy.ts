@@ -158,7 +158,11 @@ export async function proxy(request: NextRequest) {
     // Redirect to login if no token on protected routes
     if (!token) {
         console.log('[Proxy] No token found, redirecting to login');
-        const loginUrl = new URL('/login', request.url);
+        // Route directly to the correct login page to avoid a double redirect:
+        //   non-tenant hosts (SaaS domain, localhost) → /saas-login
+        //   tenant hosts (school subdomains, custom domains) → /login
+        const loginPath = isTenantHost(hostname) ? '/login' : '/saas-login';
+        const loginUrl = new URL(loginPath, request.url);
         loginUrl.searchParams.set('redirect', pathname);
         return NextResponse.redirect(loginUrl);
     }
