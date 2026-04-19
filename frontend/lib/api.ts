@@ -1124,6 +1124,8 @@ export interface AiGeneratedArtifactRecord {
 
 export interface Timetable {
     timetable_id: number;
+    academic_year?: number | string;
+    academic_year_name?: string;
     academic_class: number | string;
     academic_class_name?: string;
     day_of_week: string;

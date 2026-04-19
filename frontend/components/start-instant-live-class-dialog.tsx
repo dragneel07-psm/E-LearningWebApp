@@ -19,7 +19,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Video, Loader2, Play } from 'lucide-react';
 import { toast } from 'sonner';
-import { academicAPI, liveSessionAPI, AcademicClass, usersAPI } from '@/lib/api';
+import { academicAPI, liveSessionAPI, AcademicClass } from '@/lib/api';
 
 interface StartInstantLiveClassDialogProps {
     trigger?: React.ReactNode;
@@ -37,7 +37,9 @@ export function StartInstantLiveClassDialog({ trigger }: StartInstantLiveClassDi
 
     useEffect(() => {
         if (open) {
-            academicAPI.getAssignedClasses()
+            // Backend already scopes /academic/classes/ to the teacher's
+            // assigned_classes when role=teacher.
+            academicAPI.getClasses()
                 .then(setAssignedClasses)
                 .catch(console.error);
         }
@@ -49,7 +51,7 @@ export function StartInstantLiveClassDialog({ trigger }: StartInstantLiveClassDi
 
         try {
             // Get current year
-            const currentYear = await academicAPI.getCurrentYear();
+            const currentYear = await academicAPI.getCurrentAcademicYear();
             if (!currentYear) throw new Error('No active academic year found.');
 
             // Calculate dates
