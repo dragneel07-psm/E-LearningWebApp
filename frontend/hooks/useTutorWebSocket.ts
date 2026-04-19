@@ -78,6 +78,9 @@ export function useTutorWebSocket() {
   // Callbacks so callers can react to events
   const onDoneRef = useRef<((payload: TutorDonePayload) => void) | null>(null);
   const onErrorRef = useRef<((detail: string) => void) | null>(null);
+  // Holds the latest `connect` so the close handler can schedule a
+  // reconnect without referencing `connect` before its declaration.
+  const connectRef = useRef<() => void>(() => {});
 
   const connect = useCallback(() => {
     if (typeof window === 'undefined') return;
@@ -142,10 +145,14 @@ export function useTutorWebSocket() {
       setStatus('closed');
       // Auto-reconnect on abnormal close (not 1000=normal or 4001=auth)
       if (e.code !== 1000 && e.code !== 4001) {
-        setTimeout(connect, 3000);
+        setTimeout(() => connectRef.current(), 3000);
       }
     };
   }, []);
+
+  useEffect(() => {
+    connectRef.current = connect;
+  }, [connect]);
 
   // Connect once on mount; clean up on unmount
   useEffect(() => {

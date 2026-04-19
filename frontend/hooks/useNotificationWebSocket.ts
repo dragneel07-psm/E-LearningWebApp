@@ -48,6 +48,9 @@ export function useNotificationWebSocket(opts?: {
   const pingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const onNotificationRef = useRef(opts?.onNotification);
   onNotificationRef.current = opts?.onNotification;
+  // Holds the latest `connect` so the close handler can schedule a
+  // reconnect without referencing `connect` before its declaration.
+  const connectRef = useRef<() => void>(() => {});
 
   const connect = useCallback(() => {
     if (typeof window === 'undefined') return;
@@ -102,10 +105,14 @@ export function useNotificationWebSocket(opts?: {
       }
       // Auto-reconnect unless normal close or auth failure
       if (e.code !== 1000 && e.code !== 4001) {
-        setTimeout(connect, 5000);
+        setTimeout(() => connectRef.current(), 5000);
       }
     };
   }, []);
+
+  useEffect(() => {
+    connectRef.current = connect;
+  }, [connect]);
 
   useEffect(() => {
     connect();
