@@ -194,12 +194,13 @@ export async function proxy(request: NextRequest) {
         // Check expiration
         if (user.exp && user.exp * 1000 < Date.now()) {
             console.log(`[Proxy] Token expired (exp ${user.exp * 1000} < now ${Date.now()})`);
+            const expiredLoginPath = isTenantHost(hostname) ? '/login' : '/saas-login';
             const response =
                 pathname === '/'
                     ? buildPublicRootResponse(request, requestHeaders, hostname)
                     : isAuthPage
                         ? NextResponse.next({ request: { headers: requestHeaders } })
-                        : NextResponse.redirect(new URL('/login', request.url));
+                        : NextResponse.redirect(new URL(expiredLoginPath, request.url));
             clearAuthCookies(response);
             return response;
         }
@@ -255,10 +256,11 @@ export async function proxy(request: NextRequest) {
             clearAuthCookies(response);
             return response;
         }
+        const errorLoginPath = isTenantHost(hostname) ? '/login' : '/saas-login';
         const response =
             pathname === '/'
                 ? buildPublicRootResponse(request, requestHeaders, hostname)
-                : NextResponse.redirect(new URL('/login', request.url));
+                : NextResponse.redirect(new URL(errorLoginPath, request.url));
         clearAuthCookies(response);
         return response;
     }

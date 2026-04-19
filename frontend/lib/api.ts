@@ -1588,8 +1588,12 @@ export async function apiRequest<T>(
                     const { pathname, hostname } = window.location;
                     const onAuthPage = pathname.startsWith('/login') || pathname.startsWith('/saas-login');
                     if (!onAuthPage) {
-                        const isSaasDomain = hostname === 'manyaltech.com' || hostname === 'www.manyaltech.com';
-                        window.location.href = isSaasDomain ? '/saas-login?expired=true' : '/login?expired=true';
+                        // Detect SaaS context: explicit domain check OR tenant_id stored as 'public'
+                        const storedTenantId = (localStorage.getItem('tenant_id') || '').toLowerCase().trim();
+                        const isSaasContext = hostname === 'manyaltech.com'
+                            || hostname === 'www.manyaltech.com'
+                            || storedTenantId === 'public';
+                        window.location.href = isSaasContext ? '/saas-login?expired=true' : '/login?expired=true';
                     }
                 }
             }
