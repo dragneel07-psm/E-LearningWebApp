@@ -20,7 +20,6 @@ from .throttling import (
     RefreshRateThrottle,
     RegisterRateThrottle,
 )
-import traceback
 import logging
 from django.shortcuts import get_object_or_404
 from django.db import connection
@@ -174,11 +173,20 @@ class AdminPasswordResetView(APIView):
                     "initiator_role": getattr(request.user, "role", None),
                 },
             )
-            print("DEBUG: Password reset successful.")
+            logger.info(
+                "Admin password reset succeeded",
+                extra={
+                    "target_user_id": str(target_user.user_id),
+                    "initiator_user_id": str(getattr(request.user, "user_id", "") or ""),
+                },
+            )
             return Response({'message': 'Password reset successfully.'})
-        except Exception as e:
-            traceback.print_exc()
-            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        except Exception:
+            logger.exception("Admin password reset failed")
+            return Response(
+                {'error': 'Password reset failed.'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
 
 # User Registration View
