@@ -22,7 +22,7 @@ from .throttling import (
 )
 import logging
 from django.shortcuts import get_object_or_404
-from django.db import connection
+from django.db import connection, transaction
 from django_tenants.utils import schema_context
 from core.utils.audit import record_audit_event
 from core.models import Tenant
@@ -156,23 +156,29 @@ class AdminPasswordResetView(APIView):
             else:
                 return Response({'error': 'Unauthorized role'}, status=status.HTTP_403_FORBIDDEN)
 
-            # 4. Set Password and ensure account is active so they can log in immediately
-            target_user.set_password(new_password)
-            target_user.is_active = True
-            target_user.failed_login_attempts = 0
-            target_user.locked_until = None
-            target_user.save()
-            record_audit_event(
-                action="users.admin_password_reset",
-                user=request.user,
-                request=request,
-                details={
-                    "target_user_id": str(target_user.user_id),
-                    "target_email": target_user.email,
-                    "target_tenant_id": str(getattr(target_user, "tenant_id", "") or ""),
-                    "initiator_role": getattr(request.user, "role", None),
-                },
-            )
+            # Set password, activate, and audit atomically so a failure anywhere
+            # rolls the whole change back — we never leave a new password in
+            # place without an audit trail, or an audit record for a password
+            # change that did not happen.
+            with transaction.atomic():
+                target_user.set_password(new_password)
+                target_user.is_active = True
+                target_user.failed_login_attempts = 0
+                target_user.locked_until = None
+                target_user.save(update_fields=[
+                    "password", "is_active", "failed_login_attempts", "locked_until",
+                ])
+                record_audit_event(
+                    action="users.admin_password_reset",
+                    user=request.user,
+                    request=request,
+                    details={
+                        "target_user_id": str(target_user.user_id),
+                        "target_email": target_user.email,
+                        "target_tenant_id": str(getattr(target_user, "tenant_id", "") or ""),
+                        "initiator_role": getattr(request.user, "role", None),
+                    },
+                )
             logger.info(
                 "Admin password reset succeeded",
                 extra={
