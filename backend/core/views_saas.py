@@ -1,6 +1,8 @@
 # Copyright (c) 2024-2026 Pramod Singh Manyal. All rights reserved.
 # Unauthorized copying, modification, or distribution of this file,
 # via any medium, is strictly prohibited. Proprietary and confidential.
+import logging
+import os
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import permissions
@@ -17,9 +19,12 @@ from django.utils import timezone
 from ai_engine.services.provider_config import get_ai_provider_config
 from core.utils.audit import record_audit_event
 
+logger = logging.getLogger(__name__)
+
 KPI_CACHE_KEY = "saas:kpi:v2"
 AI_USAGE_CACHE_KEY = "saas:ai-usage:v2"
-DASHBOARD_CACHE_TTL_SECONDS = 60
+DASHBOARD_CACHE_TTL_SECONDS = int(os.environ.get("SAAS_DASHBOARD_CACHE_TTL", "60"))
+SAAS_DASHBOARD_TENANT_LIMIT = int(os.environ.get("SAAS_DASHBOARD_TENANT_LIMIT", "500"))
 
 
 def _as_bool(value) -> bool:
@@ -68,8 +73,12 @@ class SaasKPIView(APIView):
                 return Response(cached_payload)
 
         # 1. Basic Stats
-        tenants = list(Tenant.objects.only("id", "name", "schema_name"))
-        total_schools = len(tenants)
+        total_schools = Tenant.objects.count()
+        tenants = list(
+            Tenant.objects.only("id", "name", "schema_name")
+            .order_by("name")[:SAAS_DASHBOARD_TENANT_LIMIT]
+        )
+        tenants_truncated = total_schools > len(tenants)
 
         # 2. Revenue (Aggregated from default/public schema DB)
         invoices = Invoice.objects.all()
@@ -113,8 +122,10 @@ class SaasKPIView(APIView):
                         'status': status,
                         'students': students_count
                     })
-                except Exception as e:
-                    print(f"Error fetching data for tenant {tenant.schema_name}: {e}")
+                except Exception:
+                    logger.exception(
+                        "SaasKPIView: failed to aggregate tenant %s", tenant.schema_name,
+                    )
                     tenant_activity.append({
                         'id': str(tenant.id),
                         'name': tenant.name,
@@ -124,12 +135,11 @@ class SaasKPIView(APIView):
                     tenant_errors.append({
                         "tenant_id": str(tenant.id),
                         "tenant_name": tenant.name,
-                        "error": str(e),
                     })
-        except Exception as outer_err:
-            print(f"SaasKPIView outer error: {outer_err}")
+        except Exception:
+            logger.exception("SaasKPIView: outer aggregation failed")
             tenant_activity = [{'id': str(t.id), 'name': t.name, 'status': 'unknown', 'students': 0} for t in tenants]
-            tenant_errors.append({"error": str(outer_err)})
+            tenant_errors.append({"error": "aggregation_failed"})
 
         # 4. Revenue Trend (Live calculation — using issued_date which exists on Invoice)
         revenue_trend = []
@@ -213,6 +223,8 @@ class SaasKPIView(APIView):
             'tenant_activity': tenant_activity,
             'alerts': alerts,
             'tenant_errors': tenant_errors,
+            'tenants_truncated': tenants_truncated,
+            'tenants_shown': len(tenants),
         }
         cache.set(KPI_CACHE_KEY, payload, DASHBOARD_CACHE_TTL_SECONDS)
         return Response(payload)
@@ -229,7 +241,12 @@ class SaasAIUsageView(APIView):
             if cached_payload:
                 return Response(cached_payload)
 
-        tenants = list(Tenant.objects.only("id", "name", "schema_name"))
+        total_tenant_count = Tenant.objects.count()
+        tenants = list(
+            Tenant.objects.only("id", "name", "schema_name")
+            .order_by("name")[:SAAS_DASHBOARD_TENANT_LIMIT]
+        )
+        tenants_truncated = total_tenant_count > len(tenants)
         total_tokens = 0
         total_prompt_tokens = 0
         total_completion_tokens = 0
@@ -319,17 +336,18 @@ class SaasAIUsageView(APIView):
                             daily_usage_map[key]['tokens'] += int(day_item.get('tokens') or 0)
                             daily_usage_map[key]['requests'] += int(day_item.get('requests') or 0)
                             daily_usage_map[key]['cost_estimate'] += Decimal(str(day_item.get('cost') or 0))
-                except Exception as e:
-                    print(f"Error aggregating AI logs for {tenant.schema_name}: {e}")
+                except Exception:
+                    logger.exception(
+                        "SaasAIUsageView: failed to aggregate tenant %s", tenant.schema_name,
+                    )
                     tenant_errors.append({
                         'tenant_id': str(tenant.id),
                         'tenant_name': tenant.name,
                         'schema_name': tenant.schema_name,
-                        'error': str(e),
                     })
-        except Exception as outer_err:
-            print(f"SaasAIUsageView outer error: {outer_err}")
-            tenant_errors.append({'error': str(outer_err)})
+        except Exception:
+            logger.exception("SaasAIUsageView: outer aggregation failed")
+            tenant_errors.append({'error': 'aggregation_failed'})
 
         usage_by_feature = []
         for feature_key, stats in usage_by_feature_map.items():
@@ -379,7 +397,9 @@ class SaasAIUsageView(APIView):
             'avg_cost_per_1k_tokens': round(avg_cost_per_1k_tokens, 6),
             'avg_tokens_per_request': round(avg_tokens_per_request, 2),
             'active_tenants': len([t for t in top_tenants if t['tokens'] > 0]),
-            'total_tenants': len(tenants),
+            'total_tenants': total_tenant_count,
+            'tenants_shown': len(tenants),
+            'tenants_truncated': tenants_truncated,
             'usage_by_feature': usage_by_feature,
             'top_tenants': top_tenants[:10],
             'daily_usage_last_7_days': daily_usage_last_7_days,
