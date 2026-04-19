@@ -32,6 +32,7 @@ app.autodiscover_tasks([
     "billing",
     "billing_school",
     "hr_payroll",
+    "library",
     "notifications",
     "transport",
     "hostel",
@@ -54,6 +55,10 @@ try:
         "send-parent-digests": {
             "task": "ai.parent_digest",
             "schedule": crontab(hour=7, minute=0),  # daily at 7 AM
+        },
+        "library-mark-overdue": {
+            "task": "library.mark_overdue_book_issues",
+            "schedule": crontab(hour=1, minute=0),  # daily at 1 AM
         },
     }
 except Exception:

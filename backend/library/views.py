@@ -45,33 +45,23 @@ class BookIssueViewSet(viewsets.ModelViewSet):
         user = self.request.user
         role = _role(user)
 
-        # 1. Role-based filtering
         if role == 'student':
-            try:
-                student = Student.objects.get(user=user)
-                queryset = queryset.filter(student=student)
-            except Student.DoesNotExist:
-                queryset = queryset.none()
-        elif role == "parent":
-            parent = Parent.objects.prefetch_related("students").filter(user=user).first()
-            if not parent:
-                queryset = queryset.none()
-            else:
-                queryset = queryset.filter(student__in=parent.students.all())
-        elif role == "teacher":
-            teacher = Teacher.objects.prefetch_related("assigned_classes").filter(user=user).first()
-            if not teacher:
-                queryset = queryset.none()
-            else:
-                class_ids = list(teacher.assigned_classes.values_list("id", flat=True))
-                queryset = queryset.filter(student__academic_class_id__in=class_ids) if class_ids else queryset.none()
-
-        # 2. Auto-update overdue status
-        today = timezone.now().date()
-        queryset.filter(
-            status='issued',
-            due_date__lt=today
-        ).update(status='overdue')
+            student = Student.objects.filter(user=user).only("id").first()
+            if student is None:
+                return queryset.none()
+            return queryset.filter(student=student)
+        if role == "parent":
+            parent = Parent.objects.filter(user=user).only("id").first()
+            if parent is None:
+                return queryset.none()
+            student_ids = list(parent.students.values_list("id", flat=True))
+            return queryset.filter(student_id__in=student_ids) if student_ids else queryset.none()
+        if role == "teacher":
+            teacher = Teacher.objects.filter(user=user).only("id").first()
+            if teacher is None:
+                return queryset.none()
+            class_ids = list(teacher.assigned_classes.values_list("id", flat=True))
+            return queryset.filter(student__academic_class_id__in=class_ids) if class_ids else queryset.none()
 
         return queryset
 
