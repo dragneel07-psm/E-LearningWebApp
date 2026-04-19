@@ -75,8 +75,17 @@ def _fallback_quiz(content: str, question_count: int) -> list[dict[str, Any]]:
     ]
 
 
-@shared_task(name="ai.index_content")
+@shared_task(
+    name="ai.index_content",
+    bind=True,
+    autoretry_for=(Exception,),
+    retry_kwargs={"max_retries": 3},
+    retry_backoff=True,
+    retry_backoff_max=600,
+    retry_jitter=True,
+)
 def ai_index_content_task(
+    self,
     *,
     tenant_schema: str,
     content: str,
@@ -111,8 +120,17 @@ def ai_index_content_task(
     return result
 
 
-@shared_task(name="ai.generate_summary")
+@shared_task(
+    name="ai.generate_summary",
+    bind=True,
+    autoretry_for=(Exception,),
+    retry_kwargs={"max_retries": 3},
+    retry_backoff=True,
+    retry_backoff_max=600,
+    retry_jitter=True,
+)
 def generate_summary_task(
+    self,
     *,
     tenant_schema: str,
     content: str,
@@ -154,8 +172,17 @@ def generate_summary_task(
     return parsed
 
 
-@shared_task(name="ai.generate_quiz")
+@shared_task(
+    name="ai.generate_quiz",
+    bind=True,
+    autoretry_for=(Exception,),
+    retry_kwargs={"max_retries": 3},
+    retry_backoff=True,
+    retry_backoff_max=600,
+    retry_jitter=True,
+)
 def generate_quiz_task(
+    self,
     *,
     tenant_schema: str,
     content: str,
@@ -197,8 +224,16 @@ def generate_quiz_task(
     }
 
 
-@shared_task(name="ai.parent_digest")
-def send_parent_digest_task(*, tenant_schema: str) -> dict[str, Any]:
+@shared_task(
+    name="ai.parent_digest",
+    bind=True,
+    autoretry_for=(Exception,),
+    retry_kwargs={"max_retries": 3},
+    retry_backoff=True,
+    retry_backoff_max=600,
+    retry_jitter=True,
+)
+def send_parent_digest_task(self, *, tenant_schema: str) -> dict[str, Any]:
     """
     Phase 14 — AI Parent Daily Digest.
 
@@ -265,8 +300,16 @@ def send_parent_digest_task(*, tenant_schema: str) -> dict[str, Any]:
     return {"sent": sent_count, "skipped": skipped_count, "tenant": schema_name}
 
 
-@shared_task(name="ai.transcribe_lesson")
-def transcribe_lesson_task(*, tenant_schema: str, lesson_id: int) -> dict[str, Any]:
+@shared_task(
+    name="ai.transcribe_lesson",
+    bind=True,
+    autoretry_for=(Exception,),
+    retry_kwargs={"max_retries": 3},
+    retry_backoff=True,
+    retry_backoff_max=600,
+    retry_jitter=True,
+)
+def transcribe_lesson_task(self, *, tenant_schema: str, lesson_id: int) -> dict[str, Any]:
     """
     Phase 11 — Video Transcript Indexing.
 
