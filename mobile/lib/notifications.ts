@@ -11,7 +11,7 @@
 import { Platform } from 'react-native';
 import { getAuthToken } from './api';
 
-const API_BASE = (process.env.EXPO_PUBLIC_API_URL || 'http://192.168.1.100:8000/api').replace(/\/+$/, '');
+const API_BASE = (process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:8000/api').replace(/\/+$/, '');
 
 /**
  * Register the device for Expo push notifications.

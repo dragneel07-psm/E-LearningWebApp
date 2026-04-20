@@ -4,9 +4,13 @@
 import * as SecureStore from 'expo-secure-store';
 
 // ─── Configuration ────────────────────────────────────────────
-// Change this to your backend server IP (find it with `ipconfig` on Windows or `ifconfig` on Mac)
-// When running on a physical device, use your computer's local IP, NOT localhost
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://192.168.1.100:8000/api';
+// Set EXPO_PUBLIC_API_URL in mobile/.env (see .env.example).
+// On a physical device this must be your computer's LAN IP, not localhost.
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:8000/api';
+if (!process.env.EXPO_PUBLIC_API_URL) {
+    // eslint-disable-next-line no-console
+    console.warn('[mobile] EXPO_PUBLIC_API_URL not set — falling back to localhost. Physical devices will fail; set it in mobile/.env and restart Expo.');
+}
 const USER_STORE_KEY = 'current_user';
 const API_TIMEOUT_MS = Number(process.env.EXPO_PUBLIC_API_TIMEOUT_MS || 15000);
 

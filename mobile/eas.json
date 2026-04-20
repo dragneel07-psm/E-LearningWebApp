@@ -26,16 +26,6 @@
         }
     },
     "submit": {
-        "production": {
-            "android": {
-                "serviceAccountKeyPath": "./google-play-key.json",
-                "track": "internal"
-            },
-            "ios": {
-                "appleId": "your@apple.com",
-                "ascAppId": "your-app-id",
-                "appleTeamId": "YOUR_TEAM_ID"
-            }
-        }
+        "production": {}
     }
 }
