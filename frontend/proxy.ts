@@ -157,7 +157,9 @@ export async function proxy(request: NextRequest) {
 
     // Redirect to login if no token on protected routes
     if (!token) {
-        console.log('[Proxy] No token found, redirecting to login');
+        if (process.env.NODE_ENV !== 'production') {
+            console.log('[Proxy] No token found, redirecting to login');
+        }
         // Route directly to the correct login page to avoid a double redirect:
         //   non-tenant hosts (SaaS domain, localhost) → /saas-login
         //   tenant hosts (school subdomains, custom domains) → /login
@@ -189,11 +191,15 @@ export async function proxy(request: NextRequest) {
         }
 
         const userRole = (user.role || 'student').toLowerCase();
-        console.log(`[Proxy] Parsed User: role=${userRole}, exp=${user.exp}`);
+        if (process.env.NODE_ENV !== 'production') {
+            console.log(`[Proxy] Parsed User: role=${userRole}, exp=${user.exp}`);
+        }
 
         // Check expiration
         if (user.exp && user.exp * 1000 < Date.now()) {
-            console.log(`[Proxy] Token expired (exp ${user.exp * 1000} < now ${Date.now()})`);
+            if (process.env.NODE_ENV !== 'production') {
+                console.log(`[Proxy] Token expired (exp ${user.exp * 1000} < now ${Date.now()})`);
+            }
             const expiredLoginPath = isTenantHost(hostname) ? '/login' : '/saas-login';
             const response =
                 pathname === '/'

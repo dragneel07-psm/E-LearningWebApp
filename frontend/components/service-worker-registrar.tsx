@@ -13,7 +13,9 @@ export function ServiceWorkerRegistrar() {
     useEffect(() => {
         if (typeof window === 'undefined') return;
         if (!('serviceWorker' in navigator)) {
-            console.log('[PWA] Service Worker not supported in this browser.');
+            if (process.env.NODE_ENV !== 'production') {
+                console.log('[PWA] Service Worker not supported in this browser.');
+            }
             return;
         }
 
@@ -28,7 +30,9 @@ export function ServiceWorkerRegistrar() {
                 });
 
                 if (!mounted) return;
-                console.log('[PWA] Service Worker registered:', reg.scope);
+                if (process.env.NODE_ENV !== 'production') {
+                    console.log('[PWA] Service Worker registered:', reg.scope);
+                }
 
                 // Check for updates
                 reg.addEventListener('updatefound', () => {
