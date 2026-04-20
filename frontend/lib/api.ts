@@ -2982,6 +2982,10 @@ export const helpers = {
                 'x-tenant-id': downloadTenantId
             }
         });
+        if (!response.ok) {
+            // Don't save an HTML/JSON error body as if it were the file.
+            throw new Error(`Download failed (${response.status})`);
+        }
         const blob = await response.blob();
         const downloadUrl = window.URL.createObjectURL(blob);
         const link = document.createElement('a');
@@ -2990,6 +2994,8 @@ export const helpers = {
         document.body.appendChild(link);
         link.click();
         link.remove();
+        // Release the blob URL so the browser can reclaim memory.
+        window.URL.revokeObjectURL(downloadUrl);
     }
 };
 
