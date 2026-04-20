@@ -16,8 +16,12 @@ export function TeacherAcademicDetails() {
     useEffect(() => {
         const loadProfile = async () => {
             try {
-                const data = await academicAPI.getMyTeacherProfile();
-                setProfile(data);
+                // /teachers/me/ returns the bare Teacher row; the enriched
+                // overview with subjects / class_sections_progress / summary
+                // lives behind /teachers/:id/profile-overview/.
+                const me = await academicAPI.getMyTeacherProfile();
+                const overview = await academicAPI.getTeacherProfileOverview(me.id);
+                setProfile(overview);
             } catch (error) {
                 console.error("Failed to load teacher academic profile", error);
             } finally {
