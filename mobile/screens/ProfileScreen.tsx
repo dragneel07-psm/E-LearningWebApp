@@ -12,6 +12,7 @@ import {
     TouchableOpacity,
     View,
 } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
 import { User, usersAPI } from '../lib/api';
 import { Colors, Shadows } from '../constants/theme';
 
@@ -22,6 +23,8 @@ interface ProfileScreenProps {
 }
 
 export default function ProfileScreen({ user, onLogout, onUserUpdated }: ProfileScreenProps) {
+    const navigation: any = useNavigation();
+    const canOpenOffline = user.role === 'student';
     const [firstName, setFirstName] = useState(user.first_name || '');
     const [lastName, setLastName] = useState(user.last_name || '');
     const [phone, setPhone] = useState(user.phone_number || '');
@@ -174,6 +177,15 @@ export default function ProfileScreen({ user, onLogout, onUserUpdated }: Profile
                 </TouchableOpacity>
             </View>
 
+            {canOpenOffline && (
+                <TouchableOpacity
+                    style={styles.offlineBtn}
+                    onPress={() => navigation.navigate('Offline')}
+                >
+                    <Text style={styles.offlineText}>📥  Offline Downloads</Text>
+                </TouchableOpacity>
+            )}
+
             <TouchableOpacity style={styles.logoutBtn} onPress={onLogout}>
                 <Text style={styles.logoutText}>Logout</Text>
             </TouchableOpacity>
@@ -223,6 +235,17 @@ const styles = StyleSheet.create({
         paddingVertical: 12,
     },
     primaryBtnText: { color: '#fff', fontWeight: '800', fontSize: 14 },
+    offlineBtn: {
+        marginBottom: 8,
+        backgroundColor: Colors.white,
+        borderRadius: 12,
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: 13,
+        borderWidth: 1,
+        borderColor: Colors.gray200,
+    },
+    offlineText: { color: Colors.gray700, fontWeight: '700', fontSize: 14 },
     logoutBtn: {
         marginTop: 8,
         backgroundColor: Colors.error,

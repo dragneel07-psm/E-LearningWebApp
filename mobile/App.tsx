@@ -25,6 +25,7 @@ import AssignmentsScreen from './screens/AssignmentsScreen';
 import TakeAssessmentScreen from './screens/TakeAssessmentScreen';
 import AssessmentResultsScreen from './screens/AssessmentResultsScreen';
 import TakeQuizScreen from './screens/TakeQuizScreen';
+import AiTutorScreen from './screens/AiTutorScreen';
 import OfflineScreen from './screens/OfflineScreen';
 import ProfileScreen from './screens/ProfileScreen';
 import FeesScreen from './screens/FeesScreen';
@@ -70,6 +71,7 @@ function tabIcon(name: string, focused: boolean) {
     Notices: ['📢', '📣'],
     Offline: ['📥', '💾'],
     Profile: ['👤', '🧑'],
+    Tutor: ['🧠', '✨'],
   };
 
   const [inactive, active] = icons[name] || ['⚪', '🔵'];
@@ -147,6 +149,36 @@ function CoursesStackNavigator() {
   );
 }
 
+function StudentProfileStack({
+  user,
+  onLogout,
+  onUserUpdated,
+}: {
+  user: User;
+  onLogout: () => void;
+  onUserUpdated: (user: User) => void;
+}) {
+  return (
+    <InnerStack.Navigator
+      screenOptions={{
+        headerStyle: { backgroundColor: Colors.primary },
+        headerTintColor: '#fff',
+        headerTitleStyle: { fontWeight: '800', fontSize: 18 },
+      }}
+    >
+      <InnerStack.Screen name="ProfileHome" options={{ headerShown: false }}>
+        {() => <ProfileScreen user={user} onLogout={onLogout} onUserUpdated={onUserUpdated} />}
+      </InnerStack.Screen>
+      <InnerStack.Screen
+        name="Offline"
+        component={OfflineScreen}
+        options={{ title: 'Offline Downloads' }}
+        initialParams={{ browseRoute: 'Courses' }}
+      />
+    </InnerStack.Navigator>
+  );
+}
+
 function StudentTabs({
   user,
   onLogout,
@@ -163,6 +195,7 @@ function StudentTabs({
       <Tab.Screen name="Grades" component={GradesScreen} />
       <Tab.Screen name="Fees" component={FeesScreen} />
       <Tab.Screen name="Assignments" component={AssignmentsStackNavigator} />
+      <Tab.Screen name="Tutor" component={AiTutorScreen} options={{ title: 'AI Tutor' }} />
       <Tab.Screen name="Notices">
         {() => <NoticeBoardScreen role="student" />}
       </Tab.Screen>
@@ -170,13 +203,8 @@ function StudentTabs({
         {() => <TimetableScreen role="student" />}
       </Tab.Screen>
       <Tab.Screen name="Messages" component={MessagingScreen} />
-      <Tab.Screen
-        name="Offline"
-        component={OfflineScreen}
-        initialParams={{ browseRoute: 'Courses' }}
-      />
       <Tab.Screen name="Profile">
-        {() => <ProfileScreen user={user} onLogout={onLogout} onUserUpdated={onUserUpdated} />}
+        {() => <StudentProfileStack user={user} onLogout={onLogout} onUserUpdated={onUserUpdated} />}
       </Tab.Screen>
     </Tab.Navigator>
   );
