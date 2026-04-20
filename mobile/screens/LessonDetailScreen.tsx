@@ -15,10 +15,11 @@ import {
 import { academicAPI, Lesson } from '../lib/api';
 import { Colors, Shadows } from '../constants/theme';
 
-export default function LessonDetailScreen({ route }: any) {
+export default function LessonDetailScreen({ route, navigation }: any) {
     const { lesson, subject } = route.params as { lesson: Lesson; subject: { id: number; name: string } };
     const [completed, setCompleted] = useState(Boolean(lesson.completed));
     const [saving, setSaving] = useState(false);
+    const hasQuiz = lesson.content_type === 'quiz' && !!lesson.assessment;
 
     const cleanContent = (lesson.content || '').replace(/<[^>]*>/g, '').trim();
 
@@ -66,6 +67,18 @@ export default function LessonDetailScreen({ route }: any) {
                 {lesson.video_url ? (
                     <TouchableOpacity style={styles.videoButton} onPress={openVideo}>
                         <Text style={styles.videoButtonText}>▶ Watch Video</Text>
+                    </TouchableOpacity>
+                ) : null}
+
+                {hasQuiz ? (
+                    <TouchableOpacity
+                        style={styles.quizButton}
+                        onPress={() => navigation.navigate('TakeQuiz', {
+                            assessmentId: lesson.assessment,
+                            title: lesson.title,
+                        })}
+                    >
+                        <Text style={styles.quizButtonText}>🧠  Take Quiz</Text>
                     </TouchableOpacity>
                 ) : null}
             </View>
@@ -117,6 +130,15 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     videoButtonText: { color: Colors.primary, fontWeight: '700', fontSize: 14 },
+    quizButton: {
+        marginTop: 12,
+        backgroundColor: Colors.secondary,
+        borderRadius: 12,
+        paddingVertical: 12,
+        alignItems: 'center',
+        ...Shadows.sm,
+    },
+    quizButtonText: { color: '#fff', fontWeight: '800', fontSize: 14 },
     progressButton: {
         marginTop: 14,
         backgroundColor: Colors.primary,

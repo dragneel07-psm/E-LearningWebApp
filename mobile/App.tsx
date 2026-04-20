@@ -24,6 +24,7 @@ import GradesScreen from './screens/GradesScreen';
 import AssignmentsScreen from './screens/AssignmentsScreen';
 import TakeAssessmentScreen from './screens/TakeAssessmentScreen';
 import AssessmentResultsScreen from './screens/AssessmentResultsScreen';
+import TakeQuizScreen from './screens/TakeQuizScreen';
 import OfflineScreen from './screens/OfflineScreen';
 import ProfileScreen from './screens/ProfileScreen';
 import FeesScreen from './screens/FeesScreen';
@@ -108,6 +109,7 @@ function DashboardStackNavigator() {
       <InnerStack.Screen name="DashHome" component={DashboardScreen} options={{ headerShown: false }} />
       <InnerStack.Screen name="Lessons" component={LessonsScreen} options={{ title: 'Lessons' }} />
       <InnerStack.Screen name="LessonDetail" component={LessonDetailScreen} options={{ title: 'Lesson Detail' }} />
+      <InnerStack.Screen name="TakeQuiz" component={TakeQuizScreen} options={{ title: 'Quiz' }} />
     </InnerStack.Navigator>
   );
 }
@@ -140,6 +142,7 @@ function CoursesStackNavigator() {
       <InnerStack.Screen name="CoursesList" component={CoursesScreen} options={{ title: 'My Subjects' }} />
       <InnerStack.Screen name="Lessons" component={LessonsScreen} options={{ title: 'Lessons' }} />
       <InnerStack.Screen name="LessonDetail" component={LessonDetailScreen} options={{ title: 'Lesson Detail' }} />
+      <InnerStack.Screen name="TakeQuiz" component={TakeQuizScreen} options={{ title: 'Quiz' }} />
     </InnerStack.Navigator>
   );
 }

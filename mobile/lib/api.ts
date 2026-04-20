@@ -68,6 +68,7 @@ export interface Lesson {
     is_published: boolean;
     duration_minutes: number;
     completed?: boolean;
+    assessment?: string | null;
 }
 
 export interface Assessment {
