@@ -84,6 +84,70 @@ export interface Assessment {
     subject_name?: string;
 }
 
+export interface Question {
+    id: string;
+    question_id: string;
+    assessment: string;
+    text: string;
+    type: 'mcq' | 'short_answer' | 'long_answer' | 'code';
+    options: string[];
+    correct_answer?: string;
+    points: number;
+    order: number;
+}
+
+export interface Submission {
+    id: string;
+    submission_id: string;
+    assessment: string;
+    student: string;
+    content?: string;
+    submitted_at: string;
+    status: 'draft' | 'submitted' | 'graded' | 'late';
+    is_graded: boolean;
+    score?: number;
+    max_score?: number;
+    feedback?: string;
+    result?: {
+        result_id: string;
+        score: number;
+        max_score: number;
+        percentage?: number;
+        grade?: string;
+        ai_feedback?: string;
+        answers?: Record<string, unknown>;
+    };
+}
+
+export interface SubmitExamResponse {
+    score: number;
+    max_score: number;
+    result_id: string;
+}
+
+export interface TutorChatSource {
+    lesson_id?: string | number;
+    lesson_title?: string;
+    chapter_title?: string;
+    score?: number;
+    snippet?: string;
+}
+
+export interface TutorChatMessage {
+    role: 'user' | 'assistant';
+    content: string;
+}
+
+export interface TutorChatResponse {
+    answer: string;
+    sources: TutorChatSource[];
+    usage: { model: string; prompt_tokens: number; completion_tokens: number };
+    tokens_used: number;
+    is_demo: boolean;
+    error?: string;
+    fallback_reason?: string;
+}
+
 export interface Notice {
     id?: number;
     title: string;
@@ -636,6 +700,27 @@ export const academicAPI = {
         return normalizeList<Assessment>(response);
     },
 
+    getAssessment: (id: string): Promise<Assessment> =>
+        apiRequest<Assessment>(`/academic/assessments/${id}/`),
+
+    getQuestionsByAssessment: async (assessmentId: string): Promise<Question[]> => {
+        const response = await apiRequest<unknown>(`/academic/questions/?assessment=${assessmentId}`);
+        return normalizeList<Question>(response);
+    },
+
+    submitExam: (
+        assessmentId: string,
+        answers: Record<string, unknown>,
+        timeTaken: number
+    ): Promise<SubmitExamResponse> =>
+        apiRequest<SubmitExamResponse>('/academic/submissions/submit_exam/', {
+            method: 'POST',
+            body: JSON.stringify({ assessment: assessmentId, answers, time_taken: timeTaken }),
+        }),
+
+    getSubmission: (id: string): Promise<Submission> =>
+        apiRequest<Submission>(`/academic/submissions/${id}/`),
+
     getGrades: async (): Promise<Grade[]> => {
         const response = await apiRequest<unknown>('/academic/results/');
         return normalizeList<Grade>(response);
@@ -790,5 +875,49 @@ export const billingAPI = {
         if (Array.isArray(response)) return response as StudentFee[];
         const r = response as { results?: StudentFee[] };
         return r.results || [];
+    },
+};
+
+// ─── AI Engine API ────────────────────────────────────────────
+export const aiAPI = {
+    tutorChat: async (
+        message: string,
+        studentId: string,
+        conversationHistory: TutorChatMessage[] = [],
+        context?: { lesson_id?: string | number; chapter_id?: string | number }
+    ): Promise<TutorChatResponse> => {
+        const payload = await apiRequest<{
+            answer?: string;
+            response?: string;
+            sources?: TutorChatSource[];
+            usage?: Partial<TutorChatResponse['usage']>;
+            tokens_used?: number;
+            is_demo?: boolean;
+            error?: string;
+            fallback_reason?: string;
+        }>('/ai/tutor/chat/', {
+            method: 'POST',
+            body: JSON.stringify({
+                message,
+                student_id: studentId,
+                conversation_history: conversationHistory,
+                context: context || undefined,
+            }),
+        });
+
+        const answer = String(payload.answer ?? payload.response ?? '');
+        const sources = Array.isArray(payload.sources) ? payload.sources : [];
+        const promptTokens = Number(payload.usage?.prompt_tokens ?? 0);
+        const completionTokens = Number(payload.usage?.completion_tokens ?? 0);
+        const model = String(payload.usage?.model ?? 'fallback');
+        return {
+            answer,
+            sources,
+            usage: { model, prompt_tokens: promptTokens, completion_tokens: completionTokens },
+            tokens_used: Number(payload.tokens_used ?? (promptTokens + completionTokens)),
+            is_demo: Boolean(payload.is_demo),
+            error: payload.error,
+            fallback_reason: payload.fallback_reason,
+        };
     },
 };
