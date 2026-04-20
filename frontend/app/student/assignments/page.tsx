@@ -3,7 +3,7 @@
 // via any medium, is strictly prohibited. Proprietary and confidential.
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -46,14 +46,26 @@ export default function AssignmentsDashboard() {
         return Math.ceil((new Date(dueDate).getTime() - Date.now()) / 86400000);
     };
 
-    const getStatus = (id: string) => {
-        const sub = submissions.find((s) => s.assessment === id);
-        return sub ? sub.status : 'pending';
-    };
+    // Build one Map for O(1) submission lookup instead of linear-scanning
+    // submissions for every assignment on every filter pass.
+    const submissionByAssessment = useMemo(() => {
+        const map = new Map<string, Submission>();
+        for (const s of submissions) map.set(String(s.assessment), s);
+        return map;
+    }, [submissions]);
 
-    const pending = assignments.filter((a) => { const s = getStatus(a.assessment_id ?? ''); return s === 'pending' || s === 'draft' || !s; });
-    const submitted = assignments.filter((a) => getStatus(a.assessment_id ?? '') === 'submitted');
-    const graded = assignments.filter((a) => getStatus(a.assessment_id ?? '') === 'graded');
+    const { pending, submitted, graded } = useMemo(() => {
+        const p: Assessment[] = [];
+        const s: Assessment[] = [];
+        const g: Assessment[] = [];
+        for (const a of assignments) {
+            const status = submissionByAssessment.get(a.assessment_id ?? '')?.status ?? 'pending';
+            if (status === 'pending' || status === 'draft') p.push(a);
+            else if (status === 'submitted') s.push(a);
+            else if (status === 'graded') g.push(a);
+        }
+        return { pending: p, submitted: s, graded: g };
+    }, [assignments, submissionByAssessment]);
 
     if (loading) return (
         <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
@@ -66,7 +78,7 @@ export default function AssignmentsDashboard() {
         const days = getDaysUntilDue(assignment.due_date ?? '');
         const isOverdue = days < 0;
         const isDueSoon = days >= 0 && days <= 3;
-        const sub = submissions.find((s) => s.assessment === assignment.assessment_id);
+        const sub = submissionByAssessment.get(assignment.assessment_id ?? '');
         const score = sub?.result?.score;
 
         let urgencyColor = 'border-slate-100';
