@@ -295,6 +295,36 @@ export interface ParentMeResponse {
     students?: StudentListItem[];
 }
 
+export interface ChildAttendanceRecord {
+    date: string;
+    status: 'present' | 'absent' | 'late' | string;
+}
+
+export interface ChildAttendanceSummary {
+    present: number;
+    absent: number;
+    late: number;
+    percentage: number;
+    total?: number;
+}
+
+export interface ChildAttendanceResponse {
+    records: ChildAttendanceRecord[];
+    summary: ChildAttendanceSummary;
+}
+
+export interface ChildResult {
+    id?: string;
+    assessment_title?: string;
+    subject?: string;
+    subject_name?: string;
+    score?: number;
+    total_marks?: number;
+    percentage?: number;
+    date?: string;
+    submitted_at?: string;
+}
+
 export interface StudentProfileOverview {
     student: {
         id: string;
@@ -690,6 +720,25 @@ export const academicAPI = {
         apiRequest<TeacherProfileOverview>(`/academic/teachers/${teacherId}/profile-overview/`),
 
     getParentMe: () => apiRequest<ParentMeResponse>('/academic/parents/me/'),
+
+    getChildAttendance: (
+        studentId: string,
+        month?: number,
+        year?: number
+    ): Promise<ChildAttendanceResponse> => {
+        const params = new URLSearchParams();
+        if (month) params.set('month', String(month));
+        if (year) params.set('year', String(year));
+        const qs = params.toString() ? `?${params.toString()}` : '';
+        return apiRequest<ChildAttendanceResponse>(
+            `/academic/parents/child/${studentId}/attendance/${qs}`
+        );
+    },
+
+    getChildResults: async (studentId: string): Promise<ChildResult[]> => {
+        const response = await apiRequest<unknown>(`/academic/parents/child/${studentId}/results/`);
+        return normalizeList<ChildResult>(response);
+    },
 
     getChapters: async (subjectId: number): Promise<Chapter[]> => {
         const response = await apiRequest<unknown>(`/academic/chapters/?subject=${subjectId}`);

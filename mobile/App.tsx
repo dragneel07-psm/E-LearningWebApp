@@ -30,6 +30,8 @@ import OfflineScreen from './screens/OfflineScreen';
 import ProfileScreen from './screens/ProfileScreen';
 import FeesScreen from './screens/FeesScreen';
 import MessagingScreen from './screens/MessagingScreen';
+import ParentAttendanceScreen from './screens/ParentAttendanceScreen';
+import ParentGradesScreen from './screens/ParentGradesScreen';
 import {
   AdminDashboardScreen,
   AdminPeopleScreen,
@@ -72,6 +74,7 @@ function tabIcon(name: string, focused: boolean) {
     Offline: ['📥', '💾'],
     Profile: ['👤', '🧑'],
     Tutor: ['🧠', '✨'],
+    Attendance: ['📅', '🗒️'],
   };
 
   const [inactive, active] = icons[name] || ['⚪', '🔵'];
@@ -251,6 +254,8 @@ function ParentTabs({
     <Tab.Navigator screenOptions={({ route }) => commonTabOptions(route.name)}>
       <Tab.Screen name="Home" component={ParentDashboardScreen} />
       <Tab.Screen name="Children" component={ParentChildrenScreen} />
+      <Tab.Screen name="Attendance" component={ParentAttendanceScreen} />
+      <Tab.Screen name="Grades" component={ParentGradesScreen} />
       <Tab.Screen name="Fees" component={ParentFeesScreen} />
       <Tab.Screen name="Notices">
         {() => <NoticeBoardScreen role="parent" />}
