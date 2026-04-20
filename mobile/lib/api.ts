@@ -182,6 +182,32 @@ export interface Attendance {
     subject_name?: string;
 }
 
+export interface CreateAttendancePayload {
+    student: string;
+    subject: number;
+    date: string;
+    status: 'present' | 'absent' | 'late';
+    remarks?: string;
+}
+
+export interface GradeSubmissionPayload {
+    score: number;
+    teacher_feedback?: string;
+}
+
+export interface GradeResultResponse {
+    submission?: Submission;
+    result?: {
+        result_id: string;
+        score: number;
+        max_score: number;
+        percentage?: number;
+        grade?: string;
+        teacher_feedback?: string;
+    };
+    message?: string;
+}
+
 export interface Grade {
     id: string;
     assessment_title?: string;
@@ -770,6 +796,27 @@ export const academicAPI = {
 
     getSubmission: (id: string): Promise<Submission> =>
         apiRequest<Submission>(`/academic/submissions/${id}/`),
+
+    getSubmissions: async (assessmentId?: string): Promise<Submission[]> => {
+        const query = assessmentId ? `?assessment=${assessmentId}` : '';
+        const response = await apiRequest<unknown>(`/academic/submissions/${query}`);
+        return normalizeList<Submission>(response);
+    },
+
+    gradeSubmission: (id: string, payload: GradeSubmissionPayload): Promise<GradeResultResponse> =>
+        apiRequest<GradeResultResponse>(`/academic/submissions/${id}/grade/`, {
+            method: 'POST',
+            body: JSON.stringify(payload),
+        }),
+
+    getStudent: (id: string): Promise<Student> =>
+        apiRequest<Student>(`/academic/students/${id}/`),
+
+    createAttendance: (payload: CreateAttendancePayload): Promise<Attendance> =>
+        apiRequest<Attendance>('/academic/attendance/', {
+            method: 'POST',
+            body: JSON.stringify(payload),
+        }),
 
     getGrades: async (): Promise<Grade[]> => {
         const response = await apiRequest<unknown>('/academic/results/');
