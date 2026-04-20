@@ -779,6 +779,30 @@ export const academicAPI = {
     getAssessment: (id: string): Promise<Assessment> =>
         apiRequest<Assessment>(`/academic/assessments/${id}/`),
 
+    createAssessment: (payload: Partial<Assessment> & { subject?: number; total_marks?: number; duration_minutes?: number }): Promise<Assessment> =>
+        apiRequest<Assessment>('/academic/assessments/', {
+            method: 'POST',
+            body: JSON.stringify(payload),
+        }),
+
+    updateAssessment: (id: string, payload: Partial<Assessment>): Promise<Assessment> =>
+        apiRequest<Assessment>(`/academic/assessments/${id}/`, {
+            method: 'PATCH',
+            body: JSON.stringify(payload),
+        }),
+
+    deleteAssessment: (id: string): Promise<void> =>
+        apiRequest<void>(`/academic/assessments/${id}/`, { method: 'DELETE' }),
+
+    createQuestion: (payload: Partial<Question> & { assessment: string }): Promise<Question> =>
+        apiRequest<Question>('/academic/questions/', {
+            method: 'POST',
+            body: JSON.stringify(payload),
+        }),
+
+    deleteQuestion: (id: string): Promise<void> =>
+        apiRequest<void>(`/academic/questions/${id}/`, { method: 'DELETE' }),
+
     getQuestionsByAssessment: async (assessmentId: string): Promise<Question[]> => {
         const response = await apiRequest<unknown>(`/academic/questions/?assessment=${assessmentId}`);
         return normalizeList<Question>(response);

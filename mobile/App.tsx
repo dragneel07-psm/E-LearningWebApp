@@ -35,6 +35,8 @@ import ParentGradesScreen from './screens/ParentGradesScreen';
 import TeacherAttendanceScreen from './screens/TeacherAttendanceScreen';
 import TeacherGradingScreen from './screens/TeacherGradingScreen';
 import GradeSubmissionScreen from './screens/GradeSubmissionScreen';
+import TeacherAssessmentsScreen from './screens/TeacherAssessmentsScreen';
+import CreateAssessmentScreen from './screens/CreateAssessmentScreen';
 import {
   AdminDashboardScreen,
   AdminPeopleScreen,
@@ -79,6 +81,7 @@ function tabIcon(name: string, focused: boolean) {
     Tutor: ['🧠', '✨'],
     Attendance: ['📅', '🗒️'],
     Grading: ['✍️', '🖊️'],
+    Assessments: ['📋', '🗂️'],
   };
 
   const [inactive, active] = icons[name] || ['⚪', '🔵'];
@@ -152,6 +155,21 @@ function CoursesStackNavigator() {
       <InnerStack.Screen name="Lessons" component={LessonsScreen} options={{ title: 'Lessons' }} />
       <InnerStack.Screen name="LessonDetail" component={LessonDetailScreen} options={{ title: 'Lesson Detail' }} />
       <InnerStack.Screen name="TakeQuiz" component={TakeQuizScreen} options={{ title: 'Quiz' }} />
+    </InnerStack.Navigator>
+  );
+}
+
+function TeacherAssessmentsStackNavigator() {
+  return (
+    <InnerStack.Navigator
+      screenOptions={{
+        headerStyle: { backgroundColor: Colors.primary },
+        headerTintColor: '#fff',
+        headerTitleStyle: { fontWeight: '800', fontSize: 18 },
+      }}
+    >
+      <InnerStack.Screen name="AssessmentsList" component={TeacherAssessmentsScreen} options={{ headerShown: false }} />
+      <InnerStack.Screen name="CreateAssessment" component={CreateAssessmentScreen} options={{ title: 'New Assessment' }} />
     </InnerStack.Navigator>
   );
 }
@@ -246,6 +264,7 @@ function TeacherTabs({
       <Tab.Screen name="Home" component={TeacherDashboardScreen} />
       <Tab.Screen name="People" component={TeacherStudentsScreen} />
       <Tab.Screen name="Attendance" component={TeacherAttendanceScreen} />
+      <Tab.Screen name="Assessments" component={TeacherAssessmentsStackNavigator} />
       <Tab.Screen name="Grading" component={TeacherGradingStackNavigator} />
       <Tab.Screen name="Timetable">
         {() => <TimetableScreen role="teacher" />}
