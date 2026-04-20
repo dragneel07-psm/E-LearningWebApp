@@ -22,6 +22,8 @@ import LessonsScreen from './screens/LessonsScreen';
 import LessonDetailScreen from './screens/LessonDetailScreen';
 import GradesScreen from './screens/GradesScreen';
 import AssignmentsScreen from './screens/AssignmentsScreen';
+import TakeAssessmentScreen from './screens/TakeAssessmentScreen';
+import AssessmentResultsScreen from './screens/AssessmentResultsScreen';
 import OfflineScreen from './screens/OfflineScreen';
 import ProfileScreen from './screens/ProfileScreen';
 import FeesScreen from './screens/FeesScreen';
@@ -110,6 +112,22 @@ function DashboardStackNavigator() {
   );
 }
 
+function AssignmentsStackNavigator() {
+  return (
+    <InnerStack.Navigator
+      screenOptions={{
+        headerStyle: { backgroundColor: Colors.primary },
+        headerTintColor: '#fff',
+        headerTitleStyle: { fontWeight: '800', fontSize: 18 },
+      }}
+    >
+      <InnerStack.Screen name="AssignmentsList" component={AssignmentsScreen} options={{ headerShown: false }} />
+      <InnerStack.Screen name="TakeAssessment" component={TakeAssessmentScreen} options={{ title: 'Assessment' }} />
+      <InnerStack.Screen name="AssessmentResults" component={AssessmentResultsScreen} options={{ title: 'Result' }} />
+    </InnerStack.Navigator>
+  );
+}
+
 function CoursesStackNavigator() {
   return (
     <InnerStack.Navigator
@@ -141,7 +159,7 @@ function StudentTabs({
       <Tab.Screen name="Courses" component={CoursesStackNavigator} />
       <Tab.Screen name="Grades" component={GradesScreen} />
       <Tab.Screen name="Fees" component={FeesScreen} />
-      <Tab.Screen name="Assignments" component={AssignmentsScreen} />
+      <Tab.Screen name="Assignments" component={AssignmentsStackNavigator} />
       <Tab.Screen name="Notices">
         {() => <NoticeBoardScreen role="student" />}
       </Tab.Screen>

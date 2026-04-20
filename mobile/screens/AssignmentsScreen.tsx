@@ -48,7 +48,7 @@ function filterAssignment(a: Assessment, tab: FilterTab): boolean {
     return true;
 }
 
-export default function AssignmentsScreen() {
+export default function AssignmentsScreen({ navigation }: any) {
     const [assignments, setAssignments] = useState<Assessment[]>([]);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
@@ -143,8 +143,17 @@ export default function AssignmentsScreen() {
                 renderItem={({ item }) => {
                     const status = statusInfo(item);
                     const days = getDaysLeft(item.due_date);
+                    const overdue = days !== null && days < 0;
                     return (
-                        <View style={styles.card}>
+                        <TouchableOpacity
+                            style={styles.card}
+                            activeOpacity={0.8}
+                            disabled={overdue}
+                            onPress={() => navigation.navigate('TakeAssessment', {
+                                assessmentId: item.assessment_id || item.id,
+                                title: item.title,
+                            })}
+                        >
                             <View style={styles.cardTop}>
                                 <View style={styles.iconCircle}>
                                     <Text style={styles.iconText}>📄</Text>
@@ -207,7 +216,11 @@ export default function AssignmentsScreen() {
                                     />
                                 </View>
                             )}
-                        </View>
+
+                            {!overdue && (
+                                <Text style={styles.startHint}>Tap to start →</Text>
+                            )}
+                        </TouchableOpacity>
                     );
                 }}
             />
@@ -344,5 +357,12 @@ const styles = StyleSheet.create({
     urgencyFill: {
         height: '100%',
         borderRadius: 2,
+    },
+    startHint: {
+        marginTop: 8,
+        fontSize: 11,
+        fontWeight: '700',
+        color: Colors.primary,
+        textAlign: 'right',
     },
 });
