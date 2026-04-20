@@ -55,6 +55,35 @@ export default function LessonEditor({ lesson, chapterTitle, onSave, onDelete }:
         if (!e.target.files || e.target.files.length === 0) return;
 
         const file = e.target.files[0];
+
+        // Client-side guardrails so users get an immediate rejection
+        // instead of uploading hundreds of MB only to hit a backend 413.
+        const MAX_BYTES = 100 * 1024 * 1024; // 100 MB
+        if (file.size > MAX_BYTES) {
+            toast.error(`File too large. Max size is ${MAX_BYTES / (1024 * 1024)} MB.`);
+            if (fileInputRef.current) fileInputRef.current.value = '';
+            return;
+        }
+        const ALLOWED_PREFIXES = ['image/', 'video/', 'audio/'];
+        const ALLOWED_EXACT = [
+            'application/pdf',
+            'application/msword',
+            'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            'application/vnd.ms-powerpoint',
+            'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+            'application/vnd.ms-excel',
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'text/plain',
+        ];
+        const mimeOk =
+            ALLOWED_PREFIXES.some(p => file.type.startsWith(p)) ||
+            ALLOWED_EXACT.includes(file.type);
+        if (!mimeOk) {
+            toast.error('Unsupported file type.');
+            if (fileInputRef.current) fileInputRef.current.value = '';
+            return;
+        }
+
         const formData = new FormData();
         formData.append('title', file.name);
         formData.append('lesson', lesson.id.toString());
