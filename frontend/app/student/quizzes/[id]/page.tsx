@@ -3,7 +3,7 @@
 // via any medium, is strictly prohibited. Proprietary and confidential.
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -45,6 +45,10 @@ export default function StudentQuizPage() {
     const [answers, setAnswers] = useState<Record<string, any>>({});
     const [timeLeft, setTimeLeft] = useState(0);
     const [score, setScore] = useState<any>(null);
+    // Ref-based guard wins the race between manual-click and auto-submit: a
+    // state read in handleSubmit closes over the value at the last render, so
+    // two near-simultaneous calls both see submitting=false.
+    const submittedRef = useRef(false);
 
     useEffect(() => {
         const loadData = async () => {
@@ -87,7 +91,8 @@ export default function StudentQuizPage() {
     };
 
     const handleSubmit = async () => {
-        if (submitting) return;
+        if (submittedRef.current) return;
+        submittedRef.current = true;
         setSubmitting(true);
         try {
             const timeTaken = assessment ? assessment.duration_minutes - Math.floor(timeLeft / 60) : 0;
@@ -103,6 +108,8 @@ export default function StudentQuizPage() {
         } catch (error) {
             console.error('Submission failed:', error);
             toast.error('Failed to submit quiz');
+            // Re-arm on failure so the student can retry
+            submittedRef.current = false;
         } finally {
             setSubmitting(false);
         }

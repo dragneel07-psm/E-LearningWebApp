@@ -3,7 +3,7 @@
 // via any medium, is strictly prohibited. Proprietary and confidential.
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -36,6 +36,8 @@ export default function TakeAssessmentPage() {
     const [answers, setAnswers] = useState<Record<string, any>>({});
     const [timeLeft, setTimeLeft] = useState(0); // in seconds
     const [startTime] = useState(Date.now());
+    // Ref guard wins the race between manual submit and auto-submit timer.
+    const submittedRef = useRef(false);
 
     useEffect(() => {
         const loadData = async () => {
@@ -79,7 +81,8 @@ export default function TakeAssessmentPage() {
     };
 
     const submitAssessment = async () => {
-        if (submitting) return;
+        if (submittedRef.current) return;
+        submittedRef.current = true;
         setSubmitting(true);
 
         try {
@@ -95,6 +98,7 @@ export default function TakeAssessmentPage() {
         } catch (error) {
             console.error('Submission failed', error);
             toast.error('Failed to submit assessment');
+            submittedRef.current = false;
             setSubmitting(false);
         }
     };
