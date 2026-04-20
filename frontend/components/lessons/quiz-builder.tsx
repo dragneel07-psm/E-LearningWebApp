@@ -30,11 +30,18 @@ interface QuizBuilderProps {
     onChange: (data: QuizData) => void;
 }
 
+function makeQuestionId(): string {
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+        return crypto.randomUUID();
+    }
+    return `q-${Date.now().toString(36)}`;
+}
+
 export function QuizBuilder({ data, onChange }: QuizBuilderProps) {
-    const [questions, setQuestions] = useState<Question[]>(
+    const [questions, setQuestions] = useState<Question[]>(() =>
         data?.questions && data.questions.length > 0 ? data.questions : [
             {
-                id: Math.random().toString(36).substr(2, 9),
+                id: makeQuestionId(),
                 question: '',
                 options: ['', '', '', ''],
                 correctIndex: 0,
@@ -48,7 +55,7 @@ export function QuizBuilder({ data, onChange }: QuizBuilderProps) {
     );
 
     const addQuestion = () => {
-        const newId = Math.random().toString(36).substr(2, 9);
+        const newId = makeQuestionId();
         const newQuestion: Question = {
             id: newId,
             question: '',

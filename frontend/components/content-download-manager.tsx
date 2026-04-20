@@ -61,15 +61,15 @@ export function ContentDownloadManager({
     const [totalSize, setTotalSize] = useState('0 KB');
     const [mounted, setMounted] = useState(false);
 
-    useEffect(() => {
-        setMounted(true);
-        refresh();
-    }, []);
-
     const refresh = () => {
         setDownloadedLessons(getOfflineLessons());
         setTotalSize(getTotalOfflineSize());
     };
+
+    useEffect(() => {
+        setMounted(true);
+        refresh();
+    }, []);
 
     const handleDownload = async (item: DownloadableItem) => {
         if (!isOnline) {
@@ -91,7 +91,7 @@ export function ContentDownloadManager({
                     title: item.title,
                     subjectName: item.subjectName,
                     downloadedAt: new Date().toISOString(),
-                    sizeKB: item.sizeKB || Math.floor(Math.random() * 500) + 100,
+                    sizeKB: item.sizeKB ?? 0,
                     content: item.content,
                     pdfUrl: item.pdfUrl,
                     videoUrl: item.url,
