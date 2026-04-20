@@ -25,6 +25,7 @@ export default function EditPlanPage() {
 
     const [isLoading, setIsLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
+    const [isDeleting, setIsDeleting] = useState(false);
 
     // Initial State
     const [formData, setFormData] = useState({
@@ -259,17 +260,28 @@ export default function EditPlanPage() {
                     <Button
                         type="button"
                         variant="ghost"
-                        className="text-red-500 hover:text-red-400 hover:bg-red-500/10 h-12 px-6 font-bold transition-all rounded-xl"
+                        disabled={isDeleting || isSaving}
+                        className="text-red-500 hover:text-red-400 hover:bg-red-500/10 h-12 px-6 font-bold transition-all rounded-xl disabled:opacity-50"
                         onClick={async () => {
-                            if (confirm("Are you sure? This will affect all tenants on this plan.")) {
+                            if (!confirm("Are you sure? This will affect all tenants on this plan.")) return;
+                            setIsDeleting(true);
+                            try {
                                 await saasApi.deletePlan(planId);
                                 toast.success("Plan decommissioned successfully.");
                                 router.push('/saas/plans');
+                            } catch (error) {
+                                console.error('Failed to decommission plan', error);
+                                toast.error("Failed to decommission plan. Please try again.");
+                                setIsDeleting(false);
                             }
                         }}
                     >
-                        <Trash2 className="mr-2 h-5 w-5" />
-                        Decommission Plan
+                        {isDeleting ? (
+                            <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                        ) : (
+                            <Trash2 className="mr-2 h-5 w-5" />
+                        )}
+                        {isDeleting ? 'Decommissioning…' : 'Decommission Plan'}
                     </Button>
                     <div className="flex items-center gap-6">
                         <Link href="/saas/plans">
