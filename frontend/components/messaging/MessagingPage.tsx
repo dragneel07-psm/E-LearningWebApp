@@ -48,6 +48,10 @@ export default function MessagingPage({ emptyStateMessage = "Choose a chat from 
 
     const [showSidebar, setShowSidebar] = useState(true);
     const messagesEndRef = useRef<HTMLDivElement>(null);
+    // Tracks which conversation the user is currently viewing so a slow
+    // loadMessages response doesn't overwrite a newer conversation's data
+    // after the user clicks away.
+    const activeConversationRef = useRef<string | null>(null);
 
     useEffect(() => {
         loadInitialData();
@@ -55,11 +59,19 @@ export default function MessagingPage({ emptyStateMessage = "Choose a chat from 
 
     useEffect(() => {
         if (activeConversation) {
+            activeConversationRef.current = activeConversation.conversation_id;
             loadMessages(activeConversation.conversation_id);
             const interval = setInterval(() => {
                 loadMessages(activeConversation.conversation_id, true);
             }, 5000);
-            return () => clearInterval(interval);
+            return () => {
+                clearInterval(interval);
+                // Any responses that land after this cleanup will no longer
+                // match the ref and will be dropped in loadMessages.
+                if (activeConversationRef.current === activeConversation.conversation_id) {
+                    activeConversationRef.current = null;
+                }
+            };
         }
     }, [activeConversation?.conversation_id]);
 
@@ -90,6 +102,9 @@ export default function MessagingPage({ emptyStateMessage = "Choose a chat from 
     const loadMessages = async (id: string, isPolling = false) => {
         try {
             const data = await conversationsAPI.getMessages(id);
+            // Drop the response if the user has switched conversations
+            // since this request was issued.
+            if (activeConversationRef.current !== id) return;
             if (!isPolling || data.length !== messages.length) {
                 setMessages(data);
                 if (data.length > messages.length) {
