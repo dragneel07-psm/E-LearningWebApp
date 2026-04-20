@@ -20,6 +20,13 @@ import {
 } from '@/lib/api';
 import { toast } from 'sonner';
 import { formatDistanceToNow } from 'date-fns';
+
+function formatRelativeSafe(iso: string | null | undefined, opts?: { addSuffix?: boolean }) {
+    if (!iso) return '';
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return '';
+    return formatDistanceToNow(d, opts);
+}
 import {
     Dialog, DialogContent, DialogDescription, DialogFooter,
     DialogHeader, DialogTitle, DialogTrigger
@@ -301,7 +308,7 @@ export default function MessagingPage() {
                                             </h4>
                                             {conv.last_message && (
                                                 <span className="text-[10px] text-slate-400">
-                                                    {formatDistanceToNow(new Date(conv.last_message.created_at), { addSuffix: false })}
+                                                    {formatRelativeSafe(conv.last_message.created_at, { addSuffix: false })}
                                                 </span>
                                             )}
                                         </div>
@@ -381,7 +388,7 @@ export default function MessagingPage() {
                                                     {msg.content}
                                                 </div>
                                                 <p className={`text-[10px] text-slate-400 ${isMe ? 'text-right' : 'text-left'}`}>
-                                                    {formatDistanceToNow(new Date(msg.created_at), { addSuffix: true })}
+                                                    {formatRelativeSafe(msg.created_at, { addSuffix: true })}
                                                 </p>
                                             </div>
                                         </div>
