@@ -39,8 +39,6 @@ import TeacherAssessmentsScreen from './screens/TeacherAssessmentsScreen';
 import CreateAssessmentScreen from './screens/CreateAssessmentScreen';
 import ManageQuestionsScreen from './screens/ManageQuestionsScreen';
 import {
-  AdminDashboardScreen,
-  AdminPeopleScreen,
   NoticeBoardScreen,
   ParentChildrenScreen,
   ParentDashboardScreen,
@@ -55,7 +53,6 @@ import {
   getCurrentUser,
   saveCurrentUser,
   User,
-  UserRole,
   usersAPI,
 } from './lib/api';
 import { Colors } from './constants/theme';
@@ -314,36 +311,6 @@ function ParentTabs({
   );
 }
 
-function AdminTabs({
-  role,
-  user,
-  onLogout,
-  onUserUpdated,
-}: {
-  role: UserRole;
-  user: User;
-  onLogout: () => void;
-  onUserUpdated: (user: User) => void;
-}) {
-  const timetableRole: UserRole = role === 'staff' ? 'staff' : role;
-
-  return (
-    <Tab.Navigator screenOptions={({ route }) => commonTabOptions(route.name)}>
-      <Tab.Screen name="Home" component={AdminDashboardScreen} />
-      <Tab.Screen name="People" component={AdminPeopleScreen} />
-      <Tab.Screen name="Timetable">
-        {() => <TimetableScreen role={timetableRole} />}
-      </Tab.Screen>
-      <Tab.Screen name="Notices">
-        {() => <NoticeBoardScreen role={timetableRole} />}
-      </Tab.Screen>
-      <Tab.Screen name="Profile">
-        {() => <ProfileScreen user={user} onLogout={onLogout} onUserUpdated={onUserUpdated} />}
-      </Tab.Screen>
-    </Tab.Navigator>
-  );
-}
-
 function RoleTabs({
   user,
   onLogout,
@@ -361,10 +328,6 @@ function RoleTabs({
 
   if (role === 'parent') {
     return <ParentTabs user={user} onLogout={onLogout} onUserUpdated={onUserUpdated} />;
-  }
-
-  if (role === 'admin' || role === 'staff' || role === 'saas_admin') {
-    return <AdminTabs role={role} user={user} onLogout={onLogout} onUserUpdated={onUserUpdated} />;
   }
 
   return <StudentTabs user={user} onLogout={onLogout} onUserUpdated={onUserUpdated} />;
@@ -391,6 +354,18 @@ export default function App() {
     }
 
     const storedUser = await getCurrentUser();
+    const isAdminRole = (user: User | null) =>
+      !!user && (user.role === 'admin' || user.role === 'staff' || user.role === 'saas_admin');
+
+    if (storedUser && isAdminRole(storedUser)) {
+      // Admin roles are web-only; clear any legacy cached session.
+      await clearTokens();
+      setIsAuthenticated(false);
+      setCurrentUser(null);
+      setChecking(false);
+      return;
+    }
+
     if (storedUser) {
       // Immediately unblock UI with cached session while we refresh profile in background.
       setCurrentUser(storedUser);
@@ -400,6 +375,12 @@ export default function App() {
 
     try {
       const freshUser = await usersAPI.getMe();
+      if (isAdminRole(freshUser)) {
+        await clearTokens();
+        setIsAuthenticated(false);
+        setCurrentUser(null);
+        return;
+      }
       await saveCurrentUser(freshUser);
       setCurrentUser(freshUser);
       setIsAuthenticated(true);
