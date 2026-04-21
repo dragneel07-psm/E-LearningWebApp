@@ -169,7 +169,12 @@ export default function TeacherAssessmentsScreen({ navigation }: any) {
                 filtered.map((a) => {
                     const badge = TYPE_COLORS[a.type] || TYPE_COLORS.quiz;
                     return (
-                        <View key={a.id} style={styles.assessmentCard}>
+                        <TouchableOpacity
+                            key={a.id}
+                            activeOpacity={0.85}
+                            style={styles.assessmentCard}
+                            onPress={() => navigation.navigate('ManageQuestions', { assessmentId: a.id })}
+                        >
                             <View style={styles.assessmentHeader}>
                                 <Text style={styles.assessmentTitle} numberOfLines={2}>{a.title}</Text>
                                 <View style={[styles.typePill, { backgroundColor: badge.bg }]}>
@@ -189,6 +194,7 @@ export default function TeacherAssessmentsScreen({ navigation }: any) {
                                 <Text style={styles.metaText}>Due {formatDate(a.due_date)}</Text>
                             </View>
                             <View style={styles.actionRow}>
+                                <Text style={styles.manageHint}>Tap to manage questions →</Text>
                                 <TouchableOpacity
                                     style={styles.deleteBtn}
                                     onPress={() => confirmDelete(a)}
@@ -196,7 +202,7 @@ export default function TeacherAssessmentsScreen({ navigation }: any) {
                                     <Text style={styles.deleteBtnText}>Delete</Text>
                                 </TouchableOpacity>
                             </View>
-                        </View>
+                        </TouchableOpacity>
                     );
                 })
             )}
@@ -275,7 +281,8 @@ const styles = StyleSheet.create({
     metaRow: { flexDirection: 'row', alignItems: 'center', marginTop: 8, flexWrap: 'wrap' },
     metaText: { color: Colors.gray600, fontSize: 12, fontWeight: '600' },
     metaDot: { color: Colors.gray400, fontSize: 12, marginHorizontal: 6 },
-    actionRow: { flexDirection: 'row', justifyContent: 'flex-end', marginTop: 10, borderTopWidth: 1, borderTopColor: Colors.gray100, paddingTop: 8 },
+    actionRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 10, borderTopWidth: 1, borderTopColor: Colors.gray100, paddingTop: 8 },
+    manageHint: { color: Colors.primary, fontSize: 11, fontWeight: '700' },
     deleteBtn: {
         paddingHorizontal: 14,
         paddingVertical: 6,

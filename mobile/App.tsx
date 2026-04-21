@@ -37,6 +37,7 @@ import TeacherGradingScreen from './screens/TeacherGradingScreen';
 import GradeSubmissionScreen from './screens/GradeSubmissionScreen';
 import TeacherAssessmentsScreen from './screens/TeacherAssessmentsScreen';
 import CreateAssessmentScreen from './screens/CreateAssessmentScreen';
+import ManageQuestionsScreen from './screens/ManageQuestionsScreen';
 import {
   AdminDashboardScreen,
   AdminPeopleScreen,
@@ -170,6 +171,7 @@ function TeacherAssessmentsStackNavigator() {
     >
       <InnerStack.Screen name="AssessmentsList" component={TeacherAssessmentsScreen} options={{ headerShown: false }} />
       <InnerStack.Screen name="CreateAssessment" component={CreateAssessmentScreen} options={{ title: 'New Assessment' }} />
+      <InnerStack.Screen name="ManageQuestions" component={ManageQuestionsScreen} options={{ title: 'Questions' }} />
     </InnerStack.Navigator>
   );
 }
