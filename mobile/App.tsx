@@ -38,6 +38,8 @@ import GradeSubmissionScreen from './screens/GradeSubmissionScreen';
 import TeacherAssessmentsScreen from './screens/TeacherAssessmentsScreen';
 import CreateAssessmentScreen from './screens/CreateAssessmentScreen';
 import ManageQuestionsScreen from './screens/ManageQuestionsScreen';
+import LibraryScreen from './screens/LibraryScreen';
+import ProgressScreen from './screens/ProgressScreen';
 import {
   NoticeBoardScreen,
   ParentChildrenScreen,
@@ -80,6 +82,8 @@ function tabIcon(name: string, focused: boolean) {
     Attendance: ['📅', '🗒️'],
     Grading: ['✍️', '🖊️'],
     Assessments: ['📋', '🗂️'],
+    Library: ['📙', '📘'],
+    Progress: ['🏆', '🥇'],
   };
 
   const [inactive, active] = icons[name] || ['⚪', '🔵'];
@@ -234,6 +238,8 @@ function StudentTabs({
       <Tab.Screen name="Grades" component={GradesScreen} />
       <Tab.Screen name="Fees" component={FeesScreen} />
       <Tab.Screen name="Assignments" component={AssignmentsStackNavigator} />
+      <Tab.Screen name="Progress" component={ProgressScreen} />
+      <Tab.Screen name="Library" component={LibraryScreen} />
       <Tab.Screen name="Tutor" component={AiTutorScreen} options={{ title: 'AI Tutor' }} />
       <Tab.Screen name="Notices">
         {() => <NoticeBoardScreen role="student" />}
