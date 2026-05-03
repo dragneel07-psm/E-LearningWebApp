@@ -37,6 +37,7 @@ urlpatterns = [
     path('api/hr/', include('hr_payroll.urls')),
     path('api/transport/', include('transport.urls')),
     path('api/hostel/', include('hostel.urls')),
+    path('api/projects/', include('projects.urls')),
 
     # Versioned aliases (v1)
     path('api/v1/core/', include('core.urls')),
@@ -53,6 +54,7 @@ urlpatterns = [
     path('api/v1/hr/', include('hr_payroll.urls')),
     path('api/v1/transport/', include('transport.urls')),
     path('api/v1/hostel/', include('hostel.urls')),
+    path('api/v1/projects/', include('projects.urls')),
 
     # JWT Auth
     path('api/token/', CustomTokenObtainPairView.as_view(), name='token_obtain_pair'),
