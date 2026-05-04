@@ -3,20 +3,17 @@
 // via any medium, is strictly prohibited. Proprietary and confidential.
 'use client';
 
-import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, MessageSquare, Plus, Send, Wifi, WifiOff } from 'lucide-react';
+import { ArrowLeft, MessageSquare, Send, Wifi, WifiOff } from 'lucide-react';
 import { useState } from 'react';
 
 import { ActivityFeed } from '@/components/projects/ActivityFeed';
-import { MemberList } from '@/components/projects/MemberList';
 import { ProjectProgressBar } from '@/components/projects/ProjectProgressBar';
 import { TaskKanban } from '@/components/projects/TaskKanban';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { useProjectSocket } from '@/hooks/useProjectSocket';
 import { toast } from '@/hooks/use-toast';
@@ -24,8 +21,6 @@ import { getUser } from '@/lib/auth';
 import {
     projectKeys,
     projectsAPI,
-    useActivateProject,
-    useCreateTask,
     usePostComment,
     useProject,
     useProjectMembers,
@@ -33,6 +28,7 @@ import {
     useProjectUpdates,
     useUpdateTask,
     type ProjectStatus,
+    type ProjectTask,
     type TaskStatus,
 } from '@/services/projects';
 
@@ -44,7 +40,7 @@ const STATUS_TONE: Record<ProjectStatus, string> = {
     archived: 'bg-slate-100 text-slate-500',
 };
 
-export default function TeacherProjectDetailPage() {
+export default function StudentProjectDetailPage() {
     const params = useParams<{ id: string }>();
     const router = useRouter();
     const id = params?.id;
@@ -57,52 +53,47 @@ export default function TeacherProjectDetailPage() {
     const wsStatus = useProjectSocket(id).status;
 
     const updateTask = useUpdateTask(id || '');
-    const createTask = useCreateTask(id || '');
-    const activate = useActivateProject(id || '');
     const postComment = usePostComment(id || '');
 
-    const [newTaskTitle, setNewTaskTitle] = useState('');
     const [comment, setComment] = useState('');
     const me = getUser();
 
     if (projectQ.isLoading) return <p className="p-6 text-sm text-slate-500">Loading…</p>;
     if (projectQ.error || !projectQ.data) {
-        return <p className="p-6 text-sm text-rose-600">Project not found or access denied.</p>;
+        return (
+            <p className="p-6 text-sm text-rose-600">
+                Project not found or you don&apos;t have access.
+            </p>
+        );
     }
 
     const project = projectQ.data;
-    const isMentor = me?.user_id === project.mentor;
-    const isAdmin = me?.role === 'admin' || me?.role === 'staff';
-    const canManage = isMentor || isAdmin;
+    const tasks = tasksQ.data || [];
+
+    // The student-brief serializer doesn't expose user_id today, so we match
+    // by the displayed full name. The backend RBAC is the real authority for
+    // who can edit what — this only drives UI affordances.
+    const myFullName = me ? [me.first_name, me.last_name].filter(Boolean).join(' ') : '';
+    const isLeader = Boolean(
+        project.leader_detail && myFullName && project.leader_detail.name === myFullName,
+    );
+    const canDrag = isLeader;
+
+    const myTasks: ProjectTask[] = tasks.filter(
+        (t) => t.assignee_detail && myFullName && t.assignee_detail.name === myFullName,
+    );
+
+    // Read membersQ.data so the call isn't unused — it primes the cache and
+    // also unlocks future enrichments (avatars, leader switch).
+    void membersQ.data;
 
     const handleMove = (taskId: string, newStatus: TaskStatus) => {
         updateTask.mutate(
             { id: taskId, payload: { status: newStatus } },
             {
-                onError: () => toast({ title: 'Status update failed', variant: 'destructive' }),
+                onError: () => toast({ title: 'Update failed', variant: 'destructive' }),
             },
         );
-    };
-
-    const handleAddTask = async () => {
-        if (!newTaskTitle.trim()) return;
-        try {
-            await createTask.mutateAsync({ title: newTaskTitle.trim() });
-            setNewTaskTitle('');
-            toast({ title: 'Task added' });
-        } catch {
-            toast({ title: 'Could not add task', variant: 'destructive' });
-        }
-    };
-
-    const handleActivate = async () => {
-        try {
-            await activate.mutateAsync();
-            toast({ title: 'Project is now active' });
-        } catch (err) {
-            const detail = (err as { response?: { data?: { message?: string } } }).response?.data?.message;
-            toast({ title: 'Activation failed', description: detail, variant: 'destructive' });
-        }
     };
 
     const handleSubmit = async () => {
@@ -110,8 +101,9 @@ export default function TeacherProjectDetailPage() {
             await projectsAPI.submit(project.project_id);
             toast({ title: 'Project submitted' });
             qc.invalidateQueries({ queryKey: projectKeys.detail(project.project_id) });
-        } catch {
-            toast({ title: 'Submit failed', variant: 'destructive' });
+        } catch (err) {
+            const detail = (err as { response?: { data?: { message?: string } } }).response?.data?.message;
+            toast({ title: 'Submit failed', description: detail, variant: 'destructive' });
         }
     };
 
@@ -150,97 +142,81 @@ export default function TeacherProjectDetailPage() {
                                 {wsStatus}
                             </span>
                         </div>
-                        {project.section_detail && (
+                        {project.mentor_detail && (
                             <p className="text-sm text-slate-500">
-                                {project.section_detail.academic_class_name} · Section{' '}
-                                {project.section_detail.name}
+                                Mentor: {project.mentor_detail.full_name}
                             </p>
                         )}
                     </div>
                 </div>
-                <div className="flex items-center gap-2">
-                    {canManage && project.status === 'draft' && (
-                        <Button onClick={handleActivate} disabled={activate.isPending}>
-                            Activate
-                        </Button>
-                    )}
-                    {canManage && project.status === 'submitted' && (
-                        <Button asChild>
-                            <Link href={`/teacher/projects/${project.project_id}/grade`}>Grade project</Link>
-                        </Button>
-                    )}
-                    {project.status === 'active' && (
-                        <Button variant="outline" onClick={handleSubmit}>
-                            <Send className="mr-1 h-4 w-4" /> Submit
-                        </Button>
-                    )}
-                </div>
-            </div>
-
-            <div className="grid gap-4 lg:grid-cols-3">
-                <Card className="lg:col-span-2">
-                    <CardHeader className="pb-3">
-                        <CardTitle className="text-base">Progress</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <ProjectProgressBar value={project.progress_percent} label={project.progress_label} />
-                        {project.due_date && (
-                            <p className="mt-3 text-xs text-slate-500">
-                                Due {new Date(project.due_date).toLocaleString()}
-                            </p>
-                        )}
-                        {project.final_grade != null && (
-                            <p className="mt-2 text-sm text-slate-700">
-                                Final grade: <span className="font-semibold">{project.final_grade}</span>
-                            </p>
-                        )}
-                    </CardContent>
-                </Card>
-                <Card>
-                    <CardHeader className="pb-3">
-                        <CardTitle className="text-base">Members</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <MemberList
-                            project={project}
-                            members={membersQ.data || []}
-                            canManage={canManage}
-                            onChanged={() => {
-                                qc.invalidateQueries({ queryKey: projectKeys.detail(project.project_id) });
-                                qc.invalidateQueries({ queryKey: projectKeys.members(project.project_id) });
-                            }}
-                        />
-                    </CardContent>
-                </Card>
+                {isLeader && project.status === 'active' && (
+                    <Button onClick={handleSubmit}>
+                        <Send className="mr-1 h-4 w-4" /> Submit project
+                    </Button>
+                )}
             </div>
 
             <Card>
-                <CardHeader className="flex flex-row items-center justify-between pb-3">
-                    <CardTitle className="text-base">Tasks</CardTitle>
-                    {canManage && (
-                        <div className="flex items-center gap-2">
-                            <Input
-                                placeholder="New task title"
-                                value={newTaskTitle}
-                                onChange={(e) => setNewTaskTitle(e.target.value)}
-                                onKeyDown={(e) => e.key === 'Enter' && handleAddTask()}
-                                className="w-64"
-                            />
-                            <Button onClick={handleAddTask} disabled={createTask.isPending}>
-                                <Plus className="mr-1 h-4 w-4" /> Add
-                            </Button>
-                        </div>
+                <CardHeader className="pb-3">
+                    <CardTitle className="text-base">Progress</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                    <ProjectProgressBar value={project.progress_percent} label={project.progress_label} />
+                    {project.due_date && (
+                        <p className="text-xs text-slate-500">
+                            Due {new Date(project.due_date).toLocaleString()}
+                        </p>
                     )}
+                    {project.final_grade != null && (
+                        <p className="text-sm text-slate-700">
+                            Final grade: <span className="font-semibold">{project.final_grade}</span>
+                        </p>
+                    )}
+                </CardContent>
+            </Card>
+
+            {myTasks.length > 0 && (
+                <Card>
+                    <CardHeader className="pb-3">
+                        <CardTitle className="text-base">My tasks</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        <ul className="space-y-2">
+                            {myTasks.map((t) => (
+                                <li
+                                    key={t.task_id}
+                                    className="flex items-center justify-between rounded-md border border-slate-200 bg-white px-3 py-2 text-sm"
+                                >
+                                    <span>{t.title}</span>
+                                    <select
+                                        className="rounded border border-slate-200 px-2 py-1 text-xs"
+                                        value={t.status}
+                                        onChange={(e) =>
+                                            handleMove(t.task_id, e.target.value as TaskStatus)
+                                        }
+                                    >
+                                        <option value="todo">To Do</option>
+                                        <option value="in_progress">In Progress</option>
+                                        <option value="review">Review</option>
+                                        <option value="done">Done</option>
+                                        <option value="blocked">Blocked</option>
+                                    </select>
+                                </li>
+                            ))}
+                        </ul>
+                    </CardContent>
+                </Card>
+            )}
+
+            <Card>
+                <CardHeader className="pb-3">
+                    <CardTitle className="text-base">All tasks</CardTitle>
                 </CardHeader>
                 <CardContent>
                     {tasksQ.isLoading ? (
                         <p className="text-sm text-slate-500">Loading tasks…</p>
                     ) : (
-                        <TaskKanban
-                            tasks={tasksQ.data || []}
-                            canDrag={canManage}
-                            onMove={handleMove}
-                        />
+                        <TaskKanban tasks={tasks} canDrag={canDrag} onMove={handleMove} />
                     )}
                 </CardContent>
             </Card>
@@ -252,7 +228,7 @@ export default function TeacherProjectDetailPage() {
                 <CardContent className="space-y-4">
                     <div className="flex items-start gap-2">
                         <Textarea
-                            placeholder="Leave a comment for the team…"
+                            placeholder="Comment for the team…"
                             value={comment}
                             onChange={(e) => setComment(e.target.value)}
                             rows={2}
@@ -279,7 +255,6 @@ export default function TeacherProjectDetailPage() {
                     </CardContent>
                 </Card>
             )}
-
         </div>
     );
 }

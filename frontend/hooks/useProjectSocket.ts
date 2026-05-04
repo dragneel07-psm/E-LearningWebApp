@@ -88,6 +88,7 @@ export function useProjectSocket(
                     case 'project.task.deleted':
                         qc.invalidateQueries({ queryKey: projectKeys.tasks(projectId) });
                         qc.invalidateQueries({ queryKey: projectKeys.detail(projectId) });
+                        qc.invalidateQueries({ queryKey: projectKeys.members(projectId) });
                         break;
                     case 'project.update.created':
                         qc.invalidateQueries({ queryKey: projectKeys.updates(projectId) });

@@ -306,6 +306,23 @@ class MembershipActionTests(ProjectsApiBaseTestCase):
         super().setUp()
         self.project = self._make_project(max_group_size=3)
 
+    def test_member_can_list_members(self):
+        self._login(self.member_user)
+        resp = self.client.get(
+            f"/api/projects/projects/{self.project.project_id}/members/"
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        student_ids = {str(m["student"]) for m in resp.data}
+        self.assertIn(str(self.leader_student.student_id), student_ids)
+        self.assertIn(str(self.member_student.student_id), student_ids)
+
+    def test_outsider_cannot_list_members(self):
+        self._login(self.outsider_user)
+        resp = self.client.get(
+            f"/api/projects/projects/{self.project.project_id}/members/"
+        )
+        self.assertEqual(resp.status_code, status.HTTP_404_NOT_FOUND)
+
     def test_mentor_can_add_member(self):
         self._login(self.mentor_user)
         resp = self.client.post(

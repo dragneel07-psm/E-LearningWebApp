@@ -8,7 +8,8 @@ import { usePathname, useRouter } from 'next/navigation';
 import { ReactNode } from 'react';
 import {
     LayoutDashboard, Users, CalendarDays, GraduationCap,
-    Wallet, CalendarClock, BookOpen, MessageSquare, LogOut
+    Wallet, CalendarClock, BookOpen, MessageSquare, LogOut,
+    FolderKanban
 } from 'lucide-react';
 import { removeTokens } from '@/lib/auth';
 
@@ -17,6 +18,7 @@ const NAV = [
     { href: '/parent/children', label: 'My Children', icon: Users },
     { href: '/parent/attendance', label: 'Attendance', icon: CalendarDays },
     { href: '/parent/grades', label: 'Grades', icon: GraduationCap },
+    { href: '/parent/projects', label: 'Projects', icon: FolderKanban },
     { href: '/parent/fees', label: 'Fees', icon: Wallet },
     { href: '/parent/leaves', label: 'Leave Requests', icon: CalendarClock },
     { href: '/parent/meetings', label: 'Meetings', icon: CalendarClock },

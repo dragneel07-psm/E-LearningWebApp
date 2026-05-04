@@ -179,6 +179,10 @@ export const projectsAPI = {
         const res = await api.get<MentorDashboardEntry[]>('/api/projects/projects/dashboard/mentor/');
         return res.data;
     },
+    listMembers: async (id: string): Promise<ProjectMember[]> => {
+        const res = await api.get<ProjectMember[]>(`/api/projects/projects/${id}/members/`);
+        return res.data;
+    },
 };
 
 export const projectTasksAPI = {
@@ -226,6 +230,7 @@ export const projectKeys = {
     detail: (id: string) => ['projects', 'detail', id] as const,
     tasks: (id: string) => ['projects', 'tasks', id] as const,
     updates: (id: string) => ['projects', 'updates', id] as const,
+    members: (id: string) => ['projects', 'members', id] as const,
     mentorDashboard: () => ['projects', 'mentor-dashboard'] as const,
 };
 
@@ -256,6 +261,14 @@ export function useProjectUpdates(id: string | undefined) {
     return useQuery({
         queryKey: id ? projectKeys.updates(id) : ['projects', 'updates', 'none'],
         queryFn: () => projectUpdatesAPI.listForProject(id as string),
+        enabled: Boolean(id),
+    });
+}
+
+export function useProjectMembers(id: string | undefined) {
+    return useQuery({
+        queryKey: id ? projectKeys.members(id) : ['projects', 'members', 'none'],
+        queryFn: () => projectsAPI.listMembers(id as string),
         enabled: Boolean(id),
     });
 }
@@ -319,6 +332,7 @@ export function useAddMember(projectId: string) {
             projectsAPI.addMember(projectId, studentId, role),
         onSuccess: () => {
             qc.invalidateQueries({ queryKey: projectKeys.detail(projectId) });
+            qc.invalidateQueries({ queryKey: projectKeys.members(projectId) });
         },
     });
 }

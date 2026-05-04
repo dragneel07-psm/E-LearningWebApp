@@ -60,7 +60,7 @@ class ProjectViewSet(TenantScopedQuerysetMixin, viewsets.ModelViewSet):
     _CUSTOM_ACTIONS = {
         "mine",
         "mentor_dashboard",
-        "add_member",
+        "members",
         "remove_member",
         "set_leader",
         "activate",
@@ -126,9 +126,13 @@ class ProjectViewSet(TenantScopedQuerysetMixin, viewsets.ModelViewSet):
             )
         return Response(data)
 
-    @action(detail=True, methods=["post"], url_path="members")
-    def add_member(self, request, pk=None):
+    @action(detail=True, methods=["get", "post"], url_path="members")
+    def members(self, request, pk=None):
         project = self.get_object()
+        if request.method == "GET":
+            queryset = project.members.select_related("student", "student__user").all()
+            data = ProjectMemberSerializer(queryset, many=True).data
+            return Response(data)
         if not (is_admin(request.user) or is_mentor_of(request.user, project)):
             raise PermissionDenied("Only the mentor or admin can add members.")
         student_id = request.data.get("student")
