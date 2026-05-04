@@ -40,6 +40,9 @@ import CreateAssessmentScreen from './screens/CreateAssessmentScreen';
 import ManageQuestionsScreen from './screens/ManageQuestionsScreen';
 import LibraryScreen from './screens/LibraryScreen';
 import ProgressScreen from './screens/ProgressScreen';
+import ProjectsListScreen from './screens/ProjectsListScreen';
+import ProjectDetailScreen from './screens/ProjectDetailScreen';
+import ParentProjectsScreen from './screens/ParentProjectsScreen';
 import {
   NoticeBoardScreen,
   ParentChildrenScreen,
@@ -84,6 +87,7 @@ function tabIcon(name: string, focused: boolean) {
     Assessments: ['📋', '🗂️'],
     Library: ['📙', '📘'],
     Progress: ['🏆', '🥇'],
+    Projects: ['📂', '📁'],
   };
 
   const [inactive, active] = icons[name] || ['⚪', '🔵'];
@@ -140,6 +144,50 @@ function AssignmentsStackNavigator() {
       <InnerStack.Screen name="AssignmentsList" component={AssignmentsScreen} options={{ headerShown: false }} />
       <InnerStack.Screen name="TakeAssessment" component={TakeAssessmentScreen} options={{ title: 'Assessment' }} />
       <InnerStack.Screen name="AssessmentResults" component={AssessmentResultsScreen} options={{ title: 'Result' }} />
+    </InnerStack.Navigator>
+  );
+}
+
+function ProjectsStackNavigator({ role }: { role: 'student' | 'teacher' }) {
+  return (
+    <InnerStack.Navigator
+      screenOptions={{
+        headerStyle: { backgroundColor: Colors.primary },
+        headerTintColor: '#fff',
+        headerTitleStyle: { fontWeight: '800', fontSize: 18 },
+      }}
+    >
+      <InnerStack.Screen name="ProjectsList" options={{ title: 'Projects' }}>
+        {(props) => <ProjectsListScreen {...props} role={role} />}
+      </InnerStack.Screen>
+      <InnerStack.Screen
+        name="ProjectDetail"
+        component={ProjectDetailScreen}
+        options={{ title: 'Project' }}
+      />
+    </InnerStack.Navigator>
+  );
+}
+
+function ParentProjectsStackNavigator() {
+  return (
+    <InnerStack.Navigator
+      screenOptions={{
+        headerStyle: { backgroundColor: Colors.primary },
+        headerTintColor: '#fff',
+        headerTitleStyle: { fontWeight: '800', fontSize: 18 },
+      }}
+    >
+      <InnerStack.Screen
+        name="ParentProjectsList"
+        component={ParentProjectsScreen}
+        options={{ title: 'Projects' }}
+      />
+      <InnerStack.Screen
+        name="ProjectDetail"
+        component={ProjectDetailScreen}
+        options={{ title: 'Project' }}
+      />
     </InnerStack.Navigator>
   );
 }
@@ -238,6 +286,9 @@ function StudentTabs({
       <Tab.Screen name="Grades" component={GradesScreen} />
       <Tab.Screen name="Fees" component={FeesScreen} />
       <Tab.Screen name="Assignments" component={AssignmentsStackNavigator} />
+      <Tab.Screen name="Projects">
+        {() => <ProjectsStackNavigator role="student" />}
+      </Tab.Screen>
       <Tab.Screen name="Progress" component={ProgressScreen} />
       <Tab.Screen name="Library" component={LibraryScreen} />
       <Tab.Screen name="Tutor" component={AiTutorScreen} options={{ title: 'AI Tutor' }} />
@@ -270,6 +321,9 @@ function TeacherTabs({
       <Tab.Screen name="People" component={TeacherStudentsScreen} />
       <Tab.Screen name="Attendance" component={TeacherAttendanceScreen} />
       <Tab.Screen name="Assessments" component={TeacherAssessmentsStackNavigator} />
+      <Tab.Screen name="Projects">
+        {() => <ProjectsStackNavigator role="teacher" />}
+      </Tab.Screen>
       <Tab.Screen name="Grading" component={TeacherGradingStackNavigator} />
       <Tab.Screen name="Timetable">
         {() => <TimetableScreen role="teacher" />}
@@ -301,6 +355,7 @@ function ParentTabs({
       <Tab.Screen name="Children" component={ParentChildrenScreen} />
       <Tab.Screen name="Attendance" component={ParentAttendanceScreen} />
       <Tab.Screen name="Grades" component={ParentGradesScreen} />
+      <Tab.Screen name="Projects" component={ParentProjectsStackNavigator} />
       <Tab.Screen name="Fees" component={ParentFeesScreen} />
       <Tab.Screen name="Notices">
         {() => <NoticeBoardScreen role="parent" />}
