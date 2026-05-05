@@ -20,7 +20,14 @@ function colorFor(value: number): string {
 export function ProjectProgressBar({ value, label, showPercent = true }: ProjectProgressBarProps) {
     const clamped = Math.max(0, Math.min(100, Math.round(value || 0)));
     return (
-        <div className="space-y-1.5">
+        <div
+            className="space-y-1.5"
+            role="progressbar"
+            aria-valuenow={clamped}
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-label={label ? `${label}: ${clamped}%` : `Progress: ${clamped}%`}
+        >
             <div className="flex items-center justify-between text-xs text-slate-600">
                 <span>{label ?? 'Progress'}</span>
                 {showPercent && <span className="font-medium tabular-nums">{clamped}%</span>}

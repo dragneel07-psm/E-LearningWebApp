@@ -110,8 +110,9 @@ export default function TeacherProjectDetailPage() {
             await projectsAPI.submit(project.project_id);
             toast({ title: 'Project submitted' });
             qc.invalidateQueries({ queryKey: projectKeys.detail(project.project_id) });
-        } catch {
-            toast({ title: 'Submit failed', variant: 'destructive' });
+        } catch (err) {
+            const detail = (err as { response?: { data?: { message?: string } } }).response?.data?.message;
+            toast({ title: 'Submit failed', description: detail, variant: 'destructive' });
         }
     };
 
@@ -129,7 +130,7 @@ export default function TeacherProjectDetailPage() {
         <div className="space-y-6 p-6">
             <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="flex items-center gap-3">
-                    <Button variant="ghost" size="icon" onClick={() => router.back()}>
+                    <Button variant="ghost" size="icon" onClick={() => router.back()} aria-label="Go back">
                         <ArrowLeft className="h-4 w-4" />
                     </Button>
                     <div>

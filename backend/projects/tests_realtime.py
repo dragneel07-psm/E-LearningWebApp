@@ -33,6 +33,11 @@ def _anon_user():
     return MagicMock(is_authenticated=False)
 
 
+def _enable_projects(tenant):
+    tenant.features = {**(tenant.features or {}), "projects": True}
+    tenant.save(update_fields=["features"])
+
+
 @override_settings(CHANNEL_LAYERS=IN_MEMORY_CHANNEL_LAYERS)
 class ProjectStreamConsumerAuthTests(TestCase):
     def _app(self):
@@ -70,6 +75,7 @@ class ProjectStreamConsumerVisibilityTests(FastTenantTestCase):
         domain.is_primary = True
 
     def setUp(self):
+        _enable_projects(self.tenant)
         self.acad_class = AcademicClass.objects.create(name="Grade 11", order=11)
         self.section = Section.objects.create(name="A", academic_class=self.acad_class)
         self.mentor = UserAccount.objects.create_user(
@@ -142,6 +148,46 @@ class ProjectStreamConsumerVisibilityTests(FastTenantTestCase):
             await comm.disconnect()
 
 
+
+class ProjectStreamFeatureFlagTests(FastTenantTestCase):
+    """Feature flag off must reject the WebSocket connect with 4403."""
+
+    @classmethod
+    def setup_tenant(cls, tenant):
+        tenant.name = "WS Feature Flag Test School"
+
+    @classmethod
+    def setup_domain(cls, domain):
+        domain.is_primary = True
+
+    def setUp(self):
+        # Deliberately do NOT call _enable_projects — the flag is off.
+        self.tenant.features = {**(self.tenant.features or {}), "projects": False}
+        self.tenant.save(update_fields=["features"])
+        self.mentor = UserAccount.objects.create_user(
+            username="ff_mentor",
+            email="ff_mentor@example.com",
+            password="Pass@1234",
+            role="teacher",
+            tenant=self.tenant,
+        )
+        self.project = Project.objects.create(
+            tenant=self.tenant, title="FF", mentor=self.mentor, status="active"
+        )
+
+    async def test_flag_off_rejects_connect(self):
+        with override_settings(CHANNEL_LAYERS=IN_MEMORY_CHANNEL_LAYERS):
+            comm = WebsocketCommunicator(
+                ProjectStreamConsumer.as_asgi(), f"/ws/projects/{self.project.pk}/"
+            )
+            comm.scope["user"] = self.mentor
+            comm.scope["url_route"] = {"kwargs": {"project_id": str(self.project.pk)}}
+            connected, code = await comm.connect()
+            self.assertFalse(connected)
+            self.assertEqual(code, 4403)
+            await comm.disconnect()
+
+
 class ProjectStreamBroadcastTests(FastTenantTestCase):
     """Verify channel-layer events from group_send reach the connected client."""
 
@@ -154,6 +200,7 @@ class ProjectStreamBroadcastTests(FastTenantTestCase):
         domain.is_primary = True
 
     def setUp(self):
+        _enable_projects(self.tenant)
         self.mentor = UserAccount.objects.create_user(
             username="bcast_mentor",
             email="bcast_mentor@example.com",

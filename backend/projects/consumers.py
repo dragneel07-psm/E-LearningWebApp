@@ -122,6 +122,7 @@ class ProjectStreamConsumer(AsyncWebsocketConsumer):
             is_leader_of,
             is_member_of,
             is_mentor_of,
+            tenant_has_projects_enabled,
         )
 
         project = Project.objects.filter(pk=project_id).first()
@@ -130,6 +131,9 @@ class ProjectStreamConsumer(AsyncWebsocketConsumer):
         # Tenant safety: caller must be in the same tenant as the project.
         user_tenant = getattr(user, "tenant", None)
         if user_tenant is not None and project.tenant_id != user_tenant.pk:
+            return False
+        # Feature flag: same gate the REST API enforces via IsProjectsEnabled.
+        if not tenant_has_projects_enabled(user_tenant or project.tenant):
             return False
         if is_admin(user):
             return True
