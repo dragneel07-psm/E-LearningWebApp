@@ -32,11 +32,22 @@ class Tenant(TenantMixin, TimeStampedModel):
     established_year = models.IntegerField(blank=True, null=True)
     logo = models.ImageField(upload_to=tenant_logo_upload_to, blank=True, null=True)
     
-    # Feature Flags for SaaS Admin to control tenant capabilities
+    # Feature Flags for SaaS Admin to control tenant capabilities.
+    # `features` is the *effective* dict (plan baseline merged with overrides) and
+    # is recomputed on every save via sync_tenant_with_plan.
     features = models.JSONField(
         default=dict,
         blank=True,
-        help_text="Stores active/inactive features for different roles, e.g., {'parents': {'view_attendance': True}}"
+        help_text="Effective feature flags for this tenant. Computed from the plan + feature_overrides; do not edit directly."
+    )
+
+    # Per-tenant feature overrides. Wins over plan entitlements during sync,
+    # so SaaS admins can flip a feature for one school without changing its
+    # plan. Empty dict means "use plan defaults".
+    feature_overrides = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="Per-tenant overrides that win over plan entitlements, e.g., {'projects': False}."
     )
 
     # default true, schema will be automatically created and synced when it is saved

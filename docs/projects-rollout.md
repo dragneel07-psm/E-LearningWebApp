@@ -47,10 +47,12 @@ up automatically.
 - [ ] Verify the gate is open: hit `GET /api/projects/projects/` as any
       teacher — should return `200`.
 
-(If you later want a clickable per-tenant override — i.e. let SaaS admins
-flip projects off for a specific school without touching the plan — that's
-the Phase 9 backlog item "per-tenant feature override field on Tenant".
-Not in scope for this rollout.)
+**Per-tenant override (shipped):** SaaS admins can flip a feature on or
+off for a specific school via the Switch in
+`/saas/schools/<id>` → Settings → Feature Flags. The toggle PATCHes
+`tenant.feature_overrides`, which the plan-sync layer respects (overrides
+win over plan baseline). An "override" badge marks any flag that diverges
+from the plan default.
 
 ## 4. Pilot test plan (against staging)
 
@@ -123,18 +125,18 @@ Pilot week was a soft launch; this section is just communications.
 
 If a P0 surfaces in pilot or global rollout:
 
-- [ ] Disable for an individual tenant (manual override, since the plan
-      layer makes it default-on):
+- [ ] Disable for an individual tenant by writing to `feature_overrides`
+      (this survives plan-sync because the override layer wins):
       ```python
       from core.models.tenant import Tenant
+      from core.utils.plan_enforcement import sync_tenant_with_plan
       t = Tenant.objects.get(schema_name="<schema>")
-      t.features = {**(t.features or {}), "projects": False}
-      t.save(update_fields=["features"])
+      t.feature_overrides = {**(t.feature_overrides or {}), "projects": False}
+      t.save(update_fields=["feature_overrides"])
+      sync_tenant_with_plan(t)  # rebuilds t.features from plan + override
       ```
-      Note: any subsequent call to `sync_tenant_with_plan` will reset this
-      back to `True` (plan layer is source of truth). Either skip plan-sync
-      during the rollback window or mirror the change in the plan
-      enforcement code.
+      Equivalent in the SaaS UI: visit `/saas/schools/<id>` → Settings →
+      Feature Flags and click the projects Switch off.
 - [ ] If the bug is data-corrupting, halt Celery beat (`celery -A config
       beat --detach` → kill) so overdue/due-soon scans don't compound it.
 - [ ] Hotfix on a branch off `main`; do **not** revert the merge unless the
@@ -151,11 +153,10 @@ sprint.
 - Hide nav entries when `tenant.features.projects` is off (currently links
   show but pages 403). Needs a feature-flag exposure on `/api/users/me/` or
   similar.
-- Per-tenant feature overrides that survive plan-sync. Today the plan is
-  the source of truth and overwrites direct edits to `tenant.features`.
-  Adding a `Tenant.feature_overrides` JSON field that the plan layer
-  respects would let SaaS admins toggle features for individual schools
-  without changing their plan.
+- ~~Per-tenant feature overrides that survive plan-sync.~~ **Shipped** —
+  `Tenant.feature_overrides` JSONField + clickable Switch in the SaaS
+  school detail page; plan-sync merges plan baseline with the override
+  dict, override wins.
 - Per-task weights surfaced in the UI (currently default=1 and hidden).
 - Mentor digest WebSocket channel that fans in summary events for all
   guided projects (already designed in the original plan but not built).

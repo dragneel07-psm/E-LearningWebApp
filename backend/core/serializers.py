@@ -10,6 +10,7 @@ from django.db.models import Sum
 from billing.models_saas import SubscriptionPlan
 from core.utils.plan_enforcement import (
     build_plan_entitled_features,
+    compute_effective_features,
     derive_tenant_type_from_plan,
     get_tenant_plan,
 )
@@ -33,15 +34,16 @@ class TenantSerializer(serializers.ModelSerializer):
     class Meta:
         model = Tenant
         fields = [
-            'id', 'schema_name', 'name', 'subdomain', 'type', 'status', 
+            'id', 'schema_name', 'name', 'subdomain', 'type', 'status',
             'contact_email', 'contact_phone', 'address', 'website',
-            'features',
+            'features', 'feature_overrides',
             'plan_name', 'subscription_status', 'billing_cycle',
             'student_count', 'teacher_count', 'total_users', 'admin_count',
             'ai_usage', 'ai_tokens_used', 'ai_token_limit',
             'storage_used_bytes', 'storage_used_mb', 'storage_limit_gb', 'storage_usage_percent',
             'logo'
         ]
+        read_only_fields = ['features']  # `features` is computed; `feature_overrides` is the writable surface.
 
     def validate(self, attrs):
         # Enforce strict plan entitlement on every update.
@@ -51,7 +53,12 @@ class TenantSerializer(serializers.ModelSerializer):
 
         plan = get_tenant_plan(instance)
         attrs['type'] = derive_tenant_type_from_plan(plan)
-        attrs['features'] = build_plan_entitled_features(plan)
+        # Effective features = plan baseline overlaid with per-tenant overrides.
+        # `feature_overrides` may arrive in this PATCH; otherwise read the stored value.
+        overrides = attrs.get('feature_overrides')
+        if overrides is None:
+            overrides = getattr(instance, 'feature_overrides', None) or {}
+        attrs['features'] = compute_effective_features(plan, overrides)
         return attrs
     
     def get_plan_name(self, obj):
@@ -209,7 +216,9 @@ class TenantSerializer(serializers.ModelSerializer):
         try:
             plan = get_tenant_plan(instance)
             data['type'] = derive_tenant_type_from_plan(plan)
-            data['features'] = build_plan_entitled_features(plan)
+            data['features'] = compute_effective_features(
+                plan, getattr(instance, 'feature_overrides', None)
+            )
         except Exception as exc:
             logger.error(
                 "TenantSerializer plan enrichment failed for tenant %s: %s\n%s",
