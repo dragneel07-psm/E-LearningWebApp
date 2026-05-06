@@ -33,22 +33,24 @@ These should be green before the PR is merged.
   - `projects.scan_due_soon_projects` — daily at 09:00
 - [ ] Confirm Channels consumer is reachable via `wss://<staging>/ws/projects/<id>/?token=<jwt>`
 
-## 3. Pilot tenant enablement
+## 3. Tenant enablement
 
-Pick **one** school as the pilot. The flag is per-tenant so this is a one-row
-update.
+Project tracking is treated as **baseline LMS functionality** (same pattern
+as `student_gamification`): every tenant gets it. The data migration
+`core.0009_backfill_tenant_projects_feature` flips
+`tenant.features['projects'] = True` for every existing tenant on first
+deploy, and `build_plan_entitled_features()` ensures new tenants pick it
+up automatically.
 
-- [ ] Identify pilot tenant; record `schema_name` here: `___________________`
-- [ ] Enable via Django admin (recommended for an audit trail) or a one-off
-      shell:
-      ```python
-      from core.models.tenant import Tenant
-      t = Tenant.objects.get(schema_name="<pilot_schema>")
-      t.features = {**(t.features or {}), "projects": True}
-      t.save(update_fields=["features"])
-      ```
-- [ ] Verify the gate flipped: hit `GET /api/projects/projects/` as any
-      teacher in that tenant — should return `200` (was `403` before).
+- [ ] Confirm the migration ran: `Tenant.objects.values_list("features", flat=True)` should
+      show `projects: True` on every row.
+- [ ] Verify the gate is open: hit `GET /api/projects/projects/` as any
+      teacher — should return `200`.
+
+(If you later want a clickable per-tenant override — i.e. let SaaS admins
+flip projects off for a specific school without touching the plan — that's
+the Phase 9 backlog item "per-tenant feature override field on Tenant".
+Not in scope for this rollout.)
 
 ## 4. Pilot test plan (against staging)
 
@@ -111,19 +113,9 @@ Confirm these are visible during the pilot week.
 
 ## 8. Global enable
 
-Only after Section 7 has no open blockers.
+Already global from Section 3 — projects is default-on for every tenant.
+Pilot week was a soft launch; this section is just communications.
 
-- [ ] Update tenant features in bulk:
-      ```python
-      from core.models.tenant import Tenant
-      Tenant.objects.exclude(schema_name="public").update(
-          features={"projects": True}  # WARNING: clobbers other flags
-      )
-      # Or, safer per-tenant loop that merges:
-      for t in Tenant.objects.exclude(schema_name="public"):
-          t.features = {**(t.features or {}), "projects": True}
-          t.save(update_fields=["features"])
-      ```
 - [ ] Announce in the SaaS-admin newsletter / changelog
 - [ ] Watch Sentry + Celery for 48h post-rollout
 
@@ -131,10 +123,18 @@ Only after Section 7 has no open blockers.
 
 If a P0 surfaces in pilot or global rollout:
 
-- [ ] Flip the flag off on the affected tenant(s) — disables the API and the
-      WebSocket; the nav links in web/mobile remain visible but pages will
-      show the 403 banner. (Future polish: hide the nav entry when the flag
-      is off — see Phase 9 backlog below.)
+- [ ] Disable for an individual tenant (manual override, since the plan
+      layer makes it default-on):
+      ```python
+      from core.models.tenant import Tenant
+      t = Tenant.objects.get(schema_name="<schema>")
+      t.features = {**(t.features or {}), "projects": False}
+      t.save(update_fields=["features"])
+      ```
+      Note: any subsequent call to `sync_tenant_with_plan` will reset this
+      back to `True` (plan layer is source of truth). Either skip plan-sync
+      during the rollback window or mirror the change in the plan
+      enforcement code.
 - [ ] If the bug is data-corrupting, halt Celery beat (`celery -A config
       beat --detach` → kill) so overdue/due-soon scans don't compound it.
 - [ ] Hotfix on a branch off `main`; do **not** revert the merge unless the
@@ -151,6 +151,11 @@ sprint.
 - Hide nav entries when `tenant.features.projects` is off (currently links
   show but pages 403). Needs a feature-flag exposure on `/api/users/me/` or
   similar.
+- Per-tenant feature overrides that survive plan-sync. Today the plan is
+  the source of truth and overwrites direct edits to `tenant.features`.
+  Adding a `Tenant.feature_overrides` JSON field that the plan layer
+  respects would let SaaS admins toggle features for individual schools
+  without changing their plan.
 - Per-task weights surfaced in the UI (currently default=1 and hidden).
 - Mentor digest WebSocket channel that fans in summary events for all
   guided projects (already designed in the original plan but not built).

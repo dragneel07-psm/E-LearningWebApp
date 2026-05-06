@@ -53,6 +53,7 @@ def build_plan_entitled_features(plan) -> Dict[str, bool]:
             "parent_attendance": False,
             "parent_fees": False,
             "student_career_guidance": False,
+            "projects": True,
         }
 
     has_ai_tutor = bool(getattr(plan, "has_ai_tutor", False))
@@ -69,6 +70,7 @@ def build_plan_entitled_features(plan) -> Dict[str, bool]:
         "parent_attendance": has_parent_portal,
         "parent_fees": has_parent_portal,
         "student_career_guidance": has_career_guidance,
+        "projects": True,
     }
 
 

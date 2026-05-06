@@ -39,6 +39,7 @@ const DEFAULT_FEATURE_FLAGS: Record<string, boolean> = {
     parent_fees: false,
     teacher_ai_grading: false,
     teacher_reports: false,
+    projects: true,
 };
 
 function getTenantIdentifier(tenantValue: unknown): string {
