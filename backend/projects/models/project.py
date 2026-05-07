@@ -48,6 +48,10 @@ class Project(models.Model):
         blank=True,
         related_name="projects",
         db_constraint=False,
+        help_text=(
+            "Primary class section for the project. Optional — members can "
+            "span multiple sections (cross-class collaboration)."
+        ),
     )
 
     mentor = models.ForeignKey(
@@ -97,8 +101,6 @@ class Project(models.Model):
         return f"{self.title} ({self.status})"
 
     def clean(self):
-        if self.is_group and self.section_id is None:
-            raise ValidationError({"section": "Group projects must be tied to a class section."})
         if (
             self.min_group_size is not None
             and self.max_group_size is not None

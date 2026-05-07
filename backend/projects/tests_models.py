@@ -74,11 +74,12 @@ class ProjectInvariantTests(FastTenantTestCase):
 
     # --- Group/section invariant ---
 
-    def test_group_project_requires_section(self):
+    def test_group_project_without_section_is_allowed(self):
+        # Cross-class collaboration: members can span sections so the project
+        # itself doesn't need to pin to one. (Phase 9 #5 dropped the rule
+        # that group projects must carry a primary section.)
         p = self._make_project(is_group=True, section=None)
-        with self.assertRaises(ValidationError) as ctx:
-            p.clean()
-        self.assertIn("section", ctx.exception.message_dict)
+        p.clean()  # should not raise
 
     def test_group_project_with_section_passes(self):
         p = self._make_project(is_group=True, section=self.section)
@@ -274,6 +275,42 @@ class ProjectMembershipTests(FastTenantTestCase):
         third = ProjectMember(tenant=self.tenant, project=self.project, student=s3)
         with self.assertRaises(ValidationError):
             third.clean()
+
+    def test_cross_class_members_allowed(self):
+        # Phase 9 #5: a group project with no primary section can pull
+        # members from any section.
+        other_class = AcademicClass.objects.create(name="Grade 10", order=10)
+        other_section = Section.objects.create(name="B", academic_class=other_class)
+
+        cross_class_project = Project.objects.create(
+            tenant=self.tenant,
+            title="Cross-Class Capstone",
+            mentor=self.mentor,
+            is_group=True,
+            section=None,  # no primary section — purely member-driven scoping
+            max_group_size=5,
+        )
+
+        # Member from the original class.
+        s1 = self._make_student("xc_s1")
+        ProjectMember.objects.create(
+            tenant=self.tenant, project=cross_class_project, student=s1
+        )
+        # Member from a *different* class section.
+        u2 = UserAccount.objects.create_user(
+            username="xc_s2",
+            email="xc_s2@example.com",
+            password="Student@1234",
+            role="student",
+            tenant=self.tenant,
+        )
+        s2 = Student.objects.create(user=u2, academic_class=other_class, section=other_section)
+        ProjectMember.objects.create(
+            tenant=self.tenant, project=cross_class_project, student=s2
+        )
+
+        # Both members are accepted; no clean()/save() error.
+        self.assertEqual(cross_class_project.members.count(), 2)
 
 
 class ProjectSubmissionTests(FastTenantTestCase):

@@ -179,14 +179,18 @@ class ProjectCreateTests(ProjectsApiBaseTestCase):
         )
         self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
 
-    def test_group_project_requires_section(self):
+    def test_group_project_without_section_is_allowed(self):
+        # Phase 9 #5: cross-class collaboration is supported by allowing a
+        # group project to skip the primary-section pin.
         self._login(self.mentor_user)
         resp = self.client.post(
             "/api/projects/projects/",
-            {"title": "Group Project", "is_group": True},
+            {"title": "Cross-Class Group Project", "is_group": True},
             format="json",
         )
-        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(resp.status_code, status.HTTP_201_CREATED, resp.data)
+        self.assertTrue(resp.data["is_group"])
+        self.assertIsNone(resp.data["section"])
 
 
 class ProjectVisibilityTests(ProjectsApiBaseTestCase):

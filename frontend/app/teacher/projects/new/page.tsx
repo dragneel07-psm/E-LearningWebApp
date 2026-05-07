@@ -32,13 +32,6 @@ export default function NewProjectPage() {
             toast({ title: 'Title is required', variant: 'destructive' });
             return;
         }
-        if (isGroup && !sectionId) {
-            toast({
-                title: 'Class section required for group projects',
-                variant: 'destructive',
-            });
-            return;
-        }
         try {
             const payload = {
                 title: title.trim(),
@@ -124,12 +117,12 @@ export default function NewProjectPage() {
                     {isGroup && (
                         <div className="grid gap-3 md:grid-cols-3">
                             <div className="space-y-1.5">
-                                <Label htmlFor="section">Class section ID</Label>
+                                <Label htmlFor="section">Primary section (optional)</Label>
                                 <Input
                                     id="section"
                                     value={sectionId}
                                     onChange={(e) => setSectionId(e.target.value)}
-                                    placeholder="e.g. 12"
+                                    placeholder="Leave blank for cross-class"
                                 />
                             </div>
                             <div className="space-y-1.5">
