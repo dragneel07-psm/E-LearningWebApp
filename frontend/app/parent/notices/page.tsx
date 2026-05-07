@@ -27,6 +27,19 @@ export default function ParentNoticesPage() {
             .finally(() => setLoading(false));
     }, []);
 
+    const markRead = (notice: Notice) => {
+        const id = notice.id ?? notice.notice_id;
+        if (typeof id !== 'number' || notice.is_read) return;
+        setNotices(prev =>
+            prev.map(n => ((n.id ?? n.notice_id) === id ? { ...n, is_read: true } : n)),
+        );
+        academicAPI.markNoticeRead(id).catch(() => {
+            setNotices(prev =>
+                prev.map(n => ((n.id ?? n.notice_id) === id ? { ...n, is_read: false } : n)),
+            );
+        });
+    };
+
     return (
         <div className="p-6 md:p-8 space-y-6 max-w-3xl">
             <div>
@@ -46,22 +59,29 @@ export default function ParentNoticesPage() {
             ) : (
                 <div className="space-y-3">
                     {notices.map(notice => (
-                        <Card key={(notice as any).notice_id ?? (notice as any).id} className="border-slate-200 shadow-sm">
+                        <Card
+                            key={notice.notice_id ?? notice.id}
+                            className={`shadow-sm cursor-pointer transition-colors ${!notice.is_read ? 'border-violet-200 bg-violet-50/40' : 'border-slate-200'}`}
+                            onClick={() => markRead(notice)}
+                        >
                             <CardContent className="p-5">
                                 <div className="flex items-start justify-between gap-3">
                                     <div className="flex-1 min-w-0">
                                         <div className="flex items-center gap-2 flex-wrap mb-1">
                                             <h3 className="font-bold text-slate-900 text-sm">{notice.title}</h3>
-                                            {(notice as any).priority && (
-                                                <Badge className={`text-[10px] font-bold px-2 py-0.5 ${PRIORITY_COLOR[(notice as any).priority] ?? PRIORITY_COLOR.normal}`}>
-                                                    {(notice as any).priority}
+                                            {!notice.is_read && (
+                                                <Badge className="bg-violet-500 text-white border-0 text-[9px] font-bold px-1.5 py-0">UNREAD</Badge>
+                                            )}
+                                            {notice.priority && (
+                                                <Badge className={`text-[10px] font-bold px-2 py-0.5 ${PRIORITY_COLOR[notice.priority] ?? PRIORITY_COLOR.normal}`}>
+                                                    {notice.priority}
                                                 </Badge>
                                             )}
                                         </div>
                                         <p className="text-xs text-slate-500 leading-relaxed">{notice.content}</p>
                                     </div>
                                     <p className="text-[10px] text-slate-400 whitespace-nowrap flex-shrink-0">
-                                        {new Date((notice as any).created_at || (notice as any).published_at).toLocaleDateString()}
+                                        {notice.published_date ? new Date(notice.published_date).toLocaleDateString() : ''}
                                     </p>
                                 </div>
                             </CardContent>

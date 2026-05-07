@@ -7,7 +7,7 @@ from .subject import Subject
 from .student import Student
 from .teacher import Teacher
 from .parent import Parent
-from .notice import Notice
+from .notice import Notice, NoticeRead
 from .lesson import Chapter, Lesson, LessonMaterial, LessonProgress
 from .attendance import Attendance
 from .assessment import (

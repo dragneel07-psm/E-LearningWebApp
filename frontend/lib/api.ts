@@ -1312,6 +1312,7 @@ export interface Notice {
     expiry_date?: string | null;
     attachment?: string | null;
     attachment_url?: string | null;
+    is_read?: boolean;
 }
 
 export type AdmissionEnquiryStatus =
@@ -2511,6 +2512,12 @@ export const academicAPI = {
     deleteNotice: (id: number, data?: Partial<Notice>) => apiRequest<void>(`/academic/notices/${id}/`, {
         method: 'DELETE'
     }),
+    markNoticeRead: (id: number) =>
+        apiRequest<{ status: string; is_read: boolean }>(`/academic/notices/${id}/mark-read/`, {
+            method: 'POST',
+        }),
+    getUnreadNoticeCount: () =>
+        apiRequest<{ count: number }>(`/academic/notices/unread-count/`),
 
     // Exams
     getExams: async () => {

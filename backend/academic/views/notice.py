@@ -1,46 +1,64 @@
 # Copyright (c) 2024-2026 Pramod Singh Manyal. All rights reserved.
 # Unauthorized copying, modification, or distribution of this file,
 # via any medium, is strictly prohibited. Proprietary and confidential.
-from rest_framework import viewsets, permissions, status
+from rest_framework import viewsets, permissions
 from rest_framework.response import Response
 from rest_framework.decorators import action
-from django.db.models import Q
-from ..models.notice import Notice
+from django.db.models import Q, Exists, OuterRef
+from ..models.notice import Notice, NoticeRead
+from ..models.parent import Parent
 from ..serializers.notice import NoticeSerializer
 from core.mixins import TenantScopedQuerysetMixin
 from notifications.services import NotificationService
+
 
 class NoticeViewSet(TenantScopedQuerysetMixin, viewsets.ModelViewSet):
     queryset = Notice.objects.all()
     serializer_class = NoticeSerializer
     permission_classes = [permissions.IsAuthenticated]
 
+    def _audience_filter(self, user):
+        """Return a Q matching what this user can see, or None for unrestricted."""
+        if user.role == 'student':
+            student_profile = getattr(user, 'student_profile', None)
+            if student_profile is None:
+                return Q(pk__in=[])
+            return (
+                Q(target_audience='school')
+                | Q(target_audience='class', target_class=student_profile.academic_class)
+                | Q(target_audience='student', target_student=student_profile)
+            )
+        if user.role == 'parent':
+            parent = Parent.objects.prefetch_related('students').filter(user=user).first()
+            if parent is None:
+                return Q(pk__in=[])
+            child_class_ids = list(parent.students.values_list('academic_class_id', flat=True))
+            child_ids = list(parent.students.values_list('pk', flat=True))
+            return (
+                Q(target_audience='school')
+                | Q(target_audience='class', target_class_id__in=child_class_ids)
+                | Q(target_audience='student', target_student_id__in=child_ids)
+            )
+        if user.role in ('teacher', 'admin', 'saas_admin'):
+            return None
+        return Q(pk__in=[])
+
     def get_queryset(self):
         queryset = super().get_queryset()
         user = self.request.user
 
-        if user.role == 'student':
-            # Students see: School-wide + Their Class + Targeted to them
-            student_profile = getattr(user, 'student_profile', None)
-            if student_profile:
-                return queryset.filter(
-                    Q(target_audience='school') |
-                    Q(target_audience='class', target_class=student_profile.academic_class) |
-                    Q(target_audience='student', target_student=student_profile)
-                )
-            return queryset.none()
-        
-        elif user.role in ['teacher', 'admin', 'saas_admin']:
-            # Staff sees all notices in their tenant
-            return queryset
-        
-        return queryset.none()
+        audience = self._audience_filter(user)
+        if audience is not None:
+            queryset = queryset.filter(audience)
+
+        # Annotate is_read so the serializer can expose it without N+1 queries.
+        read_subquery = NoticeRead.objects.filter(notice=OuterRef('pk'), user=user)
+        return queryset.annotate(_is_read=Exists(read_subquery))
 
     def perform_create(self, serializer):
         tenant = self.request.user.tenant
         notice = serializer.save(tenant=tenant)
-        
-        # Trigger Notifications based on audience
+
         try:
             if notice.target_audience == 'school':
                 NotificationService.notify_role(tenant, 'student', f"New Notice: {notice.title}", notice.content)
@@ -50,5 +68,24 @@ class NoticeViewSet(TenantScopedQuerysetMixin, viewsets.ModelViewSet):
             elif notice.target_audience == 'student' and notice.target_student:
                 NotificationService.create_notification(notice.target_student.user, f"Personal Notice: {notice.title}", notice.content, tenant=tenant)
         except Exception as e:
-            # Prevent notice creation failure due to notification error
+            # Don't let notification failures block notice creation.
             print(f"Error sending notifications: {e}")
+
+    @action(detail=True, methods=['post'], url_path='mark-read')
+    def mark_read(self, request, pk=None):
+        """Idempotently mark this notice as read by the current user."""
+        notice = self.get_object()
+        tenant = getattr(request.user, 'tenant', None) or getattr(notice, 'tenant', None)
+        NoticeRead.objects.get_or_create(
+            notice=notice,
+            user=request.user,
+            defaults={'tenant': tenant},
+        )
+        return Response({'status': 'ok', 'is_read': True})
+
+    @action(detail=False, methods=['get'], url_path='unread-count')
+    def unread_count(self, request):
+        """Return how many notices the current user hasn't opened yet."""
+        queryset = self.get_queryset()
+        count = queryset.filter(_is_read=False).count()
+        return Response({'count': count})

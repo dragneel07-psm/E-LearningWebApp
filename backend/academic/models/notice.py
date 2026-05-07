@@ -1,6 +1,7 @@
 # Copyright (c) 2024-2026 Pramod Singh Manyal. All rights reserved.
 # Unauthorized copying, modification, or distribution of this file,
 # via any medium, is strictly prohibited. Proprietary and confidential.
+from django.conf import settings
 from django.db import models
 from .class_section import AcademicClass
 from .student import Student
@@ -45,3 +46,32 @@ class Notice(models.Model):
 
     def __str__(self):
         return self.title
+
+
+class NoticeRead(models.Model):
+    """Tracks which users have opened which notices."""
+    tenant = models.ForeignKey(
+        'core.Tenant',
+        on_delete=models.CASCADE,
+        related_name='notice_reads',
+        null=True,
+        blank=True,
+        db_constraint=False,
+    )
+    notice = models.ForeignKey(Notice, on_delete=models.CASCADE, related_name='reads')
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='notice_reads',
+        db_constraint=False,
+    )
+    read_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('notice', 'user')
+        indexes = [
+            models.Index(fields=['user', 'notice'], name='acad_noticeread_user_idx'),
+        ]
+
+    def __str__(self):
+        return f"{self.user_id} read notice {self.notice_id}"

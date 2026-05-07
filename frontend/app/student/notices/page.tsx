@@ -32,20 +32,33 @@ export default function StudentNoticesPage() {
         })();
     }, []);
 
-    const toggle = (id: string | number | undefined) => {
+    const toggle = (notice: Notice) => {
+        const id = notice.id ?? notice.notice_id;
         if (id == null) return;
         setExpanded((prev) => {
             const next = new Set(prev);
             next.has(id) ? next.delete(id) : next.add(id);
             return next;
         });
+        // Mark as read on first open. Optimistic: flip locally, then sync.
+        if (typeof id === 'number' && !notice.is_read) {
+            setNotices((prev) =>
+                prev.map((n) => ((n.id ?? n.notice_id) === id ? { ...n, is_read: true } : n)),
+            );
+            academicAPI.markNoticeRead(id).catch(() => {
+                // Revert if the server rejected it.
+                setNotices((prev) =>
+                    prev.map((n) => ((n.id ?? n.notice_id) === id ? { ...n, is_read: false } : n)),
+                );
+            });
+        }
     };
 
     const isNew = (d?: string) => d && (Date.now() - new Date(d).getTime()) < 3 * 86400000;
 
     const filtered = filter === 'all' ? notices : notices.filter((n) => n.priority === filter);
     const highCount = notices.filter((n) => n.priority === 'high').length;
-    const newCount = notices.filter((n) => isNew(n.published_date)).length;
+    const newCount = notices.filter((n) => !n.is_read).length;
 
     if (loading) return (
         <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
@@ -79,7 +92,7 @@ export default function StudentNoticesPage() {
                     {newCount > 0 && (
                         <div className="flex items-center gap-2 px-4 py-2 bg-blue-50 border border-blue-100 rounded-xl">
                             <Bell className="h-4 w-4 text-blue-500" />
-                            <span className="text-sm font-bold text-blue-700">{newCount} New</span>
+                            <span className="text-sm font-bold text-blue-700">{newCount} Unread</span>
                         </div>
                     )}
                     {highCount > 0 && (
@@ -118,7 +131,7 @@ export default function StudentNoticesPage() {
                     const style = priorityStyle[p] ?? priorityStyle.normal;
                     const PriorityIcon = style.icon;
                     const isExpanded = notice.id != null && expanded.has(notice.id);
-                    const isNewNotice = isNew(notice.published_date);
+                    const isUnread = !notice.is_read;
 
                     return (
                         <Card
@@ -129,7 +142,7 @@ export default function StudentNoticesPage() {
                                 {/* Main row — always visible */}
                                 <button
                                     className="w-full text-left p-5 hover:bg-black/[0.02] transition-colors"
-                                    onClick={() => toggle(notice.id)}
+                                    onClick={() => toggle(notice)}
                                 >
                                     <div className="flex items-start justify-between gap-3">
                                         <div className="flex-1 min-w-0">
@@ -138,8 +151,8 @@ export default function StudentNoticesPage() {
                                                 <Badge className={`${style.badge} border-0 text-[10px] font-bold uppercase tracking-widest capitalize px-2 py-0`}>
                                                     {notice.category || p} priority
                                                 </Badge>
-                                                {isNewNotice && (
-                                                    <Badge className="bg-blue-500 text-white border-0 text-[9px] font-bold px-1.5 py-0">NEW</Badge>
+                                                {isUnread && (
+                                                    <Badge className="bg-blue-500 text-white border-0 text-[9px] font-bold px-1.5 py-0">UNREAD</Badge>
                                                 )}
                                                 <span className="flex items-center gap-1 text-[10px] text-slate-400 ml-auto">
                                                     <Calendar className="h-3 w-3" />
