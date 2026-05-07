@@ -14,6 +14,7 @@ import {
     BarChart3, ArrowUpRight, Sparkles, BookOpen, Trophy
 } from 'lucide-react';
 import { academicAPI, Result, Assessment, Subject } from '@/lib/api';
+import { ProjectGradesCard } from '@/components/projects/ProjectGradesCard';
 
 type ResultWithMeta = Result & {
     assessmentDetails?: Assessment;
@@ -275,6 +276,9 @@ export default function StudentGradesPage() {
                     </div>
                 </div>
             </div>
+
+            {/* Project grades — Phase 9 #6 read-time aggregation */}
+            <ProjectGradesCard detailHrefBase="/student/projects" />
         </div>
     );
 }
