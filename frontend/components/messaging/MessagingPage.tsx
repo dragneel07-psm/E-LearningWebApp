@@ -105,10 +105,15 @@ export default function MessagingPage({ emptyStateMessage = "Choose a chat from 
             ]);
             setConversations(convs);
             setCurrentUser(me);
-            // getAccounts requires admin — fail gracefully for teachers/students
-            usersAPI.getAccounts().then(users =>
-                setAllUsers(users.filter((u: UserType) => u.user_id !== me.user_id))
-            ).catch(() => {});
+            // getAccounts is admin-only — skip it for non-admins so the
+            // browser console isn't spammed with expected 403s. Teachers,
+            // students and parents can't start arbitrary new conversations
+            // through this UI today.
+            if (me?.role === 'admin' || me?.role === 'saas_admin') {
+                usersAPI.getAccounts().then(users =>
+                    setAllUsers(users.filter((u: UserType) => u.user_id !== me.user_id))
+                ).catch(() => {});
+            }
         } catch {
             toast.error("Failed to load messages");
         } finally {
