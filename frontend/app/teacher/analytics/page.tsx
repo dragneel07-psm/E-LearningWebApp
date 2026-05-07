@@ -5,10 +5,11 @@
 
 import { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import {
     TrendingUp, Users, AlertTriangle,
     CheckCircle2, ChevronRight, BarChart3,
-    Calendar, BrainCircuit, Sparkles, Lock
+    Calendar, BrainCircuit, Sparkles, Lock, Loader2
 } from 'lucide-react';
 import { aiAPI, academicAPI, usersAPI, Subject } from '@/lib/api';
 import {
@@ -16,6 +17,27 @@ import {
     CartesianGrid, Tooltip, LineChart, Line, AreaChart, Area
 } from 'recharts';
 import { SafeResponsiveContainer } from '@/components/ui/safe-responsive-container';
+import { toast } from 'sonner';
+
+interface IndividualReport {
+    student_name?: string;
+    metrics?: {
+        avg_score?: number;
+        attendance?: number;
+        streak?: number;
+        focus?: number;
+        class?: string;
+        mastery?: Array<{ subject: string; score: number }>;
+    };
+    ai_report?: {
+        summary?: string;
+        strengths?: string[];
+        weaknesses?: string[];
+        recommendations?: string[];
+    };
+    generated_at?: string;
+    error?: string;
+}
 
 interface AnalyticsData {
     at_risk_count: number;
@@ -30,6 +52,27 @@ export default function TeacherAnalyticsPage() {
     const [user, setUser] = useState<any>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [generatingFor, setGeneratingFor] = useState<string | null>(null);
+    const [report, setReport] = useState<IndividualReport | null>(null);
+    const [reportOpen, setReportOpen] = useState(false);
+
+    const handleGenerateReport = async (student: { id: string; name: string }) => {
+        setGeneratingFor(student.id);
+        try {
+            const result = await aiAPI.generateStudentReport(student.id) as IndividualReport;
+            if (result?.error) {
+                toast.error(result.error || 'Failed to generate report.');
+                return;
+            }
+            setReport(result);
+            setReportOpen(true);
+            toast.success(`Report generated for ${student.name}.`);
+        } catch (err: any) {
+            toast.error(err?.message || 'Failed to generate report.');
+        } finally {
+            setGeneratingFor(null);
+        }
+    };
 
     useEffect(() => {
         async function loadAnalytics() {
@@ -197,8 +240,21 @@ export default function TeacherAnalyticsPage() {
                                             </p>
                                         ))}
                                     </div>
-                                    <button className="mt-2 text-[10px] font-black uppercase tracking-widest text-indigo-600 hover:underline flex items-center gap-1">
-                                        Generate Individual Report <ChevronRight className="h-3 w-3" />
+                                    <button
+                                        type="button"
+                                        onClick={() => handleGenerateReport({ id: student.id, name: student.name })}
+                                        disabled={generatingFor === student.id}
+                                        className="mt-2 text-[10px] font-black uppercase tracking-widest text-indigo-600 hover:underline flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
+                                    >
+                                        {generatingFor === student.id ? (
+                                            <>
+                                                <Loader2 className="h-3 w-3 animate-spin" /> Generating…
+                                            </>
+                                        ) : (
+                                            <>
+                                                Generate Individual Report <ChevronRight className="h-3 w-3" />
+                                            </>
+                                        )}
                                     </button>
                                 </div>
                             ))}
@@ -238,7 +294,99 @@ export default function TeacherAnalyticsPage() {
                     ))}
                 </CardContent>
             </Card>
+
+            <Dialog open={reportOpen} onOpenChange={setReportOpen}>
+                <DialogContent className="sm:max-w-2xl max-h-[85vh] overflow-y-auto">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2">
+                            <BrainCircuit className="h-5 w-5 text-indigo-600" />
+                            {report?.student_name ? `AI Report — ${report.student_name}` : 'AI Report'}
+                        </DialogTitle>
+                        {report?.metrics?.class && (
+                            <DialogDescription>
+                                Class: {report.metrics.class}
+                                {report.generated_at && (
+                                    <> · Generated {new Date(report.generated_at).toLocaleString()}</>
+                                )}
+                            </DialogDescription>
+                        )}
+                    </DialogHeader>
+
+                    {report && (
+                        <div className="space-y-4">
+                            {report.ai_report?.summary && (
+                                <section>
+                                    <h4 className="text-xs font-black uppercase tracking-widest text-slate-500 mb-1">Summary</h4>
+                                    <p className="text-sm leading-relaxed text-slate-800">{report.ai_report.summary}</p>
+                                </section>
+                            )}
+
+                            {report.metrics && (
+                                <section className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                                    <StatTile label="Avg Score" value={`${(report.metrics.avg_score ?? 0).toFixed(1)}%`} />
+                                    <StatTile label="Attendance" value={`${(report.metrics.attendance ?? 0).toFixed(1)}%`} />
+                                    <StatTile label="Streak" value={`${report.metrics.streak ?? 0}d`} />
+                                    <StatTile label="Focus" value={`${report.metrics.focus ?? 0}%`} />
+                                </section>
+                            )}
+
+                            {report.metrics?.mastery && report.metrics.mastery.length > 0 && (
+                                <section>
+                                    <h4 className="text-xs font-black uppercase tracking-widest text-slate-500 mb-2">Subject Mastery</h4>
+                                    <ul className="space-y-1.5">
+                                        {report.metrics.mastery.map((m) => (
+                                            <li key={m.subject} className="flex items-center justify-between text-sm">
+                                                <span className="text-slate-700">{m.subject}</span>
+                                                <span className="font-mono font-semibold text-slate-900">{m.score}%</span>
+                                            </li>
+                                        ))}
+                                    </ul>
+                                </section>
+                            )}
+
+                            {report.ai_report?.strengths && report.ai_report.strengths.length > 0 && (
+                                <ListSection title="Strengths" items={report.ai_report.strengths} tone="emerald" />
+                            )}
+                            {report.ai_report?.weaknesses && report.ai_report.weaknesses.length > 0 && (
+                                <ListSection title="Areas to Improve" items={report.ai_report.weaknesses} tone="amber" />
+                            )}
+                            {report.ai_report?.recommendations && report.ai_report.recommendations.length > 0 && (
+                                <ListSection title="Recommendations" items={report.ai_report.recommendations} tone="indigo" />
+                            )}
+                        </div>
+                    )}
+                </DialogContent>
+            </Dialog>
         </div>
+    );
+}
+
+function StatTile({ label, value }: { label: string; value: string }) {
+    return (
+        <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-center">
+            <p className="text-lg font-black text-slate-900">{value}</p>
+            <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500 mt-1">{label}</p>
+        </div>
+    );
+}
+
+function ListSection({ title, items, tone }: { title: string; items: string[]; tone: 'emerald' | 'amber' | 'indigo' }) {
+    const toneClass = {
+        emerald: 'text-emerald-700 bg-emerald-50 border-emerald-100',
+        amber: 'text-amber-700 bg-amber-50 border-amber-100',
+        indigo: 'text-indigo-700 bg-indigo-50 border-indigo-100',
+    }[tone];
+    return (
+        <section>
+            <h4 className="text-xs font-black uppercase tracking-widest text-slate-500 mb-2">{title}</h4>
+            <ul className="space-y-1.5">
+                {items.map((item, i) => (
+                    <li key={i} className={`text-sm rounded-lg border px-3 py-2 ${toneClass}`}>
+                        {item}
+                    </li>
+                ))}
+            </ul>
+        </section>
     );
 }
 

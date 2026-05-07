@@ -397,15 +397,18 @@ def at_risk_students(request):
         traceback.print_exc()
         return Response({"error": str(exc)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-@api_view(['GET'])
+@api_view(['GET', 'POST'])
 @permission_classes([IsAuthenticated])
 def student_report(request, student_id):
     """
-    Generate a detailed AI report for a student.
+    Generate a detailed AI report for a student. POST persists a new report;
+    GET re-runs the generator without persistence is also accepted for callers
+    that want a fresh snapshot.
     """
     try:
         service = ReportingService()
-        data = service.generate_student_report(student_id)
+        save = request.method == 'POST'
+        data = service.generate_student_report(student_id, save=save)
         return Response(data)
     except Exception as e:
         return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

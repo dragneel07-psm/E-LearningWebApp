@@ -2837,6 +2837,8 @@ export const aiAPI = {
         ai_insights: string[];
     }>('/ai/analytics/teacher/'),
     getStudentReport: (studentId: string) => apiRequest<any>(`/ai/reports/student/${studentId}/`),
+    generateStudentReport: (studentId: string) =>
+        apiRequest<any>(`/ai/reports/student/${studentId}/`, { method: 'POST' }),
     getActivePath: () => apiRequest<LearningPath>('/ai/learning-paths/active/'),
 };
 
