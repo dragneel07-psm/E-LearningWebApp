@@ -75,15 +75,20 @@ resolve_server_bin() {
   for candidate in /usr/local/bin/daphne /opt/venv/bin/daphne; do
     [ -x "$candidate" ] && echo "$candidate" && return 0
   done
-  # Fall back to gunicorn (HTTP only — WebSockets disabled)
-  log "WARNING: daphne not found, falling back to gunicorn (WebSockets will not work)"
-  if command -v gunicorn >/dev/null 2>&1; then
-    command -v gunicorn; return 0
+  # daphne missing. WebSockets won't work under gunicorn — refuse to start
+  # silently. Set ALLOW_GUNICORN_FALLBACK=true to opt back into the old behavior.
+  if [ "${ALLOW_GUNICORN_FALLBACK:-false}" = "true" ]; then
+    log "WARNING: daphne not found, falling back to gunicorn (WebSockets will not work)"
+    if command -v gunicorn >/dev/null 2>&1; then
+      command -v gunicorn; return 0
+    fi
+    for candidate in /usr/local/bin/gunicorn /opt/venv/bin/gunicorn; do
+      [ -x "$candidate" ] && echo "$candidate" && return 0
+    done
+    echo "Unable to locate daphne or gunicorn. Install daphne." >&2
+    exit 1
   fi
-  for candidate in /usr/local/bin/gunicorn /opt/venv/bin/gunicorn; do
-    [ -x "$candidate" ] && echo "$candidate" && return 0
-  done
-  echo "Unable to locate daphne or gunicorn. Install daphne." >&2
+  echo "FATAL: daphne not found. Install daphne (it's in requirements.txt) or set ALLOW_GUNICORN_FALLBACK=true to start without WebSocket support." >&2
   exit 1
 }
 

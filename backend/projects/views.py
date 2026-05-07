@@ -3,6 +3,7 @@
 # via any medium, is strictly prohibited. Proprietary and confidential.
 """ViewSets for the projects app — REST API surface for project tracking."""
 from django.core.exceptions import ValidationError as DjangoValidationError
+from django.db import IntegrityError
 from django.db.models import Q
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
@@ -145,9 +146,14 @@ class ProjectViewSet(TenantScopedQuerysetMixin, viewsets.ModelViewSet):
             raise ValidationError("Cannot add members to a non-group project.")
         from academic.models import Student
 
-        student = Student.objects.filter(student_id=student_id).first()
+        try:
+            student = Student.objects.filter(student_id=student_id).first()
+        except (ValueError, DjangoValidationError):
+            raise ValidationError({"student": "Invalid student id."})
         if student is None:
             raise ValidationError({"student": "Student not found."})
+        if project.members.filter(student=student).exists():
+            raise ValidationError({"student": "Student is already a member of this project."})
         member = ProjectMember(
             tenant=project.tenant, project=project, student=student, role=role
         )
@@ -155,7 +161,10 @@ class ProjectViewSet(TenantScopedQuerysetMixin, viewsets.ModelViewSet):
             member.clean()
         except DjangoValidationError as exc:
             raise ValidationError(exc.messages)
-        member.save()
+        try:
+            member.save()
+        except IntegrityError:
+            raise ValidationError({"student": "Student is already a member of this project."})
         if role == "leader":
             project.leader = student
             project.save(update_fields=["leader", "updated_at"])
