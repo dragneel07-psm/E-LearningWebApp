@@ -60,6 +60,15 @@ function TaskCard({ task, canDrag }: { task: ProjectTask; canDrag: boolean }) {
                                 {task.assignee_detail.name}
                             </Badge>
                         )}
+                        {task.weight > 1 && (
+                            <Badge
+                                variant="outline"
+                                className="border-indigo-200 bg-indigo-50 font-normal text-indigo-700"
+                                title={`This task contributes ${task.weight}× to project progress`}
+                            >
+                                ×{task.weight}
+                            </Badge>
+                        )}
                         {task.due_date && (
                             <span className="inline-flex items-center gap-1">
                                 <Clock className="h-3 w-3" />

@@ -62,6 +62,7 @@ export default function TeacherProjectDetailPage() {
     const postComment = usePostComment(id || '');
 
     const [newTaskTitle, setNewTaskTitle] = useState('');
+    const [newTaskWeight, setNewTaskWeight] = useState<string>('1');
     const [comment, setComment] = useState('');
     const me = getUser();
 
@@ -86,9 +87,11 @@ export default function TeacherProjectDetailPage() {
 
     const handleAddTask = async () => {
         if (!newTaskTitle.trim()) return;
+        const weight = Math.max(1, Math.floor(Number(newTaskWeight) || 1));
         try {
-            await createTask.mutateAsync({ title: newTaskTitle.trim() });
+            await createTask.mutateAsync({ title: newTaskTitle.trim(), weight });
             setNewTaskTitle('');
+            setNewTaskWeight('1');
             toast({ title: 'Task added' });
         } catch {
             toast({ title: 'Could not add task', variant: 'destructive' });
@@ -226,6 +229,16 @@ export default function TeacherProjectDetailPage() {
                                 onChange={(e) => setNewTaskTitle(e.target.value)}
                                 onKeyDown={(e) => e.key === 'Enter' && handleAddTask()}
                                 className="w-64"
+                            />
+                            <Input
+                                type="number"
+                                min={1}
+                                step={1}
+                                value={newTaskWeight}
+                                onChange={(e) => setNewTaskWeight(e.target.value)}
+                                title="Weight — how much this task contributes to overall progress"
+                                aria-label="Task weight"
+                                className="w-20"
                             />
                             <Button onClick={handleAddTask} disabled={createTask.isPending}>
                                 <Plus className="mr-1 h-4 w-4" /> Add
