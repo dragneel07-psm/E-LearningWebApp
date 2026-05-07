@@ -35,6 +35,38 @@ def _broadcast(project_id, event: dict) -> None:
         logger.exception("project ws broadcast failed for project_id=%s", project_id)
 
 
+def _broadcast_mentor_summary(project: Project) -> None:
+    """Fan a digest event to the mentor's group whenever the project changes.
+
+    The dashboard listens on ws/projects/digest/ and refetches its data on
+    any summary push, so the at-risk widget stays accurate without one
+    WebSocket per project.
+    """
+    if not project.mentor_id:
+        return
+    try:
+        from asgiref.sync import async_to_sync
+        from channels.layers import get_channel_layer
+
+        from .consumers import mentor_group_name
+
+        layer = get_channel_layer()
+        if layer is None:
+            return
+        overdue = sum(1 for t in project.tasks.all() if t.is_overdue)
+        payload = {
+            "type": "project.summary",
+            "project_id": str(project.pk),
+            "status": project.status,
+            "progress_percent": project.progress_percent,
+            "overdue_task_count": overdue,
+            "is_at_risk": overdue > 0,
+        }
+        async_to_sync(layer.group_send)(mentor_group_name(project.mentor_id), payload)
+    except Exception:
+        logger.exception("mentor digest broadcast failed for project_id=%s", project.pk)
+
+
 def _serialize_task(task: ProjectTask) -> dict:
     return {
         "task_id": str(task.task_id),
@@ -69,6 +101,8 @@ def _broadcast_project_progress(project: Project) -> None:
             "label": project.progress_label,
         },
     )
+    # Mentor dashboard cares about progress changes too.
+    _broadcast_mentor_summary(project)
 
 
 # --- ProjectTask: assignee change tracking ---
@@ -149,6 +183,7 @@ def _on_update_saved(sender, instance: ProjectUpdate, created, **kwargs):
                 "final_grade": (instance.meta or {}).get("final_grade"),
             },
         )
+        _broadcast_mentor_summary(instance.project)
         _notify_project_graded(instance.project)
     elif instance.kind in {"submission"}:
         _broadcast(
@@ -160,6 +195,7 @@ def _on_update_saved(sender, instance: ProjectUpdate, created, **kwargs):
                 "to": "submitted",
             },
         )
+        _broadcast_mentor_summary(instance.project)
 
 
 # --- Notifications ---

@@ -39,6 +39,10 @@ def project_group_name(project_id) -> str:
     return f"project_{project_id}"
 
 
+def mentor_group_name(user_id) -> str:
+    return f"mentor_{user_id}"
+
+
 class ProjectStreamConsumer(AsyncWebsocketConsumer):
     async def connect(self):
         user = self.scope.get("user")
@@ -153,3 +157,80 @@ class ProjectStreamConsumer(AsyncWebsocketConsumer):
         if getattr(user, "role", "") == "teacher":
             return True
         return False
+
+
+class MentorDigestStreamConsumer(AsyncWebsocketConsumer):
+    """Per-mentor digest channel.
+
+    URL: ws://<host>/ws/projects/digest/?token=<jwt>
+
+    Joins group `mentor_<user_id>`. Signals on ProjectTask + ProjectUpdate
+    fan a `project.summary` event into this group whenever any of the
+    teacher's mentored projects changes — so the mentor dashboard updates
+    without opening a separate WebSocket per project.
+
+    Server → Client frames:
+      { "type": "project.summary",
+        "project_id": "...",
+        "status": "active",
+        "progress_percent": 60.0,
+        "overdue_task_count": 1,
+        "is_at_risk": true }
+      { "type": "pong" }
+    """
+
+    async def connect(self):
+        user = self.scope.get("user")
+        if not user or not user.is_authenticated:
+            await self.close(code=4001)
+            return
+
+        role = (getattr(user, "role", "") or "").lower()
+        if role not in {"teacher", "admin", "staff", "saas_admin"}:
+            await self.close(code=4403)
+            return
+
+        # Tenant feature gate — mirrors REST IsProjectsEnabled.
+        allowed = await self._tenant_allows(user)
+        if not allowed:
+            await self.close(code=4403)
+            return
+
+        self.group_name = mentor_group_name(user.pk)
+        await self.channel_layer.group_add(self.group_name, self.channel_name)
+        await self.accept()
+        logger.debug("WS mentor-digest connect: user=%s group=%s", user.pk, self.group_name)
+
+    async def disconnect(self, close_code):
+        if hasattr(self, "group_name"):
+            await self.channel_layer.group_discard(self.group_name, self.channel_name)
+
+    async def receive(self, text_data=None, bytes_data=None):
+        try:
+            data = json.loads(text_data or "{}")
+        except json.JSONDecodeError:
+            await self.send_json({"type": "error", "detail": "Invalid JSON."})
+            return
+        if data.get("type") == "ping":
+            await self.send_json({"type": "pong"})
+            return
+        await self.send_json({"type": "error", "detail": "Unknown message type."})
+
+    # Channel layer event handler. group_send type "project.summary" → method
+    # name `project_summary` (dot → underscore).
+    async def project_summary(self, event):
+        await self.send_json({**event, "type": "project.summary"})
+
+    async def send_json(self, payload: dict) -> None:
+        await self.send(text_data=json.dumps(payload, default=str))
+
+    @database_sync_to_async
+    def _tenant_allows(self, user) -> bool:
+        from ._helpers import tenant_has_projects_enabled
+
+        tenant = getattr(user, "tenant", None)
+        if tenant is None:
+            # Allow saas_admin (no tenant) through — global visibility.
+            role = (getattr(user, "role", "") or "").lower()
+            return role in {"saas_admin", "admin", "staff"}
+        return tenant_has_projects_enabled(tenant)

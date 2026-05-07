@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ProjectProgressBar } from '@/components/projects/ProjectProgressBar';
+import { useMentorDigestSocket } from '@/hooks/useMentorDigestSocket';
 import { useMentorDashboard, useProjects, type ProjectStatus } from '@/services/projects';
 
 const STATUS_TONE: Record<ProjectStatus, string> = {
@@ -26,6 +27,9 @@ export default function TeacherProjectsPage() {
     const [filter, setFilter] = useState<'mine' | 'all'>('mine');
     const projectsQ = useProjects(filter);
     const dashboardQ = useMentorDashboard();
+    // One WebSocket per mentor; auto-invalidates the dashboard query on
+    // any project event for projects this teacher mentors.
+    useMentorDigestSocket();
 
     const atRisk = useMemo(
         () => (dashboardQ.data || []).filter((p) => p.is_at_risk),

@@ -19,7 +19,12 @@ from django.test import TestCase, override_settings
 from django_tenants.test.cases import FastTenantTestCase
 
 from academic.models import AcademicClass, Section, Student
-from projects.consumers import ProjectStreamConsumer, project_group_name
+from projects.consumers import (
+    MentorDigestStreamConsumer,
+    ProjectStreamConsumer,
+    mentor_group_name,
+    project_group_name,
+)
 from projects.models import Project, ProjectMember
 from users.models import UserAccount
 
@@ -250,4 +255,113 @@ class ProjectStreamBroadcastTests(FastTenantTestCase):
             await comm.send_to(text_data=json.dumps({"type": "ping"}))
             frame = await comm.receive_json_from()
             self.assertEqual(frame["type"], "pong")
+            await comm.disconnect()
+
+
+@override_settings(CHANNEL_LAYERS=IN_MEMORY_CHANNEL_LAYERS)
+class MentorDigestAuthTests(TestCase):
+    def _app(self):
+        return MentorDigestStreamConsumer.as_asgi()
+
+    async def test_unauthenticated_rejected(self):
+        comm = WebsocketCommunicator(self._app(), "/ws/projects/digest/")
+        comm.scope["user"] = _anon_user()
+        connected, code = await comm.connect()
+        self.assertFalse(connected)
+        self.assertEqual(code, 4001)
+        await comm.disconnect()
+
+
+class MentorDigestVisibilityTests(FastTenantTestCase):
+    @classmethod
+    def setup_tenant(cls, tenant):
+        tenant.name = "Mentor Digest School"
+
+    @classmethod
+    def setup_domain(cls, domain):
+        domain.is_primary = True
+
+    def setUp(self):
+        _enable_projects(self.tenant)
+        self.acad_class = AcademicClass.objects.create(name="Grade 12", order=12)
+        self.section = Section.objects.create(name="A", academic_class=self.acad_class)
+        self.mentor = UserAccount.objects.create_user(
+            username="md_mentor",
+            email="md_mentor@example.com",
+            password="Pass@1234",
+            role="teacher",
+            tenant=self.tenant,
+        )
+        self.student = UserAccount.objects.create_user(
+            username="md_student",
+            email="md_student@example.com",
+            password="Pass@1234",
+            role="student",
+            tenant=self.tenant,
+        )
+
+    async def test_teacher_can_connect(self):
+        with override_settings(CHANNEL_LAYERS=IN_MEMORY_CHANNEL_LAYERS):
+            comm = WebsocketCommunicator(MentorDigestStreamConsumer.as_asgi(), "/ws/projects/digest/")
+            comm.scope["user"] = self.mentor
+            connected, _ = await comm.connect()
+            self.assertTrue(connected)
+            await comm.disconnect()
+
+    async def test_student_rejected(self):
+        with override_settings(CHANNEL_LAYERS=IN_MEMORY_CHANNEL_LAYERS):
+            comm = WebsocketCommunicator(MentorDigestStreamConsumer.as_asgi(), "/ws/projects/digest/")
+            comm.scope["user"] = self.student
+            connected, code = await comm.connect()
+            self.assertFalse(connected)
+            self.assertEqual(code, 4403)
+            await comm.disconnect()
+
+
+class MentorDigestBroadcastTests(FastTenantTestCase):
+    """group_send to mentor_<id> reaches the connected client."""
+
+    @classmethod
+    def setup_tenant(cls, tenant):
+        tenant.name = "Mentor Digest Bcast School"
+
+    @classmethod
+    def setup_domain(cls, domain):
+        domain.is_primary = True
+
+    def setUp(self):
+        _enable_projects(self.tenant)
+        self.mentor = UserAccount.objects.create_user(
+            username="md_bcast_mentor",
+            email="md_bcast_mentor@example.com",
+            password="Pass@1234",
+            role="teacher",
+            tenant=self.tenant,
+        )
+
+    async def test_summary_event_pushed_to_client(self):
+        from channels.layers import get_channel_layer
+
+        with override_settings(CHANNEL_LAYERS=IN_MEMORY_CHANNEL_LAYERS):
+            comm = WebsocketCommunicator(MentorDigestStreamConsumer.as_asgi(), "/ws/projects/digest/")
+            comm.scope["user"] = self.mentor
+            connected, _ = await comm.connect()
+            self.assertTrue(connected)
+
+            layer = get_channel_layer()
+            await layer.group_send(
+                mentor_group_name(self.mentor.pk),
+                {
+                    "type": "project.summary",
+                    "project_id": "p-123",
+                    "status": "active",
+                    "progress_percent": 60.0,
+                    "overdue_task_count": 1,
+                    "is_at_risk": True,
+                },
+            )
+            frame = await comm.receive_json_from()
+            self.assertEqual(frame["type"], "project.summary")
+            self.assertEqual(frame["project_id"], "p-123")
+            self.assertTrue(frame["is_at_risk"])
             await comm.disconnect()
