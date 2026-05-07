@@ -63,7 +63,12 @@ export function TeacherSidebar() {
         usersAPI.getMe().then(setUser).catch(console.error);
     }, []);
 
-    const filteredNavigation = [...navigation];
+    let filteredNavigation = [...navigation];
+
+    // Hide Projects when the tenant has the projects feature disabled.
+    if (user?.tenant_features?.projects === false) {
+        filteredNavigation = filteredNavigation.filter(n => n.name !== 'Projects');
+    }
 
     // Insert Analytics before Library when feature is available
     if (user?.tenant_features?.teacher_reports !== false) {

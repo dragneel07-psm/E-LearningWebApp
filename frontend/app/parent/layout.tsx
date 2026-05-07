@@ -5,13 +5,14 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { ReactNode } from 'react';
+import { ReactNode, useEffect, useState } from 'react';
 import {
     LayoutDashboard, Users, CalendarDays, GraduationCap,
     Wallet, CalendarClock, BookOpen, MessageSquare, LogOut,
     FolderKanban
 } from 'lucide-react';
 import { removeTokens } from '@/lib/auth';
+import { usersAPI, User as UserType } from '@/lib/api';
 
 const NAV = [
     { href: '/parent', label: 'Overview', icon: LayoutDashboard, exact: true },
@@ -29,6 +30,18 @@ const NAV = [
 export default function ParentLayout({ children }: { children: ReactNode }) {
     const pathname = usePathname();
     const router = useRouter();
+    const [user, setUser] = useState<UserType | null>(null);
+
+    useEffect(() => {
+        usersAPI.getMe().then(setUser).catch(console.error);
+    }, []);
+
+    const visibleNav = NAV.filter((item) => {
+        if (item.href === '/parent/projects' && user?.tenant_features?.projects === false) {
+            return false;
+        }
+        return true;
+    });
 
     const handleLogout = () => {
         removeTokens();
@@ -52,7 +65,7 @@ export default function ParentLayout({ children }: { children: ReactNode }) {
                 </div>
 
                 <nav className="flex-1 px-3 space-y-0.5">
-                    {NAV.map(({ href, label, icon: Icon, exact }) => {
+                    {visibleNav.map(({ href, label, icon: Icon, exact }) => {
                         const active = exact ? pathname === href : pathname.startsWith(href);
                         return (
                             <Link

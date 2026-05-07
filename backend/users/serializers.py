@@ -6,7 +6,11 @@ from rest_framework import serializers
 from django.contrib.auth import get_user_model
 from django.conf import settings
 from .models import UserAccount
-from core.utils.plan_enforcement import build_plan_entitled_features, get_tenant_plan
+from core.utils.plan_enforcement import (
+    build_plan_entitled_features,
+    compute_effective_features,
+    get_tenant_plan,
+)
 from core.utils.audit import record_audit_event
 from rest_framework_simplejwt.exceptions import InvalidToken
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer, TokenRefreshSerializer
@@ -34,15 +38,19 @@ def _ensure_valid_login_tenant(user) -> None:
 
 
 def _safe_tenant_features(user) -> dict:
+    """Return the *effective* feature dict (plan baseline merged with the
+    tenant's per-school overrides) for use in JWT claims and /users/me.
+    """
     tenant = _resolved_tenant(user)
 
     if not tenant:
         return {}
 
+    overrides = getattr(tenant, "feature_overrides", None) or {}
     try:
-        return build_plan_entitled_features(get_tenant_plan(tenant))
+        return compute_effective_features(get_tenant_plan(tenant), overrides)
     except Exception:
-        return build_plan_entitled_features(None)
+        return compute_effective_features(None, overrides)
 
 
 def _tenant_claims(user) -> dict:

@@ -286,9 +286,11 @@ function StudentTabs({
       <Tab.Screen name="Grades" component={GradesScreen} />
       <Tab.Screen name="Fees" component={FeesScreen} />
       <Tab.Screen name="Assignments" component={AssignmentsStackNavigator} />
-      <Tab.Screen name="Projects">
-        {() => <ProjectsStackNavigator role="student" />}
-      </Tab.Screen>
+      {user.tenant_features?.projects !== false && (
+        <Tab.Screen name="Projects">
+          {() => <ProjectsStackNavigator role="student" />}
+        </Tab.Screen>
+      )}
       <Tab.Screen name="Progress" component={ProgressScreen} />
       <Tab.Screen name="Library" component={LibraryScreen} />
       <Tab.Screen name="Tutor" component={AiTutorScreen} options={{ title: 'AI Tutor' }} />
@@ -321,9 +323,11 @@ function TeacherTabs({
       <Tab.Screen name="People" component={TeacherStudentsScreen} />
       <Tab.Screen name="Attendance" component={TeacherAttendanceScreen} />
       <Tab.Screen name="Assessments" component={TeacherAssessmentsStackNavigator} />
-      <Tab.Screen name="Projects">
-        {() => <ProjectsStackNavigator role="teacher" />}
-      </Tab.Screen>
+      {user.tenant_features?.projects !== false && (
+        <Tab.Screen name="Projects">
+          {() => <ProjectsStackNavigator role="teacher" />}
+        </Tab.Screen>
+      )}
       <Tab.Screen name="Grading" component={TeacherGradingStackNavigator} />
       <Tab.Screen name="Timetable">
         {() => <TimetableScreen role="teacher" />}
@@ -355,7 +359,9 @@ function ParentTabs({
       <Tab.Screen name="Children" component={ParentChildrenScreen} />
       <Tab.Screen name="Attendance" component={ParentAttendanceScreen} />
       <Tab.Screen name="Grades" component={ParentGradesScreen} />
-      <Tab.Screen name="Projects" component={ParentProjectsStackNavigator} />
+      {user.tenant_features?.projects !== false && (
+        <Tab.Screen name="Projects" component={ParentProjectsStackNavigator} />
+      )}
       <Tab.Screen name="Fees" component={ParentFeesScreen} />
       <Tab.Screen name="Notices">
         {() => <NoticeBoardScreen role="parent" />}
