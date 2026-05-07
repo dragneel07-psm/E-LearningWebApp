@@ -10,9 +10,22 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from '@/hooks/use-toast';
-import { useGradeProject, useProject } from '@/services/projects';
+import {
+    useCreateRubricTemplate,
+    useGradeProject,
+    useProject,
+    useRubricTemplates,
+    type RubricTemplate,
+} from '@/services/projects';
 
 interface RubricLine {
     criterion: string;
@@ -33,10 +46,13 @@ export default function TeacherGradeProjectPage() {
     const id = params?.id;
     const projectQ = useProject(id);
     const gradeMut = useGradeProject(id || '');
+    const templatesQ = useRubricTemplates();
+    const createTemplate = useCreateRubricTemplate();
 
     const [finalGrade, setFinalGrade] = useState<string>('');
     const [note, setNote] = useState<string>('');
     const [lines, setLines] = useState<RubricLine[]>(STARTER_LINES);
+    const [templateName, setTemplateName] = useState<string>('');
 
     if (projectQ.isLoading) return <p className="p-6 text-sm text-slate-500">Loading…</p>;
     if (!projectQ.data) return <p className="p-6 text-sm text-rose-600">Project not found.</p>;
@@ -48,6 +64,43 @@ export default function TeacherGradeProjectPage() {
 
     const addLine = () =>
         setLines((prev) => [...prev, { criterion: '', score: '', max: '10', notes: '' }]);
+
+    const applyTemplate = (template: RubricTemplate) => {
+        const seeded: RubricLine[] = (template.criteria_json || []).map((line) => ({
+            criterion: line.criterion || '',
+            score: '',
+            max: line.max != null ? String(line.max) : '10',
+            notes: '',
+        }));
+        if (seeded.length === 0) {
+            toast({ title: 'Template is empty', variant: 'destructive' });
+            return;
+        }
+        setLines(seeded);
+        toast({ title: `Loaded template "${template.name}"` });
+    };
+
+    const saveAsTemplate = async () => {
+        const trimmed = templateName.trim();
+        if (!trimmed) {
+            toast({ title: 'Template name required', variant: 'destructive' });
+            return;
+        }
+        const criteria = lines
+            .filter((l) => l.criterion.trim())
+            .map((l) => ({ criterion: l.criterion.trim(), max: Number(l.max) || 0 }));
+        if (criteria.length === 0) {
+            toast({ title: 'Add at least one criterion before saving as template', variant: 'destructive' });
+            return;
+        }
+        try {
+            await createTemplate.mutateAsync({ name: trimmed, criteria_json: criteria });
+            setTemplateName('');
+            toast({ title: 'Saved as template' });
+        } catch {
+            toast({ title: 'Could not save template', variant: 'destructive' });
+        }
+    };
 
     const submit = async () => {
         const grade = Number(finalGrade);
@@ -85,8 +138,28 @@ export default function TeacherGradeProjectPage() {
             </header>
 
             <Card>
-                <CardHeader>
+                <CardHeader className="flex flex-row items-center justify-between">
                     <CardTitle className="text-base">Rubric</CardTitle>
+                    {templatesQ.data && templatesQ.data.length > 0 && (
+                        <Select
+                            onValueChange={(value) => {
+                                const tpl = templatesQ.data?.find((t) => t.template_id === value);
+                                if (tpl) applyTemplate(tpl);
+                            }}
+                        >
+                            <SelectTrigger className="w-64">
+                                <SelectValue placeholder="Load from template…" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {templatesQ.data.map((t) => (
+                                    <SelectItem key={t.template_id} value={t.template_id}>
+                                        {t.name}
+                                        {t.is_shared ? ' (shared)' : ''}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    )}
                 </CardHeader>
                 <CardContent className="space-y-3">
                     {lines.map((l, i) => (
@@ -120,6 +193,21 @@ export default function TeacherGradeProjectPage() {
                     <Button variant="ghost" size="sm" onClick={addLine}>
                         + Add criterion
                     </Button>
+                    <div className="mt-4 flex items-center gap-2 border-t pt-4">
+                        <Input
+                            placeholder="Template name to save current rubric…"
+                            value={templateName}
+                            onChange={(e) => setTemplateName(e.target.value)}
+                        />
+                        <Button
+                            type="button"
+                            variant="outline"
+                            onClick={saveAsTemplate}
+                            disabled={createTemplate.isPending || !templateName.trim()}
+                        >
+                            Save as template
+                        </Button>
+                    </div>
                 </CardContent>
             </Card>
 

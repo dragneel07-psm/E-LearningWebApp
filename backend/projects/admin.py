@@ -10,6 +10,7 @@ from .models import (
     ProjectSubmission,
     ProjectTask,
     ProjectUpdate,
+    RubricTemplate,
 )
 
 
@@ -58,3 +59,11 @@ class ProjectAttachmentAdmin(admin.ModelAdmin):
     list_display = ("attachment_id", "project", "task", "uploaded_by", "uploaded_at", "size_bytes")
     raw_id_fields = ("project", "task", "update", "uploaded_by", "tenant")
     readonly_fields = ("uploaded_at",)
+
+
+@admin.register(RubricTemplate)
+class RubricTemplateAdmin(admin.ModelAdmin):
+    list_display = ("name", "owner", "subject", "is_shared", "updated_at")
+    search_fields = ("name", "description")
+    raw_id_fields = ("tenant", "owner", "subject")
+    readonly_fields = ("created_at", "updated_at")

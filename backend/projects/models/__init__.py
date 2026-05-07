@@ -7,6 +7,7 @@ from .task import ProjectTask
 from .update import ProjectUpdate
 from .submission import ProjectSubmission
 from .attachment import ProjectAttachment
+from .rubric_template import RubricTemplate
 
 __all__ = [
     "Project",
@@ -15,4 +16,5 @@ __all__ = [
     "ProjectUpdate",
     "ProjectSubmission",
     "ProjectAttachment",
+    "RubricTemplate",
 ]

@@ -10,6 +10,7 @@ from .views import (
     ProjectTaskViewSet,
     ProjectUpdateViewSet,
     ProjectViewSet,
+    RubricTemplateViewSet,
 )
 
 router = DefaultRouter()
@@ -18,6 +19,7 @@ router.register(r"tasks", ProjectTaskViewSet, basename="project-tasks")
 router.register(r"updates", ProjectUpdateViewSet, basename="project-updates")
 router.register(r"submissions", ProjectSubmissionViewSet, basename="project-submissions")
 router.register(r"attachments", ProjectAttachmentViewSet, basename="project-attachments")
+router.register(r"rubric-templates", RubricTemplateViewSet, basename="rubric-templates")
 
 urlpatterns = [
     path("", include(router.urls)),

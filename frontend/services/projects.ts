@@ -100,6 +100,24 @@ export interface ProjectUpdate {
     created_at: string;
 }
 
+export interface RubricTemplateLine {
+    criterion: string;
+    max?: number;
+}
+
+export interface RubricTemplate {
+    template_id: string;
+    name: string;
+    description: string;
+    owner: string | null;
+    owner_detail?: UserBrief | null;
+    subject: number | null;
+    criteria_json: RubricTemplateLine[];
+    is_shared: boolean;
+    created_at: string;
+    updated_at: string;
+}
+
 export interface MentorDashboardEntry {
     project_id: string;
     title: string;
@@ -205,6 +223,27 @@ export const projectTasksAPI = {
     },
 };
 
+export const rubricTemplatesAPI = {
+    list: async (): Promise<RubricTemplate[]> => {
+        const res = await api.get<RubricTemplate[] | Paginated<RubricTemplate>>(
+            '/api/projects/rubric-templates/',
+        );
+        return unwrap(res.data);
+    },
+    create: async (payload: {
+        name: string;
+        description?: string;
+        criteria_json: RubricTemplateLine[];
+        subject?: number | null;
+    }): Promise<RubricTemplate> => {
+        const res = await api.post<RubricTemplate>('/api/projects/rubric-templates/', payload);
+        return res.data;
+    },
+    delete: async (id: string): Promise<void> => {
+        await api.delete(`/api/projects/rubric-templates/${id}/`);
+    },
+};
+
 export const projectUpdatesAPI = {
     listForProject: async (projectId: string): Promise<ProjectUpdate[]> => {
         const res = await api.get<ProjectUpdate[] | Paginated<ProjectUpdate>>('/api/projects/updates/', {
@@ -232,6 +271,7 @@ export const projectKeys = {
     updates: (id: string) => ['projects', 'updates', id] as const,
     members: (id: string) => ['projects', 'members', id] as const,
     mentorDashboard: () => ['projects', 'mentor-dashboard'] as const,
+    rubricTemplates: () => ['projects', 'rubric-templates'] as const,
 };
 
 export function useProjects(filter?: 'mine' | 'all') {
@@ -270,6 +310,23 @@ export function useProjectMembers(id: string | undefined) {
         queryKey: id ? projectKeys.members(id) : ['projects', 'members', 'none'],
         queryFn: () => projectsAPI.listMembers(id as string),
         enabled: Boolean(id),
+    });
+}
+
+export function useRubricTemplates() {
+    return useQuery({
+        queryKey: projectKeys.rubricTemplates(),
+        queryFn: rubricTemplatesAPI.list,
+    });
+}
+
+export function useCreateRubricTemplate() {
+    const qc = useQueryClient();
+    return useMutation({
+        mutationFn: rubricTemplatesAPI.create,
+        onSuccess: () => {
+            qc.invalidateQueries({ queryKey: projectKeys.rubricTemplates() });
+        },
     });
 }
 

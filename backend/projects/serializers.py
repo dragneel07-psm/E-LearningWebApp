@@ -10,6 +10,7 @@ from .models import (
     ProjectSubmission,
     ProjectTask,
     ProjectUpdate,
+    RubricTemplate,
 )
 
 
@@ -269,3 +270,44 @@ class ProjectSerializer(serializers.ModelSerializer):
             setattr(instance, field, value)
         instance.clean()
         return attrs
+
+
+# --- Rubric Template ---
+
+
+class RubricTemplateSerializer(serializers.ModelSerializer):
+    owner_detail = _UserBriefSerializer(source="owner", read_only=True)
+    is_shared = serializers.BooleanField(read_only=True)
+
+    class Meta:
+        model = RubricTemplate
+        fields = [
+            "template_id",
+            "name",
+            "description",
+            "owner",
+            "owner_detail",
+            "subject",
+            "criteria_json",
+            "is_shared",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = [
+            "template_id",
+            "owner",
+            "owner_detail",
+            "is_shared",
+            "created_at",
+            "updated_at",
+        ]
+
+    def validate_criteria_json(self, value):
+        if not isinstance(value, list):
+            raise serializers.ValidationError("criteria_json must be a list.")
+        for i, entry in enumerate(value):
+            if not isinstance(entry, dict):
+                raise serializers.ValidationError(f"Entry {i} must be an object.")
+            if not entry.get("criterion"):
+                raise serializers.ValidationError(f"Entry {i} is missing 'criterion'.")
+        return value

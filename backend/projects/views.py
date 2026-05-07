@@ -29,6 +29,7 @@ from .models import (
     ProjectSubmission,
     ProjectTask,
     ProjectUpdate,
+    RubricTemplate,
 )
 from .permissions import (
     CanCommentOnProject,
@@ -43,6 +44,7 @@ from .serializers import (
     ProjectSubmissionSerializer,
     ProjectTaskSerializer,
     ProjectUpdateSerializer,
+    RubricTemplateSerializer,
 )
 
 
@@ -437,3 +439,55 @@ class ProjectAttachmentViewSet(TenantScopedQuerysetMixin, viewsets.ModelViewSet)
         serializer.save(
             tenant=project.tenant, uploaded_by=user, size_bytes=size, mime_type=mime
         )
+
+
+# --- Rubric template ---
+
+
+class RubricTemplateViewSet(TenantScopedQuerysetMixin, viewsets.ModelViewSet):
+    """Teacher-managed reusable grading rubrics.
+
+    Visibility:
+      - admins: all templates in the tenant
+      - teachers: own templates + tenant-shared (owner=null)
+      - students/parents: 403
+    Write access:
+      - create: any teacher/admin (the owner is set to the requester)
+      - update/delete: owner or admin only
+    """
+
+    queryset = RubricTemplate.objects.select_related("owner", "subject").all()
+    serializer_class = RubricTemplateSerializer
+    permission_classes = [IsAuthenticated, IsProjectsEnabled]
+    tenant_field = "tenant"
+
+    def initial(self, request, *args, **kwargs):
+        super().initial(request, *args, **kwargs)
+        role = role_of(request.user)
+        if role not in {"teacher", "admin", "staff", "saas_admin"}:
+            raise PermissionDenied("Only teachers and admins can use rubric templates.")
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        if is_admin(self.request.user):
+            return qs
+        # Teacher: own + tenant-shared.
+        return qs.filter(Q(owner=self.request.user) | Q(owner__isnull=True))
+
+    def perform_create(self, serializer):
+        user = self.request.user
+        tenant = getattr(user, "tenant", None) or getattr(self.request, "tenant", None)
+        if tenant is None:
+            raise PermissionDenied("No tenant context.")
+        serializer.save(tenant=tenant, owner=user)
+
+    def perform_update(self, serializer):
+        instance = serializer.instance
+        if not is_admin(self.request.user) and instance.owner_id != self.request.user.pk:
+            raise PermissionDenied("You can only edit your own rubric templates.")
+        serializer.save()
+
+    def perform_destroy(self, instance):
+        if not is_admin(self.request.user) and instance.owner_id != self.request.user.pk:
+            raise PermissionDenied("You can only delete your own rubric templates.")
+        instance.delete()
