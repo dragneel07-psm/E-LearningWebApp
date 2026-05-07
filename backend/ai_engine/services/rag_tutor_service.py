@@ -10,6 +10,7 @@ import random
 from typing import Any
 
 from django.conf import settings
+from django.db import DatabaseError
 from django.db.models import Q, QuerySet
 from openai import OpenAI
 
@@ -242,25 +243,36 @@ class RAGTutorService:
         ]
 
     def retrieve_relevant_chunks(self, message: str, context: dict[str, Any] | None = None) -> list[dict[str, Any]]:
-        queries = self._expand_query(message)
-        queryset = self._base_queryset(context)
+        try:
+            queries = self._expand_query(message)
+            queryset = self._base_queryset(context)
 
-        all_scored: list[list[tuple[ContentChunk, float]]] = []
-        for query in queries:
-            query_vector = self._embed_query(query)
-            scored = self._retrieve_for_query(queryset, query_vector)
-            all_scored.append(scored)
+            all_scored: list[list[tuple[ContentChunk, float]]] = []
+            for query in queries:
+                query_vector = self._embed_query(query)
+                scored = self._retrieve_for_query(queryset, query_vector)
+                all_scored.append(scored)
 
-        if len(all_scored) == 1:
-            # No expansion — use simple sort (faster)
-            scored_flat = all_scored[0]
-            scored_flat.sort(key=lambda item: item[1], reverse=True)
-            return [
-                {"chunk": chunk, "similarity": similarity}
-                for chunk, similarity in scored_flat[: self.top_k]
-            ]
+            if len(all_scored) == 1:
+                # No expansion — use simple sort (faster)
+                scored_flat = all_scored[0]
+                scored_flat.sort(key=lambda item: item[1], reverse=True)
+                return [
+                    {"chunk": chunk, "similarity": similarity}
+                    for chunk, similarity in scored_flat[: self.top_k]
+                ]
 
-        return self._merge_and_rerank(all_scored)
+            return self._merge_and_rerank(all_scored)
+        except DatabaseError as exc:
+            # The most common cause is the embedding column / pgvector extension
+            # missing on this tenant's schema (migration not yet applied). Fall
+            # back to ungrounded chat so the tutor still responds instead of 500.
+            logger.warning(
+                "RAG retrieval skipped due to DatabaseError (likely missing migration "
+                "or pgvector extension on this tenant): %s",
+                exc,
+            )
+            return []
 
     def _build_messages(self, message: str, snippets: list[dict[str, Any]]) -> list[dict[str, str]]:
         tenant_name = getattr(self.tenant, "name", "the school")
