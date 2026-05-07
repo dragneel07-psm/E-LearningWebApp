@@ -59,16 +59,33 @@ export default function MessagingPage({ emptyStateMessage = "Choose a chat from 
 
     useEffect(() => {
         if (activeConversation) {
-            activeConversationRef.current = activeConversation.conversation_id;
-            loadMessages(activeConversation.conversation_id);
+            const id = activeConversation.conversation_id;
+            activeConversationRef.current = id;
+            loadMessages(id);
+            // Mark this conversation as read whenever the user opens it, and
+            // zero the unread badge locally so the sidebar updates instantly.
+            const hadUnread = activeConversation.unread_count > 0;
+            if (hadUnread) {
+                setConversations((prev) =>
+                    prev.map((c) => (c.conversation_id === id ? { ...c, unread_count: 0 } : c)),
+                );
+                conversationsAPI.markAsRead(id).catch(() => {
+                    // On failure, restore the badge so the user knows it didn't sync.
+                    setConversations((prev) =>
+                        prev.map((c) =>
+                            c.conversation_id === id ? { ...c, unread_count: activeConversation.unread_count } : c,
+                        ),
+                    );
+                });
+            }
             const interval = setInterval(() => {
-                loadMessages(activeConversation.conversation_id, true);
+                loadMessages(id, true);
             }, 5000);
             return () => {
                 clearInterval(interval);
                 // Any responses that land after this cleanup will no longer
                 // match the ref and will be dropped in loadMessages.
-                if (activeConversationRef.current === activeConversation.conversation_id) {
+                if (activeConversationRef.current === id) {
                     activeConversationRef.current = null;
                 }
             };
@@ -109,6 +126,15 @@ export default function MessagingPage({ emptyStateMessage = "Choose a chat from 
                 setMessages(data);
                 if (data.length > messages.length) {
                     conversationsAPI.markAsRead(id);
+                    // Zero the sidebar badge for this conversation in case new
+                    // messages arrived via polling while it was open.
+                    setConversations((prev) =>
+                        prev.map((c) =>
+                            c.conversation_id === id && c.unread_count > 0
+                                ? { ...c, unread_count: 0 }
+                                : c,
+                        ),
+                    );
                 }
             }
         } catch {

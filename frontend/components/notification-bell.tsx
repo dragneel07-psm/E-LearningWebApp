@@ -75,21 +75,32 @@ export function NotificationBell() {
     }
 
     async function handleMarkAsRead(id: number) {
+        // Optimistic: flip the row and decrement the badge immediately.
+        const wasUnread = notifications.find((n) => n.id === id && !n.is_read);
+        setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, is_read: true } : n)));
+        if (wasUnread) setUnreadCount((c) => Math.max(0, c - 1));
         try {
             await notificationsAPI.markAsRead(id);
-            loadNotifications();
         } catch (error) {
             console.error('Failed to mark as read:', error);
+            // Revert on failure.
+            setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, is_read: false } : n)));
+            if (wasUnread) setUnreadCount((c) => c + 1);
         }
     }
 
     async function handleMarkAllAsRead() {
+        const previousNotifications = notifications;
+        const previousCount = unreadCount;
+        setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })));
+        setUnreadCount(0);
         setLoading(true);
         try {
             await notificationsAPI.markAllAsRead();
-            loadNotifications();
         } catch (error) {
             console.error('Failed to mark all as read:', error);
+            setNotifications(previousNotifications);
+            setUnreadCount(previousCount);
         } finally {
             setLoading(false);
         }
