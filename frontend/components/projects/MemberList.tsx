@@ -3,13 +3,20 @@
 // via any medium, is strictly prohibited. Proprietary and confidential.
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Crown, Trash2, UserPlus } from 'lucide-react';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '@/components/ui/select';
 import { toast } from '@/hooks/use-toast';
+import { academicAPI, type Student } from '@/lib/api';
 import { projectsAPI, type Project, type ProjectMember } from '@/services/projects';
 
 interface MemberListProps {
@@ -20,21 +27,66 @@ interface MemberListProps {
 }
 
 export function MemberList({ project, members, canManage, onChanged }: MemberListProps) {
-    const [studentId, setStudentId] = useState('');
+    const [pickedStudent, setPickedStudent] = useState('');
     const [busy, setBusy] = useState(false);
+    const [students, setStudents] = useState<Student[]>([]);
+    const [loadingStudents, setLoadingStudents] = useState(false);
+
+    useEffect(() => {
+        if (!canManage || !project.is_group) return;
+        let cancelled = false;
+        setLoadingStudents(true);
+        const params = project.section ? { section_id: String(project.section) } : undefined;
+        academicAPI
+            .getStudents(params)
+            .then((data) => {
+                if (!cancelled) setStudents(data || []);
+            })
+            .catch(() => {
+                if (!cancelled) setStudents([]);
+            })
+            .finally(() => {
+                if (!cancelled) setLoadingStudents(false);
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, [canManage, project.is_group, project.section]);
+
+    const memberIds = useMemo(() => new Set(members.map((m) => m.student)), [members]);
+
+    const selectableStudents = useMemo(
+        () =>
+            students
+                .filter((s) => {
+                    const sid = s.student_id || s.id;
+                    return sid && !memberIds.has(sid);
+                })
+                .map((s) => {
+                    const sid = s.student_id || s.id;
+                    const name = `${s.first_name || ''} ${s.last_name || ''}`.trim() || s.username || s.email || sid;
+                    return { id: sid, name };
+                })
+                .sort((a, b) => a.name.localeCompare(b.name)),
+        [students, memberIds],
+    );
 
     const handleAdd = async () => {
-        const trimmed = studentId.trim();
-        if (!trimmed) return;
+        if (!pickedStudent) return;
         setBusy(true);
         try {
-            await projectsAPI.addMember(project.project_id, trimmed);
-            setStudentId('');
+            await projectsAPI.addMember(project.project_id, pickedStudent);
+            setPickedStudent('');
             toast({ title: 'Member added' });
             onChanged();
         } catch (err) {
-            const detail = (err as { response?: { data?: { message?: string } } }).response?.data?.message;
-            toast({ title: 'Could not add member', description: detail || 'Please try again.', variant: 'destructive' });
+            const data = (err as { response?: { data?: unknown } }).response?.data;
+            const detail = extractErrorDetail(data);
+            toast({
+                title: 'Could not add member',
+                description: detail || 'Please try again.',
+                variant: 'destructive',
+            });
         } finally {
             setBusy(false);
         }
@@ -129,17 +181,47 @@ export function MemberList({ project, members, canManage, onChanged }: MemberLis
 
             {canManage && project.is_group && (
                 <div className="flex items-center gap-2">
-                    <Input
-                        placeholder="Student ID (UUID)"
-                        value={studentId}
-                        onChange={(e) => setStudentId(e.target.value)}
-                        disabled={busy}
-                    />
-                    <Button type="button" onClick={handleAdd} disabled={busy || !studentId.trim()}>
+                    <Select
+                        value={pickedStudent}
+                        onValueChange={setPickedStudent}
+                        disabled={busy || loadingStudents || selectableStudents.length === 0}
+                    >
+                        <SelectTrigger className="flex-1">
+                            <SelectValue
+                                placeholder={
+                                    loadingStudents
+                                        ? 'Loading students…'
+                                        : selectableStudents.length === 0
+                                          ? 'No students available to add'
+                                          : 'Pick a student to add'
+                                }
+                            />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {selectableStudents.map((s) => (
+                                <SelectItem key={s.id} value={s.id}>
+                                    {s.name}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                    <Button type="button" onClick={handleAdd} disabled={busy || !pickedStudent}>
                         <UserPlus className="mr-1 h-4 w-4" /> Add
                     </Button>
                 </div>
             )}
         </div>
     );
+}
+
+function extractErrorDetail(data: unknown): string | null {
+    if (!data || typeof data !== 'object') return null;
+    const obj = data as Record<string, unknown>;
+    if (typeof obj.message === 'string') return obj.message;
+    if (typeof obj.detail === 'string') return obj.detail;
+    if (typeof obj.student === 'string') return obj.student;
+    if (Array.isArray(obj.student) && typeof obj.student[0] === 'string') return obj.student[0] as string;
+    if (Array.isArray(obj.non_field_errors) && typeof obj.non_field_errors[0] === 'string')
+        return obj.non_field_errors[0] as string;
+    return null;
 }
