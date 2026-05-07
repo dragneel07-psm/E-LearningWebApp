@@ -67,10 +67,10 @@ class StudentLeaveViewSet(viewsets.ModelViewSet):
             teacher = TeacherModel.objects.filter(user=user).first()
             if not teacher:
                 return qs.none()
-            student_ids = Student.objects.filter(
+            students = Student.objects.filter(
                 academic_class__in=teacher.assigned_classes.all()
-            ).values_list('id', flat=True)
-            return qs.filter(student__id__in=student_ids)
+            )
+            return qs.filter(student__in=students)
         if role == 'parent':
             # Parents see their children's leaves
             parent = getattr(user, 'parent_profile', None)
