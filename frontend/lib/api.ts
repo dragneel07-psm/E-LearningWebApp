@@ -71,6 +71,9 @@ export interface Tenant {
     logo?: string;
     features?: Record<string, boolean>;
     feature_overrides?: Record<string, boolean>;
+    /** Plan baseline (without overrides). Read-only; provided by the
+     *  TenantSerializer so the SaaS UI can highlight divergence. */
+    plan_features?: Record<string, boolean>;
     // Computed SaaS metrics
     student_count?: number;
     teacher_count?: number;

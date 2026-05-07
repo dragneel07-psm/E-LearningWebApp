@@ -17,6 +17,7 @@ from core.utils.plan_enforcement import (
 
 class TenantSerializer(serializers.ModelSerializer):
     plan_name = serializers.SerializerMethodField()
+    plan_features = serializers.SerializerMethodField()
     subscription_status = serializers.SerializerMethodField()
     billing_cycle = serializers.SerializerMethodField()
     student_count = serializers.SerializerMethodField()
@@ -36,7 +37,7 @@ class TenantSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'schema_name', 'name', 'subdomain', 'type', 'status',
             'contact_email', 'contact_phone', 'address', 'website',
-            'features', 'feature_overrides',
+            'features', 'feature_overrides', 'plan_features',
             'plan_name', 'subscription_status', 'billing_cycle',
             'student_count', 'teacher_count', 'total_users', 'admin_count',
             'ai_usage', 'ai_tokens_used', 'ai_token_limit',
@@ -69,6 +70,16 @@ class TenantSerializer(serializers.ModelSerializer):
             return "Trial (Plan Pending)"
         except Exception:
             return "Trial (Plan Pending)"
+
+    def get_plan_features(self, obj):
+        """Plan baseline (no per-tenant overrides). Used by the SaaS UI to
+        decide which feature rows are diverging from the plan default.
+        Read-only; never used to compute the *effective* features dict.
+        """
+        try:
+            return build_plan_entitled_features(get_tenant_plan(obj))
+        except Exception:
+            return build_plan_entitled_features(None)
 
     def get_subscription_status(self, obj):
         try:

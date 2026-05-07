@@ -169,3 +169,18 @@ class TenantSerializerTests(TestCase):
         # The Meta.read_only_fields = ['features'] kicks the value out;
         # the validate() override then recomputes it from plan + overrides.
         self.assertTrue(serializer.validated_data["features"]["projects"])
+
+    def test_plan_features_exposed_separately_from_effective(self):
+        """SaaS UI needs the plan baseline to detect override divergence."""
+        from core.serializers import TenantSerializer
+        from core.utils.plan_enforcement import build_plan_entitled_features, get_tenant_plan
+
+        tenant = self._make_tenant(feature_overrides={"projects": False})
+        data = TenantSerializer(instance=tenant).data
+        # `plan_features` reflects the plan with no overrides.
+        expected_baseline = build_plan_entitled_features(get_tenant_plan(tenant))
+        self.assertEqual(data["plan_features"], expected_baseline)
+        # `features` reflects the merged effective dict — projects=False here.
+        self.assertFalse(data["features"]["projects"])
+        # And plan_features still says projects=True (baseline) for divergence detection.
+        self.assertTrue(data["plan_features"]["projects"])

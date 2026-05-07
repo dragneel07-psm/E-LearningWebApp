@@ -400,8 +400,7 @@ export default function SchoolDetailsPage() {
         if (!school) return;
         const targetId = String(school.id ?? schoolId);
         const currentOverrides = (school.feature_overrides || {}) as Record<string, boolean>;
-        const planBaseline = (school as { plan_features?: Record<string, boolean> }).plan_features
-            || ({} as Record<string, boolean>);
+        const planBaseline = (school.plan_features || {}) as Record<string, boolean>;
         const planValue = planBaseline[key];
         // Optimistically reflect the new value in the UI.
         setFeatureFlags(prev => ({ ...prev, [key]: nextValue }));
