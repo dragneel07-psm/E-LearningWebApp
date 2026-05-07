@@ -34,9 +34,15 @@ export interface LiveNotification {
 
 function getWsBase(): string {
   if (typeof window === 'undefined') return '';
-  const proto = window.location.protocol === 'https:' ? 'wss' : 'ws';
-  const backendHost = process.env.NEXT_PUBLIC_WS_HOST || window.location.host;
-  return `${proto}://${backendHost}`;
+  const pageProto = window.location.protocol === 'https:' ? 'wss' : 'ws';
+  const raw = (process.env.NEXT_PUBLIC_WS_HOST || window.location.host).trim();
+  // Tolerate operators pasting in a full URL (https://host, wss://host, etc.).
+  const protoMatch = raw.match(/^(wss?|https?):\/\//i);
+  const host = raw.replace(/^(wss?:\/\/|https?:\/\/)/i, '').replace(/\/+$/, '');
+  const proto = protoMatch
+    ? (protoMatch[1].toLowerCase().startsWith('ws') ? protoMatch[1].toLowerCase() : (protoMatch[1].toLowerCase() === 'https' ? 'wss' : 'ws'))
+    : pageProto;
+  return `${proto}://${host}`;
 }
 
 export function useNotificationWebSocket(opts?: {
