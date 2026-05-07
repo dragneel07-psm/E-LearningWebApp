@@ -46,22 +46,20 @@ class BookIssueViewSet(viewsets.ModelViewSet):
         role = _role(user)
 
         if role == 'student':
-            student = Student.objects.filter(user=user).only("id").first()
+            student = Student.objects.filter(user=user).only("pk").first()
             if student is None:
                 return queryset.none()
             return queryset.filter(student=student)
         if role == "parent":
-            parent = Parent.objects.filter(user=user).only("id").first()
+            parent = Parent.objects.filter(user=user).only("pk").first()
             if parent is None:
                 return queryset.none()
-            student_ids = list(parent.students.values_list("id", flat=True))
-            return queryset.filter(student_id__in=student_ids) if student_ids else queryset.none()
+            return queryset.filter(student__in=parent.students.all())
         if role == "teacher":
-            teacher = Teacher.objects.filter(user=user).only("id").first()
+            teacher = Teacher.objects.filter(user=user).only("pk").first()
             if teacher is None:
                 return queryset.none()
-            class_ids = list(teacher.assigned_classes.values_list("id", flat=True))
-            return queryset.filter(student__academic_class_id__in=class_ids) if class_ids else queryset.none()
+            return queryset.filter(student__academic_class__in=teacher.assigned_classes.all())
 
         return queryset
 
