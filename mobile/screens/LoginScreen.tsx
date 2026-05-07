@@ -45,6 +45,11 @@ export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
         setError('');
         try {
             const response = await authAPI.login(username.trim(), password.trim(), subdomain.trim());
+            const role = response.user?.role;
+            if (role === 'admin' || role === 'staff' || role === 'saas_admin') {
+                setError('Admin access is available on the web portal only. Please sign in at your school website.');
+                return;
+            }
             await saveTokens(response.access, response.refresh);
             await saveTenantId(subdomain.trim());
             await saveCurrentUser(response.user);

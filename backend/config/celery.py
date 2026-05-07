@@ -34,6 +34,7 @@ app.autodiscover_tasks([
     "hr_payroll",
     "library",
     "notifications",
+    "projects",
     "transport",
     "hostel",
 ])
@@ -59,6 +60,14 @@ try:
         "library-mark-overdue": {
             "task": "library.mark_overdue_book_issues",
             "schedule": crontab(hour=1, minute=0),  # daily at 1 AM
+        },
+        "projects-scan-overdue-tasks": {
+            "task": "projects.scan_overdue_tasks",
+            "schedule": crontab(minute=0),  # hourly on the hour
+        },
+        "projects-scan-due-soon": {
+            "task": "projects.scan_due_soon_projects",
+            "schedule": crontab(hour=9, minute=0),  # daily at 9 AM
         },
     }
 except Exception:

@@ -141,7 +141,10 @@ function MessageThread({
     const [sending, setSending] = useState(false);
     const flatRef = useRef<FlatList>(null);
 
-    const title = getConversationTitle(conversation, currentUser?.id);
+    const title = getConversationTitle(
+        conversation,
+        currentUser?.id ? Number(currentUser.id) : undefined
+    );
 
     const load = useCallback(async () => {
         try {

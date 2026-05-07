@@ -39,6 +39,7 @@ const DEFAULT_FEATURE_FLAGS: Record<string, boolean> = {
     parent_fees: false,
     teacher_ai_grading: false,
     teacher_reports: false,
+    projects: true,
 };
 
 function getTenantIdentifier(tenantValue: unknown): string {
@@ -395,8 +396,37 @@ export default function SchoolDetailsPage() {
         }
     };
 
+    const handleToggleFeatureOverride = async (key: string, nextValue: boolean) => {
+        if (!school) return;
+        const targetId = String(school.id ?? schoolId);
+        const currentOverrides = (school.feature_overrides || {}) as Record<string, boolean>;
+        const planBaseline = (school.plan_features || {}) as Record<string, boolean>;
+        const planValue = planBaseline[key];
+        // Optimistically reflect the new value in the UI.
+        setFeatureFlags(prev => ({ ...prev, [key]: nextValue }));
+        // If the new value matches the plan baseline, drop the override entry
+        // entirely — keeps feature_overrides minimal.
+        const nextOverrides: Record<string, boolean> = { ...currentOverrides };
+        if (planValue !== undefined && planValue === nextValue) {
+            delete nextOverrides[key];
+        } else {
+            nextOverrides[key] = nextValue;
+        }
+        try {
+            const updated = await coreAPI.updateTenant(targetId, { feature_overrides: nextOverrides });
+            setSchool(prev => (prev ? { ...prev, ...updated } : prev));
+            setFeatureFlags(prev => ({ ...prev, ...((updated.features as Record<string, boolean>) || {}) }));
+            toast.success(`${key.replace(/_/g, ' ')} ${nextValue ? 'enabled' : 'disabled'} for this school.`);
+        } catch (error) {
+            console.error(error);
+            // Revert optimistic update.
+            setFeatureFlags(prev => ({ ...prev, [key]: !nextValue }));
+            toast.error("Failed to update feature override.");
+        }
+    };
+
     const handleSaveFeatures = async () => {
-        toast.info("Feature access is strictly controlled by the subscribed plan. Change plan to adjust features.");
+        toast.info("Toggles save automatically. Use the switches above to enable or disable a feature for this school.");
     };
 
     const handleUploadLogo = async () => {
@@ -1225,24 +1255,33 @@ export default function SchoolDetailsPage() {
                             <div className="border-t pt-6 space-y-4">
                                 <div>
                                     <h4 className="font-semibold">Feature Flags</h4>
-                                    <p className="text-sm text-slate-500">Features are plan-controlled and cannot exceed plan entitlements.</p>
+                                    <p className="text-sm text-slate-500">
+                                        Toggle to override the plan baseline for this school.
+                                        An override badge appears next to flags that diverge
+                                        from the plan default.
+                                    </p>
                                 </div>
                                 <div className="grid gap-3 md:grid-cols-2">
-                                    {Object.entries(featureFlags).map(([key, value]) => (
-                                        <div key={key} className="flex items-center justify-between rounded-md border p-3">
-                                            <div className="text-sm">{key.replace(/_/g, ' ')}</div>
-                                            <Switch
-                                                checked={value}
-                                                disabled
-                                            />
-                                        </div>
-                                    ))}
-                                </div>
-                                <div className="flex justify-end">
-                                    <Button variant="outline" onClick={handleSaveFeatures} disabled={isSavingFeatures}>
-                                        <Save className="mr-2 h-4 w-4" />
-                                        Plan-Controlled
-                                    </Button>
+                                    {Object.entries(featureFlags).map(([key, value]) => {
+                                        const overrides = (school?.feature_overrides || {}) as Record<string, boolean>;
+                                        const isOverridden = Object.prototype.hasOwnProperty.call(overrides, key);
+                                        return (
+                                            <div key={key} className="flex items-center justify-between rounded-md border p-3">
+                                                <div className="flex items-center gap-2 text-sm">
+                                                    <span>{key.replace(/_/g, ' ')}</span>
+                                                    {isOverridden && (
+                                                        <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold uppercase text-amber-800">
+                                                            override
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                <Switch
+                                                    checked={value}
+                                                    onCheckedChange={(next) => handleToggleFeatureOverride(key, next)}
+                                                />
+                                            </div>
+                                        );
+                                    })}
                                 </div>
                             </div>
 

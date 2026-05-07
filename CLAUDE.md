@@ -85,7 +85,7 @@ docker compose up   # Starts backend, frontend, PostgreSQL, Redis, Celery
 
 Each school is a PostgreSQL schema. Apps are split into:
 - **SHARED_APPS** (public schema): `core`, `users`, `billing`, `billing_saas`, `auditlog`
-- **TENANT_APPS** (per-tenant schemas): `academic`, `ai_engine`, `notifications`, `library`, `gamification`, `conversations`, `billing_school`
+- **TENANT_APPS** (per-tenant schemas): `academic`, `ai_engine`, `notifications`, `library`, `gamification`, `conversations`, `billing_school`, `projects`
 
 Tenant resolution order (set in `frontend/proxy.ts` as `x-tenant-id` header):
 1. `x-tenant-id` HTTP header (dev override)
@@ -129,6 +129,7 @@ All routes are under `/api/` (aliased at `/api/v1/`):
 - `/api/ai/` — AI tutor, learning paths, reports, analytics
 - `/api/billing/`, `/api/billing/saas/`, `/api/billing/school/`
 - `/api/notifications/`, `/api/library/`, `/api/gamification/`, `/api/conversations/`
+- `/api/projects/` — group/individual project tracking (gated by `tenant.features['projects']`)
 - `POST /api/token/` — obtain JWT; `POST /api/token/refresh/` — refresh JWT
 
 ### AI Engine (`backend/ai_engine/`)

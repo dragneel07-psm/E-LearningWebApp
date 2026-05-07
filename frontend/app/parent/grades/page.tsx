@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { academicAPI, Parent, Student } from '@/lib/api';
 import { useToast } from '@/hooks/use-toast';
+import { ProjectGradesCard } from '@/components/projects/ProjectGradesCard';
 import {
     GraduationCap, Loader2, AlertCircle, TrendingUp, TrendingDown,
     Minus, BookOpen, Award,
@@ -223,6 +224,9 @@ export default function ParentGradesPage() {
                             </div>
                         </CardContent>
                     </Card>
+
+                    {/* Project grades — Phase 9 #6 read-time aggregation */}
+                    <ProjectGradesCard detailHrefBase="/parent/projects" />
                 </>
             )}
         </div>

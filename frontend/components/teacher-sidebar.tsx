@@ -26,6 +26,7 @@ import {
     HelpCircle,
     MessageCircle,
     Video,
+    FolderKanban,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
@@ -37,6 +38,7 @@ const navigation = [
     { name: 'Attendance',     href: '/teacher/attendance',   icon: ClipboardCheck },
     { name: 'Assessments',    href: '/teacher/assessments',  icon: ClipboardList },
     { name: 'Assignments',    href: '/teacher/assignments',  icon: FileText },
+    { name: 'Projects',       href: '/teacher/projects',     icon: FolderKanban },
     { name: 'Grading',        href: '/teacher/grading',      icon: Award },
     { name: 'Gradebook',      href: '/teacher/grades',       icon: GraduationCap },
     { name: 'Question Bank',  href: '/teacher/questions',    icon: HelpCircle },
@@ -61,7 +63,12 @@ export function TeacherSidebar() {
         usersAPI.getMe().then(setUser).catch(console.error);
     }, []);
 
-    const filteredNavigation = [...navigation];
+    let filteredNavigation = [...navigation];
+
+    // Hide Projects when the tenant has the projects feature disabled.
+    if (user?.tenant_features?.projects === false) {
+        filteredNavigation = filteredNavigation.filter(n => n.name !== 'Projects');
+    }
 
     // Insert Analytics before Library when feature is available
     if (user?.tenant_features?.teacher_reports !== false) {

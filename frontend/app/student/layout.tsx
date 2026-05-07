@@ -13,7 +13,8 @@ import {
     User as UserIcon, LogOut, Menu, X, MessageSquare,
     GraduationCap, Clock, FileBarChart, CreditCard,
     BrainCircuit, Trophy, Award, WifiOff, Download, Brain,
-    CalendarClock, Info, MessageSquareWarning, ChevronRight, Video, Wifi
+    CalendarClock, Info, MessageSquareWarning, ChevronRight, Video, Wifi,
+    FolderKanban
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -104,6 +105,12 @@ export default function StudentLayout({ children }: { children: React.ReactNode 
                 { label: 'Courses', href: '/student/courses', icon: GraduationCap },
                 { label: 'Quizzes', href: '/student/quizzes', icon: Brain },
                 { label: 'Assignments', href: '/student/assignments', icon: FileText },
+                {
+                    label: 'Projects',
+                    href: '/student/projects',
+                    icon: FolderKanban,
+                    hidden: user?.tenant_features?.projects === false,
+                },
                 { label: 'Assessments', href: '/student/assessments', icon: Award },
                 { label: 'My Grades', href: '/student/grades', icon: Award },
                 { label: 'Library', href: '/student/library', icon: BookOpen },

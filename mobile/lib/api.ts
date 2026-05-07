@@ -779,6 +779,30 @@ export const academicAPI = {
     getAssessment: (id: string): Promise<Assessment> =>
         apiRequest<Assessment>(`/academic/assessments/${id}/`),
 
+    createAssessment: (payload: Partial<Assessment> & { subject?: number; total_marks?: number; duration_minutes?: number }): Promise<Assessment> =>
+        apiRequest<Assessment>('/academic/assessments/', {
+            method: 'POST',
+            body: JSON.stringify(payload),
+        }),
+
+    updateAssessment: (id: string, payload: Partial<Assessment>): Promise<Assessment> =>
+        apiRequest<Assessment>(`/academic/assessments/${id}/`, {
+            method: 'PATCH',
+            body: JSON.stringify(payload),
+        }),
+
+    deleteAssessment: (id: string): Promise<void> =>
+        apiRequest<void>(`/academic/assessments/${id}/`, { method: 'DELETE' }),
+
+    createQuestion: (payload: Partial<Question> & { assessment: string }): Promise<Question> =>
+        apiRequest<Question>('/academic/questions/', {
+            method: 'POST',
+            body: JSON.stringify(payload),
+        }),
+
+    deleteQuestion: (id: string): Promise<void> =>
+        apiRequest<void>(`/academic/questions/${id}/`, { method: 'DELETE' }),
+
     getQuestionsByAssessment: async (assessmentId: string): Promise<Question[]> => {
         const response = await apiRequest<unknown>(`/academic/questions/?assessment=${assessmentId}`);
         return normalizeList<Question>(response);
@@ -972,6 +996,143 @@ export const billingAPI = {
         if (Array.isArray(response)) return response as StudentFee[];
         const r = response as { results?: StudentFee[] };
         return r.results || [];
+    },
+};
+
+// ─── Library ──────────────────────────────────────────────────
+export interface LibraryBook {
+    book_id: string;
+    title: string;
+    author: string;
+    isbn?: string | null;
+    category: string;
+    publisher?: string | null;
+    published_year?: number | null;
+    total_copies: number;
+    available_copies: number;
+    description?: string | null;
+    cover_image?: string | null;
+}
+
+export interface BookIssue {
+    issue_id: string;
+    book: string;
+    book_title?: string;
+    book_author?: string;
+    issued_date: string;
+    due_date: string;
+    return_date?: string | null;
+    status: 'issued' | 'returned' | 'overdue';
+    fine_amount?: string | number;
+    remarks?: string | null;
+}
+
+export const libraryAPI = {
+    getBooks: async (search?: string): Promise<LibraryBook[]> => {
+        const qs = search ? `?search=${encodeURIComponent(search)}` : '';
+        const response = await apiRequest<unknown>(`/library/books/${qs}`);
+        return normalizeList<LibraryBook>(response);
+    },
+
+    getMyIssues: async (): Promise<BookIssue[]> => {
+        const response = await apiRequest<unknown>('/library/issues/');
+        return normalizeList<BookIssue>(response);
+    },
+};
+
+// ─── Gamification ────────────────────────────────────────────
+export interface Badge {
+    id: number;
+    name: string;
+    description?: string;
+    icon?: string;
+    category?: string;
+    points?: number;
+}
+
+export interface StudentBadge {
+    id: number;
+    badge: number;
+    badge_details?: Badge;
+    earned_at: string;
+}
+
+export interface GamificationStats {
+    current_level: number;
+    current_xp: number;
+    total_xp: number;
+    current_streak: number;
+    longest_streak: number;
+    next_level_xp: number;
+}
+
+export interface LeaderboardEntry {
+    rank: number;
+    student_id: string;
+    student_name: string;
+    total_xp: number;
+    current_level: number;
+    current_streak: number;
+    badges_count: number;
+    is_me: boolean;
+}
+
+export interface LeaderboardResponse {
+    scope: string;
+    total_participants: number;
+    my_rank?: number | null;
+    entries: LeaderboardEntry[];
+}
+
+export const gamificationAPI = {
+    getMyStats: (): Promise<GamificationStats> =>
+        apiRequest<GamificationStats>('/gamification/profile/my_stats/'),
+
+    getMyBadges: async (): Promise<StudentBadge[]> => {
+        const response = await apiRequest<unknown>('/gamification/student-badges/');
+        return normalizeList<StudentBadge>(response);
+    },
+
+    getLeaderboard: (scope: 'class' | 'school' = 'class', limit = 20): Promise<LeaderboardResponse> =>
+        apiRequest<LeaderboardResponse>(
+            `/gamification/leaderboard/?scope=${scope}&limit=${limit}`
+        ),
+};
+
+// ─── Learning Path ────────────────────────────────────────────
+export interface LearningNode {
+    id: number;
+    title: string;
+    description?: string;
+    order: number;
+    node_type?: string;
+    status?: 'pending' | 'in_progress' | 'completed' | string;
+    lesson?: number | null;
+    subject?: number | null;
+    subject_name?: string;
+    progress_percentage?: number;
+}
+
+export interface LearningPath {
+    id: number;
+    title: string;
+    description?: string;
+    status?: string;
+    created_at?: string;
+    nodes?: LearningNode[];
+    progress_percentage?: number;
+}
+
+export const learningPathAPI = {
+    getPaths: async (): Promise<LearningPath[]> => {
+        const response = await apiRequest<unknown>('/ai/learning-paths/');
+        return normalizeList<LearningPath>(response);
+    },
+
+    getNodes: async (pathId?: number): Promise<LearningNode[]> => {
+        const qs = pathId ? `?learning_path=${pathId}` : '';
+        const response = await apiRequest<unknown>(`/ai/learning-nodes/${qs}`);
+        return normalizeList<LearningNode>(response);
     },
 };
 

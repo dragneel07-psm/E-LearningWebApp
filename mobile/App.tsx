@@ -35,9 +35,15 @@ import ParentGradesScreen from './screens/ParentGradesScreen';
 import TeacherAttendanceScreen from './screens/TeacherAttendanceScreen';
 import TeacherGradingScreen from './screens/TeacherGradingScreen';
 import GradeSubmissionScreen from './screens/GradeSubmissionScreen';
+import TeacherAssessmentsScreen from './screens/TeacherAssessmentsScreen';
+import CreateAssessmentScreen from './screens/CreateAssessmentScreen';
+import ManageQuestionsScreen from './screens/ManageQuestionsScreen';
+import LibraryScreen from './screens/LibraryScreen';
+import ProgressScreen from './screens/ProgressScreen';
+import ProjectsListScreen from './screens/ProjectsListScreen';
+import ProjectDetailScreen from './screens/ProjectDetailScreen';
+import ParentProjectsScreen from './screens/ParentProjectsScreen';
 import {
-  AdminDashboardScreen,
-  AdminPeopleScreen,
   NoticeBoardScreen,
   ParentChildrenScreen,
   ParentDashboardScreen,
@@ -52,7 +58,6 @@ import {
   getCurrentUser,
   saveCurrentUser,
   User,
-  UserRole,
   usersAPI,
 } from './lib/api';
 import { Colors } from './constants/theme';
@@ -79,6 +84,10 @@ function tabIcon(name: string, focused: boolean) {
     Tutor: ['🧠', '✨'],
     Attendance: ['📅', '🗒️'],
     Grading: ['✍️', '🖊️'],
+    Assessments: ['📋', '🗂️'],
+    Library: ['📙', '📘'],
+    Progress: ['🏆', '🥇'],
+    Projects: ['📂', '📁'],
   };
 
   const [inactive, active] = icons[name] || ['⚪', '🔵'];
@@ -139,6 +148,50 @@ function AssignmentsStackNavigator() {
   );
 }
 
+function ProjectsStackNavigator({ role }: { role: 'student' | 'teacher' }) {
+  return (
+    <InnerStack.Navigator
+      screenOptions={{
+        headerStyle: { backgroundColor: Colors.primary },
+        headerTintColor: '#fff',
+        headerTitleStyle: { fontWeight: '800', fontSize: 18 },
+      }}
+    >
+      <InnerStack.Screen name="ProjectsList" options={{ title: 'Projects' }}>
+        {(props) => <ProjectsListScreen {...props} role={role} />}
+      </InnerStack.Screen>
+      <InnerStack.Screen
+        name="ProjectDetail"
+        component={ProjectDetailScreen}
+        options={{ title: 'Project' }}
+      />
+    </InnerStack.Navigator>
+  );
+}
+
+function ParentProjectsStackNavigator() {
+  return (
+    <InnerStack.Navigator
+      screenOptions={{
+        headerStyle: { backgroundColor: Colors.primary },
+        headerTintColor: '#fff',
+        headerTitleStyle: { fontWeight: '800', fontSize: 18 },
+      }}
+    >
+      <InnerStack.Screen
+        name="ParentProjectsList"
+        component={ParentProjectsScreen}
+        options={{ title: 'Projects' }}
+      />
+      <InnerStack.Screen
+        name="ProjectDetail"
+        component={ProjectDetailScreen}
+        options={{ title: 'Project' }}
+      />
+    </InnerStack.Navigator>
+  );
+}
+
 function CoursesStackNavigator() {
   return (
     <InnerStack.Navigator
@@ -152,6 +205,22 @@ function CoursesStackNavigator() {
       <InnerStack.Screen name="Lessons" component={LessonsScreen} options={{ title: 'Lessons' }} />
       <InnerStack.Screen name="LessonDetail" component={LessonDetailScreen} options={{ title: 'Lesson Detail' }} />
       <InnerStack.Screen name="TakeQuiz" component={TakeQuizScreen} options={{ title: 'Quiz' }} />
+    </InnerStack.Navigator>
+  );
+}
+
+function TeacherAssessmentsStackNavigator() {
+  return (
+    <InnerStack.Navigator
+      screenOptions={{
+        headerStyle: { backgroundColor: Colors.primary },
+        headerTintColor: '#fff',
+        headerTitleStyle: { fontWeight: '800', fontSize: 18 },
+      }}
+    >
+      <InnerStack.Screen name="AssessmentsList" component={TeacherAssessmentsScreen} options={{ headerShown: false }} />
+      <InnerStack.Screen name="CreateAssessment" component={CreateAssessmentScreen} options={{ title: 'New Assessment' }} />
+      <InnerStack.Screen name="ManageQuestions" component={ManageQuestionsScreen} options={{ title: 'Questions' }} />
     </InnerStack.Navigator>
   );
 }
@@ -217,6 +286,13 @@ function StudentTabs({
       <Tab.Screen name="Grades" component={GradesScreen} />
       <Tab.Screen name="Fees" component={FeesScreen} />
       <Tab.Screen name="Assignments" component={AssignmentsStackNavigator} />
+      {user.tenant_features?.projects !== false && (
+        <Tab.Screen name="Projects">
+          {() => <ProjectsStackNavigator role="student" />}
+        </Tab.Screen>
+      )}
+      <Tab.Screen name="Progress" component={ProgressScreen} />
+      <Tab.Screen name="Library" component={LibraryScreen} />
       <Tab.Screen name="Tutor" component={AiTutorScreen} options={{ title: 'AI Tutor' }} />
       <Tab.Screen name="Notices">
         {() => <NoticeBoardScreen role="student" />}
@@ -246,6 +322,12 @@ function TeacherTabs({
       <Tab.Screen name="Home" component={TeacherDashboardScreen} />
       <Tab.Screen name="People" component={TeacherStudentsScreen} />
       <Tab.Screen name="Attendance" component={TeacherAttendanceScreen} />
+      <Tab.Screen name="Assessments" component={TeacherAssessmentsStackNavigator} />
+      {user.tenant_features?.projects !== false && (
+        <Tab.Screen name="Projects">
+          {() => <ProjectsStackNavigator role="teacher" />}
+        </Tab.Screen>
+      )}
       <Tab.Screen name="Grading" component={TeacherGradingStackNavigator} />
       <Tab.Screen name="Timetable">
         {() => <TimetableScreen role="teacher" />}
@@ -277,6 +359,9 @@ function ParentTabs({
       <Tab.Screen name="Children" component={ParentChildrenScreen} />
       <Tab.Screen name="Attendance" component={ParentAttendanceScreen} />
       <Tab.Screen name="Grades" component={ParentGradesScreen} />
+      {user.tenant_features?.projects !== false && (
+        <Tab.Screen name="Projects" component={ParentProjectsStackNavigator} />
+      )}
       <Tab.Screen name="Fees" component={ParentFeesScreen} />
       <Tab.Screen name="Notices">
         {() => <NoticeBoardScreen role="parent" />}
@@ -286,36 +371,6 @@ function ParentTabs({
       </Tab.Screen>
       <Tab.Screen name="Messages" component={MessagingScreen} />
       <Tab.Screen name="Offline" component={OfflineScreen} />
-      <Tab.Screen name="Profile">
-        {() => <ProfileScreen user={user} onLogout={onLogout} onUserUpdated={onUserUpdated} />}
-      </Tab.Screen>
-    </Tab.Navigator>
-  );
-}
-
-function AdminTabs({
-  role,
-  user,
-  onLogout,
-  onUserUpdated,
-}: {
-  role: UserRole;
-  user: User;
-  onLogout: () => void;
-  onUserUpdated: (user: User) => void;
-}) {
-  const timetableRole: UserRole = role === 'staff' ? 'staff' : role;
-
-  return (
-    <Tab.Navigator screenOptions={({ route }) => commonTabOptions(route.name)}>
-      <Tab.Screen name="Home" component={AdminDashboardScreen} />
-      <Tab.Screen name="People" component={AdminPeopleScreen} />
-      <Tab.Screen name="Timetable">
-        {() => <TimetableScreen role={timetableRole} />}
-      </Tab.Screen>
-      <Tab.Screen name="Notices">
-        {() => <NoticeBoardScreen role={timetableRole} />}
-      </Tab.Screen>
       <Tab.Screen name="Profile">
         {() => <ProfileScreen user={user} onLogout={onLogout} onUserUpdated={onUserUpdated} />}
       </Tab.Screen>
@@ -342,10 +397,6 @@ function RoleTabs({
     return <ParentTabs user={user} onLogout={onLogout} onUserUpdated={onUserUpdated} />;
   }
 
-  if (role === 'admin' || role === 'staff' || role === 'saas_admin') {
-    return <AdminTabs role={role} user={user} onLogout={onLogout} onUserUpdated={onUserUpdated} />;
-  }
-
   return <StudentTabs user={user} onLogout={onLogout} onUserUpdated={onUserUpdated} />;
 }
 
@@ -370,6 +421,18 @@ export default function App() {
     }
 
     const storedUser = await getCurrentUser();
+    const isAdminRole = (user: User | null) =>
+      !!user && (user.role === 'admin' || user.role === 'staff' || user.role === 'saas_admin');
+
+    if (storedUser && isAdminRole(storedUser)) {
+      // Admin roles are web-only; clear any legacy cached session.
+      await clearTokens();
+      setIsAuthenticated(false);
+      setCurrentUser(null);
+      setChecking(false);
+      return;
+    }
+
     if (storedUser) {
       // Immediately unblock UI with cached session while we refresh profile in background.
       setCurrentUser(storedUser);
@@ -379,6 +442,12 @@ export default function App() {
 
     try {
       const freshUser = await usersAPI.getMe();
+      if (isAdminRole(freshUser)) {
+        await clearTokens();
+        setIsAuthenticated(false);
+        setCurrentUser(null);
+        return;
+      }
       await saveCurrentUser(freshUser);
       setCurrentUser(freshUser);
       setIsAuthenticated(true);

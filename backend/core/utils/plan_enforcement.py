@@ -53,6 +53,7 @@ def build_plan_entitled_features(plan) -> Dict[str, bool]:
             "parent_attendance": False,
             "parent_fees": False,
             "student_career_guidance": False,
+            "projects": True,
         }
 
     has_ai_tutor = bool(getattr(plan, "has_ai_tutor", False))
@@ -69,13 +70,29 @@ def build_plan_entitled_features(plan) -> Dict[str, bool]:
         "parent_attendance": has_parent_portal,
         "parent_fees": has_parent_portal,
         "student_career_guidance": has_career_guidance,
+        "projects": True,
     }
+
+
+def compute_effective_features(plan, overrides) -> Dict[str, bool]:
+    """Plan-entitled features overlaid with per-tenant overrides.
+
+    Overrides win on a per-key basis. Pass `None` or `{}` for overrides
+    to get the plan baseline unchanged. Non-bool override values are
+    coerced to bool so the dict is consumable by simple truthy checks.
+    """
+    effective = dict(build_plan_entitled_features(plan))
+    if not overrides:
+        return effective
+    for key, value in overrides.items():
+        effective[key] = bool(value)
+    return effective
 
 
 def sync_tenant_with_plan(tenant, plan=None, save: bool = True):
     active_plan = plan or get_tenant_plan(tenant)
     tenant.type = derive_tenant_type_from_plan(active_plan)
-    tenant.features = build_plan_entitled_features(active_plan)
+    tenant.features = compute_effective_features(active_plan, getattr(tenant, "feature_overrides", None))
     if save:
         tenant.save(update_fields=["type", "features"])
     return tenant
