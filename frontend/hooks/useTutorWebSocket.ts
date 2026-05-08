@@ -39,6 +39,8 @@ export interface TutorDonePayload {
   mode: string;
   usage: { prompt_tokens: number; completion_tokens: number };
   is_demo: boolean;
+  fallback_reason?: string | null;
+  error?: string | null;
   budget: {
     used_today: number;
     daily_limit: number;

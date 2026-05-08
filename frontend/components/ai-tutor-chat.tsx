@@ -4,6 +4,7 @@
 'use client';
 
 import { aiAPI, ChatMessage, TutorChatSource, TutorChatUsage } from '@/lib/api';
+import { describeFallback } from '@/lib/ai-fallback';
 
 import { useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -55,7 +56,8 @@ export function AITutorChat({ open, onOpenChange, studentId }: AITutorChatProps)
             setMessages(prev => [...prev, assistantMessage]);
 
             if (data.is_demo) {
-                toast.info('AI provider fallback response is active.');
+                const { title, description } = describeFallback(data.fallback_reason, data.error);
+                toast.info(title, description ? { description } : undefined);
             }
         } catch (error) {
             console.error('Failed to get AI response:', error);
@@ -177,3 +179,4 @@ export function AITutorChat({ open, onOpenChange, studentId }: AITutorChatProps)
         </Dialog>
     );
 }
+

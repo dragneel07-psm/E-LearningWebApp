@@ -246,6 +246,8 @@ class TutorStreamConsumer(AsyncWebsocketConsumer):
             "mode": done_payload.get("mode", "direct"),
             "usage": usage,
             "is_demo": bool(done_payload.get("is_demo")),
+            "fallback_reason": done_payload.get("fallback_reason"),
+            "error": done_payload.get("error"),
             "budget": budget_status,
         })
 

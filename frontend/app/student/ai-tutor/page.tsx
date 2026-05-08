@@ -11,6 +11,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { Send, Sparkles, Trash2, Loader2, Wifi, WifiOff, AlertTriangle } from 'lucide-react';
 import { TutorChatSource, TutorChatUsage } from '@/lib/api';
+import { describeFallback } from '@/lib/ai-fallback';
 import { toast } from 'sonner';
 import ReactMarkdown from 'react-markdown';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
@@ -101,7 +102,11 @@ export default function AITutorPage() {
                     saveConversation(updated, payload.conversation_id);
 
                     if (payload.is_demo) {
-                        toast.info('Fallback AI mode active. Configure provider key for full quality.');
+                        const { title, description } = describeFallback(
+                            payload.fallback_reason ?? undefined,
+                            payload.error ?? undefined,
+                        );
+                        toast.info(title, description ? { description } : undefined);
                     }
                     if (payload.budget && payload.budget.daily_limit > 0) {
                         const pct = Math.round((payload.budget.used_today / payload.budget.daily_limit) * 100);
