@@ -396,9 +396,85 @@ class GlobalSettingsViewSet(viewsets.ViewSet):
             )
             return Response(serializer.data)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-    
-    # We can also support update/partial_update if the router expects it, but 'list' and 'create' covers GET/POST for singleton.
-    # Actually, often 'list' is mapped to GET / and 'create' to POST /.
+
+    @action(detail=False, methods=["post"], url_path="test-ai-connection")
+    def test_ai_connection(self, request):
+        """Send a 1-token ping to the configured AI provider and report success/failure.
+
+        Body (all optional — when omitted, uses the persisted GlobalSettings):
+          api_key, base_url, provider_name, model
+
+        This lets the SaaS UI test a key the admin has typed but not yet saved.
+        """
+        from ai_engine.services.provider_config import (
+            build_provider_headers,
+            get_ai_provider_config,
+            resolve_provider_and_base_url,
+        )
+
+        try:
+            from openai import OpenAI
+        except Exception as exc:
+            return Response(
+                {"ok": False, "error": f"AI client not installed on server: {exc}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+        config = get_ai_provider_config()
+        api_key = (request.data.get("api_key") or "").strip() or config.get("api_key") or ""
+        base_url_in = (request.data.get("base_url") or "").strip() or config.get("base_url") or ""
+        provider_in = (request.data.get("provider_name") or "").strip() or config.get("provider_name") or ""
+        model = (request.data.get("model") or "").strip() or config.get("model") or ""
+
+        if not api_key:
+            return Response({
+                "ok": False,
+                "error": "No API key configured. Enter a key (or save one) and try again.",
+            })
+
+        provider_name, base_url = resolve_provider_and_base_url(provider_in, base_url_in, api_key)
+        headers = build_provider_headers(provider_name)
+
+        try:
+            client = OpenAI(
+                api_key=api_key,
+                base_url=base_url,
+                default_headers=headers or None,
+                timeout=15.0,
+            )
+        except Exception as exc:
+            return Response({"ok": False, "error": f"Could not init client: {exc}"})
+
+        started = time.perf_counter()
+        try:
+            completion = client.chat.completions.create(
+                model=model,
+                messages=[{"role": "user", "content": "ping"}],
+                max_tokens=1,
+                temperature=0,
+            )
+        except Exception as exc:
+            return Response({
+                "ok": False,
+                "provider": provider_name,
+                "model": model,
+                "base_url": base_url,
+                "error": str(exc),
+            })
+
+        latency_ms = int((time.perf_counter() - started) * 1000)
+        usage = getattr(completion, "usage", None)
+        return Response(
+            {
+                "ok": True,
+                "provider": provider_name,
+                "model": getattr(completion, "model", model) or model,
+                "base_url": base_url,
+                "latency_ms": latency_ms,
+                "prompt_tokens": getattr(usage, "prompt_tokens", 0) if usage else 0,
+                "completion_tokens": getattr(usage, "completion_tokens", 0) if usage else 0,
+            }
+        )
 
 class SystemStatusView(APIView):
     permission_classes = [permissions.IsAdminUser]

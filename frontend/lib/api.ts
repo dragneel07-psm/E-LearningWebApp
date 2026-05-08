@@ -3171,6 +3171,20 @@ export const saasApi = {
             method: 'POST',
             body: JSON.stringify(data),
         }),
+    testAIConnection: (overrides?: { api_key?: string; base_url?: string; provider_name?: string; model?: string }) =>
+        apiRequest<{
+            ok: boolean;
+            provider?: string;
+            model?: string;
+            base_url?: string;
+            latency_ms?: number;
+            prompt_tokens?: number;
+            completion_tokens?: number;
+            error?: string;
+        }>('/core/settings/test-ai-connection/', {
+            method: 'POST',
+            body: JSON.stringify(overrides || {}),
+        }),
     getAuditLogs: () => coreAPI.getAuditLogs(),
     getSystemStatus: () => coreAPI.getSystemStatus(),
     getKPIs: () => apiRequest<{ kpis: any, revenue_trend: any[], tenant_activity: any[] }>('/core/saas-kpi/'),

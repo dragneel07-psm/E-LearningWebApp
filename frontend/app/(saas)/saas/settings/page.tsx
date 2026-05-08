@@ -10,14 +10,24 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Bot, Loader2, Save, Settings, Shield, Globe } from "lucide-react";
+import { Bot, Loader2, Save, Settings, Shield, Globe, Plug, CheckCircle2, XCircle } from "lucide-react";
 import { saasApi, GlobalSettings } from '@/lib/api/saas';
 import { toast } from "sonner";
 import { motion } from "framer-motion";
 
+type TestConnectionResult = {
+    ok: boolean;
+    provider?: string;
+    model?: string;
+    latency_ms?: number;
+    error?: string;
+};
+
 export default function SystemSettingsPage() {
     const [isLoading, setIsLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
+    const [isTesting, setIsTesting] = useState(false);
+    const [testResult, setTestResult] = useState<TestConnectionResult | null>(null);
     const [settings, setSettings] = useState<GlobalSettings>({
         site_name: '',
         support_email: '',
@@ -85,6 +95,40 @@ export default function SystemSettingsPage() {
 
     const handleChange = <K extends keyof GlobalSettings>(field: K, value: GlobalSettings[K]) => {
         setSettings(prev => ({ ...prev, [field]: value }));
+        // Stale the previous test result whenever any AI field changes.
+        if (field === 'ai_api_key' || field === 'ai_base_url' || field === 'ai_model' || field === 'ai_provider_name') {
+            setTestResult(null);
+        }
+    };
+
+    const handleTestConnection = async () => {
+        setIsTesting(true);
+        setTestResult(null);
+        try {
+            const overrides: { api_key?: string; base_url?: string; provider_name?: string; model?: string } = {};
+            const typedKey = (settings.ai_api_key || '').trim();
+            if (typedKey) overrides.api_key = typedKey;
+            const baseUrl = (settings.ai_base_url || '').trim();
+            if (baseUrl) overrides.base_url = baseUrl;
+            const providerName = (settings.ai_provider_name || '').trim();
+            if (providerName) overrides.provider_name = providerName;
+            const model = (settings.ai_model || '').trim();
+            if (model) overrides.model = model;
+
+            const result = await saasApi.testAIConnection(overrides);
+            setTestResult(result);
+            if (result.ok) {
+                toast.success(`Connected to ${result.provider} (${result.model}) in ${result.latency_ms}ms`);
+            } else {
+                toast.error(result.error || 'Connection failed.');
+            }
+        } catch (error) {
+            const message = error instanceof Error ? error.message : 'Connection failed.';
+            setTestResult({ ok: false, error: message });
+            toast.error(message);
+        } finally {
+            setIsTesting(false);
+        }
     };
 
     if (isLoading) return <div className="p-8 flex items-center justify-center h-full"><Loader2 className="w-8 h-8 animate-spin text-slate-400" /></div>;
@@ -237,6 +281,40 @@ export default function SystemSettingsPage() {
                                     {settings.ai_api_key_configured
                                         ? `Stored key: ${settings.ai_api_key_masked || 'Configured'}`
                                         : 'No API key configured yet.'}
+                                </p>
+
+                                <div className="flex items-center gap-3 pt-2">
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={handleTestConnection}
+                                        disabled={isTesting}
+                                    >
+                                        {isTesting ? (
+                                            <><Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" /> Testing…</>
+                                        ) : (
+                                            <><Plug className="mr-2 h-3.5 w-3.5" /> Test connection</>
+                                        )}
+                                    </Button>
+                                    {testResult && (
+                                        <div className={`flex items-center gap-1.5 text-xs font-medium ${testResult.ok ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
+                                            {testResult.ok ? (
+                                                <>
+                                                    <CheckCircle2 className="h-3.5 w-3.5" />
+                                                    <span>{testResult.provider} · {testResult.model} · {testResult.latency_ms}ms</span>
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <XCircle className="h-3.5 w-3.5" />
+                                                    <span className="truncate max-w-[420px]" title={testResult.error}>{testResult.error}</span>
+                                                </>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+                                <p className="text-[11px] text-slate-400 dark:text-slate-500">
+                                    Sends a 1-token ping to the configured provider. Tests the typed key if you haven&apos;t saved it yet.
                                 </p>
                             </div>
                         </CardContent>
