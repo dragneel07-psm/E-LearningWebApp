@@ -3,9 +3,21 @@
 // via any medium, is strictly prohibited. Proprietary and confidential.
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, Loader2, Search, Shield, UserCog, UserPlus } from 'lucide-react';
+import {
+    ArrowLeft,
+    Eye,
+    EyeOff,
+    KeyRound,
+    Loader2,
+    RefreshCw,
+    Search,
+    Shield,
+    User as UserIcon,
+    UserCog,
+    UserPlus,
+} from 'lucide-react';
 import { toast } from 'sonner';
 
 import { usersAPI, User } from '@/lib/api';
@@ -80,6 +92,15 @@ export default function StaffAccessPage() {
     const [createForm, setCreateForm] = useState<CreateForm>(EMPTY_FORM);
     const [creating, setCreating] = useState(false);
 
+    // View staff details dialog
+    const [viewUser, setViewUser] = useState<User | null>(null);
+
+    // Reset password dialog
+    const [resetUser, setResetUser] = useState<User | null>(null);
+    const [resetPassword, setResetPassword] = useState('');
+    const [showResetPassword, setShowResetPassword] = useState(false);
+    const [resetting, setResetting] = useState(false);
+
     const load = useCallback(async () => {
         setLoading(true);
         try {
@@ -97,16 +118,61 @@ export default function StaffAccessPage() {
     const handleStaffRoleChange = async (userId: string, staffRole: StaffRole) => {
         setSaving(userId);
         try {
-            await usersAPI.updateAccount(userId, { staff_role: staffRole } as Partial<User>);
+            // Trust the backend's response — if the field was silently dropped,
+            // the UI will reflect what was actually persisted, not an optimistic guess.
+            const updated = await usersAPI.updateAccount(userId, {
+                staff_role: staffRole,
+            } as Partial<User>);
             setUsers((prev) =>
-                prev.map((u) => (u.user_id === userId ? { ...u, staff_role: staffRole } : u))
+                prev.map((u) => (u.user_id === userId ? { ...u, ...updated } : u))
             );
-            toast.success('Staff role updated.');
+            const persisted = (updated.staff_role ?? '') as StaffRole;
+            if (persisted !== staffRole) {
+                toast.error('Server did not persist the role. Please retry.');
+            } else {
+                toast.success('Staff role updated.');
+            }
         } catch {
             toast.error('Failed to update staff role.');
         } finally {
             setSaving(null);
         }
+    };
+
+    const generatePassword = () => {
+        const chars = 'ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789!@#$%';
+        let pwd = '';
+        const buf = new Uint32Array(14);
+        crypto.getRandomValues(buf);
+        for (let i = 0; i < buf.length; i++) pwd += chars[buf[i] % chars.length];
+        setResetPassword(pwd);
+        setShowResetPassword(true);
+    };
+
+    const handleResetPassword = async () => {
+        if (!resetUser) return;
+        if (!resetPassword || resetPassword.length < 8) {
+            toast.error('Password must be at least 8 characters.');
+            return;
+        }
+        setResetting(true);
+        try {
+            await usersAPI.resetUserPassword(resetUser.user_id, resetPassword);
+            toast.success(`Password reset for ${resetUser.email}.`);
+            setResetUser(null);
+            setResetPassword('');
+            setShowResetPassword(false);
+        } catch (err) {
+            toast.error(err instanceof Error ? err.message : 'Failed to reset password.');
+        } finally {
+            setResetting(false);
+        }
+    };
+
+    const openResetPassword = (u: User) => {
+        setResetUser(u);
+        setResetPassword('');
+        setShowResetPassword(false);
     };
 
     const handleCreateStaff = async () => {
@@ -228,18 +294,19 @@ export default function StaffAccessPage() {
                                 <TableHead>Account Role</TableHead>
                                 <TableHead>Staff Sub-Role</TableHead>
                                 <TableHead>Module Access</TableHead>
+                                <TableHead className="text-right">Actions</TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
                             {loading ? (
                                 <TableRow>
-                                    <TableCell colSpan={5} className="text-center py-10">
+                                    <TableCell colSpan={6} className="text-center py-10">
                                         <Loader2 className="h-6 w-6 animate-spin mx-auto text-slate-400" />
                                     </TableCell>
                                 </TableRow>
                             ) : filtered.length === 0 ? (
                                 <TableRow>
-                                    <TableCell colSpan={5} className="text-center py-10 text-slate-400">
+                                    <TableCell colSpan={6} className="text-center py-10 text-slate-400">
                                         No staff accounts found. Use "Add Staff User" to create one.
                                     </TableCell>
                                 </TableRow>
@@ -296,6 +363,28 @@ export default function StaffAccessPage() {
                                             </TableCell>
                                             <TableCell className="text-xs text-slate-500 max-w-xs">
                                                 {isAdmin ? 'All modules' : ROLE_MODULE_SUMMARY[staffRole]}
+                                            </TableCell>
+                                            <TableCell className="text-right">
+                                                <div className="flex items-center justify-end gap-1">
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="icon"
+                                                        className="h-8 w-8 text-slate-500 hover:text-indigo-600"
+                                                        title="View staff details"
+                                                        onClick={() => setViewUser(u)}
+                                                    >
+                                                        <UserIcon className="h-4 w-4" />
+                                                    </Button>
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="icon"
+                                                        className="h-8 w-8 text-slate-500 hover:text-amber-600"
+                                                        title="Reset password"
+                                                        onClick={() => openResetPassword(u)}
+                                                    >
+                                                        <KeyRound className="h-4 w-4" />
+                                                    </Button>
+                                                </div>
                                             </TableCell>
                                         </TableRow>
                                     );
@@ -394,6 +483,203 @@ export default function StaffAccessPage() {
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
+
+            {/* View Staff Details Dialog */}
+            <Dialog open={!!viewUser} onOpenChange={(open) => !open && setViewUser(null)}>
+                <DialogContent className="sm:max-w-[520px]">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2">
+                            <UserIcon className="h-5 w-5 text-indigo-600" />
+                            Staff Details
+                        </DialogTitle>
+                    </DialogHeader>
+                    {viewUser && (
+                        <div className="space-y-4 py-2">
+                            <div className="flex items-center gap-4 rounded-lg border bg-slate-50 p-4">
+                                <div className="flex h-14 w-14 items-center justify-center rounded-full bg-indigo-100 text-indigo-600 text-xl font-bold">
+                                    {(viewUser.first_name?.[0] ?? '?').toUpperCase()}
+                                    {(viewUser.last_name?.[0] ?? '').toUpperCase()}
+                                </div>
+                                <div className="min-w-0">
+                                    <p className="font-semibold text-slate-900 truncate">
+                                        {viewUser.first_name} {viewUser.last_name}
+                                    </p>
+                                    <p className="text-sm text-slate-500 truncate">{viewUser.email}</p>
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-3 text-sm">
+                                <DetailRow label="Username" value={viewUser.username || '—'} />
+                                <DetailRow
+                                    label="Account Status"
+                                    value={
+                                        <Badge
+                                            className={
+                                                viewUser.is_active === false
+                                                    ? 'bg-rose-100 text-rose-700 border-rose-200 text-[10px] font-bold'
+                                                    : 'bg-emerald-100 text-emerald-700 border-emerald-200 text-[10px] font-bold'
+                                            }
+                                        >
+                                            {viewUser.is_active === false ? 'Inactive' : 'Active'}
+                                        </Badge>
+                                    }
+                                />
+                                <DetailRow
+                                    label="Account Role"
+                                    value={
+                                        <Badge
+                                            className={
+                                                viewUser.role === 'admin'
+                                                    ? 'bg-indigo-100 text-indigo-700 border-indigo-200 text-[10px] font-bold'
+                                                    : 'bg-slate-100 text-slate-600 border-slate-200 text-[10px] font-bold'
+                                            }
+                                        >
+                                            {viewUser.role === 'admin' ? 'School Admin' : 'Staff'}
+                                        </Badge>
+                                    }
+                                />
+                                <DetailRow
+                                    label="Sub-Role"
+                                    value={
+                                        viewUser.role === 'admin' ? (
+                                            <span className="text-xs text-slate-400 italic">Full access</span>
+                                        ) : (
+                                            <Badge
+                                                className={`text-[10px] font-bold ${roleBadgeClass(
+                                                    (viewUser.staff_role ?? '') as StaffRole
+                                                )}`}
+                                            >
+                                                {STAFF_ROLE_OPTIONS.find(
+                                                    (o) => o.value === (viewUser.staff_role ?? '')
+                                                )?.label ?? '—'}
+                                            </Badge>
+                                        )
+                                    }
+                                />
+                                <div className="col-span-2">
+                                    <p className="text-xs uppercase tracking-wide text-slate-400 mb-1">
+                                        Module Access
+                                    </p>
+                                    <p className="text-sm text-slate-700">
+                                        {viewUser.role === 'admin'
+                                            ? 'All modules'
+                                            : ROLE_MODULE_SUMMARY[(viewUser.staff_role ?? '') as StaffRole]}
+                                    </p>
+                                </div>
+                                <DetailRow label="User ID" value={<code className="text-xs">{viewUser.user_id}</code>} />
+                                <DetailRow label="Tenant" value={<code className="text-xs">{viewUser.tenant || '—'}</code>} />
+                            </div>
+                        </div>
+                    )}
+                    <DialogFooter className="gap-2">
+                        {viewUser && viewUser.role !== 'admin' && (
+                            <Button
+                                variant="outline"
+                                onClick={() => {
+                                    const u = viewUser;
+                                    setViewUser(null);
+                                    if (u) openResetPassword(u);
+                                }}
+                                className="gap-2"
+                            >
+                                <KeyRound className="h-4 w-4" />
+                                Reset Password
+                            </Button>
+                        )}
+                        <Button onClick={() => setViewUser(null)}>Close</Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* Reset Password Dialog */}
+            <Dialog open={!!resetUser} onOpenChange={(open) => !open && !resetting && setResetUser(null)}>
+                <DialogContent className="sm:max-w-[460px]">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2">
+                            <KeyRound className="h-5 w-5 text-amber-600" />
+                            Reset Password
+                        </DialogTitle>
+                    </DialogHeader>
+                    {resetUser && (
+                        <div className="space-y-4 py-2">
+                            <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
+                                Setting a new password for{' '}
+                                <strong>
+                                    {resetUser.first_name} {resetUser.last_name}
+                                </strong>{' '}
+                                ({resetUser.email}). The user will be able to sign in with this password
+                                immediately. Share it through a secure channel.
+                            </div>
+                            <div className="grid gap-2">
+                                <Label>New Password</Label>
+                                <div className="flex gap-2">
+                                    <div className="relative flex-1">
+                                        <Input
+                                            type={showResetPassword ? 'text' : 'password'}
+                                            value={resetPassword}
+                                            onChange={(e) => setResetPassword(e.target.value)}
+                                            placeholder="Min 8 characters"
+                                            className="pr-9"
+                                            autoFocus
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowResetPassword((v) => !v)}
+                                            className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700"
+                                            tabIndex={-1}
+                                        >
+                                            {showResetPassword ? (
+                                                <EyeOff className="h-4 w-4" />
+                                            ) : (
+                                                <Eye className="h-4 w-4" />
+                                            )}
+                                        </button>
+                                    </div>
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        onClick={generatePassword}
+                                        className="gap-2"
+                                    >
+                                        <RefreshCw className="h-4 w-4" />
+                                        Generate
+                                    </Button>
+                                </div>
+                                <p className="text-[11px] text-slate-500">
+                                    Use at least 8 characters. The "Generate" button creates a strong random
+                                    password you can copy from the field above.
+                                </p>
+                            </div>
+                        </div>
+                    )}
+                    <DialogFooter>
+                        <Button
+                            variant="outline"
+                            onClick={() => setResetUser(null)}
+                            disabled={resetting}
+                        >
+                            Cancel
+                        </Button>
+                        <Button
+                            onClick={handleResetPassword}
+                            disabled={resetting || resetPassword.length < 8}
+                            className="bg-amber-600 hover:bg-amber-700"
+                        >
+                            {resetting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                            Reset Password
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+        </div>
+    );
+}
+
+function DetailRow({ label, value }: { label: string; value: ReactNode }) {
+    return (
+        <div>
+            <p className="text-xs uppercase tracking-wide text-slate-400 mb-1">{label}</p>
+            <div className="text-sm text-slate-700">{value}</div>
         </div>
     );
 }
