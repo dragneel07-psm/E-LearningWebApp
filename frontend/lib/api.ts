@@ -2594,6 +2594,10 @@ export const billingAPI = {
     }),
 
     getStudentFees: () => fetchAllPages<StudentFee>(`${BILLING_SCHOOL_BASE}/student-fees/`),
+    updateStudentFee: (id: string, data: Partial<StudentFee>) => apiRequest<StudentFee>(`${BILLING_SCHOOL_BASE}/student-fees/${id}/`, {
+        method: 'PATCH',
+        body: JSON.stringify(data)
+    }),
     getMyFees: () => apiRequest<{ fees: StudentFee[]; payments: Payment[]; summary: { total_due: number; total_paid: number; outstanding: number } }>(`${BILLING_SCHOOL_BASE}/student-fees/my_fees/`),
     sendInvoice: (id: string) => apiRequest<{ status: string }>(`${BILLING_SCHOOL_BASE}/student-fees/${id}/send_invoice/`, { method: 'POST' }),
     assignBulkFees: (data: { fee_structure_id: string; academic_class_id: string; due_date: string }) =>

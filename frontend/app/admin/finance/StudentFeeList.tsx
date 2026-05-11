@@ -13,7 +13,7 @@ import {
     Clock, MoreVertical, Download,
     Users, Calendar
 } from 'lucide-react';
-import { billingAPI, academicAPI, StudentFee, FeeStructure, AcademicClass } from '@/lib/api';
+import { billingAPI, academicAPI, StudentFee, FeeStructure, AcademicClass, Payment } from '@/lib/api';
 import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
 import { PaymentDialog } from './PaymentDialog';
@@ -23,6 +23,14 @@ import {
     DropdownMenuItem,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+    Dialog,
+    DialogContent,
+    DialogHeader,
+    DialogTitle,
+    DialogDescription,
+    DialogFooter,
+} from "@/components/ui/dialog";
 
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -35,6 +43,11 @@ export function StudentFeeList() {
     const [statusFilter, setStatusFilter] = useState<'all' | 'paid' | 'pending' | 'overdue'>('all');
     const [isPaymentOpen, setIsPaymentOpen] = useState(false);
     const [selectedFee, setSelectedFee] = useState<StudentFee | null>(null);
+    const [waiveTarget, setWaiveTarget] = useState<StudentFee | null>(null);
+    const [historyTarget, setHistoryTarget] = useState<StudentFee | null>(null);
+    const [statementTarget, setStatementTarget] = useState<StudentFee | null>(null);
+    const [actionPayments, setActionPayments] = useState<Payment[]>([]);
+    const [actionLoading, setActionLoading] = useState(false);
 
     useEffect(() => {
         loadData();
@@ -61,6 +74,41 @@ export function StudentFeeList() {
     const handleRecordPayment = (fee: StudentFee) => {
         setSelectedFee(fee);
         setIsPaymentOpen(true);
+    };
+
+    const loadPaymentsForStudent = async (studentId: string) => {
+        setActionLoading(true);
+        try {
+            const all = await billingAPI.getPayments();
+            setActionPayments(all.filter(p => p.student === studentId));
+        } catch {
+            toast.error("Failed to load payment history");
+            setActionPayments([]);
+        } finally {
+            setActionLoading(false);
+        }
+    };
+
+    const openHistory = (fee: StudentFee) => {
+        setHistoryTarget(fee);
+        loadPaymentsForStudent(fee.student);
+    };
+
+    const openStatement = (fee: StudentFee) => {
+        setStatementTarget(fee);
+        loadPaymentsForStudent(fee.student);
+    };
+
+    const confirmWaive = async () => {
+        if (!waiveTarget) return;
+        try {
+            await billingAPI.updateStudentFee(waiveTarget.student_fee_id, { status: 'waived' });
+            toast.success("Fee waived");
+            setWaiveTarget(null);
+            await loadData();
+        } catch {
+            toast.error("Failed to waive fee");
+        }
     };
 
     const getStatusBadge = (status: string) => {
@@ -273,13 +321,17 @@ export function StudentFeeList() {
                                                         </Button>
                                                     </DropdownMenuTrigger>
                                                     <DropdownMenuContent align="end" className="w-40">
-                                                        <DropdownMenuItem className="text-xs font-bold gap-2">
+                                                        <DropdownMenuItem className="text-xs font-bold gap-2" onClick={() => openStatement(fee)}>
                                                             <Download className="h-3.5 w-3.5" /> Statement
                                                         </DropdownMenuItem>
-                                                        <DropdownMenuItem className="text-xs font-bold gap-2">
+                                                        <DropdownMenuItem className="text-xs font-bold gap-2" onClick={() => openHistory(fee)}>
                                                             <Filter className="h-3.5 w-3.5" /> History
                                                         </DropdownMenuItem>
-                                                        <DropdownMenuItem className="text-xs font-bold gap-2 text-red-600">
+                                                        <DropdownMenuItem
+                                                            className="text-xs font-bold gap-2 text-red-600"
+                                                            disabled={fee.status === 'paid' || fee.status === 'waived'}
+                                                            onClick={() => setWaiveTarget(fee)}
+                                                        >
                                                             <AlertCircle className="h-3.5 w-3.5" /> Waive Fee
                                                         </DropdownMenuItem>
                                                     </DropdownMenuContent>
@@ -315,6 +367,157 @@ export function StudentFeeList() {
                 fee={selectedFee}
                 onSuccess={loadData}
             />
+
+            <Dialog open={!!waiveTarget} onOpenChange={(o) => !o && setWaiveTarget(null)}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Waive this fee?</DialogTitle>
+                        <DialogDescription>
+                            {waiveTarget && (
+                                <>
+                                    Mark <span className="font-semibold">{waiveTarget.fee_name}</span> for{' '}
+                                    <span className="font-semibold">{waiveTarget.student_name}</span> as waived.
+                                    The outstanding balance of ${(waiveTarget.balance ?? (waiveTarget.amount_due - waiveTarget.amount_paid)).toLocaleString()} will be cleared.
+                                    This cannot be undone from the UI.
+                                </>
+                            )}
+                        </DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setWaiveTarget(null)}>Cancel</Button>
+                        <Button variant="destructive" onClick={confirmWaive}>Waive Fee</Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            <Dialog open={!!historyTarget} onOpenChange={(o) => !o && setHistoryTarget(null)}>
+                <DialogContent className="max-w-2xl">
+                    <DialogHeader>
+                        <DialogTitle>Payment History</DialogTitle>
+                        <DialogDescription>
+                            {historyTarget && <>Payments recorded for {historyTarget.student_name}.</>}
+                        </DialogDescription>
+                    </DialogHeader>
+                    {actionLoading ? (
+                        <div className="py-8 text-center text-sm text-slate-500">Loading…</div>
+                    ) : actionPayments.length === 0 ? (
+                        <div className="py-8 text-center text-sm text-slate-500">No payments recorded.</div>
+                    ) : (
+                        <div className="max-h-96 overflow-y-auto">
+                            <table className="w-full text-sm">
+                                <thead className="text-xs uppercase text-slate-500 border-b">
+                                    <tr>
+                                        <th className="text-left py-2">Date</th>
+                                        <th className="text-left py-2">Method</th>
+                                        <th className="text-left py-2">Reference</th>
+                                        <th className="text-right py-2">Amount</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {actionPayments.map(p => (
+                                        <tr key={p.payment_id} className="border-b last:border-b-0">
+                                            <td className="py-2">{new Date(p.payment_date).toLocaleDateString()}</td>
+                                            <td className="py-2 capitalize">{p.method}</td>
+                                            <td className="py-2 text-slate-500">{p.transaction_id || '—'}</td>
+                                            <td className="py-2 text-right font-semibold">${Number(p.amount).toLocaleString()}</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
+                </DialogContent>
+            </Dialog>
+
+            <Dialog open={!!statementTarget} onOpenChange={(o) => !o && setStatementTarget(null)}>
+                <DialogContent className="max-w-3xl">
+                    <DialogHeader>
+                        <DialogTitle>Account Statement</DialogTitle>
+                        <DialogDescription>
+                            {statementTarget && <>Full fee and payment summary for {statementTarget.student_name}.</>}
+                        </DialogDescription>
+                    </DialogHeader>
+                    {statementTarget && (() => {
+                        const studentFees = fees.filter(f => f.student === statementTarget.student);
+                        const totalDue = studentFees.reduce((s, f) => s + Number(f.amount_due || 0), 0);
+                        const totalPaid = studentFees.reduce((s, f) => s + Number(f.amount_paid || 0), 0);
+                        const outstanding = totalDue - totalPaid;
+                        return (
+                            <div className="space-y-4">
+                                <div className="grid grid-cols-3 gap-3 text-sm">
+                                    <div className="rounded-lg border p-3">
+                                        <div className="text-xs text-slate-500">Total Charged</div>
+                                        <div className="font-bold">${totalDue.toLocaleString()}</div>
+                                    </div>
+                                    <div className="rounded-lg border p-3">
+                                        <div className="text-xs text-slate-500">Total Paid</div>
+                                        <div className="font-bold text-emerald-600">${totalPaid.toLocaleString()}</div>
+                                    </div>
+                                    <div className="rounded-lg border p-3">
+                                        <div className="text-xs text-slate-500">Outstanding</div>
+                                        <div className={`font-bold ${outstanding > 0 ? 'text-red-600' : 'text-slate-500'}`}>${outstanding.toLocaleString()}</div>
+                                    </div>
+                                </div>
+                                <div>
+                                    <h4 className="text-xs font-bold uppercase text-slate-500 mb-2">Fees</h4>
+                                    <table className="w-full text-sm">
+                                        <thead className="text-xs uppercase text-slate-500 border-b">
+                                            <tr>
+                                                <th className="text-left py-2">Item</th>
+                                                <th className="text-left py-2">Due</th>
+                                                <th className="text-right py-2">Charged</th>
+                                                <th className="text-right py-2">Paid</th>
+                                                <th className="text-right py-2">Status</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {studentFees.map(f => (
+                                                <tr key={f.student_fee_id} className="border-b last:border-b-0">
+                                                    <td className="py-2">{f.fee_name}</td>
+                                                    <td className="py-2">{new Date(f.due_date).toLocaleDateString()}</td>
+                                                    <td className="py-2 text-right">${Number(f.amount_due).toLocaleString()}</td>
+                                                    <td className="py-2 text-right text-emerald-600">${Number(f.amount_paid).toLocaleString()}</td>
+                                                    <td className="py-2 text-right capitalize">{f.status}</td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                                <div>
+                                    <h4 className="text-xs font-bold uppercase text-slate-500 mb-2">Payments ({actionPayments.length})</h4>
+                                    {actionLoading ? (
+                                        <div className="py-4 text-center text-sm text-slate-500">Loading payments…</div>
+                                    ) : actionPayments.length === 0 ? (
+                                        <div className="py-4 text-center text-sm text-slate-500">No payments recorded.</div>
+                                    ) : (
+                                        <table className="w-full text-sm">
+                                            <thead className="text-xs uppercase text-slate-500 border-b">
+                                                <tr>
+                                                    <th className="text-left py-2">Date</th>
+                                                    <th className="text-left py-2">Method</th>
+                                                    <th className="text-right py-2">Amount</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {actionPayments.map(p => (
+                                                    <tr key={p.payment_id} className="border-b last:border-b-0">
+                                                        <td className="py-2">{new Date(p.payment_date).toLocaleDateString()}</td>
+                                                        <td className="py-2 capitalize">{p.method}</td>
+                                                        <td className="py-2 text-right font-semibold">${Number(p.amount).toLocaleString()}</td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    )}
+                                </div>
+                                <DialogFooter>
+                                    <Button variant="outline" onClick={() => window.print()}>Print</Button>
+                                </DialogFooter>
+                            </div>
+                        );
+                    })()}
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }
