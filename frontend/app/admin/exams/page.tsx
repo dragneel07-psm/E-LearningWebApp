@@ -22,7 +22,7 @@ import {
     SelectTrigger, SelectValue
 } from "@/components/ui/select";
 import { Label } from '@/components/ui/label';
-import { academicAPI, reportsAPI, Exam, Assessment, AcademicClass } from '@/lib/api';
+import { academicAPI, reportsAPI, downloadReport, Exam, Assessment, AcademicClass } from '@/lib/api';
 import { toast } from 'sonner';
 
 export default function ExamManagementPage() {
@@ -121,17 +121,10 @@ export default function ExamManagementPage() {
             setDownloadingTickets(exam.exam_id);
             toast.info("Generating hall tickets ZIP...");
 
-            const url = reportsAPI.getBulkHallTicketsZIP(exam.exam_id);
-
-            // Create a temporary link and trigger download
-            const link = document.createElement('a');
-            link.href = url;
-            link.download = `hall_tickets_${exam.assessment_details?.title.replace(/\s+/g, '_')}.zip`;
-            link.target = '_blank';
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-
+            await downloadReport(
+                reportsAPI.getBulkHallTicketsZIP(exam.exam_id),
+                `hall_tickets_${exam.assessment_details?.title.replace(/\s+/g, '_')}.zip`,
+            );
             toast.success(`Downloading ${exam.seating_arrangements.length} hall tickets`);
         } catch (error: any) {
             console.error("Failed to download hall tickets", error);

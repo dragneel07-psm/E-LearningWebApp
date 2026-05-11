@@ -7,7 +7,11 @@ import { useEffect, useState, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { analyticsAPI, AnalyticsDashboard, api } from '@/lib/api';
+import { analyticsAPI, AnalyticsDashboard, api, downloadReport } from '@/lib/api';
+import { toast } from 'sonner';
+
+const downloadOrToast = (path: string, filename: string) =>
+    downloadReport(path, filename).catch(() => toast.error('Failed to download report'));
 import {
     Users, GraduationCap, BookOpen, School,
     TrendingUp, TrendingDown, BarChart3, Star,
@@ -125,11 +129,11 @@ export default function AnalyticsPage() {
                     </Button>
                     {/* Export links */}
                     <Button variant="outline" size="sm" className="rounded-xl text-xs font-bold gap-1.5 border-slate-200"
-                        onClick={() => window.open(api.reports.getFeeCollectionExcel(), '_blank')}>
+                        onClick={() => downloadOrToast(api.reports.getFeeCollectionExcel(), 'fee_collection.xlsx')}>
                         <Download className="h-3.5 w-3.5" /> Fee Report
                     </Button>
                     <Button variant="outline" size="sm" className="rounded-xl text-xs font-bold gap-1.5 border-slate-200"
-                        onClick={() => window.open(api.reports.getPendingFeesPDF(), '_blank')}>
+                        onClick={() => downloadOrToast(api.reports.getPendingFeesPDF(), 'pending_fees.pdf')}>
                         <Download className="h-3.5 w-3.5" /> Pending Fees
                     </Button>
                 </div>
@@ -326,19 +330,19 @@ export default function AnalyticsPage() {
                     <p className="text-xs font-black text-slate-500 uppercase tracking-widest mb-3">Quick Exports</p>
                     <div className="flex flex-wrap gap-2">
                         <Button variant="outline" size="sm" className="rounded-xl text-xs font-bold gap-1.5 border-slate-200 bg-white"
-                            onClick={() => (window as any).open(api.reports.getFeeCollectionPDF(), '_blank')}>
+                            onClick={() => downloadOrToast(api.reports.getFeeCollectionPDF(), 'fee_collection.pdf')}>
                             <Download className="h-3.5 w-3.5" /> Fee Collection PDF
                         </Button>
                         <Button variant="outline" size="sm" className="rounded-xl text-xs font-bold gap-1.5 border-slate-200 bg-white"
-                            onClick={() => (window as any).open(api.reports.getFeeCollectionExcel(), '_blank')}>
+                            onClick={() => downloadOrToast(api.reports.getFeeCollectionExcel(), 'fee_collection.xlsx')}>
                             <Download className="h-3.5 w-3.5" /> Fee Collection Excel
                         </Button>
                         <Button variant="outline" size="sm" className="rounded-xl text-xs font-bold gap-1.5 border-slate-200 bg-white"
-                            onClick={() => (window as any).open(api.reports.getPendingFeesPDF(), '_blank')}>
+                            onClick={() => downloadOrToast(api.reports.getPendingFeesPDF(), 'pending_fees.pdf')}>
                             <Download className="h-3.5 w-3.5" /> Pending Fees PDF
                         </Button>
                         <Button variant="outline" size="sm" className="rounded-xl text-xs font-bold gap-1.5 border-slate-200 bg-white"
-                            onClick={() => (window as any).open(api.reports.getPendingFeesExcel(), '_blank')}>
+                            onClick={() => downloadOrToast(api.reports.getPendingFeesExcel(), 'pending_fees.xlsx')}>
                             <Download className="h-3.5 w-3.5" /> Pending Fees Excel
                         </Button>
                     </div>

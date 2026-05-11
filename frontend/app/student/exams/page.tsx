@@ -11,7 +11,7 @@ import {
     Calendar, MapPin, Ticket, Info,
     Printer, Loader2, BookOpen, Clock
 } from 'lucide-react';
-import { academicAPI, reportsAPI, Exam, ExamSeating } from '@/lib/api';
+import { academicAPI, reportsAPI, downloadReport, Exam, ExamSeating } from '@/lib/api';
 import { toast } from 'sonner';
 
 function toList<T>(payload: unknown): T[] {
@@ -53,17 +53,10 @@ export default function StudentExamsPage() {
     const handleDownloadHallTicket = async (seating: ExamSeating) => {
         try {
             setDownloading(seating.seating_id);
-            const url = reportsAPI.getHallTicketPDF(seating.seating_id);
-
-            // Create a temporary link and trigger download
-            const link = document.createElement('a');
-            link.href = url;
-            link.download = `hall_ticket_${seating.hall_ticket_number}.pdf`;
-            link.target = '_blank';
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-
+            await downloadReport(
+                reportsAPI.getHallTicketPDF(seating.seating_id),
+                `hall_ticket_${seating.hall_ticket_number}.pdf`,
+            );
             toast.success("Hall ticket downloaded successfully!");
         } catch (error) {
             console.error("Failed to download hall ticket", error);

@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { billingAPI, academicAPI, api, StudentFee, Payment, Student } from '@/lib/api';
+import { billingAPI, academicAPI, api, downloadReport, StudentFee, Payment, Student } from '@/lib/api';
 import { toast } from 'sonner';
 import { Download, AlertCircle, Calendar } from 'lucide-react';
 import { format } from 'date-fns';
@@ -80,8 +80,12 @@ function DefaultersList() {
         }
     };
 
-    const downloadPDF = () => {
-        window.open(api.reports.getPendingFeesPDF(), '_blank');
+    const downloadPDF = async () => {
+        try {
+            await downloadReport(api.reports.getPendingFeesPDF(), `pending_fees_${new Date().toISOString().slice(0, 10)}.pdf`);
+        } catch {
+            toast.error('Failed to download report');
+        }
     };
 
     return (
@@ -160,10 +164,12 @@ function DailyCollection() {
         }
     };
 
-    const downloadReport = () => {
-        // Assume API supports date range
-        const url = api.reports.getFeeCollectionPDF(today, today);
-        window.open(url, '_blank');
+    const downloadDailyReport = async () => {
+        try {
+            await downloadReport(api.reports.getFeeCollectionPDF(today, today), `fee_collection_${today}.pdf`);
+        } catch {
+            toast.error('Failed to download report');
+        }
     };
 
     return (
@@ -177,7 +183,7 @@ function DailyCollection() {
                     <div className="text-xl font-bold text-green-600">
                         Total: ${total.toFixed(2)}
                     </div>
-                    <Button variant="outline" onClick={downloadReport}>
+                    <Button variant="outline" onClick={downloadDailyReport}>
                         <Download className="mr-2 h-4 w-4" /> Download Report
                     </Button>
                 </div>

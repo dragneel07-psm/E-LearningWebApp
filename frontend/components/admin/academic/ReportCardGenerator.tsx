@@ -7,7 +7,7 @@ import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { academicAPI, AcademicClass, Section, Student, reportsAPI } from '@/lib/api';
+import { academicAPI, AcademicClass, Section, Student, reportsAPI, downloadReport } from '@/lib/api';
 import { toast } from 'sonner';
 import { FileText, Download, Loader2, Users } from 'lucide-react';
 
@@ -71,12 +71,11 @@ export default function ReportCardGenerator() {
 
         setGenerating(true);
         try {
-            // Trigger download by opening in new tab or fetching blob
-            const url = reportsAPI.getStudentPerformancePDF(selectedStudentId);
-
-            // Should verify if it works, sometimes direct link is easiest for PDF
-            window.open(url, '_blank');
-            toast.success('Report generation started');
+            await downloadReport(
+                reportsAPI.getStudentPerformancePDF(selectedStudentId),
+                `report_card_${selectedStudentId}.pdf`,
+            );
+            toast.success('Report downloaded');
         } catch (error) {
             console.error(error);
             toast.error('Failed to generate report');

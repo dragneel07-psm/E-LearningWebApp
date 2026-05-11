@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { academicAPI, reportsAPI, AcademicClass, Section, Student } from '@/lib/api';
+import { academicAPI, reportsAPI, downloadReport, AcademicClass, Section, Student } from '@/lib/api';
 import { toast } from 'sonner';
 import {
     FileText, Download, Loader2, CalendarDays, Wallet,
@@ -23,14 +23,12 @@ function getSelectValue(value: string | number | null | undefined): string | nul
     return normalized.trim().length > 0 ? normalized : null;
 }
 
-function downloadUrl(url: string, filename: string) {
-    const a = document.createElement('a');
-    a.href = url;
-    a.target = '_blank';
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
+async function downloadUrl(url: string, filename: string) {
+    try {
+        await downloadReport(url, filename);
+    } catch {
+        toast.error('Failed to download report');
+    }
 }
 
 function SectionHeader({ icon, title, description }: { icon: React.ReactNode; title: string; description: string }) {

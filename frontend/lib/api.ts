@@ -1656,6 +1656,22 @@ export async function apiRequest<T>(
     }
 }
 
+// Download a file via the API with the auth header attached and trigger a
+// browser save. Use this instead of window.open() / <a href> for any
+// authenticated PDF/Excel/ZIP endpoint — bare navigations don't carry the
+// Bearer token and the backend will 401.
+export async function downloadReport(path: string, filename: string): Promise<void> {
+    const blob = await apiRequestBlob(path);
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+}
+
 // Fetch wrapper for Blobs (PDFs, Excel, etc.)
 async function apiRequestBlob(
     endpoint: string,
@@ -3426,27 +3442,33 @@ export const api = {
             }),
     },
     reports: {
-        getStudentPerformancePDF: (studentId: string) => `${API_BASE_URL}/academic/reports/student-performance/${studentId}/`,
-        getStudentPerformanceExcel: (studentId: string) => `${API_BASE_URL}/academic/reports/student-performance-excel/${studentId}/`,
-        getAttendanceSummaryPDF: (sectionId: string | number) => `${API_BASE_URL}/academic/reports/attendance-summary/${sectionId}/`,
-        getAttendanceSummaryExcel: (sectionId: string | number) => `${API_BASE_URL}/academic/reports/attendance-summary-excel/${sectionId}/`,
+        // These return paths (no API_BASE_URL). Pass them to downloadReport()
+        // to fetch with the auth header and trigger a save. Do NOT use
+        // window.open() — that produces a bare GET without the Bearer token
+        // and the backend returns 401.
+        getStudentPerformancePDF: (studentId: string) => `/academic/reports/student-performance/${studentId}/`,
+        getStudentPerformanceExcel: (studentId: string) => `/academic/reports/student-performance-excel/${studentId}/`,
+        getAttendanceSummaryPDF: (sectionId: string | number) => `/academic/reports/attendance-summary/${sectionId}/`,
+        getAttendanceSummaryExcel: (sectionId: string | number) => `/academic/reports/attendance-summary-excel/${sectionId}/`,
         getFeeCollectionPDF: (start?: string, end?: string) => {
             const query = new URLSearchParams();
             if (start) query.append('start_date', start);
             if (end) query.append('end_date', end);
-            return `${API_BASE_URL}${BILLING_SCHOOL_BASE}/reports/fee-collection/?${query.toString()}`;
+            const qs = query.toString();
+            return `${BILLING_SCHOOL_BASE}/reports/fee-collection/${qs ? `?${qs}` : ''}`;
         },
         getFeeCollectionExcel: (start?: string, end?: string) => {
             const query = new URLSearchParams();
             if (start) query.append('start_date', start);
             if (end) query.append('end_date', end);
-            return `${API_BASE_URL}${BILLING_SCHOOL_BASE}/reports/fee-collection-excel/?${query.toString()}`;
+            const qs = query.toString();
+            return `${BILLING_SCHOOL_BASE}/reports/fee-collection-excel/${qs ? `?${qs}` : ''}`;
         },
-        getPendingFeesPDF: () => `${API_BASE_URL}${BILLING_SCHOOL_BASE}/reports/pending-fees/`,
-        getPendingFeesExcel: () => `${API_BASE_URL}${BILLING_SCHOOL_BASE}/reports/pending-fees-excel/`,
-        getResultCardPDF: (studentId: string, resultId: string) => `${API_BASE_URL}/academic/reports/result-card/${studentId}/${resultId}/`,
-        getHallTicketPDF: (seatingId: string) => `${API_BASE_URL}/academic/reports/hall-ticket/${seatingId}/`,
-        getBulkHallTicketsZIP: (examId: string) => `${API_BASE_URL}/academic/reports/bulk-hall-tickets/${examId}/`,
+        getPendingFeesPDF: () => `${BILLING_SCHOOL_BASE}/reports/pending-fees/`,
+        getPendingFeesExcel: () => `${BILLING_SCHOOL_BASE}/reports/pending-fees-excel/`,
+        getResultCardPDF: (studentId: string, resultId: string) => `/academic/reports/result-card/${studentId}/${resultId}/`,
+        getHallTicketPDF: (seatingId: string) => `/academic/reports/hall-ticket/${seatingId}/`,
+        getBulkHallTicketsZIP: (examId: string) => `/academic/reports/bulk-hall-tickets/${examId}/`,
     },
     settings: {
         get: () => apiRequest('/core/settings/'),
