@@ -965,6 +965,33 @@ function normalizeArrayPayload<T>(payload: T[] | PaginatedResponse<T> | null | u
     return [];
 }
 
+async function fetchAllPages<T>(endpoint: string): Promise<T[]> {
+    const sep = endpoint.includes('?') ? '&' : '?';
+    const firstPage = await apiRequest<T[] | PaginatedResponse<T>>(endpoint);
+    if (Array.isArray(firstPage)) return firstPage;
+    if (!firstPage || !Array.isArray(firstPage.results)) return [];
+
+    const all = [...firstPage.results];
+    const totalCount = typeof firstPage.count === 'number' ? firstPage.count : all.length;
+    let page = 2;
+    let hasMore = Boolean(firstPage.next);
+
+    while (hasMore && all.length < totalCount) {
+        const nextPage = await apiRequest<T[] | PaginatedResponse<T>>(`${endpoint}${sep}page=${page}`);
+        if (Array.isArray(nextPage)) {
+            all.push(...nextPage);
+            break;
+        }
+        const batch = Array.isArray(nextPage?.results) ? nextPage.results : [];
+        if (batch.length === 0) break;
+        all.push(...batch);
+        hasMore = Boolean(nextPage?.next);
+        page += 1;
+    }
+
+    return all;
+}
+
 export interface Conversation {
     conversation_id: string;
     type: 'direct' | 'group';
@@ -2553,7 +2580,7 @@ export const billingAPI = {
     getSubscriptionHistory: (id: string) => apiRequest<SubscriptionPlanHistory[] | PaginatedResponse<SubscriptionPlanHistory>>(`${BILLING_SAAS_BASE}/subscriptions/${id}/history/`),
 
     // Finance Management
-    getFeeStructures: () => apiRequest<FeeStructure[]>(`${BILLING_SCHOOL_BASE}/fee-structures/`),
+    getFeeStructures: () => fetchAllPages<FeeStructure>(`${BILLING_SCHOOL_BASE}/fee-structures/`),
     createFeeStructure: (data: Partial<FeeStructure>) => apiRequest<FeeStructure>(`${BILLING_SCHOOL_BASE}/fee-structures/`, {
         method: 'POST',
         body: JSON.stringify(data)
@@ -2566,7 +2593,7 @@ export const billingAPI = {
         method: 'DELETE'
     }),
 
-    getStudentFees: () => apiRequest<StudentFee[]>(`${BILLING_SCHOOL_BASE}/student-fees/`),
+    getStudentFees: () => fetchAllPages<StudentFee>(`${BILLING_SCHOOL_BASE}/student-fees/`),
     getMyFees: () => apiRequest<{ fees: StudentFee[]; payments: Payment[]; summary: { total_due: number; total_paid: number; outstanding: number } }>(`${BILLING_SCHOOL_BASE}/student-fees/my_fees/`),
     sendInvoice: (id: string) => apiRequest<{ status: string }>(`${BILLING_SCHOOL_BASE}/student-fees/${id}/send_invoice/`, { method: 'POST' }),
     assignBulkFees: (data: { fee_structure_id: string; academic_class_id: string; due_date: string }) =>
@@ -2575,13 +2602,13 @@ export const billingAPI = {
             body: JSON.stringify(data)
         }),
 
-    getPayments: () => apiRequest<Payment[]>(`${BILLING_SCHOOL_BASE}/payments/`),
+    getPayments: () => fetchAllPages<Payment>(`${BILLING_SCHOOL_BASE}/payments/`),
     recordPayment: (data: Partial<Payment>) => apiRequest<Payment>(`${BILLING_SCHOOL_BASE}/payments/`, {
         method: 'POST',
         body: JSON.stringify(data)
     }),
 
-    getExpenses: () => apiRequest<Expense[]>(`${BILLING_SCHOOL_BASE}/expenses/`),
+    getExpenses: () => fetchAllPages<Expense>(`${BILLING_SCHOOL_BASE}/expenses/`),
     createExpense: (data: Partial<Expense>) => apiRequest<Expense>(`${BILLING_SCHOOL_BASE}/expenses/`, {
         method: 'POST',
         body: JSON.stringify(data)
