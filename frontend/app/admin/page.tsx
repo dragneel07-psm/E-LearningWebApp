@@ -9,6 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Users, GraduationCap, School, TrendingUp, ArrowUpRight, ArrowDownRight, UserPlus, FilePlus, Calendar, MoreVertical, CreditCard, BookOpen, UserRoundPlus, BarChart3 } from 'lucide-react';
 import { academicAPI, usersAPI, billingAPI } from '@/lib/api';
+import { getUser } from '@/lib/auth';
 import { XAxis, YAxis, CartesianGrid, Tooltip, AreaChart, Area, PieChart, Pie, Cell, Legend } from 'recharts';
 import { SafeResponsiveContainer } from '@/components/ui/safe-responsive-container';
 
@@ -65,7 +66,11 @@ export default function SchoolAdminDashboard() {
                 academicAPI.getStudents().catch((e) => { console.error("Students fetch failed:", e); return []; }),
                 academicAPI.getTeachers().catch((e) => { console.error("Teachers fetch failed:", e); return []; }),
                 academicAPI.getClasses().catch((e) => { console.error("Classes fetch failed:", e); return []; }),
-                usersAPI.getAccounts().catch((e) => { console.error("Accounts fetch failed:", e); return []; }),
+                // getAccounts is admin-only; staff (e.g. accountant) gets 403.
+                // Falls back to deriving studentCount from students[] below.
+                (getUser()?.role === 'admin'
+                    ? usersAPI.getAccounts().catch((e) => { console.error("Accounts fetch failed:", e); return []; })
+                    : Promise.resolve([])),
                 billingAPI.getFinanceDashboard().catch((e) => {
                     console.error("Finance fetch failed:", e);
                     return { total_revenue: 0, total_pending: 0, total_expenses: 0, net_balance: 0, recent_payments: [], recent_expenses: [] };

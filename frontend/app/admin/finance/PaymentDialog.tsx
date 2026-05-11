@@ -48,9 +48,10 @@ export function PaymentDialog({ open, onOpenChange, fee, onSuccess }: PaymentDia
         setIsSubmitting(true);
         try {
             const payment = await billingAPI.recordPayment({
+                student: fee.student,
                 student_fee: fee.student_fee_id,
                 amount: parseFloat(amount),
-                payment_method: method,
+                method,
                 transaction_id: reference || undefined,
             });
 
