@@ -111,6 +111,83 @@ export function StudentFeeList() {
         }
     };
 
+    const escapeHtml = (s: string) =>
+        s.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] as string));
+
+    const printStatement = () => {
+        if (!statementTarget) return;
+        const studentFees = fees.filter(f => f.student === statementTarget.student);
+        const totalDue = studentFees.reduce((s, f) => s + Number(f.amount_due || 0), 0);
+        const totalPaid = studentFees.reduce((s, f) => s + Number(f.amount_paid || 0), 0);
+        const outstanding = totalDue - totalPaid;
+        const fmt = (n: number) => n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        const today = new Date().toLocaleDateString();
+
+        const feeRows = studentFees.map(f => `
+            <tr>
+                <td>${escapeHtml(f.fee_name || '')}</td>
+                <td>${new Date(f.due_date).toLocaleDateString()}</td>
+                <td class="num">$${fmt(Number(f.amount_due))}</td>
+                <td class="num paid">$${fmt(Number(f.amount_paid))}</td>
+                <td class="status">${escapeHtml(f.status)}</td>
+            </tr>`).join('');
+
+        const paymentRows = actionPayments.map(p => `
+            <tr>
+                <td>${new Date(p.payment_date).toLocaleDateString()}</td>
+                <td class="cap">${escapeHtml(p.method)}</td>
+                <td>${escapeHtml(p.transaction_id || '—')}</td>
+                <td class="num paid">$${fmt(Number(p.amount))}</td>
+            </tr>`).join('');
+
+        const html = `<!doctype html>
+<html><head><title>Account Statement — ${escapeHtml(statementTarget.student_name || '')}</title>
+<style>
+  @page { size: A4; margin: 1.5cm; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; color: #1a202c; font-size: 12px; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  .meta { color: #64748b; font-size: 11px; margin-bottom: 18px; }
+  .summary { display: flex; gap: 12px; margin-bottom: 24px; }
+  .card { flex: 1; border: 1px solid #e2e8f0; border-radius: 6px; padding: 10px 12px; }
+  .card .label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; color: #64748b; }
+  .card .value { font-size: 16px; font-weight: 700; margin-top: 2px; }
+  .card.due .value { color: ${outstanding > 0 ? '#dc2626' : '#059669'}; }
+  .card.paid .value { color: #059669; }
+  h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px; color: #475569; margin: 18px 0 6px; border-bottom: 1px solid #e2e8f0; padding-bottom: 4px; }
+  table { width: 100%; border-collapse: collapse; font-size: 11px; }
+  th { text-align: left; text-transform: uppercase; font-size: 9px; letter-spacing: 0.5px; color: #64748b; padding: 6px 8px; border-bottom: 1px solid #e2e8f0; }
+  td { padding: 6px 8px; border-bottom: 1px solid #f1f5f9; }
+  td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  td.paid { color: #059669; font-weight: 600; }
+  td.cap, td.status { text-transform: capitalize; }
+  .empty { color: #94a3b8; font-style: italic; padding: 12px 0; }
+  .footer { margin-top: 36px; font-size: 10px; color: #94a3b8; text-align: center; }
+</style></head><body>
+  <h1>Account Statement</h1>
+  <div class="meta">${escapeHtml(statementTarget.student_name || '')} &middot; Generated ${today}</div>
+  <div class="summary">
+    <div class="card"><div class="label">Total Charged</div><div class="value">$${fmt(totalDue)}</div></div>
+    <div class="card paid"><div class="label">Total Paid</div><div class="value">$${fmt(totalPaid)}</div></div>
+    <div class="card due"><div class="label">Outstanding</div><div class="value">$${fmt(outstanding)}</div></div>
+  </div>
+  <h2>Fees</h2>
+  ${studentFees.length ? `<table><thead><tr><th>Item</th><th>Due</th><th class="num">Charged</th><th class="num">Paid</th><th>Status</th></tr></thead><tbody>${feeRows}</tbody></table>` : '<div class="empty">No fees recorded.</div>'}
+  <h2>Payments (${actionPayments.length})</h2>
+  ${actionPayments.length ? `<table><thead><tr><th>Date</th><th>Method</th><th>Reference</th><th class="num">Amount</th></tr></thead><tbody>${paymentRows}</tbody></table>` : '<div class="empty">No payments recorded.</div>'}
+  <div class="footer">Computer-generated statement.</div>
+  <script>window.onload = () => { window.print(); }</script>
+</body></html>`;
+
+        const w = window.open('', '_blank', 'width=900,height=1000');
+        if (!w) {
+            toast.error("Unable to open print window. Allow pop-ups and try again.");
+            return;
+        }
+        w.document.open();
+        w.document.write(html);
+        w.document.close();
+    };
+
     const getStatusBadge = (status: string) => {
         switch (status) {
             case 'paid': return <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100 border-emerald-200"><CheckCircle2 className="h-3 w-3 mr-1" /> Paid</Badge>;
@@ -511,7 +588,7 @@ export function StudentFeeList() {
                                     )}
                                 </div>
                                 <DialogFooter>
-                                    <Button variant="outline" onClick={() => window.print()}>Print</Button>
+                                    <Button variant="outline" onClick={printStatement}>Print</Button>
                                 </DialogFooter>
                             </div>
                         );

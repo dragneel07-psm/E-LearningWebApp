@@ -17,6 +17,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     pkg-config \
     python3-dev \
     libglib2.0-dev \
+    libpango1.0-dev \
+    libpangoft2-1.0-0 \
+    libharfbuzz-dev \
+    libffi-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Upgrade pip & build tools
@@ -42,6 +46,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq5 \
     libcairo2 \
     libglib2.0-0 \
+    libpango-1.0-0 \
+    libpangoft2-1.0-0 \
+    libharfbuzz0b \
+    libffi8 \
+    shared-mime-info \
+    fonts-dejavu-core \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy pre-built wheels from builder stage and install

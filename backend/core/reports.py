@@ -5,15 +5,47 @@ import io
 import logging
 from django.http import HttpResponse
 from django.template.loader import render_to_string
-from xhtml2pdf import pisa
-# import pandas as pd (Moved to lazy import)
 
 logger = logging.getLogger(__name__)
 
 
+def _render_with_weasyprint(html: str) -> bytes | None:
+    try:
+        from weasyprint import HTML  # type: ignore
+    except Exception:
+        return None
+    try:
+        return HTML(string=html).write_pdf()
+    except Exception:
+        logger.exception("WeasyPrint failed to render PDF")
+        return None
+
+
+def _render_with_xhtml2pdf(html: str) -> bytes | None:
+    try:
+        from xhtml2pdf import pisa  # type: ignore
+    except Exception:
+        return None
+    result = io.BytesIO()
+    try:
+        pdf = pisa.pisaDocument(io.BytesIO(html.encode("UTF-8")), result)
+    except Exception:
+        logger.exception("xhtml2pdf failed to render PDF")
+        return None
+    if pdf and not pdf.err:
+        return result.getvalue()
+    if pdf and pdf.err:
+        logger.warning("xhtml2pdf returned parser errors")
+    return None
+
+
 def generate_pdf_response(template_path, context, filename):
     """
-    Generates a PDF response from an HTML template.
+    Render a Django template and return it as a PDF HttpResponse.
+
+    Tries WeasyPrint first (full CSS3 support: gradients, flexbox, custom fonts);
+    falls back to xhtml2pdf for environments where WeasyPrint's native libs are
+    missing. Final fallback ships the raw HTML so the user gets *something*.
     """
     try:
         html = render_to_string(template_path, context)
@@ -21,43 +53,13 @@ def generate_pdf_response(template_path, context, filename):
         logger.exception("Failed to render report template %s", template_path)
         return None
 
-    result = io.BytesIO()
-    try:
-        pdf = pisa.pisaDocument(io.BytesIO(html.encode("UTF-8")), result)
-    except Exception:
-        pdf = None
-        logger.exception("PDF conversion crashed for template %s", template_path)
-
-    if pdf and not pdf.err:
-        response = HttpResponse(result.getvalue(), content_type='application/pdf')
+    pdf_bytes = _render_with_weasyprint(html) or _render_with_xhtml2pdf(html)
+    if pdf_bytes:
+        response = HttpResponse(pdf_bytes, content_type='application/pdf')
         response['Content-Disposition'] = f'attachment; filename="{filename}"'
         return response
 
-    if pdf and pdf.err:
-        logger.warning("PDF conversion returned parser errors for template %s", template_path)
-
-    # Fallback: keep report downloadable even when PDF rendering fails in runtime env.
-    fallback_html = (
-        "<html><body>"
-        "<h2>Report Fallback</h2>"
-        "<p>The formatted PDF could not be generated in this environment.</p>"
-        "<p>Please contact support if this continues.</p>"
-        "</body></html>"
-    )
-    fallback_result = io.BytesIO()
-    try:
-        fallback_pdf = pisa.pisaDocument(io.BytesIO(fallback_html.encode("UTF-8")), fallback_result)
-    except Exception:
-        fallback_pdf = None
-        logger.exception("Fallback PDF conversion crashed for template %s", template_path)
-
-    if fallback_pdf and not fallback_pdf.err:
-        response = HttpResponse(fallback_result.getvalue(), content_type='application/pdf')
-        response['Content-Disposition'] = f'attachment; filename="{filename}"'
-        response['X-Report-Fallback'] = '1'
-        return response
-
-    logger.warning("Serving HTML fallback for report template %s after PDF failures", template_path)
+    logger.warning("Both PDF renderers failed for template %s; serving HTML", template_path)
     response = HttpResponse(html, content_type='text/html; charset=utf-8')
     response['Content-Disposition'] = f'attachment; filename="{filename.rsplit(".", 1)[0]}.html"'
     response['X-Report-Fallback'] = 'html'

@@ -1,5 +1,19 @@
 [phases.setup]
-aptPkgs = ["...", "build-essential", "libcairo2-dev", "pkg-config", "python3-dev", "python3-pip", "python3-venv"]
+aptPkgs = [
+    "...",
+    "build-essential",
+    "libcairo2-dev",
+    "pkg-config",
+    "python3-dev",
+    "python3-pip",
+    "python3-venv",
+    "libpango1.0-dev",
+    "libpangoft2-1.0-0",
+    "libharfbuzz-dev",
+    "libffi-dev",
+    "shared-mime-info",
+    "fonts-dejavu-core",
+]
 
 [variables]
 C_INCLUDE_PATH = "/usr/include"
