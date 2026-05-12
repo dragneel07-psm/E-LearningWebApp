@@ -1796,7 +1796,21 @@ async function apiRequestBlob(
     });
 
     if (!response.ok) {
-        throw new Error('Failed to download file');
+        // Best-effort: extract a friendly message from the JSON body so the
+        // caller can surface it via toast instead of saving the JSON as a file.
+        let message = `Download failed (${response.status})`;
+        try {
+            const body = await response.text();
+            try {
+                const parsed = JSON.parse(body);
+                message = parsed.error || parsed.detail || parsed.message || message;
+            } catch {
+                if (body.trim()) message = body.trim().slice(0, 200);
+            }
+        } catch { /* ignore */ }
+        const err = new Error(message) as Error & { status?: number };
+        err.status = response.status;
+        throw err;
     }
 
     return await response.blob();

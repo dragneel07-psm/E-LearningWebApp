@@ -259,13 +259,26 @@ function ExamReports() {
         academicAPI.getStudents({ section_id: sectionId }).then(setStudents).catch(() => null).finally(() => setLoading(false));
     }, [sectionId]);
 
-    const downloadBulk = () => {
+    const downloadBulk = async () => {
         if (!examId) { toast.error('Select an exam'); return; }
-        setBusy(true);
         const exam = exams.find((entry) => getSelectValue(entry.exam_id ?? entry.id) === examId);
-        downloadUrl(reportsAPI.getBulkHallTicketsZIP(examId), `hall_tickets_${exam?.assessment?.title?.replace(/\s+/g, '_') ?? examId}.zip`);
-        toast.success('Downloading hall tickets ZIP…');
-        setTimeout(() => setBusy(false), 2000);
+        const seatings = (exam as any)?.seating_arrangements;
+        if (Array.isArray(seatings) && seatings.length === 0) {
+            toast.error('No hall tickets generated yet. Open the Exams page → Allocate Seats first.');
+            return;
+        }
+        setBusy(true);
+        try {
+            await downloadReport(
+                reportsAPI.getBulkHallTicketsZIP(examId),
+                `hall_tickets_${exam?.assessment?.title?.replace(/\s+/g, '_') ?? examId}.zip`,
+            );
+            toast.success('Hall tickets ZIP downloaded');
+        } catch (e: any) {
+            toast.error(e?.message || 'Failed to download hall tickets');
+        } finally {
+            setBusy(false);
+        }
     };
 
     return (
