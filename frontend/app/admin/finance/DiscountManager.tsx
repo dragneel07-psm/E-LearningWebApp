@@ -24,7 +24,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
-import { feeDiscountAPI, FeeDiscount } from '@/lib/api';
+import { feeDiscountAPI, FeeDiscount, SCHOLARSHIP_CATEGORY_LABELS, SCHOLARSHIP_SOURCE_LABELS, ScholarshipCategory, ScholarshipSource } from '@/lib/api';
 import { toast } from 'sonner';
 import {
     Percent,
@@ -53,6 +53,8 @@ interface DiscountFormState {
     max_cap: string;
     reason: string;
     is_active: boolean;
+    scholarship_category: string;
+    scholarship_source: string;
 }
 
 const EMPTY_FORM: DiscountFormState = {
@@ -62,6 +64,8 @@ const EMPTY_FORM: DiscountFormState = {
     max_cap: '',
     reason: '',
     is_active: true,
+    scholarship_category: '',
+    scholarship_source: '',
 };
 
 // ── Main component ───────────────────────────────────────────────────────────
@@ -107,6 +111,8 @@ export function DiscountManager() {
             max_cap: d.max_cap != null ? String(d.max_cap) : '',
             reason: d.reason ?? '',
             is_active: d.is_active,
+            scholarship_category: d.scholarship_category ?? '',
+            scholarship_source: d.scholarship_source ?? '',
         });
         setDialogOpen(true);
     };
@@ -123,6 +129,8 @@ export function DiscountManager() {
             max_cap: form.max_cap ? parseFloat(form.max_cap) : undefined,
             reason: form.reason.trim() || undefined,
             is_active: form.is_active,
+            scholarship_category: form.scholarship_category as FeeDiscount['scholarship_category'],
+            scholarship_source: form.scholarship_source as FeeDiscount['scholarship_source'],
         };
         setSubmitting(true);
         try {
@@ -360,6 +368,54 @@ export function DiscountManager() {
                                 className="rounded-xl resize-none text-sm"
                             />
                         </div>
+
+                        {/* Phase E: Scholarship classification — for the Govt audit register. */}
+                        <div className="bg-blue-50/40 border border-blue-200 rounded-xl p-3 space-y-3">
+                            <div>
+                                <Label className="text-xs font-bold text-blue-700">Scholarship Classification (optional)</Label>
+                                <p className="text-[10px] text-slate-500 mt-0.5">
+                                    Tag this discount so any fee using it shows up in the Govt Scholarship Register report.
+                                </p>
+                            </div>
+                            <div className="grid grid-cols-2 gap-3">
+                                <div className="space-y-1">
+                                    <Label className="text-[10px] uppercase text-slate-500">Category</Label>
+                                    <Select
+                                        value={form.scholarship_category || ''}
+                                        onValueChange={(v) => setForm((f) => ({ ...f, scholarship_category: v === '__none__' ? '' : v }))}
+                                    >
+                                        <SelectTrigger className="h-9 text-xs rounded-lg"><SelectValue placeholder="Not a scholarship" /></SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="__none__">Not a scholarship</SelectItem>
+                                            {(Object.keys(SCHOLARSHIP_CATEGORY_LABELS) as ScholarshipCategory[])
+                                                .filter(k => k !== '')
+                                                .map((k) => (
+                                                    <SelectItem key={k} value={k}>{SCHOLARSHIP_CATEGORY_LABELS[k]}</SelectItem>
+                                                ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                                <div className="space-y-1">
+                                    <Label className="text-[10px] uppercase text-slate-500">Funding Source</Label>
+                                    <Select
+                                        value={form.scholarship_source || ''}
+                                        onValueChange={(v) => setForm((f) => ({ ...f, scholarship_source: v === '__none__' ? '' : v }))}
+                                        disabled={!form.scholarship_category}
+                                    >
+                                        <SelectTrigger className="h-9 text-xs rounded-lg"><SelectValue placeholder="—" /></SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="__none__">—</SelectItem>
+                                            {(Object.keys(SCHOLARSHIP_SOURCE_LABELS) as ScholarshipSource[])
+                                                .filter(k => k !== '')
+                                                .map((k) => (
+                                                    <SelectItem key={k} value={k}>{SCHOLARSHIP_SOURCE_LABELS[k]}</SelectItem>
+                                                ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                            </div>
+                        </div>
+
                         <div className="flex items-center gap-2">
                             <input
                                 type="checkbox"

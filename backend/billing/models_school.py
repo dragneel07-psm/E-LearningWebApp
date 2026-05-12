@@ -14,6 +14,38 @@ from .models_base import SchemaScopedBillingModel
 
 class FeeDiscount(models.Model):
     """Reusable discount template (scholarship, sibling discount, staff child, etc.)"""
+
+    # IRD / Nepal Govt scholarship categories — kept on the discount template so
+    # any StudentFee linked to this discount can be aggregated into the
+    # Scholarship Register report (SSDP / EGRP audit requirement).
+    SCHOLARSHIP_CATEGORY_CHOICES = [
+        ('',                  'Not a Scholarship'),
+        ('dalit',             'Dalit'),
+        ('janajati',          'Janajati'),
+        ('madhesi',           'Madhesi'),
+        ('muslim',            'Muslim'),
+        ('karnali',           'Karnali Province'),
+        ('differently_abled', 'Differently-abled'),
+        ('female_remote',     'Girl Student (Remote Area)'),
+        ('orphan',            'Orphan / Single-parent'),
+        ('martyr_family',     'Martyr / Conflict-victim Family'),
+        ('free_books',        'Free Books Scheme'),
+        ('staff_child',       'Staff Child Concession'),
+        ('sibling',           'Sibling Discount'),
+        ('merit',             'Merit / Top Performer'),
+        ('other',             'Other'),
+    ]
+    SCHOLARSHIP_SOURCE_CHOICES = [
+        ('',                  'Not a Scholarship'),
+        ('school_own',        'School-funded'),
+        ('govt_ssdp',         'Govt SSDP'),
+        ('govt_egrp',         'Govt EGRP'),
+        ('govt_local',        'Local Govt / Palika'),
+        ('donor_private',     'Private Donor'),
+        ('donor_ngo',         'NGO / INGO'),
+        ('other',             'Other'),
+    ]
+
     discount_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     tenant = models.ForeignKey(
         'core.Tenant', on_delete=models.CASCADE,
@@ -27,6 +59,15 @@ class FeeDiscount(models.Model):
                                    help_text='Maximum discount cap (for percentage type)')
     reason = models.CharField(max_length=200, blank=True)
     is_active = models.BooleanField(default=True)
+
+    # Phase E: Scholarship Register fields (audit-ready)
+    scholarship_category = models.CharField(
+        max_length=24, choices=SCHOLARSHIP_CATEGORY_CHOICES, blank=True, default='',
+    )
+    scholarship_source = models.CharField(
+        max_length=24, choices=SCHOLARSHIP_SOURCE_CHOICES, blank=True, default='',
+    )
+
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

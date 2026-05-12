@@ -495,6 +495,132 @@ class BillingReportViewSet(BillingSchemaGuardMixin, viewsets.ViewSet):
             "grand_total": str(sum(bucket_totals.values())),
         })
 
+    @action(detail=False, methods=["get"], url_path="scholarship-register")
+    def scholarship_register(self, request):
+        """
+        Phase E (Tier 3): Government Scholarship Register.
+
+        Aggregates every StudentFee whose discount has a scholarship_category
+        set, grouped by (category, source) for the requested fiscal year.
+        IRD / SSDP / EGRP auditors expect this register annually.
+        """
+        from decimal import Decimal
+        from billing.models_school import StudentFee, FeeDiscount
+
+        tenant = self._tenant(request)
+        fy = (request.query_params.get("fy") or "").strip()
+
+        qs = (
+            StudentFee.objects
+            .filter(tenant=tenant)
+            .exclude(discount__isnull=True)
+            .exclude(discount__scholarship_category="")
+            .select_related("student__user", "fee_structure", "discount")
+        )
+
+        # Optional FY filter: due_date inside the BS fiscal year window.
+        # We don't have an indexed fiscal_year column on StudentFee, so we
+        # filter in Python after a lightweight created_at-based AD heuristic.
+        if fy:
+            from billing_school.utils_bs_calendar import fiscal_year_bs
+            rows = [f for f in qs if fiscal_year_bs(f.due_date).startswith(fy.split("/")[0])]
+        else:
+            rows = list(qs)
+
+        cat_map = dict(FeeDiscount.SCHOLARSHIP_CATEGORY_CHOICES)
+        src_map = dict(FeeDiscount.SCHOLARSHIP_SOURCE_CHOICES)
+
+        # Group: category -> source -> { count, amount, awards: [...] }
+        groups: dict = {}
+        grand_count = 0
+        grand_amount = Decimal("0")
+
+        for f in rows:
+            disc = f.discount
+            cat = disc.scholarship_category or "other"
+            src = disc.scholarship_source or "other"
+            award_amount = Decimal(str(f.discount_amount or 0))
+
+            try:
+                student_name = f.student.user.get_full_name() if f.student and f.student.user else "—"
+            except Exception:
+                student_name = "—"
+            class_name = str(f.student.academic_class) if getattr(f.student, "academic_class", None) else ""
+
+            g = groups.setdefault(cat, {})
+            s = g.setdefault(src, {"count": 0, "amount": Decimal("0"), "awards": []})
+            s["count"] += 1
+            s["amount"] += award_amount
+            s["awards"].append({
+                "student_id": str(f.student.student_id) if f.student else "",
+                "student_name": student_name,
+                "class": class_name,
+                "fee_name": f.fee_structure.name if f.fee_structure else "",
+                "discount_name": disc.name,
+                "amount": str(award_amount),
+                "due_date": f.due_date.isoformat(),
+            })
+            grand_count += 1
+            grand_amount += award_amount
+
+        # Flatten for JSON serialization.
+        rendered = []
+        for cat_key, sources in groups.items():
+            for src_key, payload in sources.items():
+                rendered.append({
+                    "category_key": cat_key,
+                    "category_label": cat_map.get(cat_key, cat_key.title()),
+                    "source_key": src_key,
+                    "source_label": src_map.get(src_key, src_key.title()),
+                    "count": payload["count"],
+                    "amount": str(payload["amount"]),
+                    "awards": payload["awards"],
+                })
+
+        # Stable sort: category, then source.
+        rendered.sort(key=lambda r: (r["category_label"], r["source_label"]))
+
+        return Response({
+            "fiscal_year_bs": fy,
+            "grand_count": grand_count,
+            "grand_amount": str(grand_amount),
+            "groups": rendered,
+        })
+
+    @action(detail=False, methods=["get"], url_path="scholarship-register-pdf")
+    def scholarship_register_pdf(self, request):
+        """PDF version of the scholarship register — for audit binder."""
+        from decimal import Decimal
+        json_data = self.scholarship_register(request).data
+        tenant = self._tenant(request)
+
+        logo_url = ""
+        try:
+            if tenant and tenant.logo:
+                logo_url = tenant.logo.url
+        except Exception:
+            logo_url = ""
+
+        context = {
+            **json_data,
+            "school_name": tenant.name if tenant else "",
+            "school_pan": getattr(tenant, "pan_number", "") or "",
+            "school_address": getattr(tenant, "address", "") or "",
+            "school_logo": logo_url,
+            "principal_name": getattr(tenant, "principal_name", "") or "",
+            "accountant_name": getattr(tenant, "accountant_name", "") or "",
+            "currency": getattr(tenant, "currency_symbol", "Rs.") or "Rs.",
+            "generated_on": timezone.now().strftime("%d %b %Y %H:%M"),
+        }
+        filename = f"scholarship_register_{json_data.get('fiscal_year_bs') or 'all'}.pdf"
+        response = generate_pdf_response("reports/scholarship_register.html", context, filename)
+        if response:
+            self._log_export(request, report_type="scholarship_register", fmt="pdf",
+                             details={"groups": len(json_data.get("groups", [])),
+                                      "grand_count": json_data.get("grand_count")})
+            return response
+        return Response({"error": "Failed to generate report"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
     @action(detail=False, methods=["get"], url_path="trial-balance")
     def trial_balance(self, request):
         """

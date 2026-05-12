@@ -6,7 +6,7 @@
 import Link from 'next/link';
 import FinancialReports from '@/components/finance/FinancialReports';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { CalendarDays, Banknote, Building2, BookOpen, AlertTriangle, Scale, ChevronRight } from 'lucide-react';
+import { CalendarDays, Banknote, Building2, BookOpen, AlertTriangle, Scale, Award, ChevronRight } from 'lucide-react';
 
 const REPORTS = [
     { href: '/admin/finance/reports/day-book', icon: CalendarDays, color: 'bg-indigo-100 text-indigo-600',
@@ -21,6 +21,8 @@ const REPORTS = [
       title: 'Aging Report', desc: 'Outstanding fees bucketed by overdue age (current / 30 / 60 / 90+).' },
     { href: '/admin/finance/reports/trial-balance', icon: Scale, color: 'bg-amber-100 text-amber-600',
       title: 'Trial Balance', desc: 'All Chart of Accounts balances from posted journal entries.' },
+    { href: '/admin/finance/reports/scholarships', icon: Award, color: 'bg-blue-100 text-blue-700',
+      title: 'Scholarship Register', desc: 'Govt-mandated scholarship listing for SSDP / EGRP / IRD audits.' },
 ];
 
 export default function ReportsPage() {

@@ -2804,6 +2804,15 @@ export const billingAPI = {
         apiRequest<TrialBalance>(
             `${BILLING_SCHOOL_BASE}/reports/trial-balance/${asOf ? `?to=${asOf}` : ''}`,
         ),
+    scholarshipRegister: (fy?: string) =>
+        apiRequest<ScholarshipRegister>(
+            `${BILLING_SCHOOL_BASE}/reports/scholarship-register/${fy ? `?fy=${encodeURIComponent(fy)}` : ''}`,
+        ),
+    scholarshipRegisterPdf: (fy?: string) =>
+        downloadReport(
+            `${BILLING_SCHOOL_BASE}/reports/scholarship-register-pdf/${fy ? `?fy=${encodeURIComponent(fy)}` : ''}`,
+            `scholarship_register_${fy || 'all'}.pdf`,
+        ),
     createExpense: (data: Partial<Expense>) => apiRequest<Expense>(`${BILLING_SCHOOL_BASE}/expenses/`, {
         method: 'POST',
         body: JSON.stringify(data)
@@ -4621,6 +4630,44 @@ export const appraisalAPI = {
 
 // ── Fee Discounts ─────────────────────────────────────────────────────────────
 
+export type ScholarshipCategory =
+    '' | 'dalit' | 'janajati' | 'madhesi' | 'muslim' | 'karnali'
+    | 'differently_abled' | 'female_remote' | 'orphan' | 'martyr_family'
+    | 'free_books' | 'staff_child' | 'sibling' | 'merit' | 'other';
+
+export type ScholarshipSource =
+    '' | 'school_own' | 'govt_ssdp' | 'govt_egrp' | 'govt_local'
+    | 'donor_private' | 'donor_ngo' | 'other';
+
+export const SCHOLARSHIP_CATEGORY_LABELS: Record<ScholarshipCategory, string> = {
+    '': 'Not a Scholarship',
+    dalit: 'Dalit',
+    janajati: 'Janajati',
+    madhesi: 'Madhesi',
+    muslim: 'Muslim',
+    karnali: 'Karnali Province',
+    differently_abled: 'Differently-abled',
+    female_remote: 'Girl Student (Remote Area)',
+    orphan: 'Orphan / Single-parent',
+    martyr_family: 'Martyr / Conflict-victim Family',
+    free_books: 'Free Books Scheme',
+    staff_child: 'Staff Child Concession',
+    sibling: 'Sibling Discount',
+    merit: 'Merit / Top Performer',
+    other: 'Other',
+};
+
+export const SCHOLARSHIP_SOURCE_LABELS: Record<ScholarshipSource, string> = {
+    '': 'Not a Scholarship',
+    school_own: 'School-funded',
+    govt_ssdp: 'Govt SSDP',
+    govt_egrp: 'Govt EGRP',
+    govt_local: 'Local Govt / Palika',
+    donor_private: 'Private Donor',
+    donor_ngo: 'NGO / INGO',
+    other: 'Other',
+};
+
 export interface FeeDiscount {
     discount_id: string;
     name: string;
@@ -4629,7 +4676,33 @@ export interface FeeDiscount {
     max_cap?: number;
     reason?: string;
     is_active: boolean;
+    scholarship_category?: ScholarshipCategory;
+    scholarship_source?: ScholarshipSource;
     created_at: string;
+}
+
+export interface ScholarshipRegisterRow {
+    category_key: string;
+    category_label: string;
+    source_key: string;
+    source_label: string;
+    count: number;
+    amount: string;
+    awards: {
+        student_id: string;
+        student_name: string;
+        class: string;
+        fee_name: string;
+        discount_name: string;
+        amount: string;
+        due_date: string;
+    }[];
+}
+export interface ScholarshipRegister {
+    fiscal_year_bs: string;
+    grand_count: number;
+    grand_amount: string;
+    groups: ScholarshipRegisterRow[];
 }
 
 export const feeDiscountAPI = {
