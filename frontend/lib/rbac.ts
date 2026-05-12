@@ -171,9 +171,16 @@ export function getAllowedModules(role: string, staffRole: StaffRole): Set<Admin
 export function canAccess(
     role: string,
     staffRole: StaffRole,
-    modulePath: AdminModule,
+    modulePath: string,
 ): boolean {
-    return getAllowedModules(role, staffRole).has(modulePath);
+    const allowed = getAllowedModules(role, staffRole);
+    if (allowed.has(modulePath as AdminModule)) return true;
+    // Allow if any allowed entry is a prefix of the requested path
+    // (so /admin/finance/reports/day-book inherits from /admin/finance/reports).
+    for (const entry of allowed) {
+        if (modulePath === entry || modulePath.startsWith(entry + '/')) return true;
+    }
+    return false;
 }
 
 /** Human-readable label for the staff_role */

@@ -182,4 +182,374 @@ class BillingReportViewSet(BillingSchemaGuardMixin, viewsets.ViewSet):
         return generate_excel_response(data, columns, filename)
 
 
+    # ─────────────────────────────────────────────────────────────────────
+    # Phase B: Day Book / Cash Book / Bank Book / Student Ledger / Aging /
+    #         Trial Balance — JSON for on-screen view, frontend prints.
+    # ─────────────────────────────────────────────────────────────────────
+
+    def _date_range(self, request):
+        """Resolve start/end date params, defaulting to today only."""
+        from datetime import date as _date
+        from django.utils.dateparse import parse_date
+        today = timezone.now().date()
+        start = parse_date(request.query_params.get("from") or "") or today
+        end = parse_date(request.query_params.get("to") or "") or today
+        if start > end:
+            start, end = end, start
+        return start, end
+
+    def _payments_in_range(self, tenant, start, end):
+        from billing.models_school import Payment
+        return (
+            Payment.objects
+            .filter(tenant=tenant, payment_date__date__gte=start, payment_date__date__lte=end)
+            .select_related("student__user", "student_fee__fee_structure", "recorded_by")
+            .order_by("payment_date")
+        )
+
+    def _expenses_in_range(self, tenant, start, end):
+        from billing.models_school import Expense
+        return (
+            Expense.objects
+            .filter(tenant=tenant, date__gte=start, date__lte=end)
+            .select_related("recorded_by")
+            .order_by("date")
+        )
+
+    @action(detail=False, methods=["get"], url_path="day-book")
+    def day_book(self, request):
+        """
+        Daily transactions register: every Payment (Dr) + Expense (Cr) for
+        the requested date range, in chronological order, with day totals.
+        """
+        from decimal import Decimal
+        tenant = self._tenant(request)
+        start, end = self._date_range(request)
+
+        rows = []
+        in_total = Decimal("0")
+        out_total = Decimal("0")
+
+        for p in self._payments_in_range(tenant, start, end):
+            try:
+                student_name = p.student.user.get_full_name() if p.student and p.student.user else "—"
+            except Exception:
+                student_name = "—"
+            fee_label = (p.student_fee.fee_structure.name
+                         if p.student_fee and p.student_fee.fee_structure else "General")
+            rows.append({
+                "date": p.payment_date.isoformat(),
+                "type": "receipt",
+                "particulars": f"{student_name} — {fee_label}",
+                "method": p.method,
+                "reference": p.bill_number or p.transaction_id or "",
+                "in": str(p.amount),
+                "out": "0.00",
+            })
+            in_total += p.amount
+
+        for e in self._expenses_in_range(tenant, start, end):
+            rows.append({
+                "date": e.date.isoformat(),
+                "type": "expense",
+                "particulars": f"{e.title} — {e.category}",
+                "method": "",
+                "reference": "",
+                "in": "0.00",
+                "out": str(e.amount),
+            })
+            out_total += e.amount
+
+        rows.sort(key=lambda r: r["date"])
+
+        return Response({
+            "from": start.isoformat(),
+            "to": end.isoformat(),
+            "rows": rows,
+            "totals": {
+                "in": str(in_total),
+                "out": str(out_total),
+                "net": str(in_total - out_total),
+            },
+        })
+
+    @action(detail=False, methods=["get"], url_path="cash-book")
+    def cash_book(self, request):
+        """Day Book filtered to cash payments only."""
+        from decimal import Decimal
+        tenant = self._tenant(request)
+        start, end = self._date_range(request)
+
+        rows = []
+        total_in = Decimal("0")
+        for p in self._payments_in_range(tenant, start, end).filter(method="cash"):
+            try:
+                student_name = p.student.user.get_full_name() if p.student and p.student.user else "—"
+            except Exception:
+                student_name = "—"
+            fee_label = (p.student_fee.fee_structure.name
+                         if p.student_fee and p.student_fee.fee_structure else "General")
+            rows.append({
+                "date": p.payment_date.isoformat(),
+                "particulars": f"{student_name} — {fee_label}",
+                "reference": p.bill_number or p.transaction_id or "",
+                "amount": str(p.amount),
+            })
+            total_in += p.amount
+
+        return Response({
+            "from": start.isoformat(),
+            "to": end.isoformat(),
+            "rows": rows,
+            "total": str(total_in),
+        })
+
+    @action(detail=False, methods=["get"], url_path="bank-book")
+    def bank_book(self, request):
+        """Payments via non-cash methods (bank_transfer, cheque, online, card)."""
+        from decimal import Decimal
+        tenant = self._tenant(request)
+        start, end = self._date_range(request)
+
+        rows = []
+        total = Decimal("0")
+        non_cash = ("bank_transfer", "cheque", "online", "card")
+        for p in self._payments_in_range(tenant, start, end).filter(method__in=non_cash):
+            try:
+                student_name = p.student.user.get_full_name() if p.student and p.student.user else "—"
+            except Exception:
+                student_name = "—"
+            fee_label = (p.student_fee.fee_structure.name
+                         if p.student_fee and p.student_fee.fee_structure else "General")
+            rows.append({
+                "date": p.payment_date.isoformat(),
+                "method": p.method,
+                "particulars": f"{student_name} — {fee_label}",
+                "reference": p.transaction_id or p.bill_number or "",
+                "amount": str(p.amount),
+            })
+            total += p.amount
+
+        return Response({
+            "from": start.isoformat(),
+            "to": end.isoformat(),
+            "rows": rows,
+            "total": str(total),
+        })
+
+    @action(detail=False, methods=["get"], url_path="student-ledger")
+    def student_ledger(self, request):
+        """
+        T-format ledger for a single student: every fee charge (Dr) + every
+        payment received (Cr) with running balance.
+        """
+        from decimal import Decimal
+        from billing.models_school import StudentFee, Payment
+
+        student_id = request.query_params.get("student")
+        if not student_id:
+            return Response({"detail": "student query param is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        tenant = self._tenant(request)
+        from academic.models import Student
+        try:
+            student = Student.objects.select_related("user").get(student_id=student_id)
+        except Student.DoesNotExist:
+            return Response({"detail": "Student not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        fees = (
+            StudentFee.objects
+            .filter(tenant=tenant, student=student)
+            .select_related("fee_structure")
+            .order_by("due_date")
+        )
+        payments = (
+            Payment.objects
+            .filter(tenant=tenant, student=student)
+            .select_related("student_fee__fee_structure")
+            .order_by("payment_date")
+        )
+
+        # Build chronological event list, then compute running balance.
+        events = []
+        for f in fees:
+            events.append({
+                "ts": f.created_at,
+                "date": f.due_date.isoformat(),
+                "particulars": f.fee_structure.name if f.fee_structure else "Fee",
+                "reference": "",
+                "debit": str(f.amount_due),
+                "credit": "0.00",
+            })
+        for p in payments:
+            events.append({
+                "ts": p.payment_date,
+                "date": p.payment_date.date().isoformat(),
+                "particulars": (p.student_fee.fee_structure.name
+                                if p.student_fee and p.student_fee.fee_structure
+                                else "Payment received"),
+                "reference": p.bill_number or p.transaction_id or "",
+                "debit": "0.00",
+                "credit": str(p.amount),
+            })
+
+        events.sort(key=lambda e: e["ts"])
+
+        running = Decimal("0")
+        rows = []
+        total_dr = Decimal("0")
+        total_cr = Decimal("0")
+        for e in events:
+            d = Decimal(e["debit"])
+            c = Decimal(e["credit"])
+            total_dr += d
+            total_cr += c
+            running += d - c
+            rows.append({
+                "date": e["date"],
+                "particulars": e["particulars"],
+                "reference": e["reference"],
+                "debit": e["debit"],
+                "credit": e["credit"],
+                "balance": str(running),
+            })
+
+        try:
+            student_name = student.user.get_full_name() if student.user else ""
+        except Exception:
+            student_name = ""
+
+        return Response({
+            "student": {
+                "id": str(student.student_id),
+                "name": student_name,
+                "class": str(student.academic_class) if getattr(student, "academic_class", None) else "",
+            },
+            "rows": rows,
+            "totals": {
+                "debit": str(total_dr),
+                "credit": str(total_cr),
+                "balance": str(running),
+            },
+        })
+
+    @action(detail=False, methods=["get"], url_path="aging")
+    def aging_report(self, request):
+        """
+        Outstanding StudentFee bucketed by overdue age:
+            current (not yet due) | 1–30 | 31–60 | 61–90 | 90+
+        """
+        from datetime import timedelta
+        from decimal import Decimal
+        from django.db.models import F
+
+        tenant = self._tenant(request)
+        as_of = self._date_range(request)[1]  # use 'to' as as_of
+
+        outstanding = (
+            StudentFee.objects
+            .filter(tenant=tenant)
+            .exclude(status__in=["paid", "waived"])
+            .annotate(balance=F("amount_due") - F("amount_paid"))
+            .filter(balance__gt=0)
+            .select_related("student__user", "fee_structure")
+            .order_by("due_date")
+        )
+
+        buckets = {"current": [], "0-30": [], "31-60": [], "61-90": [], "90+": []}
+        bucket_totals = {k: Decimal("0") for k in buckets}
+
+        for f in outstanding:
+            try:
+                student_name = f.student.user.get_full_name() if f.student and f.student.user else "—"
+            except Exception:
+                student_name = "—"
+            balance = Decimal(str(f.balance))
+            days_overdue = (as_of - f.due_date).days
+
+            if days_overdue < 0:
+                key = "current"
+            elif days_overdue <= 30:
+                key = "0-30"
+            elif days_overdue <= 60:
+                key = "31-60"
+            elif days_overdue <= 90:
+                key = "61-90"
+            else:
+                key = "90+"
+
+            buckets[key].append({
+                "student_id": str(f.student.student_id) if f.student else "",
+                "student_name": student_name,
+                "fee_name": f.fee_structure.name if f.fee_structure else "Fee",
+                "due_date": f.due_date.isoformat(),
+                "days_overdue": max(0, days_overdue),
+                "balance": str(balance),
+            })
+            bucket_totals[key] += balance
+
+        return Response({
+            "as_of": as_of.isoformat(),
+            "buckets": buckets,
+            "totals": {k: str(v) for k, v in bucket_totals.items()},
+            "grand_total": str(sum(bucket_totals.values())),
+        })
+
+    @action(detail=False, methods=["get"], url_path="trial-balance")
+    def trial_balance(self, request):
+        """
+        Trial Balance from posted Journal Entries (NAS COA).
+
+        Note: only reflects accounts where journal lines have been posted.
+        Phase C will auto-post receipts/expenses so this fills automatically.
+        """
+        from decimal import Decimal
+        from django.db.models import Sum
+        from billing_school.models_nas import ChartOfAccount
+
+        tenant = self._tenant(request)
+        as_of = self._date_range(request)[1]
+
+        accounts = (
+            ChartOfAccount.objects
+            .filter(tenant=tenant, is_active=True)
+            .order_by("account_code")
+        )
+
+        rows = []
+        total_dr = Decimal("0")
+        total_cr = Decimal("0")
+        for acc in accounts:
+            agg = acc.journal_lines.filter(
+                entry__is_posted=True, entry__date_ad__lte=as_of,
+            ).aggregate(d=Sum("debit"), c=Sum("credit"))
+            debits = agg["d"] or Decimal("0")
+            credits = agg["c"] or Decimal("0")
+            net = debits - credits
+            if acc.account_type in ("asset", "expenditure"):
+                # Debit-normal: positive net stays in Dr column
+                dr_col, cr_col = (net if net > 0 else Decimal("0")), (-net if net < 0 else Decimal("0"))
+            else:
+                # Credit-normal: positive net stays in Cr column
+                dr_col, cr_col = (-net if net < 0 else Decimal("0")), (net if net > 0 else Decimal("0"))
+            if dr_col == 0 and cr_col == 0:
+                continue
+            rows.append({
+                "account_code": acc.account_code,
+                "account_name": acc.name,
+                "account_type": acc.account_type,
+                "debit": str(dr_col),
+                "credit": str(cr_col),
+            })
+            total_dr += dr_col
+            total_cr += cr_col
+
+        return Response({
+            "as_of": as_of.isoformat(),
+            "rows": rows,
+            "totals": {"debit": str(total_dr), "credit": str(total_cr)},
+            "balanced": total_dr == total_cr,
+        })
+
+
 __all__ = ["BillingReportViewSet"]

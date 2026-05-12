@@ -965,6 +965,64 @@ function normalizeArrayPayload<T>(payload: T[] | PaginatedResponse<T> | null | u
     return [];
 }
 
+// Phase B report row types
+export interface DayBookRow {
+    date: string;
+    type: 'receipt' | 'expense';
+    particulars: string;
+    method: string;
+    reference: string;
+    in: string;
+    out: string;
+}
+export interface CashRow {
+    date: string;
+    particulars: string;
+    reference: string;
+    amount: string;
+}
+export interface BankRow {
+    date: string;
+    method: string;
+    particulars: string;
+    reference: string;
+    amount: string;
+}
+export interface LedgerRow {
+    date: string;
+    particulars: string;
+    reference: string;
+    debit: string;
+    credit: string;
+    balance: string;
+}
+export interface AgingBucketRow {
+    student_id: string;
+    student_name: string;
+    fee_name: string;
+    due_date: string;
+    days_overdue: number;
+    balance: string;
+}
+export interface AgingReport {
+    as_of: string;
+    buckets: {
+        current: AgingBucketRow[];
+        '0-30': AgingBucketRow[];
+        '31-60': AgingBucketRow[];
+        '61-90': AgingBucketRow[];
+        '90+': AgingBucketRow[];
+    };
+    totals: { current: string; '0-30': string; '31-60': string; '61-90': string; '90+': string };
+    grand_total: string;
+}
+export interface TrialBalance {
+    as_of: string;
+    rows: { account_code: string; account_name: string; account_type: string; debit: string; credit: string }[];
+    totals: { debit: string; credit: string };
+    balanced: boolean;
+}
+
 // School profile (Phase A: Nepali billing identity for IRD-style receipts)
 export interface SchoolProfile {
     id?: string;
@@ -2651,6 +2709,32 @@ export const billingAPI = {
     }),
 
     getExpenses: () => fetchAllPages<Expense>(`${BILLING_SCHOOL_BASE}/expenses/`),
+
+    // Phase B reports — JSON only; frontend renders + offers print.
+    dayBook: (from: string, to: string) =>
+        apiRequest<{ from: string; to: string; rows: DayBookRow[]; totals: { in: string; out: string; net: string } }>(
+            `${BILLING_SCHOOL_BASE}/reports/day-book/?from=${from}&to=${to}`,
+        ),
+    cashBook: (from: string, to: string) =>
+        apiRequest<{ from: string; to: string; rows: CashRow[]; total: string }>(
+            `${BILLING_SCHOOL_BASE}/reports/cash-book/?from=${from}&to=${to}`,
+        ),
+    bankBook: (from: string, to: string) =>
+        apiRequest<{ from: string; to: string; rows: BankRow[]; total: string }>(
+            `${BILLING_SCHOOL_BASE}/reports/bank-book/?from=${from}&to=${to}`,
+        ),
+    studentLedger: (studentId: string) =>
+        apiRequest<{ student: { id: string; name: string; class: string }; rows: LedgerRow[]; totals: { debit: string; credit: string; balance: string } }>(
+            `${BILLING_SCHOOL_BASE}/reports/student-ledger/?student=${studentId}`,
+        ),
+    aging: (asOf?: string) =>
+        apiRequest<AgingReport>(
+            `${BILLING_SCHOOL_BASE}/reports/aging/${asOf ? `?to=${asOf}` : ''}`,
+        ),
+    trialBalance: (asOf?: string) =>
+        apiRequest<TrialBalance>(
+            `${BILLING_SCHOOL_BASE}/reports/trial-balance/${asOf ? `?to=${asOf}` : ''}`,
+        ),
     createExpense: (data: Partial<Expense>) => apiRequest<Expense>(`${BILLING_SCHOOL_BASE}/expenses/`, {
         method: 'POST',
         body: JSON.stringify(data)
