@@ -152,10 +152,25 @@ class ReportViewSet(viewsets.ViewSet):
 
     @action(detail=False, methods=['get'], url_path='student-performance/(?P<student_id>[^/.]+)')
     def student_performance_pdf(self, request, student_id=None):
+        import logging, traceback
+        log = logging.getLogger(__name__)
+        try:
+            return self._student_performance_pdf_inner(request, student_id)
+        except PermissionDenied:
+            raise
+        except Exception as exc:
+            log.exception("student_performance_pdf failed for student_id=%s", student_id)
+            return Response(
+                {"error": "Failed to generate report", "detail": str(exc),
+                 "trace": traceback.format_exc().splitlines()[-6:]},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+    def _student_performance_pdf_inner(self, request, student_id=None):
         using_db = getattr(request, 'db_alias', 'default')
         student = get_object_or_404(Student.objects.using(using_db).select_related('user'), pk=student_id)
         self._ensure_student_access(request, student)
-        
+
         # Re-fetch raw results for the per-row table.
         results_data = []
         results = (
