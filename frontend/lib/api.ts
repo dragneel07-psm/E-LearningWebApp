@@ -4441,7 +4441,7 @@ export interface FeeDiscount {
 export const feeDiscountAPI = {
     getDiscounts: (active?: boolean) => {
         const q = active !== undefined ? `?active=${active}` : '';
-        return apiRequest<FeeDiscount[]>(`/billing/school/discounts/${q}`);
+        return fetchAllPages<FeeDiscount>(`/billing/school/discounts/${q}`);
     },
     createDiscount: (data: Partial<FeeDiscount>) =>
         apiRequest<FeeDiscount>('/billing/school/discounts/', { method: 'POST', body: JSON.stringify(data) }),
