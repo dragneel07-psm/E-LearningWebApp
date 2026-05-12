@@ -156,24 +156,50 @@ class ReportViewSet(viewsets.ViewSet):
         student = get_object_or_404(Student.objects.using(using_db).select_related('user'), pk=student_id)
         self._ensure_student_access(request, student)
         
-        # Use ReportingService to get comprehensive data including AI summary
-        # Transform results for template since we are using service now
+        # Re-fetch raw results for the per-row table.
         results_data = []
-        # We can re-fetch or use what service collected if it returns raw objects?
-        # Service returns 'mastery' but maybe not raw list. Let's re-fetch for the table to be safe and detailed.
-        results = Result.objects.using(using_db).filter(student=student).select_related('assessment', 'assessment__subject').order_by('-submitted_at')
+        results = (
+            Result.objects.using(using_db)
+            .filter(student=student)
+            .select_related('assessment', 'assessment__subject')
+            .order_by('-submitted_at')
+        )
         for r in results:
+            assessment = getattr(r, 'assessment', None)
+            if assessment is None:
+                continue
+            subject = getattr(assessment, 'subject', None)
+            subject_name = getattr(subject, 'name', '—') if subject else '—'
+
+            try:
+                score = float(r.score or 0)
+            except (TypeError, ValueError):
+                score = 0.0
+            try:
+                total_marks = float(assessment.total_marks or 0)
+            except (TypeError, ValueError):
+                total_marks = 0.0
+            percentage = round((score / total_marks) * 100, 1) if total_marks > 0 else 0.0
+
+            try:
+                type_display = assessment.get_type_display()
+            except Exception:
+                type_display = getattr(assessment, 'type', '') or '—'
+
             results_data.append({
-                'subject': r.assessment.subject.name,
-                'assessment': r.assessment.title,
-                'type': r.assessment.get_type_display(),
-                'score': r.score,
-                'total_marks': r.assessment.total_marks,
-                'percentage': round((r.score / r.assessment.total_marks) * 100, 1),
-                'submitted_at': r.submitted_at
+                'subject': subject_name,
+                'assessment': getattr(assessment, 'title', '') or '—',
+                'type': type_display,
+                'score': score,
+                'total_marks': total_marks,
+                'percentage': percentage,
+                'submitted_at': r.submitted_at,
             })
 
-        avg_percentage = round(sum(item['percentage'] for item in results_data) / len(results_data), 1) if results_data else 0
+        avg_percentage = (
+            round(sum(item['percentage'] for item in results_data) / len(results_data), 1)
+            if results_data else 0
+        )
         report_data = {
             'results_data': results_data,
             'metrics': {
@@ -220,14 +246,31 @@ class ReportViewSet(viewsets.ViewSet):
         
         data = []
         for r in results:
+            assessment = getattr(r, 'assessment', None)
+            if assessment is None:
+                continue
+            subject = getattr(assessment, 'subject', None)
+            try:
+                score = float(r.score or 0)
+            except (TypeError, ValueError):
+                score = 0.0
+            try:
+                total_marks = float(assessment.total_marks or 0)
+            except (TypeError, ValueError):
+                total_marks = 0.0
+            percentage = round((score / total_marks) * 100, 2) if total_marks > 0 else 0.0
+            try:
+                type_display = assessment.get_type_display()
+            except Exception:
+                type_display = getattr(assessment, 'type', '') or '—'
             data.append({
-                'Subject': r.assessment.subject.name,
-                'Assessment': r.assessment.title,
-                'Type': r.assessment.get_type_display(),
-                'Score': r.score,
-                'Total Marks': r.assessment.total_marks,
-                'Percentage': round((r.score / r.assessment.total_marks) * 100, 2),
-                'Date': r.submitted_at.strftime("%Y-%m-%d")
+                'Subject': getattr(subject, 'name', '—') if subject else '—',
+                'Assessment': getattr(assessment, 'title', '') or '—',
+                'Type': type_display,
+                'Score': score,
+                'Total Marks': total_marks,
+                'Percentage': percentage,
+                'Date': r.submitted_at.strftime("%Y-%m-%d") if r.submitted_at else ''
             })
             
         columns = ['Subject', 'Assessment', 'Type', 'Score', 'Total Marks', 'Percentage', 'Date']
@@ -394,12 +437,19 @@ class ReportViewSet(viewsets.ViewSet):
             student=student
         )
         
+        try:
+            score_val = float(result.score or 0)
+            total_marks_val = float(getattr(result.assessment, 'total_marks', 0) or 0)
+        except (TypeError, ValueError):
+            score_val, total_marks_val = 0.0, 0.0
+        percentage = round((score_val / total_marks_val) * 100, 1) if total_marks_val > 0 else 0.0
+
         context = {
             'student': student,
             'result': result,
             'assessment': result.assessment,
-            'subject': result.assessment.subject,
-            'percentage': round((result.score / result.assessment.total_marks) * 100, 1),
+            'subject': getattr(result.assessment, 'subject', None),
+            'percentage': percentage,
             'school_name': self._school_name(request),
             'date': timezone.now().strftime("%B %d, %Y")
         }
