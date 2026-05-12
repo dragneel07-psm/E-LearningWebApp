@@ -2651,7 +2651,11 @@ export const billingAPI = {
 
     getFinancialAnalytics: () => apiRequest<FinancialAnalytics>(`${BILLING_SCHOOL_BASE}/dashboard/analytics/`),
 
-    downloadReceipt: (paymentId: string) => apiRequestBlob(`${BILLING_SCHOOL_BASE}/payments/${paymentId}/generate_receipt/`),
+    downloadReceipt: (paymentId: string) =>
+        downloadReport(
+            `${BILLING_SCHOOL_BASE}/payments/${paymentId}/generate_receipt/`,
+            `receipt_${paymentId.slice(0, 8)}.pdf`,
+        ),
 };
 
 

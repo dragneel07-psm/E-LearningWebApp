@@ -55,11 +55,18 @@ export function PaymentDialog({ open, onOpenChange, fee, onSuccess }: PaymentDia
                 transaction_id: reference || undefined,
             });
 
-            if (payment.id) setReceiptId(payment.id);
-            else if (payment.payment_id) setReceiptId(payment.payment_id);
+            const id = payment.id || payment.payment_id;
+            if (id) setReceiptId(id);
             setIsSuccess(true);
             toast.success("Payment recorded successfully");
             onSuccess();
+
+            // Auto-trigger receipt download so the user always gets a copy.
+            if (id) {
+                billingAPI.downloadReceipt(id).catch(() => {
+                    toast.error("Receipt could not be generated. Click Receipt to retry.");
+                });
+            }
         } catch (error) {
             toast.error("Failed to record payment");
         } finally {
@@ -67,9 +74,12 @@ export function PaymentDialog({ open, onOpenChange, fee, onSuccess }: PaymentDia
         }
     };
 
-    const handleDownloadReceipt = () => {
-        if (receiptId) {
-            billingAPI.downloadReceipt(receiptId);
+    const handleDownloadReceipt = async () => {
+        if (!receiptId) return;
+        try {
+            await billingAPI.downloadReceipt(receiptId);
+        } catch {
+            toast.error("Failed to download receipt");
         }
     };
 

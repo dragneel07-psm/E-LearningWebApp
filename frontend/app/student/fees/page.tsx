@@ -105,14 +105,7 @@ export default function StudentFeesPage() {
 
     const downloadReceipt = async (paymentId: string) => {
         try {
-            const blob = await billingAPI.downloadReceipt(paymentId);
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `receipt_${paymentId.substring(0, 8)}.pdf`;
-            document.body.appendChild(a);
-            a.click();
-            a.remove();
+            await billingAPI.downloadReceipt(paymentId);
         } catch (error) {
             toast.error('Failed to download receipt');
         }
