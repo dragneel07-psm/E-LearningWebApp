@@ -284,6 +284,292 @@ class StudentFeeViewSet(BillingIdempotencyMixin, BillingSchemaGuardMixin, Tenant
             return Response({'detail': f'Invoice notification failed: {e}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         return Response({'status': 'invoice_sent', 'student': str(fee.student_id)})
 
+    @action(detail=False, methods=["post"], url_path="bulk-assign-multi")
+    def bulk_assign_multi(self, request):
+        """
+        Phase D: assign multiple fee structures to multiple classes at once.
+        Body: {
+            "class_ids":          [<academic_class_id>, ...],
+            "fee_structure_ids":  [<fee_id>, ...],
+            "due_date":           "YYYY-MM-DD",
+            "skip_existing":      true        # don't duplicate if a StudentFee
+                                              # already exists for (student, structure, due_date)
+        }
+        Returns per-structure created/skipped counts.
+        """
+        from academic.models import Student
+
+        tenant = getattr(request.user, "tenant", None)
+        if not tenant:
+            return Response({"detail": "No tenant in scope."}, status=status.HTTP_400_BAD_REQUEST)
+
+        class_ids = request.data.get("class_ids") or []
+        structure_ids = request.data.get("fee_structure_ids") or []
+        due_date = request.data.get("due_date")
+        skip_existing = bool(request.data.get("skip_existing", True))
+
+        if not class_ids or not structure_ids or not due_date:
+            return Response(
+                {"detail": "class_ids, fee_structure_ids and due_date are all required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        structures = FeeStructure.objects.filter(tenant=tenant, fee_id__in=structure_ids)
+        if structures.count() != len(set(map(str, structure_ids))):
+            return Response({"detail": "Some fee structures not found in this tenant."},
+                            status=status.HTTP_404_NOT_FOUND)
+
+        students = list(
+            Student.objects
+            .filter(academic_class_id__in=class_ids, user__tenant=tenant)
+            .select_related("user")
+        )
+        if not students:
+            return Response({"detail": "No students found in the selected class(es)."},
+                            status=status.HTTP_404_NOT_FOUND)
+
+        summary = []
+        total_created = 0
+        total_skipped = 0
+        created_fee_ids = []
+
+        with transaction.atomic():
+            for structure in structures:
+                created = 0
+                skipped = 0
+                # Pre-load existing rows to avoid N+1 lookup inside the loop.
+                existing = set()
+                if skip_existing:
+                    existing = set(
+                        StudentFee.objects
+                        .filter(tenant=tenant, fee_structure=structure, due_date=due_date)
+                        .values_list("student_id", flat=True)
+                    )
+                for s in students:
+                    if skip_existing and s.student_id in existing:
+                        skipped += 1
+                        continue
+                    fee = StudentFee.objects.create(
+                        tenant=tenant,
+                        student=s,
+                        fee_structure=structure,
+                        amount_due=structure.amount,
+                        due_date=due_date,
+                        status="pending",
+                    )
+                    created += 1
+                    created_fee_ids.append(str(fee.student_fee_id))
+                summary.append({
+                    "fee_structure_id": str(structure.fee_id),
+                    "fee_structure_name": structure.name,
+                    "created": created,
+                    "skipped": skipped,
+                })
+                total_created += created
+                total_skipped += skipped
+
+        record_audit_event(
+            action="billing.student_fee_bulk_assign_multi",
+            user=request.user, request=request,
+            details={
+                "class_ids": class_ids, "structure_ids": structure_ids,
+                "due_date": due_date,
+                "students": len(students),
+                "created": total_created, "skipped": total_skipped,
+            },
+        )
+
+        return Response({
+            "created": total_created,
+            "skipped": total_skipped,
+            "student_count": len(students),
+            "summary": summary,
+            "created_fee_ids": created_fee_ids,
+        }, status=status.HTTP_201_CREATED)
+
+    @action(detail=True, methods=["get"], url_path="generate-bill")
+    def generate_bill(self, request, pk=None):
+        """
+        Generate a one-page bill PDF for a single StudentFee — emphasizes
+        outstanding balance + due date, suitable for distributing to parents.
+        """
+        from decimal import Decimal
+        from billing_school.utils_bs_calendar import bs_date_display
+
+        fee = self.get_object()
+        tenant = fee.tenant
+        structure = fee.fee_structure
+        student = fee.student
+
+        balance = Decimal(str(fee.amount_due or 0)) - Decimal(str(fee.amount_paid or 0))
+        try:
+            from num2words import num2words
+            amount_words = num2words(balance, lang="en").title() + " Only"
+        except Exception:
+            amount_words = ""
+
+        try:
+            student_name = student.user.get_full_name() if student and student.user else ""
+        except Exception:
+            student_name = ""
+
+        try:
+            due_date_bs = bs_date_display(fee.due_date)
+        except Exception:
+            due_date_bs = ""
+
+        heads = []
+        if structure and hasattr(structure, "heads"):
+            try:
+                heads = [{"name": h.name, "amount": f"{h.amount:.2f}"} for h in structure.heads.all()]
+            except Exception:
+                heads = []
+
+        logo_url = ""
+        try:
+            if tenant and tenant.logo:
+                logo_url = tenant.logo.url
+        except Exception:
+            logo_url = ""
+
+        context = {
+            "school_name": tenant.name if tenant else "",
+            "school_address": getattr(tenant, "address", "") or "",
+            "school_phone": getattr(tenant, "contact_phone", "") or "",
+            "school_email": getattr(tenant, "contact_email", "") or "",
+            "school_pan": getattr(tenant, "pan_number", "") or "",
+            "school_vat": getattr(tenant, "vat_number", "") or "",
+            "school_logo": logo_url,
+            "principal_name": getattr(tenant, "principal_name", "") or "",
+            "accountant_name": getattr(tenant, "accountant_name", "") or "",
+            "fiscal_year_bs": getattr(tenant, "fiscal_year_bs", "") or "",
+
+            "bill_number": f"BILL-{str(fee.student_fee_id)[:8].upper()}",
+            "student_name": student_name,
+            "student_id": str(getattr(student, "student_id", "") or ""),
+            "class_name": str(student.academic_class) if getattr(student, "academic_class", None) else "",
+
+            "due_date": fee.due_date.strftime("%d %b %Y"),
+            "due_date_bs": due_date_bs,
+            "fee_title": structure.name if structure else "Fee",
+            "fee_period": getattr(structure, "frequency", "") if structure else "",
+            "fee_heads": heads,
+
+            "amount_due": f"{Decimal(str(fee.amount_due or 0)):.2f}",
+            "amount_paid": f"{Decimal(str(fee.amount_paid or 0)):.2f}",
+            "balance": f"{balance:.2f}",
+            "late_fee": f"{Decimal(str(getattr(fee, 'late_fee_applied', 0) or 0)):.2f}",
+            "amount_words": amount_words,
+            "status": fee.get_status_display(),
+            "currency": getattr(tenant, "currency_symbol", "Rs.") or "Rs.",
+            "generated_on": timezone.now().strftime("%d %b %Y %H:%M"),
+        }
+        filename = f"bill_{str(fee.student_fee_id)[:8]}.pdf"
+        response = generate_pdf_response("reports/student_bill.html", context, filename)
+        if response:
+            return response
+        return Response({"error": "Failed to generate bill"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    @action(detail=False, methods=["post"], url_path="bulk-bills-pdf")
+    def bulk_bills_pdf(self, request):
+        """
+        Combined PDF: one page per StudentFee in the supplied list.
+        Body: { "student_fee_ids": [<uuid>, ...] }
+        """
+        from decimal import Decimal
+        from billing_school.utils_bs_calendar import bs_date_display
+
+        tenant = getattr(request.user, "tenant", None)
+        if not tenant:
+            return Response({"detail": "No tenant in scope."}, status=status.HTTP_400_BAD_REQUEST)
+
+        ids = request.data.get("student_fee_ids") or []
+        if not ids:
+            return Response({"detail": "student_fee_ids is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        fees = (
+            StudentFee.objects
+            .filter(tenant=tenant, student_fee_id__in=ids)
+            .select_related("student__user", "fee_structure")
+            .prefetch_related("fee_structure__heads")
+            .order_by("student__user__first_name")
+        )
+
+        try:
+            from num2words import num2words
+        except Exception:
+            num2words = None
+
+        bills = []
+        for fee in fees:
+            balance = Decimal(str(fee.amount_due or 0)) - Decimal(str(fee.amount_paid or 0))
+            try:
+                student_name = fee.student.user.get_full_name() if fee.student and fee.student.user else ""
+            except Exception:
+                student_name = ""
+            try:
+                due_date_bs = bs_date_display(fee.due_date)
+            except Exception:
+                due_date_bs = ""
+            heads = []
+            try:
+                heads = [{"name": h.name, "amount": f"{h.amount:.2f}"} for h in fee.fee_structure.heads.all()]
+            except Exception:
+                heads = []
+            amount_words = ""
+            if num2words:
+                try:
+                    amount_words = num2words(balance, lang="en").title() + " Only"
+                except Exception:
+                    amount_words = ""
+            bills.append({
+                "bill_number": f"BILL-{str(fee.student_fee_id)[:8].upper()}",
+                "student_name": student_name,
+                "student_id": str(getattr(fee.student, "student_id", "") or ""),
+                "class_name": str(fee.student.academic_class) if getattr(fee.student, "academic_class", None) else "",
+                "due_date": fee.due_date.strftime("%d %b %Y"),
+                "due_date_bs": due_date_bs,
+                "fee_title": fee.fee_structure.name if fee.fee_structure else "Fee",
+                "fee_heads": heads,
+                "amount_due": f"{Decimal(str(fee.amount_due or 0)):.2f}",
+                "amount_paid": f"{Decimal(str(fee.amount_paid or 0)):.2f}",
+                "balance": f"{balance:.2f}",
+                "late_fee": f"{Decimal(str(getattr(fee, 'late_fee_applied', 0) or 0)):.2f}",
+                "amount_words": amount_words,
+                "status": fee.get_status_display(),
+            })
+
+        logo_url = ""
+        try:
+            if tenant and tenant.logo:
+                logo_url = tenant.logo.url
+        except Exception:
+            logo_url = ""
+
+        context = {
+            "bills": bills,
+            "school_name": tenant.name if tenant else "",
+            "school_address": getattr(tenant, "address", "") or "",
+            "school_phone": getattr(tenant, "contact_phone", "") or "",
+            "school_pan": getattr(tenant, "pan_number", "") or "",
+            "school_logo": logo_url,
+            "principal_name": getattr(tenant, "principal_name", "") or "",
+            "accountant_name": getattr(tenant, "accountant_name", "") or "",
+            "fiscal_year_bs": getattr(tenant, "fiscal_year_bs", "") or "",
+            "currency": getattr(tenant, "currency_symbol", "Rs.") or "Rs.",
+            "generated_on": timezone.now().strftime("%d %b %Y %H:%M"),
+        }
+        filename = f"bills_{timezone.now().strftime('%Y%m%d_%H%M')}.pdf"
+        response = generate_pdf_response("reports/student_bills_bulk.html", context, filename)
+        if response:
+            record_audit_event(
+                action="billing.bulk_bills_exported",
+                user=request.user, request=request,
+                details={"count": len(bills)},
+            )
+            return response
+        return Response({"error": "Failed to generate bills"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
     @action(detail=False, methods=["post"])
     def assign_bulk(self, request):
         """

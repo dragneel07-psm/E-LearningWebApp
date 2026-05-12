@@ -397,7 +397,16 @@ export function StudentFeeList() {
                                                             <MoreVertical className="h-4 w-4" />
                                                         </Button>
                                                     </DropdownMenuTrigger>
-                                                    <DropdownMenuContent align="end" className="w-40">
+                                                    <DropdownMenuContent align="end" className="w-44">
+                                                        <DropdownMenuItem
+                                                            className="text-xs font-bold gap-2"
+                                                            onClick={() =>
+                                                                billingAPI.generateBill(fee.student_fee_id)
+                                                                    .catch(() => toast.error('Failed to download bill'))
+                                                            }
+                                                        >
+                                                            <Download className="h-3.5 w-3.5" /> Download Bill
+                                                        </DropdownMenuItem>
                                                         <DropdownMenuItem className="text-xs font-bold gap-2" onClick={() => openStatement(fee)}>
                                                             <Download className="h-3.5 w-3.5" /> Statement
                                                         </DropdownMenuItem>

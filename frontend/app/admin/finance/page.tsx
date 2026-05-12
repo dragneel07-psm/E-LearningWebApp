@@ -11,9 +11,11 @@ import { ExpenseManager } from './ExpenseManager';
 import FinancialReports from '@/components/finance/FinancialReports';
 import { DiscountManager } from './DiscountManager';
 import { LedgerManager } from './LedgerManager';
+import Link from 'next/link';
+import { Button } from '@/components/ui/button';
 import {
     LayoutDashboard, Receipt, Settings2, TrendingUp, Wallet,
-    Building2, CalendarDays, Percent, BookOpen
+    Building2, CalendarDays, Percent, BookOpen, Layers
 } from 'lucide-react';
 
 const TABS = [
@@ -43,6 +45,11 @@ export default function FinanceDashboardPage() {
                     <p className="text-slate-500 font-medium">Fee management, expense tracking, and financial reporting</p>
                 </div>
                 <div className="flex items-center gap-3 bg-slate-50 p-1.5 rounded-xl border border-slate-100">
+                    <Link href="/admin/finance/bulk-billing">
+                        <Button size="sm" className="gap-1.5 bg-indigo-600 hover:bg-indigo-700">
+                            <Layers className="h-3.5 w-3.5" /> Bulk Billing
+                        </Button>
+                    </Link>
                     <div className="flex items-center gap-2 px-3 py-1.5 bg-white rounded-lg shadow-sm border border-slate-100 text-xs font-bold text-slate-700">
                         <CalendarDays className="h-3.5 w-3.5 text-indigo-500" />
                         {new Date().getFullYear()} Academic Year

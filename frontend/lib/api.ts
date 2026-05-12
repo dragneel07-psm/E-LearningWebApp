@@ -2736,6 +2736,41 @@ export const billingAPI = {
             body: JSON.stringify(data)
         }),
 
+    // Phase D: bulk monthly billing — multiple classes × multiple fee structures.
+    bulkAssignMulti: (data: { class_ids: (string | number)[]; fee_structure_ids: string[]; due_date: string; skip_existing?: boolean }) =>
+        apiRequest<{
+            created: number;
+            skipped: number;
+            student_count: number;
+            summary: { fee_structure_id: string; fee_structure_name: string; created: number; skipped: number }[];
+            created_fee_ids: string[];
+        }>(`${BILLING_SCHOOL_BASE}/student-fees/bulk-assign-multi/`, {
+            method: 'POST',
+            body: JSON.stringify(data),
+        }),
+
+    generateBill: (studentFeeId: string) =>
+        downloadReport(
+            `${BILLING_SCHOOL_BASE}/student-fees/${studentFeeId}/generate-bill/`,
+            `bill_${studentFeeId.slice(0, 8)}.pdf`,
+        ),
+
+    bulkBillsPdf: async (studentFeeIds: string[]) => {
+        const blob = await apiRequestBlob(`${BILLING_SCHOOL_BASE}/student-fees/bulk-bills-pdf/`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ student_fee_ids: studentFeeIds }),
+        });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `bills_${new Date().toISOString().slice(0, 16).replace(/[T:]/g, '-')}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    },
+
     getPayments: () => fetchAllPages<Payment>(`${BILLING_SCHOOL_BASE}/payments/`),
     recordPayment: (data: Partial<Payment>) => apiRequest<Payment>(`${BILLING_SCHOOL_BASE}/payments/`, {
         method: 'POST',
