@@ -57,9 +57,11 @@
     </div>
 
     <div class="student-info">
-        <p><strong>Name:</strong> {{ student.first_name }} {{ student.last_name }}</p>
-        <p><strong>Student ID:</strong> {{ student.student_id or student.id }}</p>
-        <p><strong>Class:</strong> {{ student.class_section.class_name }} - {{ student.class_section.section_name }}</p>
+        <p><strong>Name:</strong> {{ student.user.first_name|default:"" }} {{ student.user.last_name|default:"" }}</p>
+        <p><strong>Student ID:</strong> {% firstof student.student_id student.id "—" %}</p>
+        {% if student.section %}
+            <p><strong>Class:</strong> {{ student.section.academic_class.name|default:"—" }} – {{ student.section.name|default:"—" }}</p>
+        {% endif %}
         <p><strong>Date:</strong> {{ date }}</p>
     </div>
 
