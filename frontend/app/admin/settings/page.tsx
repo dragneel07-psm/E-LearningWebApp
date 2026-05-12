@@ -116,6 +116,19 @@ export default function SettingsPage() {
                 </TabsList>
 
                 <TabsContent value="general">
+                    <Card className="mb-4 border-indigo-200 bg-indigo-50/40">
+                        <CardHeader>
+                            <CardTitle className="text-base">School Profile & Billing Identity</CardTitle>
+                            <CardDescription>
+                                PAN, address, logo, signatories and bill numbering — printed on every receipt and tax invoice.
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                            <Link href="/admin/settings/school-profile">
+                                <Button>Open School Profile <ChevronRight className="h-4 w-4 ml-1" /></Button>
+                            </Link>
+                        </CardContent>
+                    </Card>
                     <Card>
                         <CardHeader>
                             <CardTitle>School Profile</CardTitle>

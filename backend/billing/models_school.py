@@ -152,6 +152,14 @@ class Payment(SchemaScopedBillingModel, models.Model):
     amount = models.DecimalField(max_digits=10, decimal_places=2)
     payment_date = models.DateTimeField(auto_now_add=True)
 
+    # Sequential bill / receipt number per tenant per fiscal year, e.g. BL-2082/83-00001.
+    # Allocated by billing.bill_numbering.allocate_bill_number on create.
+    bill_number = models.CharField(
+        max_length=40, blank=True, default='',
+        db_index=True,
+        help_text='Sequential bill number per tenant per FY (Nepali IRD convention).',
+    )
+
     METHOD_CHOICES = (
         ("cash", "Cash"),
         ("bank_transfer", "Bank Transfer"),
@@ -175,6 +183,14 @@ class Payment(SchemaScopedBillingModel, models.Model):
         indexes = [
             models.Index(fields=["tenant", "payment_date"], name="bill_pay_tenant_date_idx"),
             models.Index(fields=["student", "payment_date"], name="bill_pay_student_date_idx"),
+        ]
+        constraints = [
+            # Bill numbers must be unique per tenant once allocated (blank ones are OK during migration backfill).
+            models.UniqueConstraint(
+                fields=["tenant", "bill_number"],
+                condition=~models.Q(bill_number=""),
+                name="bill_pay_tenant_billno_uniq",
+            ),
         ]
 
     def __str__(self):

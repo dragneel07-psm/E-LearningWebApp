@@ -965,6 +965,28 @@ function normalizeArrayPayload<T>(payload: T[] | PaginatedResponse<T> | null | u
     return [];
 }
 
+// School profile (Phase A: Nepali billing identity for IRD-style receipts)
+export interface SchoolProfile {
+    id?: string;
+    schema_name?: string;
+    name: string;
+    address: string;
+    contact_email: string;
+    contact_phone: string;
+    website: string;
+    established_year: number | null;
+    current_academic_year: string;
+    pan_number: string;
+    vat_number: string;
+    fiscal_year_bs: string;
+    currency_code: string;
+    currency_symbol: string;
+    principal_name: string;
+    accountant_name: string;
+    bill_prefix: string;
+    logo: string;
+}
+
 async function fetchAllPages<T>(endpoint: string): Promise<T[]> {
     const sep = endpoint.includes('?') ? '&' : '?';
     const firstPage = await apiRequest<T[] | PaginatedResponse<T>>(endpoint);
@@ -3481,6 +3503,21 @@ export const api = {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(data)
         }),
+    },
+    schoolProfile: {
+        get: () => apiRequest<SchoolProfile>('/core/school-profile/'),
+        update: (data: Partial<SchoolProfile>) => apiRequest<SchoolProfile>('/core/school-profile/', {
+            method: 'PATCH',
+            body: JSON.stringify(data),
+        }),
+        uploadLogo: (file: File) => {
+            const formData = new FormData();
+            formData.append('logo', file);
+            return apiRequest<SchoolProfile>('/core/school-profile/', {
+                method: 'PATCH',
+                body: formData,
+            });
+        },
     },
     backups: {
         list: () => apiRequest('/core/backups/'),

@@ -21,6 +21,7 @@ export type AdminModule =
     | '/admin'
     | '/admin/erp'
     | '/admin/settings/staff-access'
+    | '/admin/settings/school-profile'
     | '/admin/admissions'
     | '/admin/academic/years'
     | '/admin/academic/classes'
@@ -91,6 +92,7 @@ const ADMIN_FULL: AdminModule[] = [
     '/admin/notices',
     '/admin/settings',
     '/admin/settings/staff-access',
+    '/admin/settings/school-profile',
     '/admin/notifications',
 ];
 

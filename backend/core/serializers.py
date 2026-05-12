@@ -42,7 +42,11 @@ class TenantSerializer(serializers.ModelSerializer):
             'student_count', 'teacher_count', 'total_users', 'admin_count',
             'ai_usage', 'ai_tokens_used', 'ai_token_limit',
             'storage_used_bytes', 'storage_used_mb', 'storage_limit_gb', 'storage_usage_percent',
-            'logo'
+            'logo',
+            # Tax & billing identity (Phase A)
+            'pan_number', 'vat_number', 'fiscal_year_bs',
+            'currency_code', 'currency_symbol',
+            'principal_name', 'accountant_name', 'bill_prefix',
         ]
         read_only_fields = ['features']  # `features` is computed; `feature_overrides` is the writable surface.
 

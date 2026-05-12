@@ -31,6 +31,38 @@ class Tenant(TenantMixin, TimeStampedModel):
     current_academic_year = models.CharField(max_length=20, default='2024-2025')
     established_year = models.IntegerField(blank=True, null=True)
     logo = models.ImageField(upload_to=tenant_logo_upload_to, blank=True, null=True)
+
+    # Tax & billing identity (Nepali school context — IRD-aligned receipts)
+    pan_number = models.CharField(
+        max_length=20, blank=True, default='',
+        help_text='School PAN number printed on every tax invoice / receipt.',
+    )
+    vat_number = models.CharField(
+        max_length=20, blank=True, default='',
+        help_text='VAT registration number (only if school is VAT-registered).',
+    )
+    fiscal_year_bs = models.CharField(
+        max_length=10, blank=True, default='',
+        help_text='Current Bikram Sambat fiscal year, e.g. "2082/83". Used in bill numbering.',
+    )
+    currency_code = models.CharField(
+        max_length=10, default='NPR',
+        help_text='ISO currency code shown on receipts. Default NPR for Nepali schools.',
+    )
+    currency_symbol = models.CharField(
+        max_length=8, default='Rs.',
+        help_text='Short currency symbol on bills (e.g. "Rs.", "$").',
+    )
+
+    # Receipt signatories
+    principal_name = models.CharField(max_length=120, blank=True, default='')
+    accountant_name = models.CharField(max_length=120, blank=True, default='')
+
+    # Bill book
+    bill_prefix = models.CharField(
+        max_length=10, default='BL',
+        help_text='Prefix for sequential bill numbers, e.g. "BL" → BL-2082/83-00001.',
+    )
     
     # Feature Flags for SaaS Admin to control tenant capabilities.
     # `features` is the *effective* dict (plan baseline merged with overrides) and

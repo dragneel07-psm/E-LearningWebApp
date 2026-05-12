@@ -143,6 +143,79 @@ class JobStatusView(APIView):
 
 from .views_saas import IsSaaSAdmin
 
+
+class SchoolProfileView(APIView):
+    """
+    GET / PATCH a school admin's own tenant profile (Phase A: Nepali billing identity).
+
+    Scoped to the authenticated user's tenant — school admins manage their own
+    school's PAN, address, logo, signatories, and bill book settings here
+    without needing SaaS-admin privileges.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    # Whitelist of fields a school admin may update from this endpoint.
+    EDITABLE_FIELDS = {
+        "name", "address", "contact_email", "contact_phone", "website",
+        "established_year", "current_academic_year",
+        "pan_number", "vat_number", "fiscal_year_bs",
+        "currency_code", "currency_symbol",
+        "principal_name", "accountant_name", "bill_prefix",
+    }
+
+    READABLE_FIELDS = EDITABLE_FIELDS | {"id", "schema_name", "logo"}
+
+    def _resolve_tenant(self, request):
+        tenant = getattr(request.user, "tenant", None)
+        if tenant is None:
+            tenant = getattr(request, "tenant", None)
+        if tenant is None or getattr(tenant, "schema_name", "public") == "public":
+            return None
+        return tenant
+
+    def _is_admin(self, request) -> bool:
+        role = (getattr(request.user, "role", "") or "").lower()
+        return role == "admin" or bool(
+            getattr(request.user, "is_staff", False) or getattr(request.user, "is_superuser", False)
+        )
+
+    def get(self, request):
+        tenant = self._resolve_tenant(request)
+        if tenant is None:
+            return Response({"detail": "No tenant in scope."}, status=status.HTTP_404_NOT_FOUND)
+        data = {f: getattr(tenant, f, "") for f in self.READABLE_FIELDS - {"logo"}}
+        try:
+            data["logo"] = tenant.logo.url if tenant.logo else ""
+        except Exception:
+            data["logo"] = ""
+        return Response(data)
+
+    def patch(self, request):
+        if not self._is_admin(request):
+            return Response({"detail": "Only school admins may update the profile."}, status=status.HTTP_403_FORBIDDEN)
+        tenant = self._resolve_tenant(request)
+        if tenant is None:
+            return Response({"detail": "No tenant in scope."}, status=status.HTTP_404_NOT_FOUND)
+
+        updates = {k: v for k, v in request.data.items() if k in self.EDITABLE_FIELDS}
+        for key, value in updates.items():
+            setattr(tenant, key, value)
+
+        # Logo via multipart upload (separate field name)
+        if "logo" in request.FILES:
+            tenant.logo = request.FILES["logo"]
+
+        tenant.save()
+
+        record_audit_event(
+            action="tenant.school_profile_updated",
+            user=request.user,
+            request=request,
+            details={"fields": sorted(updates.keys()), "logo_uploaded": "logo" in request.FILES},
+        )
+        return self.get(request)
+
+
 class TenantViewSet(viewsets.ModelViewSet):
     queryset = Tenant.objects.select_related('subscription__plan').exclude(schema_name='public')
     permission_classes = [IsSaaSAdmin]

@@ -322,9 +322,15 @@ class PaymentViewSet(BillingIdempotencyMixin, BillingSchemaGuardMixin, TenantSco
         if not getattr(self.request.user, "tenant", None):
             raise PermissionDenied("Authenticated user is not associated with a tenant.")
 
+        from billing.bill_numbering import allocate_bill_number
+
+        tenant = self.request.user.tenant
+        bill_number = allocate_bill_number(tenant)
+
         payment = serializer.save(
-            tenant=self.request.user.tenant,
+            tenant=tenant,
             recorded_by=self.request.user,
+            bill_number=bill_number,
         )
         fee_before = None
         if payment.student_fee:
@@ -416,11 +422,13 @@ class PaymentViewSet(BillingIdempotencyMixin, BillingSchemaGuardMixin, TenantSco
     @action(detail=True, methods=["get"])
     def generate_receipt(self, request, pk=None):
         from decimal import Decimal
+        from billing_school.utils_bs_calendar import bs_date_display
 
         payment = self.get_object()
         student = payment.student
         student_fee = payment.student_fee
         fee_structure = student_fee.fee_structure if student_fee else None
+        tenant = payment.tenant
 
         # Remaining balance for this student fee
         balance_due = "0.00"
@@ -438,22 +446,64 @@ class PaymentViewSet(BillingIdempotencyMixin, BillingSchemaGuardMixin, TenantSco
         except Exception:
             student_name = ""
 
+        # Amount in words (English) — IRD-style on every Nepali bill.
+        try:
+            from num2words import num2words
+            amount_words = num2words(payment.amount, lang="en").title() + " Only"
+        except Exception:
+            amount_words = ""
+
+        # Bikram Sambat date alongside AD date.
+        try:
+            payment_date_bs = bs_date_display(payment.payment_date.date())
+        except Exception:
+            payment_date_bs = ""
+
+        currency_symbol = (getattr(tenant, "currency_symbol", "") or "Rs.").strip()
+        logo_url = ""
+        try:
+            if tenant and tenant.logo:
+                logo_url = tenant.logo.url
+        except Exception:
+            logo_url = ""
+
         context = {
-            "school_name": payment.tenant.name if payment.tenant else "",
-            "receipt_number": str(payment.payment_id)[:8].upper(),
+            "school_name": tenant.name if tenant else "",
+            "school_address": getattr(tenant, "address", "") or "",
+            "school_phone": getattr(tenant, "contact_phone", "") or "",
+            "school_email": getattr(tenant, "contact_email", "") or "",
+            "school_pan": getattr(tenant, "pan_number", "") or "",
+            "school_vat": getattr(tenant, "vat_number", "") or "",
+            "school_logo": logo_url,
+            "principal_name": getattr(tenant, "principal_name", "") or "",
+            "accountant_name": getattr(tenant, "accountant_name", "") or "",
+            "fiscal_year_bs": getattr(tenant, "fiscal_year_bs", "") or "",
+
+            # Bill identity
+            "bill_number": payment.bill_number or str(payment.payment_id)[:8].upper(),
+            "receipt_number": payment.bill_number or str(payment.payment_id)[:8].upper(),
+
+            # Customer (student / parent)
             "student_name": student_name,
             "student_id": str(getattr(student, "student_id", "") or ""),
             "class_name": str(student.academic_class) if getattr(student, "academic_class", None) else "",
+
+            # Payment
             "payment_date": payment.payment_date.strftime("%d %b %Y, %H:%M"),
-            "method": (payment.method or "").capitalize(),
+            "payment_date_bs": payment_date_bs,
+            "method": (payment.method or "").replace("_", " ").title(),
             "transaction_id": payment.transaction_id or "",
             "recorded_by": payment.recorded_by.get_full_name() if payment.recorded_by else "Admin",
+
+            # Line item
             "fee_title": fee_structure.name if fee_structure else "General Fee",
-            # FeeStructure has no academic_year field; fall back to frequency for context.
             "fee_period": getattr(fee_structure, "frequency", "") if fee_structure else "",
+
+            # Amounts
             "amount": f"{payment.amount:.2f}",
+            "amount_words": amount_words,
             "balance_due": balance_due,
-            "currency": "$",
+            "currency": currency_symbol,
             "generated_on": timezone.now().strftime("%d %b %Y %H:%M"),
         }
 

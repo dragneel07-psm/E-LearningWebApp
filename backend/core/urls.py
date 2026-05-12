@@ -15,6 +15,7 @@ from .views import (
     ReadyzView,
     MetricsView,
     JobStatusView,
+    SchoolProfileView,
 )
 from .views_saas import (
     SaasKPIView,
@@ -40,6 +41,7 @@ urlpatterns = [
     path('system-status/', SystemStatusView.as_view(), name='system-status'),
     path('tenant-check/', TenantCheckView.as_view(), name='tenant-check'),
     path('capabilities/', TenantCapabilitiesView.as_view(), name='tenant-capabilities'),
+    path('school-profile/', SchoolProfileView.as_view(), name='school-profile'),
     path('saas-kpi/', SaasKPIView.as_view(), name='saas-kpi'),
     path('saas-ai-usage/', SaasAIUsageView.as_view(), name='saas-ai-usage'),
     path('reset-admin-password/', TenantAdminPasswordResetView.as_view(), name='reset-admin-password'),
