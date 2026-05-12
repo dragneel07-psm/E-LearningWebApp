@@ -415,32 +415,42 @@ class PaymentViewSet(BillingIdempotencyMixin, BillingSchemaGuardMixin, TenantSco
 
     @action(detail=True, methods=["get"])
     def generate_receipt(self, request, pk=None):
-        payment = self.get_object()
+        from decimal import Decimal
 
-        # Compute remaining balance for this student fee
+        payment = self.get_object()
+        student = payment.student
+        student_fee = payment.student_fee
+        fee_structure = student_fee.fee_structure if student_fee else None
+
+        # Remaining balance for this student fee
         balance_due = "0.00"
-        if payment.student_fee:
-            sf = payment.student_fee
-            total_paid = sf.payments.aggregate(t=Sum("amount"))["t"] or 0
-            remaining = max(0, (sf.fee_structure.amount if sf.fee_structure else 0) - total_paid)
+        if student_fee:
+            total_paid = student_fee.payments.aggregate(t=Sum("amount"))["t"] or Decimal("0")
+            charged = Decimal(str(getattr(student_fee, "amount_due", None) or (fee_structure.amount if fee_structure else 0)))
+            remaining = charged - total_paid
+            if remaining < 0:
+                remaining = Decimal("0")
             balance_due = f"{remaining:.2f}"
 
+        # Student name — Student.user is db_constraint=False so it can be None.
+        try:
+            student_name = student.user.get_full_name() if student and student.user else ""
+        except Exception:
+            student_name = ""
+
         context = {
-            "school_name": payment.tenant.name,
+            "school_name": payment.tenant.name if payment.tenant else "",
             "receipt_number": str(payment.payment_id)[:8].upper(),
-            "student_name": payment.student.user.get_full_name(),
-            "student_id": payment.student.student_id,
-            "class_name": getattr(payment.student, "academic_class", None) and str(payment.student.academic_class) or "",
+            "student_name": student_name,
+            "student_id": str(getattr(student, "student_id", "") or ""),
+            "class_name": str(student.academic_class) if getattr(student, "academic_class", None) else "",
             "payment_date": payment.payment_date.strftime("%d %b %Y, %H:%M"),
-            "method": payment.method.capitalize(),
+            "method": (payment.method or "").capitalize(),
             "transaction_id": payment.transaction_id or "",
             "recorded_by": payment.recorded_by.get_full_name() if payment.recorded_by else "Admin",
-            "fee_title": payment.student_fee.fee_structure.name if payment.student_fee else "General Fee",
-            "fee_period": (
-                payment.student_fee.fee_structure.academic_year
-                if payment.student_fee and payment.student_fee.fee_structure
-                else ""
-            ),
+            "fee_title": fee_structure.name if fee_structure else "General Fee",
+            # FeeStructure has no academic_year field; fall back to frequency for context.
+            "fee_period": getattr(fee_structure, "frequency", "") if fee_structure else "",
             "amount": f"{payment.amount:.2f}",
             "balance_due": balance_due,
             "currency": "$",
