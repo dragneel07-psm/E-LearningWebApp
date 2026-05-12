@@ -4,7 +4,7 @@
 from django.urls import include, path
 from rest_framework.routers import DefaultRouter
 
-from .views import ExpenseViewSet, FeeStructureViewSet, FinanceDashboardViewSet, PaymentViewSet, StudentFeeViewSet
+from .views import ExpenseViewSet, FeeHeadViewSet, FeeStructureViewSet, FinanceDashboardViewSet, PaymentViewSet, StudentFeeViewSet
 from .views_reports import BillingReportViewSet
 from .views_discount import FeeDiscountViewSet
 from .views_ledger import LedgerAccountViewSet, LedgerEntryViewSet
@@ -21,6 +21,7 @@ from .views_nas import (
 
 router = DefaultRouter()
 router.register(r"fee-structures", FeeStructureViewSet)
+router.register(r"fee-heads", FeeHeadViewSet, basename="fee-head")
 router.register(r"student-fees", StudentFeeViewSet)
 router.register(r"payments", PaymentViewSet)
 router.register(r"expenses", ExpenseViewSet)

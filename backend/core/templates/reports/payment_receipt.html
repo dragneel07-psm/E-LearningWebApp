@@ -243,14 +243,38 @@
             </tr>
         </thead>
         <tbody>
-            <tr>
-                <td>1</td>
-                <td>
-                    {{ fee_title }}
-                    {% if fee_period %}<br><span style="font-size:8.5px;color:#6b7280;text-transform:capitalize;">{{ fee_period }}</span>{% endif %}
-                </td>
-                <td class="num">{{ currency }} {{ amount }}</td>
-            </tr>
+            {% if fee_heads %}
+                {% for h in fee_heads %}
+                    <tr>
+                        <td>{{ forloop.counter }}</td>
+                        <td>{{ h.name }}</td>
+                        <td class="num">{{ currency }} {{ h.amount }}</td>
+                    </tr>
+                {% endfor %}
+                {% if late_fee and late_fee != "0.00" %}
+                    <tr>
+                        <td>{{ fee_heads|length|add:"1" }}</td>
+                        <td>Late Fee Surcharge</td>
+                        <td class="num">{{ currency }} {{ late_fee }}</td>
+                    </tr>
+                {% endif %}
+            {% else %}
+                <tr>
+                    <td>1</td>
+                    <td>
+                        {{ fee_title }}
+                        {% if fee_period %}<br><span style="font-size:8.5px;color:#6b7280;text-transform:capitalize;">{{ fee_period }}</span>{% endif %}
+                    </td>
+                    <td class="num">{{ currency }} {{ amount }}</td>
+                </tr>
+                {% if late_fee and late_fee != "0.00" %}
+                    <tr>
+                        <td>2</td>
+                        <td>Late Fee Surcharge</td>
+                        <td class="num">{{ currency }} {{ late_fee }}</td>
+                    </tr>
+                {% endif %}
+            {% endif %}
             <tr class="total">
                 <td colspan="2">Total Paid ({{ method }})</td>
                 <td class="num">{{ currency }} {{ amount }}</td>

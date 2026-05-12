@@ -23,7 +23,7 @@ import {
     SelectValue,
 } from "@/components/ui/select";
 import { FeeStructure, AcademicClass } from '@/lib/api';
-import { DollarSign, CreditCard, Layers } from 'lucide-react';
+import { CreditCard, Layers, AlertCircle } from 'lucide-react';
 
 interface FeeStructureDialogProps {
     open: boolean;
@@ -38,6 +38,9 @@ export function FeeStructureDialog({ open, onOpenChange, onSave, editingStructur
     const [amount, setAmount] = useState<string>('');
     const [frequency, setFrequency] = useState<'monthly' | 'one_time' | 'annual' | 'term'>('monthly');
     const [targetClass, setTargetClass] = useState<string>('');
+    const [lateFeeType, setLateFeeType] = useState<'none' | 'flat' | 'percent'>('none');
+    const [lateFeeAmount, setLateFeeAmount] = useState<string>('0');
+    const [graceDays, setGraceDays] = useState<string>('0');
     const [isSubmitting, setIsSubmitting] = useState(false);
 
     useEffect(() => {
@@ -46,11 +49,17 @@ export function FeeStructureDialog({ open, onOpenChange, onSave, editingStructur
             setAmount(editingStructure.amount.toString());
             setFrequency(editingStructure.frequency);
             setTargetClass(editingStructure.academic_class?.toString() || '');
+            setLateFeeType(editingStructure.late_fee_type || 'none');
+            setLateFeeAmount((editingStructure.late_fee_amount ?? 0).toString());
+            setGraceDays((editingStructure.grace_days ?? 0).toString());
         } else {
             setName('');
             setAmount('');
             setFrequency('monthly');
             setTargetClass('');
+            setLateFeeType('none');
+            setLateFeeAmount('0');
+            setGraceDays('0');
         }
     }, [editingStructure, open]);
 
@@ -63,6 +72,9 @@ export function FeeStructureDialog({ open, onOpenChange, onSave, editingStructur
                 amount: parseFloat(amount),
                 frequency,
                 academic_class: (targetClass === 'all' || !targetClass) ? null : parseInt(targetClass),
+                late_fee_type: lateFeeType,
+                late_fee_amount: parseFloat(lateFeeAmount) || 0,
+                grace_days: parseInt(graceDays) || 0,
             });
         } finally {
             setIsSubmitting(false);
@@ -71,7 +83,7 @@ export function FeeStructureDialog({ open, onOpenChange, onSave, editingStructur
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="max-w-md border-slate-200 shadow-2xl">
+            <DialogContent className="max-w-lg border-slate-200 shadow-2xl max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
                     <div className="flex items-center gap-3 mb-2">
                         <div className="p-2 bg-emerald-50 rounded-lg">
@@ -102,9 +114,9 @@ export function FeeStructureDialog({ open, onOpenChange, onSave, editingStructur
 
                         <div className="grid grid-cols-2 gap-4">
                             <div className="space-y-2">
-                                <Label htmlFor="amount" className="text-xs font-bold uppercase tracking-wider text-slate-500">Amount ($)</Label>
+                                <Label htmlFor="amount" className="text-xs font-bold uppercase tracking-wider text-slate-500">Amount (Rs.)</Label>
                                 <div className="relative">
-                                    <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-slate-400">Rs.</span>
                                     <Input
                                         id="amount"
                                         type="number"
@@ -112,7 +124,7 @@ export function FeeStructureDialog({ open, onOpenChange, onSave, editingStructur
                                         value={amount}
                                         onChange={(e) => setAmount(e.target.value)}
                                         required
-                                        className="pl-9 border-slate-200 focus:ring-emerald-500/20 shadow-sm h-11"
+                                        className="pl-10 border-slate-200 focus:ring-emerald-500/20 shadow-sm h-11"
                                     />
                                 </div>
                             </div>
@@ -150,6 +162,54 @@ export function FeeStructureDialog({ open, onOpenChange, onSave, editingStructur
                             <p className="text-[10px] text-slate-400 italic mt-1">
                                 If specified, this fee will only be available for the selected class.
                             </p>
+                        </div>
+
+                        {/* Late Fee Policy — Phase C */}
+                        <div className="border border-amber-200 bg-amber-50/40 rounded-lg p-4 space-y-3">
+                            <div className="flex items-center gap-2">
+                                <AlertCircle className="h-4 w-4 text-amber-600" />
+                                <Label className="text-xs font-bold uppercase tracking-wider text-amber-700">Late Fee Policy</Label>
+                            </div>
+                            <p className="text-[11px] text-slate-500">
+                                Applied automatically by the nightly job once the grace period has passed.
+                            </p>
+                            <div className="grid grid-cols-3 gap-3">
+                                <div className="space-y-1">
+                                    <Label className="text-[10px] uppercase text-slate-500">Type</Label>
+                                    <Select value={lateFeeType} onValueChange={(v: any) => setLateFeeType(v)}>
+                                        <SelectTrigger className="h-9 text-xs"><SelectValue /></SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="none">None</SelectItem>
+                                            <SelectItem value="flat">Flat (Rs.)</SelectItem>
+                                            <SelectItem value="percent">% of Balance</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                                <div className="space-y-1">
+                                    <Label className="text-[10px] uppercase text-slate-500">
+                                        {lateFeeType === 'percent' ? 'Percent (0-100)' : 'Amount (Rs.)'}
+                                    </Label>
+                                    <Input
+                                        type="number"
+                                        step="0.01"
+                                        value={lateFeeAmount}
+                                        onChange={(e) => setLateFeeAmount(e.target.value)}
+                                        disabled={lateFeeType === 'none'}
+                                        className="h-9 text-xs"
+                                    />
+                                </div>
+                                <div className="space-y-1">
+                                    <Label className="text-[10px] uppercase text-slate-500">Grace Days</Label>
+                                    <Input
+                                        type="number"
+                                        min={0}
+                                        value={graceDays}
+                                        onChange={(e) => setGraceDays(e.target.value)}
+                                        disabled={lateFeeType === 'none'}
+                                        className="h-9 text-xs"
+                                    />
+                                </div>
+                            </div>
                         </div>
                     </div>
 

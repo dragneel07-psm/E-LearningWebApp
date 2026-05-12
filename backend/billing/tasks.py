@@ -43,3 +43,13 @@ def check_overdue_fees():
         count += 1
         
     return f"Sent {count} fee reminders."
+
+
+@shared_task(name="billing.apply_late_fees")
+def apply_late_fees_task():
+    """
+    Nightly Phase C task: scan StudentFees past due_date+grace_days and
+    accrue the FeeStructure's late-fee policy onto amount_due.
+    """
+    from .late_fees import apply_late_fees
+    return apply_late_fees()

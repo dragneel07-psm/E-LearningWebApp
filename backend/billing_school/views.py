@@ -88,6 +88,65 @@ class FeeStructureViewSet(BillingSchemaGuardMixin, TenantScopedQuerysetMixin, vi
         )
 
 
+class FeeHeadViewSet(BillingSchemaGuardMixin, TenantScopedQuerysetMixin, viewsets.ModelViewSet):
+    """
+    Phase C: CRUD for fee heads (line items under a FeeStructure).
+
+    Frontend posts ?fee_structure=<uuid> to filter the list when editing one
+    structure's heads. The viewset auto-scopes tenant on writes.
+    """
+    require_tenant_schema = True
+    allow_unscoped_for_saas = False
+    serializer_class = None  # bound in __init__ to avoid import cycle on module load
+    permission_classes = [IsSchoolFinanceManager]
+
+    def __init__(self, *args, **kwargs):
+        from billing.serializers import FeeHeadSerializer
+        from billing.models_school import FeeHead
+        self.serializer_class = FeeHeadSerializer
+        self.queryset = FeeHead.objects.all()
+        super().__init__(*args, **kwargs)
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        structure_id = self.request.query_params.get("fee_structure")
+        if structure_id:
+            qs = qs.filter(fee_structure_id=structure_id)
+        return qs.order_by("sort_order", "name")
+
+    def perform_create(self, serializer):
+        from billing.models_school import FeeStructure
+        tenant = self.request.user.tenant
+        # Enforce the fee_structure belongs to this tenant.
+        structure = serializer.validated_data.get("fee_structure")
+        if structure and getattr(structure, "tenant_id", None) != tenant.id:
+            from rest_framework.exceptions import PermissionDenied
+            raise PermissionDenied("Fee structure does not belong to your tenant.")
+        head = serializer.save(tenant=tenant)
+        record_audit_event(
+            action="billing.fee_head_created",
+            user=self.request.user, request=self.request,
+            details={"head_id": str(head.head_id), "fee_structure_id": str(head.fee_structure_id),
+                     "name": head.name, "amount": str(head.amount)},
+        )
+
+    def perform_update(self, serializer):
+        head = serializer.save()
+        record_audit_event(
+            action="billing.fee_head_updated",
+            user=self.request.user, request=self.request,
+            details={"head_id": str(head.head_id), "name": head.name, "amount": str(head.amount)},
+        )
+
+    def perform_destroy(self, instance):
+        payload = {"head_id": str(instance.head_id), "name": instance.name, "amount": str(instance.amount)}
+        super().perform_destroy(instance)
+        record_audit_event(
+            action="billing.fee_head_deleted",
+            user=self.request.user, request=self.request, details=payload,
+        )
+
+
 class StudentFeeViewSet(BillingIdempotencyMixin, BillingSchemaGuardMixin, TenantScopedQuerysetMixin, viewsets.ModelViewSet):
     require_tenant_schema = True
     allow_unscoped_for_saas = False
@@ -440,6 +499,23 @@ class PaymentViewSet(BillingIdempotencyMixin, BillingSchemaGuardMixin, TenantSco
                 remaining = Decimal("0")
             balance_due = f"{remaining:.2f}"
 
+        # Fee-head breakdown for the line items section (Phase C).
+        fee_heads = []
+        if fee_structure and hasattr(fee_structure, "heads"):
+            try:
+                for h in fee_structure.heads.all():
+                    fee_heads.append({
+                        "name": h.name,
+                        "amount": f"{h.amount:.2f}",
+                    })
+            except Exception:
+                fee_heads = []
+
+        # Late fee surcharge (if accrued).
+        late_fee = "0.00"
+        if student_fee:
+            late_fee = f"{Decimal(str(getattr(student_fee, 'late_fee_applied', 0) or 0)):.2f}"
+
         # Student name — Student.user is db_constraint=False so it can be None.
         try:
             student_name = student.user.get_full_name() if student and student.user else ""
@@ -498,6 +574,8 @@ class PaymentViewSet(BillingIdempotencyMixin, BillingSchemaGuardMixin, TenantSco
             # Line item
             "fee_title": fee_structure.name if fee_structure else "General Fee",
             "fee_period": getattr(fee_structure, "frequency", "") if fee_structure else "",
+            "fee_heads": fee_heads,            # head-wise breakdown (Phase C)
+            "late_fee": late_fee,              # late surcharge (Phase C)
 
             # Amounts
             "amount": f"{payment.amount:.2f}",

@@ -77,10 +77,66 @@ class FeeStructure(SchemaScopedBillingModel, models.Model):
         default="monthly",
     )
 
+    # Late-fee policy (Phase C). When set, the apply_late_fees task adds the
+    # computed late fee to overdue StudentFees once grace_days have elapsed.
+    LATE_FEE_TYPE_CHOICES = (
+        ("none", "No Late Fee"),
+        ("flat", "Flat Amount"),
+        ("percent", "Percent of Balance"),
+    )
+    late_fee_type = models.CharField(max_length=10, choices=LATE_FEE_TYPE_CHOICES, default="none")
+    late_fee_amount = models.DecimalField(
+        max_digits=10, decimal_places=2, default=0,
+        help_text="Flat NPR amount or percent (0–100) depending on late_fee_type.",
+    )
+    grace_days = models.PositiveIntegerField(
+        default=0,
+        help_text="Days after due_date before the late fee kicks in.",
+    )
+
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
         return f"{self.name} - {self.amount}"
+
+
+class FeeHead(SchemaScopedBillingModel, models.Model):
+    """
+    A single line on a fee structure (Phase C).
+
+    Schools rarely bill one big "Tuition Q1 = Rs 12,000" — they list:
+      Admission Rs 500, Tuition Rs 8,000, Library Rs 300, Lab Rs 200 …
+    Each head can be linked to a Chart of Accounts income account so the
+    accountant can see head-wise income on reports.
+    """
+
+    SCHEMA_SCOPE = "tenant"
+    head_id = models.UUIDField(primary_key=True, default=uuid_lib.uuid4, editable=False)
+    tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE, related_name="fee_heads", db_constraint=False)
+    fee_structure = models.ForeignKey(
+        FeeStructure, on_delete=models.CASCADE, related_name="heads", db_constraint=False,
+    )
+    name = models.CharField(max_length=80, help_text="e.g. Admission, Tuition, Library, Transport")
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    sort_order = models.PositiveIntegerField(default=0)
+    coa_account = models.ForeignKey(
+        "billing_school.ChartOfAccount",
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name="fee_heads",
+        db_constraint=False,
+        help_text="Income account this head posts to (optional).",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["sort_order", "name"]
+        indexes = [
+            models.Index(fields=["tenant", "fee_structure"], name="bill_feehead_t_struct_idx"),
+        ]
+
+    def __str__(self):
+        return f"{self.fee_structure.name} – {self.name}"
 
 
 class StudentFee(SchemaScopedBillingModel, models.Model):
@@ -112,6 +168,12 @@ class StudentFee(SchemaScopedBillingModel, models.Model):
         null=True, blank=True, related_name='applied_fees', db_constraint=False,
     )
     discount_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+
+    # Late fee already applied to this fee (Phase C). Tracked separately so
+    # the apply_late_fees task is idempotent and you can see the original
+    # charge vs the late-fee surcharge.
+    late_fee_applied = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    late_fee_applied_at = models.DateTimeField(null=True, blank=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

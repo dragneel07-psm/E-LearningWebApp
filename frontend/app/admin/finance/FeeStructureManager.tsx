@@ -10,12 +10,13 @@ import {
     Plus, Receipt, Trash2, Edit,
     CreditCard, DollarSign, Calendar,
     Loader2, AlertCircle, Search,
-    ArrowUpRight, Users, Settings2
+    ArrowUpRight, Users, Settings2, Layers
 } from 'lucide-react';
 import { billingAPI, academicAPI, FeeStructure, AcademicClass } from '@/lib/api';
 import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
 import { FeeStructureDialog } from './FeeStructureDialog';
+import { FeeHeadsDialog } from './FeeHeadsDialog';
 
 export function FeeStructureManager() {
     const [loading, setLoading] = useState(true);
@@ -23,6 +24,7 @@ export function FeeStructureManager() {
     const [classes, setClasses] = useState<AcademicClass[]>([]);
     const [isDialogOpen, setIsDialogOpen] = useState(false);
     const [editingStructure, setEditingStructure] = useState<FeeStructure | null>(null);
+    const [headsTarget, setHeadsTarget] = useState<FeeStructure | null>(null);
     const [searchTerm, setSearchTerm] = useState('');
 
     useEffect(() => {
@@ -149,10 +151,29 @@ export function FeeStructureManager() {
                                                 </Badge>
                                             </td>
                                             <td className="px-6 py-4 font-black text-slate-900">
-                                                ${s.amount.toLocaleString()}
+                                                Rs. {s.amount.toLocaleString()}
+                                                {s.heads && s.heads.length > 0 && (
+                                                    <div className="text-[10px] font-medium text-slate-500 mt-0.5">
+                                                        {s.heads.length} head{s.heads.length === 1 ? '' : 's'}
+                                                    </div>
+                                                )}
+                                                {s.late_fee_type && s.late_fee_type !== 'none' && (
+                                                    <div className="text-[10px] font-medium text-amber-600 mt-0.5">
+                                                        Late fee: {s.late_fee_type === 'flat' ? `Rs. ${s.late_fee_amount}` : `${s.late_fee_amount}%`} after {s.grace_days}d
+                                                    </div>
+                                                )}
                                             </td>
                                             <td className="px-6 py-4 text-right">
                                                 <div className="flex justify-end gap-1 opacity-10 md:opacity-0 group-hover:opacity-100 transition-opacity">
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="icon"
+                                                        className="h-8 w-8 text-slate-400 hover:text-violet-600 hover:bg-violet-50"
+                                                        onClick={() => setHeadsTarget(s)}
+                                                        title="Manage fee head breakdown"
+                                                    >
+                                                        <Layers className="h-4 w-4" />
+                                                    </Button>
                                                     <Button
                                                         variant="ghost"
                                                         size="icon"
@@ -233,6 +254,12 @@ export function FeeStructureManager() {
                 onSave={handleSave}
                 editingStructure={editingStructure}
                 classes={classes}
+            />
+
+            <FeeHeadsDialog
+                open={!!headsTarget}
+                onOpenChange={(o) => { if (!o) { setHeadsTarget(null); loadData(); } }}
+                structure={headsTarget}
             />
         </div>
     );

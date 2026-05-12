@@ -69,6 +69,10 @@ try:
             "task": "projects.scan_due_soon_projects",
             "schedule": crontab(hour=9, minute=0),  # daily at 9 AM
         },
+        "billing-apply-late-fees": {
+            "task": "billing.apply_late_fees",
+            "schedule": crontab(hour=2, minute=30),  # daily at 02:30
+        },
     }
 except Exception:
     pass

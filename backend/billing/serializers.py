@@ -4,6 +4,7 @@
 from rest_framework import serializers
 from decimal import Decimal, InvalidOperation
 from .models import Subscription, SubscriptionPlan, SubscriptionPlanHistory, Invoice, FeeStructure, StudentFee, Payment, Expense
+from .models_school import FeeHead
 from core.utils.plan_enforcement import (
     sync_subscription_limits_with_plan,
     sync_tenant_with_plan,
@@ -163,12 +164,27 @@ class InvoiceSerializer(serializers.ModelSerializer):
 # SCHOOL FINANCE SERIALIZERS
 # ==========================================
 
+class FeeHeadSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = FeeHead
+        fields = ['head_id', 'fee_structure', 'name', 'amount', 'sort_order', 'coa_account', 'created_at']
+        read_only_fields = ['head_id', 'tenant', 'created_at']
+
+
 class FeeStructureSerializer(serializers.ModelSerializer):
     class_name = serializers.SerializerMethodField()
+    heads = FeeHeadSerializer(many=True, read_only=True)
+    heads_total = serializers.SerializerMethodField()
 
     def get_class_name(self, obj):
         cls = getattr(obj, 'academic_class', None)
         return str(cls) if cls else ''
+
+    def get_heads_total(self, obj):
+        try:
+            return float(sum(Decimal(str(h.amount or 0)) for h in obj.heads.all()))
+        except Exception:
+            return 0.0
 
     class Meta:
         model = FeeStructure

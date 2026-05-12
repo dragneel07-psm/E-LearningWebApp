@@ -1290,6 +1290,16 @@ export interface Attendance {
     subject_name?: string; // Correctly maps to backend
 }
 
+export interface FeeHead {
+    head_id: string;
+    fee_structure: string;
+    name: string;
+    amount: number;
+    sort_order: number;
+    coa_account?: string | null;
+    created_at: string;
+}
+
 export interface FeeStructure {
     fee_id: string;
     tenant: string;
@@ -1297,6 +1307,13 @@ export interface FeeStructure {
     amount: number;
     academic_class?: number | null;
     frequency: 'monthly' | 'one_time' | 'annual' | 'term';
+    // Phase C: late-fee policy
+    late_fee_type: 'none' | 'flat' | 'percent';
+    late_fee_amount: number;
+    grace_days: number;
+    // Phase C: head-wise breakdown (read-only nested)
+    heads?: FeeHead[];
+    heads_total?: number;
     created_at: string;
 }
 
@@ -1312,6 +1329,9 @@ export interface StudentFee {
     balance?: number;
     due_date: string;
     status: 'pending' | 'partial' | 'paid' | 'overdue' | 'waived';
+    // Phase C: late-fee surcharge tracking
+    late_fee_applied?: number;
+    late_fee_applied_at?: string | null;
     created_at: string;
     updated_at: string;
 }
@@ -2677,6 +2697,20 @@ export const billingAPI = {
 
     // Finance Management
     getFeeStructures: () => fetchAllPages<FeeStructure>(`${BILLING_SCHOOL_BASE}/fee-structures/`),
+
+    // Fee heads (Phase C) — line items under a fee structure.
+    getFeeHeads: (structureId: string) =>
+        fetchAllPages<FeeHead>(`${BILLING_SCHOOL_BASE}/fee-heads/?fee_structure=${structureId}`),
+    createFeeHead: (data: Partial<FeeHead>) =>
+        apiRequest<FeeHead>(`${BILLING_SCHOOL_BASE}/fee-heads/`, {
+            method: 'POST', body: JSON.stringify(data),
+        }),
+    updateFeeHead: (id: string, data: Partial<FeeHead>) =>
+        apiRequest<FeeHead>(`${BILLING_SCHOOL_BASE}/fee-heads/${id}/`, {
+            method: 'PATCH', body: JSON.stringify(data),
+        }),
+    deleteFeeHead: (id: string) =>
+        apiRequest<void>(`${BILLING_SCHOOL_BASE}/fee-heads/${id}/`, { method: 'DELETE' }),
     createFeeStructure: (data: Partial<FeeStructure>) => apiRequest<FeeStructure>(`${BILLING_SCHOOL_BASE}/fee-structures/`, {
         method: 'POST',
         body: JSON.stringify(data)
