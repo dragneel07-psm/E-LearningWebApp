@@ -3,14 +3,15 @@
 // via any medium, is strictly prohibited. Proprietary and confidential.
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { SISDashboardOverview } from './SISDashboardOverview';
 import { IncidentLog } from './IncidentLog';
 import { HealthRecords } from './HealthRecords';
 import { DocumentsManager } from './DocumentsManager';
 import { StudentLeaveManager } from './StudentLeaveManager';
 import { ComplaintManager } from './ComplaintManager';
-import { LayoutDashboard, AlertTriangle, Heart, FileText, CalendarClock, MessageSquareWarning } from 'lucide-react';
+import { LayoutDashboard, AlertTriangle, Heart, FileText, CalendarClock, MessageSquareWarning, ShieldOff } from 'lucide-react';
+import { getUser } from '@/lib/auth';
 
 const TABS = [
     { id: 'overview', label: 'Overview', icon: LayoutDashboard },
@@ -25,6 +26,36 @@ type TabId = typeof TABS[number]['id'];
 
 export default function SISPage() {
     const [activeTab, setActiveTab] = useState<TabId>('overview');
+    const [authorized, setAuthorized] = useState<boolean | null>(null);
+
+    useEffect(() => {
+        // Backend SIS endpoints all require role=admin (or saas_admin). Skip
+        // mounting any sub-tab for staff sub-roles — they would all 403 and
+        // spam the console with permission_denied errors.
+        const role = (getUser()?.role || '').toLowerCase();
+        setAuthorized(role === 'admin' || role === 'saas_admin');
+    }, []);
+
+    if (authorized === false) {
+        return (
+            <div className="p-6">
+                <div className="max-w-md mx-auto mt-16 text-center space-y-4">
+                    <div className="mx-auto h-14 w-14 rounded-full bg-amber-100 flex items-center justify-center">
+                        <ShieldOff className="h-6 w-6 text-amber-600" />
+                    </div>
+                    <h1 className="text-xl font-bold text-slate-900">SIS access is admin-only</h1>
+                    <p className="text-sm text-slate-500">
+                        Student Information System (health records, incidents, documents, leaves, complaints)
+                        is restricted to school admins. Ask your admin to grant access or open a different module.
+                    </p>
+                </div>
+            </div>
+        );
+    }
+
+    if (authorized === null) {
+        return <div className="p-6"><div className="animate-pulse h-6 w-48 bg-slate-100 rounded" /></div>;
+    }
 
     return (
         <div className="p-6 space-y-6">
