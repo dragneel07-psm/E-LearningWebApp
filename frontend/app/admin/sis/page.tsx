@@ -29,11 +29,17 @@ export default function SISPage() {
     const [authorized, setAuthorized] = useState<boolean | null>(null);
 
     useEffect(() => {
-        // Backend SIS endpoints all require role=admin (or saas_admin). Skip
-        // mounting any sub-tab for staff sub-roles — they would all 403 and
-        // spam the console with permission_denied errors.
-        const role = (getUser()?.role || '').toLowerCase();
-        setAuthorized(role === 'admin' || role === 'saas_admin');
+        // Backend SIS endpoints accept admin / saas_admin and staff users
+        // whose staff_role is 'receptionist' (front-desk handles SIS work).
+        // Anyone else would 403 on every sub-tab.
+        const u = getUser() as { role?: string; staff_role?: string } | null;
+        const role = (u?.role || '').toLowerCase();
+        const staffRole = (u?.staff_role || '').toLowerCase();
+        setAuthorized(
+            role === 'admin'
+            || role === 'saas_admin'
+            || (role === 'staff' && staffRole === 'receptionist')
+        );
     }, []);
 
     if (authorized === false) {

@@ -24,11 +24,16 @@ export function SISDashboardOverview() {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        // SIS stats are admin/saas-admin only — skip the call (and the noisy 403)
-        // for other roles. Staff sub-roles like accountant landing on this page
-        // by URL still see an empty dashboard rather than a console error.
-        const role = (getUser()?.role || '').toLowerCase();
-        if (role !== 'admin' && role !== 'saas_admin') {
+        // Mirror backend IsSISStaff: admin / saas_admin OR staff with
+        // staff_role = receptionist. Skip the call for everyone else so
+        // we don't spam the console with permission_denied errors.
+        const u = getUser() as { role?: string; staff_role?: string } | null;
+        const role = (u?.role || '').toLowerCase();
+        const staffRole = (u?.staff_role || '').toLowerCase();
+        const allowed = role === 'admin'
+            || role === 'saas_admin'
+            || (role === 'staff' && staffRole === 'receptionist');
+        if (!allowed) {
             setLoading(false);
             return;
         }

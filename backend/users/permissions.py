@@ -60,3 +60,22 @@ class IsSaaSAdminOrStaff(permissions.BasePermission):
             request.user and request.user.is_authenticated
             and request.user.role in ('saas_admin', 'saas_staff')
         )
+
+
+class IsSISStaff(permissions.BasePermission):
+    """
+    Student Information System access: admin / saas_admin or any staff
+    user whose staff_role is 'receptionist' (front-desk staff routinely
+    handle health records, leave requests, document issuance and
+    incident logging on the admin's behalf).
+    """
+    def has_permission(self, request, view):
+        user = getattr(request, "user", None)
+        if not user or not user.is_authenticated:
+            return False
+        role = (getattr(user, "role", "") or "").lower()
+        if role in ("admin", "saas_admin"):
+            return True
+        if role == "staff" and (getattr(user, "staff_role", "") or "").lower() == "receptionist":
+            return True
+        return False

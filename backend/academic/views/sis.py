@@ -18,7 +18,7 @@ from rest_framework.response import Response
 from billing.shared_views import BillingSchemaGuardMixin
 from core.mixins import TenantScopedQuerysetMixin
 from core.utils.audit import record_audit_event
-from users.permissions import IsAdminOrSaaSAdmin
+from users.permissions import IsAdminOrSaaSAdmin, IsSISStaff
 
 from ..models.discipline import DisciplinaryIncident
 from ..models.documents import StudentDocument
@@ -80,7 +80,7 @@ class StudentDocumentSerializer(serializers.ModelSerializer):
 class _SISBase(BillingSchemaGuardMixin, TenantScopedQuerysetMixin, viewsets.ModelViewSet):
     require_tenant_schema = True
     allow_unscoped_for_saas = False
-    permission_classes = [IsAdminOrSaaSAdmin]
+    permission_classes = [IsSISStaff]
 
     def _tenant(self):
         return getattr(self.request.user, "tenant", None)
@@ -289,7 +289,7 @@ class StudentDocumentViewSet(_SISBase):
 
 class SISDashboardViewSet(BillingSchemaGuardMixin, viewsets.ViewSet):
     require_tenant_schema = True
-    permission_classes = [IsAdminOrSaaSAdmin]
+    permission_classes = [IsSISStaff]
 
     def _tenant(self, request):
         return getattr(request.user, "tenant", None)
