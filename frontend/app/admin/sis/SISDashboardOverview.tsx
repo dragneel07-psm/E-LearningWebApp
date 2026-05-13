@@ -6,6 +6,7 @@
 import { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { sisAPI, SISDashboardStats } from '@/lib/api';
+import { getUser } from '@/lib/auth';
 import { Heart, AlertTriangle, FileText, ArrowRightLeft, ShieldAlert } from 'lucide-react';
 
 const INCIDENT_TYPE_LABELS: Record<string, string> = {
@@ -23,6 +24,14 @@ export function SISDashboardOverview() {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
+        // SIS stats are admin/saas-admin only — skip the call (and the noisy 403)
+        // for other roles. Staff sub-roles like accountant landing on this page
+        // by URL still see an empty dashboard rather than a console error.
+        const role = (getUser()?.role || '').toLowerCase();
+        if (role !== 'admin' && role !== 'saas_admin') {
+            setLoading(false);
+            return;
+        }
         sisAPI.getStats()
             .then(setStats)
             .catch(() => null)
