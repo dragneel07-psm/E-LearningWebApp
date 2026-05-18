@@ -86,8 +86,9 @@ class UserAccountViewSet(TenantScopedQuerysetMixin, viewsets.ModelViewSet):
             user.set_password(new_password)
             user.save()
             return Response({'message': 'Password updated successfully.'})
-        except Exception as e:
-            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        except Exception:
+            logger.exception("Password change failed")
+            return Response({'error': 'Password update failed.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     @action(detail=False, methods=['post'], permission_classes=[permissions.IsAuthenticated])
     def push_token(self, request):
@@ -626,18 +627,16 @@ class SaasStaffViewSet(viewsets.ViewSet):
         except UserAccount.DoesNotExist:
             return Response({'error': 'Staff member not found.'}, status=status.HTTP_404_NOT_FOUND)
 
-        # Only allow toggling is_active, updating name fields, and assigning saas sub-role
-        allowed = {k: v for k, v in request.data.items() if k in ('is_active', 'first_name', 'last_name', 'saas_staff_role')}
-        for field, value in allowed.items():
-            setattr(user, field, value)
-        user.save(update_fields=list(allowed.keys()))
+        serializer = SaasStaffSerializer(user, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
         record_audit_event(
             action="users.saas_staff_updated",
             user=request.user,
             request=request,
-            details={"staff_email": user.email, "changes": allowed},
+            details={"staff_email": user.email, "changes": serializer.validated_data},
         )
-        return Response(SaasStaffSerializer(user).data)
+        return Response(serializer.data)
 
     def destroy(self, request, pk=None):
         try:

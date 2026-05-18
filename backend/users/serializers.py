@@ -2,6 +2,7 @@
 # Unauthorized copying, modification, or distribution of this file,
 # via any medium, is strictly prohibited. Proprietary and confidential.
 # users/serializers.py
+import logging
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
 from django.conf import settings
@@ -18,6 +19,8 @@ from rest_framework_simplejwt.settings import api_settings
 from rest_framework_simplejwt.tokens import AccessToken, RefreshToken as _RefreshToken
 from rest_framework.exceptions import AuthenticationFailed
 from .token_policy import role_token_lifetimes
+
+logger = logging.getLogger(__name__)
 
 def _resolved_tenant(user):
     try:
@@ -237,10 +240,8 @@ class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
                 'tenant_schema': _tenant_claims(user).get('tenant_schema'),
                 'tenant_features': _safe_tenant_features(user),
             }
-        except Exception as e:
-            import sys, traceback
-            print(f"DEBUG: Login validation failed during profile attachment: {e}", file=sys.stderr)
-            traceback.print_exc(file=sys.stderr)
+        except Exception:
+            logger.exception("Login validation failed during profile attachment")
             # We don't want to crash the whole login if just plan features fail, 
             # but here it's better to log the exact cause of 500.
         

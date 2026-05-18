@@ -14,22 +14,25 @@ import {
 import { setTokens, removeTokens, isAuthenticated, getAccessToken } from '@/lib/auth';
 import { getTenantFromSubdomain } from '@/lib/tenant';
 
+const COOKIE_DOMAIN = process.env.NEXT_PUBLIC_COOKIE_DOMAIN || '.manyaltech.com';
+const BASE_DOMAIN = COOKIE_DOMAIN.replace(/^\./, '');
+
 function setTenantCookie(tenantId: string) {
     if (typeof window === 'undefined') return;
     const isSecure = window.location.protocol === 'https:';
     const host = (window.location.hostname || '').trim().toLowerCase();
     const useSharedManyaltechDomain =
-        tenantId === 'public' && (host === 'manyaltech.com' || host === 'www.manyaltech.com');
+        tenantId === 'public' && (host === BASE_DOMAIN || host === `www.${BASE_DOMAIN}`);
     const encodedTenantId = encodeURIComponent(tenantId);
     const secureAttr = isSecure ? 'secure; ' : '';
 
     if (useSharedManyaltechDomain) {
         // Canonical public SaaS cookie: shared domain only.
         document.cookie = `tenant_id=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT`;
-        document.cookie = `tenant_id=${encodedTenantId}; path=/; domain=.manyaltech.com; ${secureAttr}samesite=lax`;
+        document.cookie = `tenant_id=${encodedTenantId}; path=/; domain=${COOKIE_DOMAIN}; ${secureAttr}samesite=lax`;
     } else {
         // Canonical tenant/local cookie: host-scoped only.
-        document.cookie = `tenant_id=; path=/; domain=.manyaltech.com; expires=Thu, 01 Jan 1970 00:00:00 GMT`;
+        document.cookie = `tenant_id=; path=/; domain=${COOKIE_DOMAIN}; expires=Thu, 01 Jan 1970 00:00:00 GMT`;
         document.cookie = `tenant_id=${encodedTenantId}; path=/; ${secureAttr}samesite=lax`;
     }
 }

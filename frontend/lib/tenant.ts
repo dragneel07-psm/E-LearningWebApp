@@ -9,9 +9,11 @@ const MANAGED_HOST_SUFFIXES = [
     '.up.railway.app',
 ];
 
+const _BASE_DOMAIN = (process.env.NEXT_PUBLIC_COOKIE_DOMAIN || '.manyaltech.com').replace(/^\./, '');
+
 const DEFAULT_PUBLIC_HOSTS = [
-    'manyaltech.com',
-    'www.manyaltech.com',
+    _BASE_DOMAIN,
+    `www.${_BASE_DOMAIN}`,
 ];
 
 function normalizeHostname(hostname: string): string {
