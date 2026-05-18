@@ -2,7 +2,7 @@
 // Unauthorized copying, modification, or distribution of this file,
 // via any medium, is strictly prohibited. Proprietary and confidential.
 import axios from 'axios';
-import { getAccessToken } from '@/lib/auth';
+import { getAccessToken, getRefreshToken, setTokens, removeTokens } from '@/lib/auth';
 import { getTenantFromSubdomain } from '@/lib/tenant';
 
 function normalizeApiBaseUrl(rawUrl: string): string {
@@ -91,12 +91,67 @@ api.interceptors.request.use((config) => {
     return config;
 });
 
-// Add response interceptor for 401 (Refresh Token Flow could be added here later)
+let isRefreshing = false;
+let failedQueue: Array<{
+    resolve: (token: string) => void;
+    reject: (err: unknown) => void;
+}> = [];
+
+function processQueue(error: unknown, token: string | null) {
+    failedQueue.forEach((prom) => {
+        if (error) {
+            prom.reject(error);
+        } else {
+            prom.resolve(token!);
+        }
+    });
+    failedQueue = [];
+}
+
 api.interceptors.response.use(
     (response) => response,
     async (error) => {
-        // If 401 and we have a refresh token (TODO: Implement refresh logic)
-        return Promise.reject(error);
+        const originalRequest = error.config;
+
+        if (error.response?.status !== 401 || originalRequest._retry) {
+            return Promise.reject(error);
+        }
+
+        const refreshToken = getRefreshToken();
+        if (!refreshToken) {
+            removeTokens();
+            return Promise.reject(error);
+        }
+
+        if (isRefreshing) {
+            return new Promise<string>((resolve, reject) => {
+                failedQueue.push({ resolve, reject });
+            }).then((token) => {
+                originalRequest.headers.Authorization = `Bearer ${token}`;
+                return api(originalRequest);
+            });
+        }
+
+        originalRequest._retry = true;
+        isRefreshing = true;
+
+        try {
+            const { data } = await axios.post(
+                `${API_URL}/api/users/token/refresh/`,
+                { refresh: refreshToken },
+            );
+            const newAccess: string = data.access;
+            setTokens(newAccess, refreshToken);
+            originalRequest.headers.Authorization = `Bearer ${newAccess}`;
+            processQueue(null, newAccess);
+            return api(originalRequest);
+        } catch (refreshError) {
+            processQueue(refreshError, null);
+            removeTokens();
+            return Promise.reject(refreshError);
+        } finally {
+            isRefreshing = false;
+        }
     }
 );
 

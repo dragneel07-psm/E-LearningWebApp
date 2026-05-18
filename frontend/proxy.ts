@@ -21,7 +21,7 @@ const PUBLIC_PATHS = [
     '/verify-email',
     '/public',
     '/forgot-password',
-    '/debug-auth',
+    ...(process.env.NODE_ENV !== 'production' ? ['/debug-auth'] : []),
     '/school',
     '/manifest.json',
     '/sw.js',

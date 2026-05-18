@@ -2,6 +2,7 @@
 # Unauthorized copying, modification, or distribution of this file,
 # via any medium, is strictly prohibited. Proprietary and confidential.
 # Forced reload - V2
+import logging
 from rest_framework import viewsets, status, permissions
 from rest_framework.decorators import action, api_view, permission_classes, throttle_classes
 from rest_framework.response import Response
@@ -59,6 +60,8 @@ from .serializers import AITokenBudgetSerializer, AITokenBudgetCreateSerializer
 from .services.bkt_service import BKTService
 from .services.token_budget_service import TokenBudgetService, TokenBudgetExceeded
 
+logger = logging.getLogger(__name__)
+
 class StudyEventViewSet(TenantScopedQuerysetMixin, viewsets.ModelViewSet):
     """
     Manage student study schedule.
@@ -106,16 +109,19 @@ class StudyEventViewSet(TenantScopedQuerysetMixin, viewsets.ModelViewSet):
             })
         except Student.DoesNotExist:
             return Response({'error': 'Student profile not found'}, status=404)
-        except Exception as e:
+        except Exception:
             logger.exception('study planner generate error')
-            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response({'error': 'Failed to generate study plan.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     @action(detail=False, methods=['get'])
     def summary(self, request):
         """Return a preview of what the AI planner found — without creating events."""
         from ai_engine.services.study_planner_service import StudyPlannerService
         db_alias = getattr(request, 'db_alias', 'default')
-        days = int(request.query_params.get('days', 7))
+        try:
+            days = int(request.query_params.get('days', 7))
+        except (TypeError, ValueError):
+            return Response({'error': 'days must be an integer'}, status=status.HTTP_400_BAD_REQUEST)
         try:
             student = Student.objects.using(db_alias).get(user=request.user)
             service = StudyPlannerService(db_alias=db_alias)
@@ -141,14 +147,13 @@ class AIInteractionLogViewSet(TenantScopedQuerysetMixin, viewsets.ReadOnlyModelV
     permission_classes = [IsAuthenticated]
     tenant_field = 'tenant'
 
-class StudentAIReportViewSet(viewsets.ReadOnlyModelViewSet):
+class StudentAIReportViewSet(TenantScopedQuerysetMixin, viewsets.ReadOnlyModelViewSet):
     queryset = StudentAIReport.objects.all()
     serializer_class = StudentAIReportSerializer
     permission_classes = [permissions.IsAuthenticated]
+    tenant_field = 'tenant'
 
     def get_queryset(self):
-        # Allow simple filtering if needed (though TenantScoped handles tenant isolation ideally)
-        # Assuming we might want to ensure tenant isolation manually if mixin not used here
         queryset = super().get_queryset()
         student_id = self.request.query_params.get('student')
         if student_id:
@@ -203,10 +208,9 @@ class LearningPathViewSet(TenantScopedQuerysetMixin, viewsets.ModelViewSet):
             serializer = self.get_serializer(path)
             return Response(serializer.data, status=status.HTTP_201_CREATED)
             
-        except Exception as e:
-            import traceback
-            traceback.print_exc()
-            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        except Exception:
+            logger.exception('learning path generate error')
+            return Response({'error': 'Failed to generate learning path.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     @action(detail=False, methods=['get'])
     def active(self, request):
@@ -226,13 +230,9 @@ class LearningPathViewSet(TenantScopedQuerysetMixin, viewsets.ModelViewSet):
             return Response(serializer.data)
         except Student.DoesNotExist:
             return Response({'error': 'Student not found'}, status=404)
-        except Exception as e:
-            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-            
-        except Exception as e:
-            import traceback
-            traceback.print_exc()
-            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        except Exception:
+            logger.exception('active learning path error')
+            return Response({'error': 'Failed to retrieve active learning path.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 class LearningNodeViewSet(TenantScopedQuerysetMixin, viewsets.ModelViewSet):
     queryset = LearningNode.objects.all()
@@ -254,7 +254,10 @@ class LearningNodeViewSet(TenantScopedQuerysetMixin, viewsets.ModelViewSet):
         Returns updated node data including next_review_at.
         """
         node = self.get_object()
-        quality = int(request.data.get('quality', 4))
+        try:
+            quality = int(request.data.get('quality', 4))
+        except (TypeError, ValueError):
+            return Response({'error': 'quality must be an integer'}, status=status.HTTP_400_BAD_REQUEST)
         quality = max(0, min(5, quality))
 
         sm2 = SM2Service()
@@ -343,11 +346,6 @@ def teacher_analytics(request):
         if not teacher:
              return Response({
                  'error': 'Teacher profile not found in this tenant',
-                 'debug': {
-                     'user_id': str(request.user.pk),
-                     'email': request.user.email,
-                     'db_alias': db_alias
-                 }
              }, status=404)
 
         class_ids = teacher.assigned_classes.using(db_alias).values_list('id', flat=True)
@@ -357,10 +355,9 @@ def teacher_analytics(request):
         return Response(data)
     except Teacher.DoesNotExist:
         return Response({'error': 'Teacher profile not found'}, status=404)
-    except Exception as e:
-        import traceback
-        traceback.print_exc()
-        return Response({'error': str(e)}, status=500)
+    except Exception:
+        logger.exception('teacher analytics error')
+        return Response({'error': 'Failed to load teacher analytics.'}, status=500)
 
 
 @api_view(["GET"])
@@ -392,10 +389,9 @@ def at_risk_students(request):
         service = RiskAnalyticsService(tenant=tenant, user=request.user)
         payload = service.get_at_risk_students(class_id=class_id, send_notifications=send_notifications)
         return Response(payload, status=status.HTTP_200_OK)
-    except Exception as exc:
-        import traceback
-        traceback.print_exc()
-        return Response({"error": str(exc)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    except Exception:
+        logger.exception('at-risk students error')
+        return Response({"error": "Failed to retrieve at-risk students."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['GET', 'POST'])
 @permission_classes([IsAuthenticated])
@@ -410,8 +406,9 @@ def student_report(request, student_id):
         save = request.method == 'POST'
         data = service.generate_student_report(student_id, save=save)
         return Response(data)
-    except Exception as e:
-        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    except Exception:
+        logger.exception('student report error')
+        return Response({'error': 'Failed to generate student report.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
@@ -428,8 +425,9 @@ def student_past_reports(request, student_id):
             'is_automated': r.is_automated
         } for r in reports]
         return Response(data)
-    except Exception as e:
-        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    except Exception:
+        logger.exception('student past reports error')
+        return Response({'error': 'Failed to retrieve past reports.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 # ── Phase 9: AI Progress Reports ──────────────────────────────────────────────
@@ -460,10 +458,9 @@ def my_progress_report(request):
     try:
         report = service.get_or_generate(student, report_type=report_type, force=False)
         return Response(report, status=status.HTTP_200_OK)
-    except Exception as exc:
-        import traceback
-        traceback.print_exc()
-        return Response({"error": str(exc)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    except Exception:
+        logger.exception('my progress report error')
+        return Response({"error": "Failed to generate progress report."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 @api_view(["POST"])
@@ -493,10 +490,9 @@ def generate_my_progress_report(request):
     try:
         report = service.get_or_generate(student, report_type=report_type, force=True)
         return Response(report, status=status.HTTP_200_OK)
-    except Exception as exc:
-        import traceback
-        traceback.print_exc()
-        return Response({"error": str(exc)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    except Exception:
+        logger.exception('generate progress report error')
+        return Response({"error": "Failed to generate progress report."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 @api_view(["GET"])
@@ -527,8 +523,9 @@ def my_report_history(request):
     try:
         history = service.list_history(student, report_type=report_type, limit=limit)
         return Response(history, status=status.HTTP_200_OK)
-    except Exception as exc:
-        return Response({"error": str(exc)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    except Exception:
+        logger.exception('report history error')
+        return Response({"error": "Failed to retrieve report history."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 @api_view(["GET"])
@@ -596,8 +593,9 @@ def student_recommendations(request):
         return Response(data)
     except Student.DoesNotExist:
         return Response({'error': 'Student profile not found'}, status=status.HTTP_404_NOT_FOUND)
-    except Exception as e:
-        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    except Exception:
+        logger.exception('student recommendations error')
+        return Response({'error': 'Failed to generate recommendations.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 @api_view(["POST"])
@@ -699,10 +697,9 @@ def admin_assistant_query(request):
         response_serializer = AdminAssistantQueryResponseSerializer(data=payload)
         response_serializer.is_valid(raise_exception=True)
         return Response(response_serializer.validated_data, status=status.HTTP_200_OK)
-    except Exception as e:
-        import traceback
-        traceback.print_exc()
-        return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    except Exception:
+        logger.exception('admin assistant query error')
+        return Response({"error": "Failed to process admin assistant query."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 @api_view(["POST"])
@@ -922,10 +919,9 @@ def ai_tutor_chat(request):
             },
             status=status.HTTP_200_OK,
         )
-    except Exception as e:
-        import traceback
-        traceback.print_exc()
-        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    except Exception:
+        logger.exception('ai tutor chat error')
+        return Response({'error': 'Failed to process tutor chat request.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 class TutorConversationViewSet(TenantScopedQuerysetMixin, viewsets.ReadOnlyModelViewSet):
@@ -1186,10 +1182,9 @@ def _lesson_artifact_response(request, lesson_id: int, artifact_type: str):
         serializer = LessonArtifactResponseSerializer(data=payload)
         serializer.is_valid(raise_exception=True)
         return Response(serializer.validated_data, status=status.HTTP_200_OK)
-    except Exception as e:
-        import traceback
-        traceback.print_exc()
-        return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    except Exception:
+        logger.exception('lesson artifact error')
+        return Response({"error": "Failed to generate lesson artifact."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 @api_view(["POST"])
@@ -1238,10 +1233,9 @@ def ai_quiz_generate(request):
         return Response(output.validated_data, status=status.HTTP_200_OK)
     except QuizGenerationError as exc:
         return Response({"error": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
-    except Exception as exc:
-        import traceback
-        traceback.print_exc()
-        return Response({"error": str(exc)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    except Exception:
+        logger.exception('quiz generation error')
+        return Response({"error": "Failed to generate quiz."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 def _is_teacher_or_admin(user) -> bool:
@@ -1469,10 +1463,9 @@ def ai_exam_generate(request):
         return Response(output.validated_data, status=status.HTTP_200_OK)
     except ExamPaperGenerationError as exc:
         return Response({"error": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
-    except Exception as exc:
-        import traceback
-        traceback.print_exc()
-        return Response({"error": str(exc)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    except Exception:
+        logger.exception('exam paper generation error')
+        return Response({"error": "Failed to generate exam paper."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 @api_view(["GET"])
@@ -1619,10 +1612,9 @@ def ai_grade_submission(request):
         return Response(output.validated_data, status=status.HTTP_200_OK)
     except AssistedGradingError as exc:
         return Response({"error": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
-    except Exception as exc:
-        import traceback
-        traceback.print_exc()
-        return Response({"error": str(exc)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    except Exception:
+        logger.exception('ai grade submission error')
+        return Response({"error": "Failed to generate grading draft."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 @api_view(["POST"])
@@ -1666,10 +1658,9 @@ def ai_approve_grading_draft(request):
         )
     except AssistedGradingError as exc:
         return Response({"error": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
-    except Exception as exc:
-        import traceback
-        traceback.print_exc()
-        return Response({"error": str(exc)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    except Exception:
+        logger.exception('approve grading draft error')
+        return Response({"error": "Failed to approve grading draft."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 # ---------------------------------------------------------------------------

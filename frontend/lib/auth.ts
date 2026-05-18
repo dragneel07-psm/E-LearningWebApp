@@ -33,12 +33,15 @@ type SetTokenOptions = {
     tenantId?: string;
 };
 
+const COOKIE_DOMAIN = process.env.NEXT_PUBLIC_COOKIE_DOMAIN || '.manyaltech.com';
+const BASE_DOMAIN = COOKIE_DOMAIN.replace(/^\./, '');
+
 function shouldUseSharedManyaltechDomain(tenantId?: string): boolean {
     if (typeof window === 'undefined') return false;
     if (tenantId !== 'public') return false;
 
     const host = (window.location.hostname || '').trim().toLowerCase();
-    return host === 'manyaltech.com' || host === 'www.manyaltech.com';
+    return host === BASE_DOMAIN || host === `www.${BASE_DOMAIN}`;
 }
 
 export const setTokens = (access: string, refresh: string, options?: SetTokenOptions) => {
@@ -56,11 +59,11 @@ export const setTokens = (access: string, refresh: string, options?: SetTokenOpt
             // Canonical public SaaS cookie: shared domain only.
             // Clear host-scoped value first to avoid duplicate-cookie redirect loops.
             document.cookie = `access_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT`;
-            document.cookie = `access_token=${encodedAccess}; path=/; domain=.manyaltech.com; ${secureAttr}samesite=lax`;
+            document.cookie = `access_token=${encodedAccess}; path=/; domain=${COOKIE_DOMAIN}; ${secureAttr}samesite=lax`;
         } else {
             // Canonical tenant/local cookie: host-scoped only.
             // Clear shared-domain value to avoid stale conflicts.
-            document.cookie = `access_token=; path=/; domain=.manyaltech.com; expires=Thu, 01 Jan 1970 00:00:00 GMT`;
+            document.cookie = `access_token=; path=/; domain=${COOKIE_DOMAIN}; expires=Thu, 01 Jan 1970 00:00:00 GMT`;
             document.cookie = `access_token=${encodedAccess}; path=/; ${secureAttr}samesite=lax`;
         }
     }
@@ -88,9 +91,9 @@ export const removeTokens = () => {
 
         // Clear cookie
         document.cookie = `access_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT`;
-        document.cookie = `access_token=; path=/; domain=.manyaltech.com; expires=Thu, 01 Jan 1970 00:00:00 GMT`;
+        document.cookie = `access_token=; path=/; domain=${COOKIE_DOMAIN}; expires=Thu, 01 Jan 1970 00:00:00 GMT`;
         document.cookie = `tenant_id=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT`;
-        document.cookie = `tenant_id=; path=/; domain=.manyaltech.com; expires=Thu, 01 Jan 1970 00:00:00 GMT`;
+        document.cookie = `tenant_id=; path=/; domain=${COOKIE_DOMAIN}; expires=Thu, 01 Jan 1970 00:00:00 GMT`;
     }
 };
 
