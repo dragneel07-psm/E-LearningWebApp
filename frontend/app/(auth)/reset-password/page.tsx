@@ -25,6 +25,9 @@ function ResetPasswordForm() {
     const [showPassword, setShowPassword] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
     const [isSubmitted, setIsSubmitted] = useState(false);
+    const [resolvedRole, setResolvedRole] = useState<string | null>(null);
+
+    const loginHref = resolvedRole === 'saas_admin' ? '/saas-login' : '/login';
 
     if (!token || !uidb64) {
         return (
@@ -50,14 +53,17 @@ function ResetPasswordForm() {
         setIsLoading(true);
 
         try {
-            await usersAPI.confirmPasswordReset({
+            const result = await usersAPI.confirmPasswordReset({
                 password,
                 token,
                 uidb64
             });
+            const nextRole = (result?.role ?? null) as string | null;
+            setResolvedRole(nextRole);
             setIsSubmitted(true);
             toast.success('Password reset successfully!');
-            setTimeout(() => router.push('/login'), 2000);
+            const target = nextRole === 'saas_admin' ? '/saas-login' : '/login';
+            setTimeout(() => router.push(target), 2000);
         } catch (error: any) {
             console.error(error);
             toast.error(error.message || 'Failed to reset password. Link may be expired.');
@@ -80,7 +86,7 @@ function ResetPasswordForm() {
                 </div>
                 <Button
                     className="w-full mt-4 bg-indigo-600 hover:bg-indigo-700"
-                    onClick={() => router.push('/login')}
+                    onClick={() => router.push(loginHref)}
                 >
                     Go to Login
                 </Button>

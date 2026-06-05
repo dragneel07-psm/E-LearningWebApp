@@ -1967,7 +1967,7 @@ export const usersAPI = {
             body: JSON.stringify({ email })
         }),
     confirmPasswordReset: (data: { password: string; token: string; uidb64: string }) =>
-        apiRequest<{ message: string }>('/users/password-reset-confirm/', {
+        apiRequest<{ message: string; role?: string | null }>('/users/password-reset-confirm/', {
             method: 'POST',
             body: JSON.stringify(data)
         }),

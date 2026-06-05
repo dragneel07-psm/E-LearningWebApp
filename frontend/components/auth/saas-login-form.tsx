@@ -21,6 +21,7 @@
  */
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -287,6 +288,15 @@ export function SaasLoginForm() {
                                             ? <Loader2 className="h-5 w-5 animate-spin" />
                                             : 'Continue'}
                                     </Button>
+
+                                    <div className="text-center">
+                                        <Link
+                                            href="/forgot-password"
+                                            className="text-xs text-slate-400 hover:text-indigo-300 transition-colors"
+                                        >
+                                            Forgot password?
+                                        </Link>
+                                    </div>
                                 </form>
                             </motion.div>
                         )}
