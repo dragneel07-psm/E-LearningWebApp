@@ -14,6 +14,11 @@ const HOP_BY_HOP_HEADERS = new Set([
     "transfer-encoding",
     "upgrade",
     "content-length",
+    // Node's fetch() transparently decompresses gzip/br responses, so the
+    // body we forward to the browser is already plain. Leaving
+    // content-encoding intact made the browser try to gunzip plain text
+    // and fail with ERR_CONTENT_DECODING_FAILED.
+    "content-encoding",
 ]);
 
 const SAME_ORIGIN_SENTINELS = new Set(["/api", "api", "same-origin", "same_origin", "relative"]);
