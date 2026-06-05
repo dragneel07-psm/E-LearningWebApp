@@ -366,6 +366,10 @@ class CustomTokenRefreshView(TokenRefreshView):
 
 # Password Reset via Email (Views)
 class PasswordResetView(views.APIView):
+    # Public endpoint — skip authentication entirely so a stale/expired JWT
+    # cookie left over from a previous session does not 401 the request
+    # before the AllowAny permission is reached.
+    authentication_classes: list = []
     permission_classes = [permissions.AllowAny]
     throttle_classes = [PasswordResetRateThrottle]
 
@@ -423,6 +427,9 @@ class PasswordResetView(views.APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 class PasswordResetConfirmView(views.APIView):
+    # Same reasoning as PasswordResetView — the user clicking a reset link in
+    # email may still have a stale JWT cookie in the same browser session.
+    authentication_classes: list = []
     permission_classes = [permissions.AllowAny]
     throttle_classes = [PasswordResetConfirmRateThrottle]
 
