@@ -21,6 +21,7 @@ const PUBLIC_PATHS = [
     '/verify-email',
     '/public',
     '/forgot-password',
+    '/reset-password',
     '/debug-auth',
     '/school',
     '/manifest.json',
