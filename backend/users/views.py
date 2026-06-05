@@ -429,8 +429,24 @@ class PasswordResetConfirmView(views.APIView):
     def post(self, request):
         serializer = PasswordResetConfirmSerializer(data=request.data)
         if serializer.is_valid():
-            serializer.save()
-            return Response({"message": "Password reset successful."}, status=status.HTTP_200_OK)
+            user = serializer.save()
+            record_audit_event(
+                action="users.password_reset_completed",
+                user=user,
+                request=request,
+                details={
+                    "target_user_id": str(getattr(user, "user_id", "") or user.pk),
+                    "target_email": user.email,
+                    "target_role": getattr(user, "role", None),
+                },
+            )
+            return Response(
+                {
+                    "message": "Password reset successful.",
+                    "role": getattr(user, "role", None),
+                },
+                status=status.HTTP_200_OK,
+            )
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 

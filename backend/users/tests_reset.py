@@ -35,7 +35,7 @@ class PasswordResetTests(TestCase):
         # Generate token manually to simulate email link
         token = default_token_generator.make_token(self.user)
         uid = urlsafe_base64_encode(force_bytes(self.user.pk))
-        
+
         response = self.client.post(self.confirm_url, {
             'uid': uid,
             'token': token,
@@ -43,7 +43,11 @@ class PasswordResetTests(TestCase):
             'confirm_password': 'NewPassword123!'
         })
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        
+        # Response must include role so the frontend can pick the correct
+        # post-reset landing page (saas_admin → /saas-login, others → /login).
+        self.assertIn('role', response.data)
+        self.assertEqual(response.data['role'], self.user.role)
+
         # Verify login with new password
         self.user.refresh_from_db()
         self.assertTrue(self.user.check_password('NewPassword123!'))
