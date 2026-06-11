@@ -357,6 +357,13 @@ else:
     CORS_ALLOWED_ORIGIN_REGEXES = []
 
 CORS_ALLOW_ALL_ORIGINS = os.environ.get("CORS_ALLOW_ALL_ORIGINS", "false").lower() == "true"
+if CORS_ALLOW_ALL_ORIGINS and not DEBUG:
+    # Credentials are allowed below; combined with wildcard origins any site
+    # could make authenticated requests on behalf of logged-in users.
+    raise ImproperlyConfigured(
+        "CORS_ALLOW_ALL_ORIGINS must not be enabled when DEBUG=False. "
+        "List explicit origins in CORS_ALLOWED_ORIGINS instead."
+    )
 CORS_ALLOW_CREDENTIALS = True
 
 _csrf_trusted_from_env = _csv_env_list("CSRF_TRUSTED_ORIGINS", [])
