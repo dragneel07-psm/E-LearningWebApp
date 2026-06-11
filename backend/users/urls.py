@@ -8,6 +8,7 @@ from .views import (
     AdminPasswordResetView, register_user, CustomTokenObtainPairView, CustomTokenRefreshView,
     PasswordResetView, PasswordResetConfirmView, EmailVerificationView,
     TwoFactorSetupView, TwoFactorActivateView, SaasStaffViewSet,
+    WebSocketTicketView,
 )
 
 router = DefaultRouter()
@@ -28,4 +29,6 @@ urlpatterns = [
     # SaaS Admin 2FA — re-auth with email+password (no JWT required)
     path('2fa/setup/', TwoFactorSetupView.as_view(), name='2fa_setup'),
     path('2fa/activate/', TwoFactorActivateView.as_view(), name='2fa_activate'),
+    # Short-lived WebSocket auth ticket (browsers can't send httpOnly cookies on WS upgrades)
+    path('ws-ticket/', WebSocketTicketView.as_view(), name='ws_ticket'),
 ]

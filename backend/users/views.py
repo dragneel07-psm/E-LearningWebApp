@@ -677,3 +677,37 @@ class SaasStaffViewSet(viewsets.ViewSet):
             details={"staff_email": email},
         )
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class WebSocketTicketView(views.APIView):
+    """
+    POST /api/users/ws-ticket/
+
+    Issues a short-lived JWT for authenticating WebSocket connections.
+    Browsers cannot attach httpOnly cookies or Authorization headers to
+    cross-origin WebSocket upgrades, so authenticated clients exchange
+    their session for a ~60s token passed as ?token=<jwt>. The ticket is
+    a regular simplejwt AccessToken, so core.ws_middleware.JWTAuthMiddleware
+    accepts it unchanged.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    # Claims JWTAuthMiddleware and WS consumers rely on.
+    _COPIED_CLAIMS = ("tenant_schema", "tenant_id", "role", "username", "staff_role")
+
+    def post(self, request):
+        from datetime import timedelta
+
+        from django.conf import settings as django_settings
+        from rest_framework_simplejwt.tokens import AccessToken
+
+        ttl_seconds = int(getattr(django_settings, "WS_TICKET_TTL_SECONDS", 60))
+        ticket = AccessToken.for_user(request.user)
+        ticket.set_exp(lifetime=timedelta(seconds=ttl_seconds))
+
+        current_payload = getattr(getattr(request, "auth", None), "payload", None) or {}
+        for claim in self._COPIED_CLAIMS:
+            if claim in current_payload:
+                ticket[claim] = current_payload[claim]
+
+        return Response({"token": str(ticket), "expires_in": ttl_seconds})
