@@ -5,6 +5,7 @@ from django.db import models
 import uuid as uuid_lib
 from django_tenants.models import TenantMixin, DomainMixin
 from .base import TimeStampedModel
+from core.upload_validation import image_upload_validators
 from core.utils.storage_paths import tenant_scoped_upload_path
 
 
@@ -30,7 +31,12 @@ class Tenant(TenantMixin, TimeStampedModel):
     website = models.URLField(blank=True, null=True)
     current_academic_year = models.CharField(max_length=20, default='2024-2025')
     established_year = models.IntegerField(blank=True, null=True)
-    logo = models.ImageField(upload_to=tenant_logo_upload_to, blank=True, null=True)
+    logo = models.ImageField(
+        upload_to=tenant_logo_upload_to,
+        blank=True,
+        null=True,
+        validators=image_upload_validators(),
+    )
 
     # Tax & billing identity (Nepali school context — IRD-aligned receipts)
     pan_number = models.CharField(

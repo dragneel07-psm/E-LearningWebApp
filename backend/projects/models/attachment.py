@@ -7,6 +7,7 @@ from django.conf import settings
 from django.db import models
 
 from core.models.tenant import Tenant
+from core.upload_validation import document_upload_validators
 from core.utils.storage_paths import schema_from_current_connection, tenant_scoped_upload_path
 
 
@@ -38,7 +39,10 @@ class ProjectAttachment(models.Model):
         related_name="attachments",
     )
 
-    file = models.FileField(upload_to=project_attachment_upload_to)
+    file = models.FileField(
+        upload_to=project_attachment_upload_to,
+        validators=document_upload_validators(),
+    )
     mime_type = models.CharField(max_length=100, blank=True)
     size_bytes = models.PositiveBigIntegerField(default=0)
 

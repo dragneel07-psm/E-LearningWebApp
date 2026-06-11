@@ -201,8 +201,17 @@ class SchoolProfileView(APIView):
         for key, value in updates.items():
             setattr(tenant, key, value)
 
-        # Logo via multipart upload (separate field name)
+        # Logo via multipart upload (separate field name). Direct FILES
+        # assignment bypasses serializer validation, so validate explicitly.
         if "logo" in request.FILES:
+            from django.core.exceptions import ValidationError as DjangoValidationError
+
+            from core.upload_validation import validate_image_upload
+
+            try:
+                validate_image_upload(request.FILES["logo"])
+            except DjangoValidationError as exc:
+                return Response({"logo": exc.messages}, status=status.HTTP_400_BAD_REQUEST)
             tenant.logo = request.FILES["logo"]
 
         tenant.save()

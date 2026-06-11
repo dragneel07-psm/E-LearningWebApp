@@ -791,7 +791,17 @@ class StudentViewSet(TenantScopedQuerysetMixin, viewsets.ModelViewSet):
         file_obj = request.FILES.get('file')
         if not file_obj:
             return Response({'error': 'No file provided'}, status=status.HTTP_400_BAD_REQUEST)
-            
+
+        from django.core.exceptions import ValidationError as DjangoValidationError
+
+        from core.upload_validation import SPREADSHEET_EXTENSIONS, validate_uploaded_file
+
+        try:
+            validate_uploaded_file(file_obj, SPREADSHEET_EXTENSIONS)
+        except DjangoValidationError as exc:
+            return Response({'error': exc.messages[0]}, status=status.HTTP_400_BAD_REQUEST)
+
+
         try:
             from academic.services.bulk_import import BulkImportService
             service = BulkImportService()
