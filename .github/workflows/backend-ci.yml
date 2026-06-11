@@ -22,7 +22,7 @@ jobs:
     - name: Set up Python
       uses: actions/setup-python@v5
       with:
-        python-version: '3.11'
+        python-version: '3.13'
         
     - name: Cache Python dependencies
       uses: actions/cache@v3
@@ -61,7 +61,9 @@ jobs:
     
     services:
       postgres:
-        image: postgres:15
+        # pgvector-enabled image: ai_engine migrations create vector columns
+        # whenever the pgvector Python package is installed.
+        image: pgvector/pgvector:pg16
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
@@ -80,7 +82,7 @@ jobs:
     - name: Set up Python
       uses: actions/setup-python@v5
       with:
-        python-version: '3.11'
+        python-version: '3.13'
         
     - name: Cache Python dependencies
       uses: actions/cache@v3
@@ -141,17 +143,25 @@ jobs:
     name: Security Scan
     runs-on: ubuntu-latest
     needs: lint
-    
+
     steps:
     - uses: actions/checkout@v4
-    
-    - name: Run Snyk to check for vulnerabilities
-      uses: snyk/actions/python@master
-      continue-on-error: true
-      env:
-        SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
       with:
-        args: --file=backend/requirements.txt
+        python-version: '3.13'
+
+    - name: Install production requirements
+      run: |
+        cd backend
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt pip-audit
+
+    - name: Run pip-audit
+      run: |
+        cd backend
+        pip-audit
 
   build:
     name: Build Docker Image
@@ -194,7 +204,7 @@ jobs:
     - name: Set up Python
       uses: actions/setup-python@v5
       with:
-        python-version: '3.11'
+        python-version: '3.13'
     
     - name: Install dependencies
       run: |
@@ -231,7 +241,7 @@ jobs:
     - name: Set up Python
       uses: actions/setup-python@v5
       with:
-        python-version: '3.11'
+        python-version: '3.13'
     
     - name: Install dependencies
       run: |

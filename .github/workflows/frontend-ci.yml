@@ -12,6 +12,25 @@ on:
       - 'frontend/**'
 
 jobs:
+  audit:
+    name: Dependency Audit
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+
+    # Blocks on high/critical vulnerabilities in production dependencies.
+    # Dev-only and moderate findings are reported by Dependabot instead.
+    - name: Audit production dependencies
+      run: |
+        cd frontend
+        npm audit --omit=dev --audit-level=high
+
   lint:
     name: Lint TypeScript Code
     runs-on: ubuntu-latest
