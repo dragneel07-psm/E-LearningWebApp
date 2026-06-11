@@ -1,10 +1,12 @@
 # Copyright (c) 2024-2026 Pramod Singh Manyal. All rights reserved.
 # Unauthorized copying, modification, or distribution of this file,
 # via any medium, is strictly prohibited. Proprietary and confidential.
-from academic.models import Student, Course, Assessment, Result, AcademicClass
-from datetime import timedelta
-from django.utils import timezone
 import random
+from datetime import timedelta
+
+from django.utils import timezone
+
+from academic.models import AcademicClass, Assessment, Course, Result, Student
 
 student = Student.objects.first()
 if not student:
@@ -16,8 +18,10 @@ aclass = student.academic_class
 if not aclass:
     print("Student has no class!")
     exit()
-    
-print(f"Adding data for student: {student.user.first_name if student.user else 'Unknown'} in {aclass}")
+
+print(
+    f"Adding data for student: {student.user.first_name if student.user else 'Unknown'} in {aclass}"
+)
 
 subjects = ["Mathematics", "Physics", "Chemistry", "English"]
 courses = []
@@ -41,11 +45,11 @@ past_titles = [
 
 for title, subj, type, level in past_titles:
     course = next(c for c in courses if c.subject == subj)
-    
+
     # Check if exists
     if Assessment.objects.filter(title=title, course=course).exists():
         continue
-        
+
     assessment = Assessment.objects.create(
         course=course,
         title=title,
@@ -54,9 +58,9 @@ for title, subj, type, level in past_titles:
         total_marks=100,
         blooms_level=level,
         scheduled_at=timezone.now() - timedelta(days=random.randint(2, 30)),
-        duration_minutes=45
+        duration_minutes=45,
     )
-    
+
     score = random.randint(60, 95)
     Result.objects.create(
         assessment=assessment,
@@ -65,7 +69,7 @@ for title, subj, type, level in past_titles:
         time_taken_minutes=random.randint(30, 45),
         submitted_at=timezone.now() - timedelta(days=random.randint(1, 29)),
         ai_feedback=f"Student showed strong {level} skills. Improve time management.",
-        teacher_feedback="Good job!"
+        teacher_feedback="Good job!",
     )
     print(f"Created result: {title} - {score}/100")
 
@@ -78,7 +82,7 @@ future_titles = [
 
 for title, subj, type, level, days_future in future_titles:
     course = next(c for c in courses if c.subject == subj)
-    
+
     if Assessment.objects.filter(title=title, course=course).exists():
         continue
 
@@ -90,7 +94,7 @@ for title, subj, type, level, days_future in future_titles:
         total_marks=100,
         blooms_level=level,
         scheduled_at=timezone.now() + timedelta(days=days_future),
-        duration_minutes=60
+        duration_minutes=60,
     )
     print(f"Created upcoming: {title}")
 

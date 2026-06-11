@@ -9,11 +9,13 @@ exponential weights so recent scores count more than older ones. Returns a
 per-subject forecast with trajectory direction and confidence level.
 """
 
-from django.utils import timezone
 from datetime import timedelta
+
+from django.utils import timezone
+
 from academic.models.assessment import Assessment, Result
-from academic.models.subject import Subject
 from academic.models.student import Student
+from academic.models.subject import Subject
 
 
 class GradeForecastService:
@@ -134,7 +136,11 @@ class GradeForecastService:
                     "student_id": str(student.student_id),
                     "student_name": student.user.get_full_name(),
                     "forecasts": forecasts,
-                    "overall_forecast": round(overall_forecast, 1) if overall_forecast is not None else None,
+                    "overall_forecast": (
+                        round(overall_forecast, 1)
+                        if overall_forecast is not None
+                        else None
+                    ),
                 }
             )
 
@@ -147,11 +153,13 @@ class GradeForecastService:
             else None
         )
         at_risk_count = sum(
-            1 for s in student_summaries
+            1
+            for s in student_summaries
             if s["overall_forecast"] is not None and s["overall_forecast"] < 50
         )
         improving_count = sum(
-            1 for s in student_summaries
+            1
+            for s in student_summaries
             for f in s["forecasts"]
             if f["trajectory"] == "improving"
         )
@@ -181,7 +189,7 @@ class GradeForecastService:
             older = scores[:mid]
             recent = scores[mid:]
         else:
-            older = scores[-(w * 2): -w]
+            older = scores[-(w * 2) : -w]
             recent = scores[-w:]
 
         if not older or not recent:

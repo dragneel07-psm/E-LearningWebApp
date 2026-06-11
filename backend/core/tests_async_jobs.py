@@ -36,7 +36,9 @@ class AsyncJobsFallbackTests(SimpleTestCase):
         CELERY_TASK_STORE_EAGER_RESULT=True,
     )
     def test_enqueue_job_runs_in_eager_mode_and_tracks_status(self):
-        job = enqueue_job(add_numbers, 4, 6, job_name="test.add", job_tenant_schema="demo")
+        job = enqueue_job(
+            add_numbers, 4, 6, job_name="test.add", job_tenant_schema="demo"
+        )
         self.assertTrue(job.get("job_id"))
         payload = get_job_status(job["job_id"])
         self.assertIsNotNone(payload)

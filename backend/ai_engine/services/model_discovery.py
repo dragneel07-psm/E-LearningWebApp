@@ -70,7 +70,9 @@ def _choose_best_model(model_ids: List[str], fallback_model: str) -> str:
     return sorted(model_ids)[0]
 
 
-def detect_provider_and_model(api_key: str, base_url: str = "", max_models: int = 100) -> Dict[str, object]:
+def detect_provider_and_model(
+    api_key: str, base_url: str = "", max_models: int = 100
+) -> Dict[str, object]:
     inferred = _infer_provider(api_key=api_key, base_url=base_url)
     provider_name = inferred["provider_name"]
     normalized_base_url = inferred["base_url"]

@@ -24,6 +24,7 @@ ProjectStreamConsumer
   Client → Server:
     { "type": "ping" } → { "type": "pong" }
 """
+
 from __future__ import annotations
 
 import json
@@ -118,7 +119,6 @@ class ProjectStreamConsumer(AsyncWebsocketConsumer):
 
     @database_sync_to_async
     def _user_can_view(self, user, project_id: str) -> bool:
-        from .models import Project
         from ._helpers import (
             get_parent_for,
             get_student_for,
@@ -128,6 +128,7 @@ class ProjectStreamConsumer(AsyncWebsocketConsumer):
             is_mentor_of,
             tenant_has_projects_enabled,
         )
+        from .models import Project
 
         project = Project.objects.filter(pk=project_id).first()
         if project is None:
@@ -199,7 +200,9 @@ class MentorDigestStreamConsumer(AsyncWebsocketConsumer):
         self.group_name = mentor_group_name(user.pk)
         await self.channel_layer.group_add(self.group_name, self.channel_name)
         await self.accept()
-        logger.debug("WS mentor-digest connect: user=%s group=%s", user.pk, self.group_name)
+        logger.debug(
+            "WS mentor-digest connect: user=%s group=%s", user.pk, self.group_name
+        )
 
     async def disconnect(self, close_code):
         if hasattr(self, "group_name"):

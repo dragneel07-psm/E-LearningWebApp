@@ -23,21 +23,32 @@ class StudentDocument(models.Model):
         (TYPE_CUSTOM, "Custom Document"),
     )
 
-    document_id = models.UUIDField(primary_key=True, default=uuid_lib.uuid4, editable=False)
+    document_id = models.UUIDField(
+        primary_key=True, default=uuid_lib.uuid4, editable=False
+    )
     tenant = models.ForeignKey(
-        "core.Tenant", on_delete=models.CASCADE,
-        related_name="student_documents", db_constraint=False
+        "core.Tenant",
+        on_delete=models.CASCADE,
+        related_name="student_documents",
+        db_constraint=False,
     )
     student = models.ForeignKey(
-        "academic.Student", on_delete=models.CASCADE,
-        related_name="documents", db_constraint=False
+        "academic.Student",
+        on_delete=models.CASCADE,
+        related_name="documents",
+        db_constraint=False,
     )
     document_type = models.CharField(max_length=30, choices=DOCUMENT_TYPE_CHOICES)
-    document_number = models.CharField(max_length=50, blank=True, help_text="Auto-generated serial number")
+    document_number = models.CharField(
+        max_length=50, blank=True, help_text="Auto-generated serial number"
+    )
     issued_date = models.DateField()
     issued_by = models.ForeignKey(
-        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
-        null=True, related_name="issued_documents", db_constraint=False
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name="issued_documents",
+        db_constraint=False,
     )
 
     # For TC: reason for leaving
@@ -58,12 +69,18 @@ class StudentDocument(models.Model):
     class Meta:
         ordering = ["-created_at"]
         indexes = [
-            models.Index(fields=["tenant", "document_type"], name="sis_doc_tenant_type_idx"),
-            models.Index(fields=["tenant", "student"], name="sis_doc_tenant_student_idx"),
+            models.Index(
+                fields=["tenant", "document_type"], name="sis_doc_tenant_type_idx"
+            ),
+            models.Index(
+                fields=["tenant", "student"], name="sis_doc_tenant_student_idx"
+            ),
         ]
 
     def __str__(self):
-        return f"{self.get_document_type_display()} – {self.student} ({self.issued_date})"
+        return (
+            f"{self.get_document_type_display()} – {self.student} ({self.issued_date})"
+        )
 
     def save(self, *args, **kwargs):
         if not self.document_number:
@@ -77,10 +94,13 @@ class StudentDocument(models.Model):
             prefix = prefix_map.get(self.document_type, "DOC")
             year = self.issued_date.year if self.issued_date else "00"
             # Count existing docs of same type for this tenant this year
-            count = StudentDocument.objects.filter(
-                tenant=self.tenant,
-                document_type=self.document_type,
-                issued_date__year=year,
-            ).count() + 1
+            count = (
+                StudentDocument.objects.filter(
+                    tenant=self.tenant,
+                    document_type=self.document_type,
+                    issued_date__year=year,
+                ).count()
+                + 1
+            )
             self.document_number = f"{prefix}-{year}-{count:04d}"
         super().save(*args, **kwargs)

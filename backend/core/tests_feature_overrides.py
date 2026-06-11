@@ -8,6 +8,7 @@ plan.
 
 Run with: python manage.py test core.tests_feature_overrides
 """
+
 from unittest.mock import MagicMock
 
 from django.test import TestCase, override_settings
@@ -27,39 +28,73 @@ class ComputeEffectiveFeaturesTests(TestCase):
     """Pure function — overrides win on a per-key basis."""
 
     def test_no_overrides_returns_plan_baseline(self):
-        plan = MagicMock(has_ai_tutor=False, has_ai_eval=False, has_parent_portal=False, has_analytics=False, has_career_guidance=False)
+        plan = MagicMock(
+            has_ai_tutor=False,
+            has_ai_eval=False,
+            has_parent_portal=False,
+            has_analytics=False,
+            has_career_guidance=False,
+        )
         baseline = build_plan_entitled_features(plan)
         self.assertEqual(compute_effective_features(plan, None), baseline)
         self.assertEqual(compute_effective_features(plan, {}), baseline)
 
     def test_override_can_disable_a_default_on_feature(self):
-        plan = MagicMock(has_ai_tutor=False, has_ai_eval=False, has_parent_portal=False, has_analytics=False, has_career_guidance=False)
+        plan = MagicMock(
+            has_ai_tutor=False,
+            has_ai_eval=False,
+            has_parent_portal=False,
+            has_analytics=False,
+            has_career_guidance=False,
+        )
         baseline = build_plan_entitled_features(plan)
-        self.assertTrue(baseline['projects'])  # baseline-on
-        effective = compute_effective_features(plan, {'projects': False})
-        self.assertFalse(effective['projects'])
+        self.assertTrue(baseline["projects"])  # baseline-on
+        effective = compute_effective_features(plan, {"projects": False})
+        self.assertFalse(effective["projects"])
 
     def test_override_can_enable_a_plan_off_feature(self):
-        plan = MagicMock(has_ai_tutor=False, has_ai_eval=False, has_parent_portal=False, has_analytics=False, has_career_guidance=False)
+        plan = MagicMock(
+            has_ai_tutor=False,
+            has_ai_eval=False,
+            has_parent_portal=False,
+            has_analytics=False,
+            has_career_guidance=False,
+        )
         baseline = build_plan_entitled_features(plan)
-        self.assertFalse(baseline['student_ai_chatbot'])
-        effective = compute_effective_features(plan, {'student_ai_chatbot': True})
-        self.assertTrue(effective['student_ai_chatbot'])
+        self.assertFalse(baseline["student_ai_chatbot"])
+        effective = compute_effective_features(plan, {"student_ai_chatbot": True})
+        self.assertTrue(effective["student_ai_chatbot"])
 
     def test_override_truthy_coerced_to_bool(self):
-        plan = MagicMock(has_ai_tutor=False, has_ai_eval=False, has_parent_portal=False, has_analytics=False, has_career_guidance=False)
-        effective = compute_effective_features(plan, {'projects': 0, 'student_ai_chatbot': 1})
-        self.assertFalse(effective['projects'])
-        self.assertTrue(effective['student_ai_chatbot'])
+        plan = MagicMock(
+            has_ai_tutor=False,
+            has_ai_eval=False,
+            has_parent_portal=False,
+            has_analytics=False,
+            has_career_guidance=False,
+        )
+        effective = compute_effective_features(
+            plan, {"projects": 0, "student_ai_chatbot": 1}
+        )
+        self.assertFalse(effective["projects"])
+        self.assertTrue(effective["student_ai_chatbot"])
 
     def test_other_keys_untouched_by_override(self):
-        plan = MagicMock(has_ai_tutor=False, has_ai_eval=False, has_parent_portal=False, has_analytics=False, has_career_guidance=False)
+        plan = MagicMock(
+            has_ai_tutor=False,
+            has_ai_eval=False,
+            has_parent_portal=False,
+            has_analytics=False,
+            has_career_guidance=False,
+        )
         baseline = build_plan_entitled_features(plan)
-        effective = compute_effective_features(plan, {'projects': False})
+        effective = compute_effective_features(plan, {"projects": False})
         for key in baseline:
-            if key == 'projects':
+            if key == "projects":
                 continue
-            self.assertEqual(effective[key], baseline[key], f"key {key} should be untouched")
+            self.assertEqual(
+                effective[key], baseline[key], f"key {key} should be untouched"
+            )
 
 
 class SyncWithOverridesTests(TestCase):
@@ -114,7 +149,9 @@ class TenantSerializerTests(TestCase):
     """
 
     def _make_tenant(self, **kwargs):
-        defaults = dict(schema_name="ser1", name="Serializer Tenant", feature_overrides={})
+        defaults = dict(
+            schema_name="ser1", name="Serializer Tenant", feature_overrides={}
+        )
         defaults.update(kwargs)
         tenant = Tenant(**defaults)
         tenant.auto_create_schema = False
@@ -173,7 +210,10 @@ class TenantSerializerTests(TestCase):
     def test_plan_features_exposed_separately_from_effective(self):
         """SaaS UI needs the plan baseline to detect override divergence."""
         from core.serializers import TenantSerializer
-        from core.utils.plan_enforcement import build_plan_entitled_features, get_tenant_plan
+        from core.utils.plan_enforcement import (
+            build_plan_entitled_features,
+            get_tenant_plan,
+        )
 
         tenant = self._make_tenant(feature_overrides={"projects": False})
         data = TenantSerializer(instance=tenant).data

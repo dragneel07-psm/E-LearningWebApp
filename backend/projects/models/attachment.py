@@ -8,7 +8,10 @@ from django.db import models
 
 from core.models.tenant import Tenant
 from core.upload_validation import document_upload_validators
-from core.utils.storage_paths import schema_from_current_connection, tenant_scoped_upload_path
+from core.utils.storage_paths import (
+    schema_from_current_connection,
+    tenant_scoped_upload_path,
+)
 
 
 def project_attachment_upload_to(instance, filename):
@@ -18,7 +21,9 @@ def project_attachment_upload_to(instance, filename):
 
 
 class ProjectAttachment(models.Model):
-    attachment_id = models.UUIDField(primary_key=True, default=uuid_lib.uuid4, editable=False)
+    attachment_id = models.UUIDField(
+        primary_key=True, default=uuid_lib.uuid4, editable=False
+    )
     tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE, db_constraint=False)
 
     project = models.ForeignKey(

@@ -2,6 +2,7 @@
 # Unauthorized copying, modification, or distribution of this file,
 # via any medium, is strictly prohibited. Proprietary and confidential.
 """ViewSets for the projects app — REST API surface for project tracking."""
+
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import IntegrityError
 from django.db.models import Q
@@ -48,12 +49,13 @@ from .serializers import (
     RubricTemplateSerializer,
 )
 
-
 # --- Project ---
 
 
 class ProjectViewSet(TenantScopedQuerysetMixin, viewsets.ModelViewSet):
-    queryset = Project.objects.select_related("mentor", "leader", "section", "subject").all()
+    queryset = Project.objects.select_related(
+        "mentor", "leader", "section", "subject"
+    ).all()
     serializer_class = ProjectSerializer
     permission_classes = [IsAuthenticated, IsProjectsEnabled, IsProjectMentorOrReadOnly]
     tenant_field = "tenant"
@@ -93,7 +95,9 @@ class ProjectViewSet(TenantScopedQuerysetMixin, viewsets.ModelViewSet):
 
     def perform_update(self, serializer):
         if serializer.instance.status not in {"draft", "active"}:
-            raise PermissionDenied("Cannot edit a project that is submitted/graded/archived.")
+            raise PermissionDenied(
+                "Cannot edit a project that is submitted/graded/archived."
+            )
         serializer.save()
 
     @action(detail=False, methods=["get"], url_path="mine")
@@ -104,14 +108,22 @@ class ProjectViewSet(TenantScopedQuerysetMixin, viewsets.ModelViewSet):
             qs = qs.filter(mentor=request.user)
         page = self.paginate_queryset(qs)
         serializer = self.get_serializer(page or qs, many=True)
-        return self.get_paginated_response(serializer.data) if page is not None else Response(serializer.data)
+        return (
+            self.get_paginated_response(serializer.data)
+            if page is not None
+            else Response(serializer.data)
+        )
 
     @action(detail=False, methods=["get"], url_path="dashboard/mentor")
     def mentor_dashboard(self, request):
         """Mentor view: own projects + at-risk flag (overdue tasks > 0)."""
         if role_of(request.user) not in {"teacher", "admin", "staff", "saas_admin"}:
             raise PermissionDenied("Mentor dashboard is for teachers/admins.")
-        qs = self.get_queryset().filter(mentor=request.user) if role_of(request.user) == "teacher" else self.get_queryset()
+        qs = (
+            self.get_queryset().filter(mentor=request.user)
+            if role_of(request.user) == "teacher"
+            else self.get_queryset()
+        )
         data = []
         for project in qs:
             overdue = sum(1 for t in project.tasks.all() if t.is_overdue)
@@ -153,7 +165,9 @@ class ProjectViewSet(TenantScopedQuerysetMixin, viewsets.ModelViewSet):
         if student is None:
             raise ValidationError({"student": "Student not found."})
         if project.members.filter(student=student).exists():
-            raise ValidationError({"student": "Student is already a member of this project."})
+            raise ValidationError(
+                {"student": "Student is already a member of this project."}
+            )
         member = ProjectMember(
             tenant=project.tenant, project=project, student=student, role=role
         )
@@ -164,11 +178,15 @@ class ProjectViewSet(TenantScopedQuerysetMixin, viewsets.ModelViewSet):
         try:
             member.save()
         except IntegrityError:
-            raise ValidationError({"student": "Student is already a member of this project."})
+            raise ValidationError(
+                {"student": "Student is already a member of this project."}
+            )
         if role == "leader":
             project.leader = student
             project.save(update_fields=["leader", "updated_at"])
-        return Response(ProjectMemberSerializer(member).data, status=status.HTTP_201_CREATED)
+        return Response(
+            ProjectMemberSerializer(member).data, status=status.HTTP_201_CREATED
+        )
 
     @action(detail=True, methods=["delete"], url_path=r"members/(?P<student_pk>[^/.]+)")
     def remove_member(self, request, pk=None, student_pk=None):
@@ -195,7 +213,9 @@ class ProjectViewSet(TenantScopedQuerysetMixin, viewsets.ModelViewSet):
             raise ValidationError({"student": "Required."})
         member = project.members.filter(student_id=student_id).first()
         if member is None:
-            raise ValidationError({"student": "Leader must already be a project member."})
+            raise ValidationError(
+                {"student": "Leader must already be a project member."}
+            )
         project.members.filter(role="leader").update(role="member")
         member.role = "leader"
         member.save(update_fields=["role"])
@@ -253,7 +273,9 @@ class ProjectViewSet(TenantScopedQuerysetMixin, viewsets.ModelViewSet):
             body=request.data.get("notes", ""),
             meta={"submission_id": str(sub.submission_id), "is_late": sub.is_late},
         )
-        return Response(ProjectSubmissionSerializer(sub).data, status=status.HTTP_201_CREATED)
+        return Response(
+            ProjectSubmissionSerializer(sub).data, status=status.HTTP_201_CREATED
+        )
 
     @action(detail=True, methods=["post"], url_path="grade")
     def grade(self, request, pk=None):
@@ -273,7 +295,9 @@ class ProjectViewSet(TenantScopedQuerysetMixin, viewsets.ModelViewSet):
         if rubric is not None:
             project.rubric_json = rubric
         project.status = "graded"
-        project.save(update_fields=["final_grade", "rubric_json", "status", "updated_at"])
+        project.save(
+            update_fields=["final_grade", "rubric_json", "status", "updated_at"]
+        )
         ProjectUpdate.objects.create(
             tenant=project.tenant,
             project=project,
@@ -289,7 +313,9 @@ class ProjectViewSet(TenantScopedQuerysetMixin, viewsets.ModelViewSet):
 
 
 class ProjectTaskViewSet(TenantScopedQuerysetMixin, viewsets.ModelViewSet):
-    queryset = ProjectTask.objects.select_related("project", "assignee", "created_by").all()
+    queryset = ProjectTask.objects.select_related(
+        "project", "assignee", "created_by"
+    ).all()
     serializer_class = ProjectTaskSerializer
     permission_classes = [IsAuthenticated, IsProjectsEnabled, CanWriteOnProjectTask]
     tenant_field = "tenant"
@@ -297,7 +323,9 @@ class ProjectTaskViewSet(TenantScopedQuerysetMixin, viewsets.ModelViewSet):
     def get_queryset(self):
         qs = super().get_queryset()
         # Limit tasks to projects visible to the user.
-        visible_projects = Project.objects.filter(project_visibility_q(self.request.user))
+        visible_projects = Project.objects.filter(
+            project_visibility_q(self.request.user)
+        )
         qs = qs.filter(project__in=visible_projects)
         project_id = self.request.query_params.get("project")
         if project_id:
@@ -308,7 +336,11 @@ class ProjectTaskViewSet(TenantScopedQuerysetMixin, viewsets.ModelViewSet):
         user = self.request.user
         project = serializer.validated_data["project"]
         student = get_student_for(user)
-        if not (is_admin(user) or is_mentor_of(user, project) or is_leader_of(student, project)):
+        if not (
+            is_admin(user)
+            or is_mentor_of(user, project)
+            or is_leader_of(student, project)
+        ):
             raise PermissionDenied("Only mentor or leader can create tasks.")
         serializer.save(tenant=project.tenant, created_by=user)
         ProjectUpdate.objects.create(
@@ -326,9 +358,11 @@ class ProjectTaskViewSet(TenantScopedQuerysetMixin, viewsets.ModelViewSet):
         new_status = serializer.validated_data.get("status", old_status)
         student = get_student_for(self.request.user)
         # Members can only update their own task's status — block any other field changes.
-        if not is_admin(self.request.user) and not is_mentor_of(
-            self.request.user, instance.project
-        ) and not is_leader_of(student, instance.project):
+        if (
+            not is_admin(self.request.user)
+            and not is_mentor_of(self.request.user, instance.project)
+            and not is_leader_of(student, instance.project)
+        ):
             allowed_fields = {"status"}
             attempted = set(serializer.validated_data.keys())
             disallowed = attempted - allowed_fields
@@ -361,7 +395,9 @@ class ProjectUpdateViewSet(TenantScopedQuerysetMixin, viewsets.ModelViewSet):
 
     def get_queryset(self):
         qs = super().get_queryset()
-        visible_projects = Project.objects.filter(project_visibility_q(self.request.user))
+        visible_projects = Project.objects.filter(
+            project_visibility_q(self.request.user)
+        )
         qs = qs.filter(project__in=visible_projects)
         project_id = self.request.query_params.get("project")
         if project_id:
@@ -385,14 +421,18 @@ class ProjectUpdateViewSet(TenantScopedQuerysetMixin, viewsets.ModelViewSet):
         # Only allow the comment kind via the public API; system kinds emitted by viewsets.
         kind = serializer.validated_data.get("kind", "comment")
         if kind != "comment" and not is_admin(user):
-            raise PermissionDenied("Only 'comment' updates can be created via this endpoint.")
+            raise PermissionDenied(
+                "Only 'comment' updates can be created via this endpoint."
+            )
         serializer.save(tenant=project.tenant, author=user)
 
 
 # --- Submission ---
 
 
-class ProjectSubmissionViewSet(TenantScopedQuerysetMixin, viewsets.ReadOnlyModelViewSet):
+class ProjectSubmissionViewSet(
+    TenantScopedQuerysetMixin, viewsets.ReadOnlyModelViewSet
+):
     """Submissions are created via Project.submit; this viewset exposes them read-only."""
 
     queryset = ProjectSubmission.objects.select_related("project", "submitted_by").all()
@@ -402,7 +442,9 @@ class ProjectSubmissionViewSet(TenantScopedQuerysetMixin, viewsets.ReadOnlyModel
 
     def get_queryset(self):
         qs = super().get_queryset()
-        visible_projects = Project.objects.filter(project_visibility_q(self.request.user))
+        visible_projects = Project.objects.filter(
+            project_visibility_q(self.request.user)
+        )
         qs = qs.filter(project__in=visible_projects)
         project_id = self.request.query_params.get("project")
         if project_id:
@@ -424,7 +466,9 @@ class ProjectAttachmentViewSet(TenantScopedQuerysetMixin, viewsets.ModelViewSet)
 
     def get_queryset(self):
         qs = super().get_queryset()
-        visible_projects = Project.objects.filter(project_visibility_q(self.request.user))
+        visible_projects = Project.objects.filter(
+            project_visibility_q(self.request.user)
+        )
         qs = qs.filter(project__in=visible_projects)
         project_id = self.request.query_params.get("project")
         if project_id:
@@ -492,11 +536,17 @@ class RubricTemplateViewSet(TenantScopedQuerysetMixin, viewsets.ModelViewSet):
 
     def perform_update(self, serializer):
         instance = serializer.instance
-        if not is_admin(self.request.user) and instance.owner_id != self.request.user.pk:
+        if (
+            not is_admin(self.request.user)
+            and instance.owner_id != self.request.user.pk
+        ):
             raise PermissionDenied("You can only edit your own rubric templates.")
         serializer.save()
 
     def perform_destroy(self, instance):
-        if not is_admin(self.request.user) and instance.owner_id != self.request.user.pk:
+        if (
+            not is_admin(self.request.user)
+            and instance.owner_id != self.request.user.pk
+        ):
             raise PermissionDenied("You can only delete your own rubric templates.")
         instance.delete()

@@ -9,7 +9,16 @@ from django_tenants.utils import tenant_context
 from rest_framework import status
 from rest_framework.test import APIClient
 
-from academic.models import AcademicClass, Assessment, Chapter, Lesson, Result, Student, Subject, Teacher
+from academic.models import (
+    AcademicClass,
+    Assessment,
+    Chapter,
+    Lesson,
+    Result,
+    Student,
+    Subject,
+    Teacher,
+)
 from academic.models.submission import Submission
 from ai_engine.models import AIGradingDraft, GradingRubric
 
@@ -55,7 +64,9 @@ class AssistedGradingApiTests(FastTenantTestCase):
             self.academic_class = AcademicClass.objects.create(name="Grade 10")
             self.teacher_profile = Teacher.objects.create(user=self.teacher_user)
             self.teacher_profile.assigned_classes.add(self.academic_class)
-            self.student_profile = Student.objects.create(user=self.student_user, academic_class=self.academic_class)
+            self.student_profile = Student.objects.create(
+                user=self.student_user, academic_class=self.academic_class
+            )
 
             self.subject = Subject.objects.create(
                 name="Science",
@@ -63,7 +74,9 @@ class AssistedGradingApiTests(FastTenantTestCase):
                 is_active=True,
                 teacher=self.teacher_profile,
             )
-            chapter = Chapter.objects.create(subject=self.subject, title="Motion", order=1, is_published=True)
+            chapter = Chapter.objects.create(
+                subject=self.subject, title="Motion", order=1, is_published=True
+            )
             lesson = Lesson.objects.create(
                 chapter=chapter,
                 title="Newton Laws",
@@ -109,15 +122,22 @@ class AssistedGradingApiTests(FastTenantTestCase):
 
         draft_resp = student_client.post(
             "/api/ai/grading/grade_submission/",
-            {"submission_id": str(self.submission.submission_id), "rubric_id": "00000000-0000-0000-0000-000000000000"},
+            {
+                "submission_id": str(self.submission.submission_id),
+                "rubric_id": "00000000-0000-0000-0000-000000000000",
+            },
             format="json",
         )
         self.assertEqual(draft_resp.status_code, status.HTTP_403_FORBIDDEN)
 
-        list_resp = student_client.get(f"/api/ai/grading/drafts/?submission_id={self.submission.submission_id}")
+        list_resp = student_client.get(
+            f"/api/ai/grading/drafts/?submission_id={self.submission.submission_id}"
+        )
         self.assertEqual(list_resp.status_code, status.HTTP_403_FORBIDDEN)
 
-    @patch("ai_engine.services.assisted_grading_service.AssistedGradingService._call_model")
+    @patch(
+        "ai_engine.services.assisted_grading_service.AssistedGradingService._call_model"
+    )
     def test_teacher_can_create_draft_and_approve(self, mock_call_model):
         mock_call_model.return_value = (
             (
@@ -151,7 +171,10 @@ class AssistedGradingApiTests(FastTenantTestCase):
 
         draft_resp = teacher_client.post(
             "/api/ai/grading/grade_submission/",
-            {"submission_id": str(self.submission.submission_id), "rubric_id": rubric_id},
+            {
+                "submission_id": str(self.submission.submission_id),
+                "rubric_id": rubric_id,
+            },
             format="json",
         )
         self.assertEqual(draft_resp.status_code, status.HTTP_200_OK)
@@ -165,7 +188,9 @@ class AssistedGradingApiTests(FastTenantTestCase):
         self.assertIsNone(draft.approved_by)
 
         student_client = self._client_for(self.student_user)
-        student_draft_view = student_client.get(f"/api/ai/grading/drafts/?submission_id={self.submission.submission_id}")
+        student_draft_view = student_client.get(
+            f"/api/ai/grading/drafts/?submission_id={self.submission.submission_id}"
+        )
         self.assertEqual(student_draft_view.status_code, status.HTTP_403_FORBIDDEN)
 
         approve_resp = teacher_client.post(
@@ -184,6 +209,8 @@ class AssistedGradingApiTests(FastTenantTestCase):
         self.assertTrue(self.submission.is_graded)
         self.assertEqual(self.submission.status, "graded")
 
-        result = Result.objects.filter(assessment=self.assessment, student=self.student_profile).first()
+        result = Result.objects.filter(
+            assessment=self.assessment, student=self.student_profile
+        ).first()
         self.assertIsNotNone(result)
         self.assertEqual(int(result.score), int(round(draft.score)))

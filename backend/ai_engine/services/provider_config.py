@@ -7,7 +7,6 @@ from urllib.parse import urlparse, urlunparse
 
 from core.models import GlobalSettings
 
-
 DEFAULT_BASE_URL = "https://api.openai.com/v1"
 DEFAULT_MODEL = "gpt-3.5-turbo"
 OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
@@ -58,10 +57,14 @@ def _normalize_known_provider_path(provider_name: str, base_url: str) -> str:
         if normalized_path in ("",):
             normalized_path = "/v1"
 
-    return urlunparse(parsed._replace(path=normalized_path or parsed.path or "/")).rstrip("/")
+    return urlunparse(
+        parsed._replace(path=normalized_path or parsed.path or "/")
+    ).rstrip("/")
 
 
-def resolve_provider_and_base_url(provider_name: str, base_url: str, api_key: str) -> Tuple[str, str]:
+def resolve_provider_and_base_url(
+    provider_name: str, base_url: str, api_key: str
+) -> Tuple[str, str]:
     normalized_provider = (provider_name or "").strip()
     normalized_url = normalize_base_url(base_url)
     key = (api_key or "").strip()
@@ -89,7 +92,9 @@ def resolve_provider_and_base_url(provider_name: str, base_url: str, api_key: st
         if not normalized_url or url_is_openrouter:
             normalized_url = DEFAULT_BASE_URL
     else:
-        resolved_provider = normalized_provider or _infer_provider_name(normalized_url or DEFAULT_BASE_URL)
+        resolved_provider = normalized_provider or _infer_provider_name(
+            normalized_url or DEFAULT_BASE_URL
+        )
         if not normalized_url:
             normalized_url = DEFAULT_BASE_URL
 

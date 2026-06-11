@@ -28,10 +28,10 @@ from typing import Any
 
 from django.utils import timezone
 
-from ai_engine.models import AiGeneratedArtifact, AIInteractionLog
-from ai_engine.services.provider_config import get_ai_provider_config
 from academic.models.assessment import Assessment, Result
 from academic.models.subject import Subject
+from ai_engine.models import AiGeneratedArtifact, AIInteractionLog
+from ai_engine.services.provider_config import get_ai_provider_config
 
 logger = logging.getLogger(__name__)
 
@@ -149,9 +149,17 @@ class MisconceptionDetectionService:
                 if item.get("is_correct") is False or item.get("correct") is False:
                     by_subject[key]["wrong_answers"].append(
                         {
-                            "question": str(item.get("question") or item.get("prompt") or ""),
-                            "student_answer": str(item.get("student_answer") or item.get("given_answer") or ""),
-                            "correct_answer": str(item.get("correct_answer") or item.get("answer") or ""),
+                            "question": str(
+                                item.get("question") or item.get("prompt") or ""
+                            ),
+                            "student_answer": str(
+                                item.get("student_answer")
+                                or item.get("given_answer")
+                                or ""
+                            ),
+                            "correct_answer": str(
+                                item.get("correct_answer") or item.get("answer") or ""
+                            ),
                         }
                     )
 
@@ -172,7 +180,11 @@ class MisconceptionDetectionService:
         if not wrong_answers:
             return []
 
-        from ai_engine.services.ai_client import parse_json_content, provider_ready, structured_chat
+        from ai_engine.services.ai_client import (
+            parse_json_content,
+            provider_ready,
+            structured_chat,
+        )
 
         if not provider_ready():
             return self._rule_based_fallback(wrong_answers)
@@ -210,7 +222,10 @@ class MisconceptionDetectionService:
                             "example_question": {"type": "string"},
                             "wrong_answer_given": {"type": "string"},
                             "correct_answer": {"type": "string"},
-                            "severity": {"type": "string", "enum": ["high", "medium", "low"]},
+                            "severity": {
+                                "type": "string",
+                                "enum": ["high", "medium", "low"],
+                            },
                         },
                         "required": [
                             "label",
@@ -270,9 +285,15 @@ class MisconceptionDetectionService:
             {
                 "label": "Recurring error pattern",
                 "description": "Student made multiple mistakes in this topic area.",
-                "example_question": wrong_answers[0]["question"] if wrong_answers else "",
-                "wrong_answer_given": wrong_answers[0]["student_answer"] if wrong_answers else "",
-                "correct_answer": wrong_answers[0]["correct_answer"] if wrong_answers else "",
+                "example_question": (
+                    wrong_answers[0]["question"] if wrong_answers else ""
+                ),
+                "wrong_answer_given": (
+                    wrong_answers[0]["student_answer"] if wrong_answers else ""
+                ),
+                "correct_answer": (
+                    wrong_answers[0]["correct_answer"] if wrong_answers else ""
+                ),
                 "severity": "medium",
             }
         ]

@@ -5,11 +5,11 @@
 
 """Simple script to create library tables directly"""
 
-import sqlite3
 import os
+import sqlite3
 
 # Database path
-db_path = 'config/school_pramod.sqlite3'
+db_path = "config/school_pramod.sqlite3"
 
 print(f"Database path: {os.path.abspath(db_path)}")
 print(f"Database exists: {os.path.exists(db_path)}")
@@ -63,7 +63,9 @@ print("✓ Created library_bookissue table")
 conn.commit()
 
 # Verify tables exist
-cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'library_%'")
+cursor.execute(
+    "SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'library_%'"
+)
 tables = cursor.fetchall()
 
 print("\n=== Verification ===")

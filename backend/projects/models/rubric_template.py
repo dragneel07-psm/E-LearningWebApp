@@ -18,7 +18,9 @@ class RubricTemplate(models.Model):
     can manage their own.
     """
 
-    template_id = models.UUIDField(primary_key=True, default=uuid_lib.uuid4, editable=False)
+    template_id = models.UUIDField(
+        primary_key=True, default=uuid_lib.uuid4, editable=False
+    )
     tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE, db_constraint=False)
 
     name = models.CharField(max_length=200)

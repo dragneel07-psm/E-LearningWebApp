@@ -10,16 +10,14 @@ live in models_nas.py and models_ledger.py and would emit catastrophic
 DeleteModel migrations for them. Importing here registers the models
 exactly once.
 """
+
+from .models_ledger import LedgerAccount, LedgerEntry  # noqa: F401
 from .models_nas import (  # noqa: F401
     ChartOfAccount,
+    FundAccount,
+    InventoryItem,
     JournalEntry,
     JournalLine,
-    FundAccount,
-    TDSEntry,
-    InventoryItem,
     MerchantServiceFee,
-)
-from .models_ledger import (  # noqa: F401
-    LedgerAccount,
-    LedgerEntry,
+    TDSEntry,
 )

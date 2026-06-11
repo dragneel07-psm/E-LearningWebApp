@@ -159,7 +159,10 @@ class AdminAssistantApiTests(FastTenantTestCase):
         self.assertEqual(response.data["query_type"], "students")
         self.assertEqual(int(response.data["data"]["total_students"]), 1)
 
-    @patch("ai_engine.services.admin_assistant_service.AdminAssistantService._classify_intent", return_value="raw_sql")
+    @patch(
+        "ai_engine.services.admin_assistant_service.AdminAssistantService._classify_intent",
+        return_value="raw_sql",
+    )
     def test_malicious_classifier_output_cannot_force_unsafe_tool(self, _mock_classify):
         client = self._client_for(self.admin_user)
         response = client.post(

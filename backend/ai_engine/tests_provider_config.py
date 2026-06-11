@@ -56,4 +56,3 @@ class ProviderConfigTests(SimpleTestCase):
 
     def test_build_provider_headers_empty_for_non_openrouter(self):
         self.assertEqual(build_provider_headers("OpenAI"), {})
-

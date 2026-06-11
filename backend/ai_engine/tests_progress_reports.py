@@ -4,6 +4,7 @@
 """
 Tests for ProgressReportService and the progress-report API endpoints.
 """
+
 from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
@@ -11,8 +12,8 @@ from unittest.mock import MagicMock, patch
 from django.test import TestCase
 from django.utils import timezone
 
-
 # ── Helpers ──────────────────────────────────────────────────────────────────
+
 
 def _mock_tenant():
     t = MagicMock()
@@ -43,6 +44,7 @@ def _mock_student(tenant=None):
 
 def _service(tenant=None):
     from ai_engine.services.progress_report_service import ProgressReportService
+
     return ProgressReportService(tenant=tenant or _mock_tenant(), db_alias="default")
 
 
@@ -78,6 +80,7 @@ def _fake_metrics():
 
 # ── ProgressReportService unit tests ─────────────────────────────────────────
 
+
 class ProgressReportServiceTests(TestCase):
 
     def test_generate_returns_student_report_dict(self):
@@ -87,16 +90,16 @@ class ProgressReportServiceTests(TestCase):
         fake_ai = {"summary": "Great work!", "strengths": ["Algebra"]}
 
         with (
-            patch.object(service, '_collect_metrics', return_value=_fake_metrics()),
-            patch.object(service, '_generate_ai_section', return_value=fake_ai),
+            patch.object(service, "_collect_metrics", return_value=_fake_metrics()),
+            patch.object(service, "_generate_ai_section", return_value=fake_ai),
         ):
-            result = service.generate(student, report_type='student', save=False)
+            result = service.generate(student, report_type="student", save=False)
 
-        self.assertIn('report', result)
-        self.assertEqual(result['report']['report_type'], 'student')
-        self.assertIn('metrics', result['report'])
-        self.assertIn('ai', result['report'])
-        self.assertFalse(result['cached'])
+        self.assertIn("report", result)
+        self.assertEqual(result["report"]["report_type"], "student")
+        self.assertIn("metrics", result["report"])
+        self.assertIn("ai", result["report"])
+        self.assertFalse(result["cached"])
 
     def test_generate_parent_report(self):
         """generate() for parent type includes report_type=parent."""
@@ -109,12 +112,12 @@ class ProgressReportServiceTests(TestCase):
         }
 
         with (
-            patch.object(service, '_collect_metrics', return_value=_fake_metrics()),
-            patch.object(service, '_generate_ai_section', return_value=fake_ai),
+            patch.object(service, "_collect_metrics", return_value=_fake_metrics()),
+            patch.object(service, "_generate_ai_section", return_value=fake_ai),
         ):
-            result = service.generate(student, report_type='parent', save=False)
+            result = service.generate(student, report_type="parent", save=False)
 
-        self.assertEqual(result['report']['report_type'], 'parent')
+        self.assertEqual(result["report"]["report_type"], "parent")
 
     def test_generate_teacher_report(self):
         """generate() for teacher type includes report_type=teacher."""
@@ -127,12 +130,12 @@ class ProgressReportServiceTests(TestCase):
         }
 
         with (
-            patch.object(service, '_collect_metrics', return_value=_fake_metrics()),
-            patch.object(service, '_generate_ai_section', return_value=fake_ai),
+            patch.object(service, "_collect_metrics", return_value=_fake_metrics()),
+            patch.object(service, "_generate_ai_section", return_value=fake_ai),
         ):
-            result = service.generate(student, report_type='teacher', save=False)
+            result = service.generate(student, report_type="teacher", save=False)
 
-        self.assertEqual(result['report']['report_type'], 'teacher')
+        self.assertEqual(result["report"]["report_type"], "teacher")
 
     def test_get_or_generate_uses_cache(self):
         """get_or_generate returns cached report within 7-day window."""
@@ -140,24 +143,26 @@ class ProgressReportServiceTests(TestCase):
         student = _mock_student()
 
         cached_report_data = {
-            'report_type': 'student',
-            'student_name': 'Alice',
-            'class_name': 'Grade 10',
-            'generated_at': timezone.now().isoformat(),
-            'metrics': _fake_metrics(),
-            'ai': {'summary': 'Cached'},
+            "report_type": "student",
+            "student_name": "Alice",
+            "class_name": "Grade 10",
+            "generated_at": timezone.now().isoformat(),
+            "metrics": _fake_metrics(),
+            "ai": {"summary": "Cached"},
         }
         mock_report = MagicMock()
         mock_report.report_data = cached_report_data
         mock_report.generated_at = timezone.now()
 
-        with patch('ai_engine.models.StudentAIReport.objects') as mock_mgr:
+        with patch("ai_engine.models.StudentAIReport.objects") as mock_mgr:
             mock_filter = mock_mgr.using.return_value.filter.return_value
             mock_filter.order_by.return_value.first.return_value = mock_report
-            result = service.get_or_generate(student, report_type='student', force=False)
+            result = service.get_or_generate(
+                student, report_type="student", force=False
+            )
 
-        self.assertTrue(result['cached'])
-        self.assertEqual(result['report']['ai']['summary'], 'Cached')
+        self.assertTrue(result["cached"])
+        self.assertEqual(result["report"]["ai"]["summary"], "Cached")
 
     def test_get_or_generate_force_bypasses_cache(self):
         """get_or_generate with force=True always generates fresh."""
@@ -165,47 +170,49 @@ class ProgressReportServiceTests(TestCase):
         student = _mock_student()
 
         fake_result = {
-            'cached': False,
-            'report': {
-                'report_type': 'student',
-                'metrics': _fake_metrics(),
-                'ai': {'summary': 'Fresh'},
+            "cached": False,
+            "report": {
+                "report_type": "student",
+                "metrics": _fake_metrics(),
+                "ai": {"summary": "Fresh"},
             },
-            'generated_at': timezone.now().isoformat(),
+            "generated_at": timezone.now().isoformat(),
         }
 
-        with patch.object(service, 'generate', return_value=fake_result) as mock_gen:
-            result = service.get_or_generate(student, report_type='student', force=True)
+        with patch.object(service, "generate", return_value=fake_result) as mock_gen:
+            result = service.get_or_generate(student, report_type="student", force=True)
 
         mock_gen.assert_called_once()
-        self.assertEqual(result['report']['ai']['summary'], 'Fresh')
+        self.assertEqual(result["report"]["ai"]["summary"], "Fresh")
 
     def test_fallback_section_student(self):
         """_fallback_section returns valid structure for student type."""
         service = _service()
-        fb = service._fallback_section(_fake_metrics(), 'student')
-        self.assertIn('summary', fb)
-        self.assertIn('strengths', fb)
+        fb = service._fallback_section(_fake_metrics(), "student")
+        self.assertIn("summary", fb)
+        self.assertIn("strengths", fb)
 
     def test_fallback_section_teacher(self):
         """_fallback_section returns risk_level for teacher type."""
         service = _service()
-        fb = service._fallback_section(_fake_metrics(), 'teacher')
-        self.assertIn('risk_level', fb)
+        fb = service._fallback_section(_fake_metrics(), "teacher")
+        self.assertIn("risk_level", fb)
 
     def test_fallback_section_parent(self):
         """_fallback_section returns home_tips for parent type."""
         service = _service()
-        fb = service._fallback_section(_fake_metrics(), 'parent')
-        self.assertIn('overview', fb)
+        fb = service._fallback_section(_fake_metrics(), "parent")
+        self.assertIn("overview", fb)
 
     def test_list_history_returns_list(self):
         """list_history returns a list of past report dicts."""
         service = _service()
         student = _mock_student()
 
-        with patch.object(service, 'list_history', return_value=[{'report_id': 'rpt-1'}]) as mock_lh:
-            history = service.list_history(student, report_type='student', limit=5)
+        with patch.object(
+            service, "list_history", return_value=[{"report_id": "rpt-1"}]
+        ) as mock_lh:
+            history = service.list_history(student, report_type="student", limit=5)
 
         self.assertIsInstance(history, list)
 
@@ -215,62 +222,73 @@ class ProgressReportServiceTests(TestCase):
         student = _mock_student()
 
         with (
-            patch.object(service, '_collect_metrics', return_value=_fake_metrics()) as mock_cm,
-            patch.object(service, '_generate_ai_section', return_value={}),
+            patch.object(
+                service, "_collect_metrics", return_value=_fake_metrics()
+            ) as mock_cm,
+            patch.object(service, "_generate_ai_section", return_value={}),
         ):
-            service.generate(student, report_type='student', save=False)
+            service.generate(student, report_type="student", save=False)
 
         mock_cm.assert_called_once_with(student)
 
     def test_extract_json_plain(self):
         """_extract_json parses plain JSON string."""
         from ai_engine.services.progress_report_service import _extract_json
+
         result = _extract_json('{"summary": "ok", "strengths": []}')
-        self.assertEqual(result['summary'], 'ok')
+        self.assertEqual(result["summary"], "ok")
 
     def test_extract_json_fenced(self):
         """_extract_json strips markdown code fences."""
         from ai_engine.services.progress_report_service import _extract_json
+
         fenced = '```json\n{"summary": "fenced"}\n```'
         result = _extract_json(fenced)
-        self.assertEqual(result['summary'], 'fenced')
+        self.assertEqual(result["summary"], "fenced")
 
     def test_extract_json_empty(self):
         """_extract_json returns empty dict for empty/None input."""
         from ai_engine.services.progress_report_service import _extract_json
-        self.assertEqual(_extract_json(''), {})
+
+        self.assertEqual(_extract_json(""), {})
         self.assertEqual(_extract_json(None), {})
 
     def test_extract_json_invalid_falls_back(self):
         """_extract_json returns {} for non-JSON input."""
         from ai_engine.services.progress_report_service import _extract_json
-        self.assertEqual(_extract_json('not json at all'), {})
+
+        self.assertEqual(_extract_json("not json at all"), {})
 
 
 # ── API endpoint tests ────────────────────────────────────────────────────────
+
 
 class ProgressReportAPITests(TestCase):
 
     def test_my_report_requires_authentication(self):
         from rest_framework.test import APIClient
+
         client = APIClient()
-        resp = client.get('/api/ai/reports/me/')
+        resp = client.get("/api/ai/reports/me/")
         self.assertIn(resp.status_code, [400, 401, 403])
 
     def test_generate_report_requires_authentication(self):
         from rest_framework.test import APIClient
+
         client = APIClient()
-        resp = client.post('/api/ai/reports/me/generate/', {}, format='json')
+        resp = client.post("/api/ai/reports/me/generate/", {}, format="json")
         self.assertIn(resp.status_code, [400, 401, 403])
 
     def test_history_requires_authentication(self):
         from rest_framework.test import APIClient
+
         client = APIClient()
-        resp = client.get('/api/ai/reports/me/history/')
+        resp = client.get("/api/ai/reports/me/history/")
         self.assertIn(resp.status_code, [400, 401, 403])
 
     def test_class_report_requires_authentication(self):
         from rest_framework.test import APIClient
+
         client = APIClient()
-        resp = client.get('/api/ai/reports/class/1/')
+        resp = client.get("/api/ai/reports/class/1/")
         self.assertIn(resp.status_code, [400, 401, 403])

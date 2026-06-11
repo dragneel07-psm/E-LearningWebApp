@@ -5,7 +5,16 @@ from django_tenants.test.cases import FastTenantTestCase
 from rest_framework import status
 from rest_framework.test import APIClient
 
-from academic.models import AcademicClass, AcademicYear, Assessment, Parent, Result, Student, Subject, Teacher
+from academic.models import (
+    AcademicClass,
+    AcademicYear,
+    Assessment,
+    Parent,
+    Result,
+    Student,
+    Subject,
+    Teacher,
+)
 from academic.models.submission import Submission
 from users.models import UserAccount
 
@@ -85,8 +94,12 @@ class AssessmentAccessControlTests(FastTenantTestCase):
         self.teacher = Teacher.objects.create(user=self.teacher_user)
         self.teacher.assigned_classes.add(class_8)
 
-        self.student = Student.objects.create(user=self.student_user, academic_class=class_8)
-        self.other_student = Student.objects.create(user=self.other_student_user, academic_class=class_9)
+        self.student = Student.objects.create(
+            user=self.student_user, academic_class=class_8
+        )
+        self.other_student = Student.objects.create(
+            user=self.other_student_user, academic_class=class_9
+        )
 
         parent = Parent.objects.create(user=self.parent_user)
         parent.students.add(self.student)
@@ -149,8 +162,12 @@ class AssessmentAccessControlTests(FastTenantTestCase):
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
 
     def test_parent_only_sees_child_results(self):
-        Result.objects.create(assessment=self.assessment_8, student=self.student, score=16)
-        Result.objects.create(assessment=self.assessment_9, student=self.other_student, score=12)
+        Result.objects.create(
+            assessment=self.assessment_8, student=self.student, score=16
+        )
+        Result.objects.create(
+            assessment=self.assessment_9, student=self.other_student, score=12
+        )
 
         self.client.force_authenticate(user=self.parent_user)
         response = self.client.get("/api/academic/results/")

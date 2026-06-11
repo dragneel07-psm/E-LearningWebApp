@@ -10,7 +10,7 @@ from typing import Any
 from django.db.models import Q
 
 from academic.models import Chapter, Subject
-from ai_engine.models import AIInteractionLog, AiGeneratedArtifact, ContentChunk
+from ai_engine.models import AiGeneratedArtifact, AIInteractionLog, ContentChunk
 from ai_engine.services.rag_tutor_service import RAGTutorService
 
 
@@ -32,7 +32,11 @@ class ExamPaperGeneratorService:
         if not candidate:
             return None
 
-        fenced = re.search(r"```(?:json)?\s*(\{.*\}|\[.*\])\s*```", candidate, re.DOTALL | re.IGNORECASE)
+        fenced = re.search(
+            r"```(?:json)?\s*(\{.*\}|\[.*\])\s*```",
+            candidate,
+            re.DOTALL | re.IGNORECASE,
+        )
         if fenced:
             candidate = fenced.group(1).strip()
 
@@ -57,7 +61,9 @@ class ExamPaperGeneratorService:
         if min(easy, medium, hard) < 0:
             raise ExamPaperGenerationError("difficulty_mix values must be >= 0.")
         if easy + medium + hard != 100:
-            raise ExamPaperGenerationError("difficulty_mix percentages must sum to 100.")
+            raise ExamPaperGenerationError(
+                "difficulty_mix percentages must sum to 100."
+            )
         return {"easy": easy, "medium": medium, "hard": hard}
 
     @staticmethod
@@ -80,10 +86,14 @@ class ExamPaperGeneratorService:
         if subject is None:
             raise ExamPaperGenerationError("subject not found.")
         if int(subject.academic_class_id) != parsed_class_id:
-            raise ExamPaperGenerationError("class_id does not match the selected subject.")
+            raise ExamPaperGenerationError(
+                "class_id does not match the selected subject."
+            )
         return subject
 
-    def _resolve_chapters(self, *, subject: Subject, units: list[Any] | None) -> list[Chapter]:
+    def _resolve_chapters(
+        self, *, subject: Subject, units: list[Any] | None
+    ) -> list[Chapter]:
         all_chapters = list(subject.chapters.all().order_by("order", "id"))
         if not all_chapters:
             raise ExamPaperGenerationError("No chapters found for this subject.")
@@ -103,9 +113,13 @@ class ExamPaperGeneratorService:
         if not unit_ids:
             return all_chapters
 
-        selected = [chapter for chapter in all_chapters if int(chapter.id) in set(unit_ids)]
+        selected = [
+            chapter for chapter in all_chapters if int(chapter.id) in set(unit_ids)
+        ]
         if len(selected) != len(set(unit_ids)):
-            raise ExamPaperGenerationError("One or more unit chapter ids are invalid for this subject.")
+            raise ExamPaperGenerationError(
+                "One or more unit chapter ids are invalid for this subject."
+            )
         return selected
 
     @staticmethod
@@ -123,7 +137,9 @@ class ExamPaperGeneratorService:
             for lesson in lessons:
                 lines.append(f"  - Lesson {lesson.id}: {lesson.title}")
                 if lesson.content:
-                    lines.append(f"    Content snippet: {str(lesson.content).strip()[:260]}")
+                    lines.append(
+                        f"    Content snippet: {str(lesson.content).strip()[:260]}"
+                    )
         return "\n".join(lines)
 
     def _chunks_for_chapters(self, chapters: list[Chapter]) -> list[ContentChunk]:
@@ -154,9 +170,13 @@ class ExamPaperGeneratorService:
         curriculum_text: str,
         chunk_snippets: list[str],
     ) -> list[dict[str, str]]:
-        snippets = "\n\n".join(f"[Chunk {idx + 1}]\n{text}" for idx, text in enumerate(chunk_snippets[:10]))
+        snippets = "\n\n".join(
+            f"[Chunk {idx + 1}]\n{text}" for idx, text in enumerate(chunk_snippets[:10])
+        )
         if not snippets:
-            snippets = "[Chunk 1]\nNo indexed chunks were found. Use curriculum text only."
+            snippets = (
+                "[Chunk 1]\nNo indexed chunks were found. Use curriculum text only."
+            )
 
         chapter_ids = [chapter.id for chapter in chapters]
         return [
@@ -218,7 +238,9 @@ class ExamPaperGeneratorService:
         ]
 
     @staticmethod
-    def _json_fix_messages(raw_text: str, marks: int, difficulty_mix: dict[str, int]) -> list[dict[str, str]]:
+    def _json_fix_messages(
+        raw_text: str, marks: int, difficulty_mix: dict[str, int]
+    ) -> list[dict[str, str]]:
         return [
             {
                 "role": "system",
@@ -256,7 +278,9 @@ class ExamPaperGeneratorService:
 
         options: list[str] = []
         if isinstance(raw.get("options"), list):
-            options = [str(option).strip() for option in raw["options"] if str(option).strip()]
+            options = [
+                str(option).strip() for option in raw["options"] if str(option).strip()
+            ]
         if qtype == "mcq" and len(options) < 2:
             return None
 
@@ -283,7 +307,11 @@ class ExamPaperGeneratorService:
         answer_key = payload.get("answer_key")
         marking_scheme = payload.get("marking_scheme")
 
-        if not isinstance(paper, dict) or not isinstance(answer_key, dict) or not isinstance(marking_scheme, dict):
+        if (
+            not isinstance(paper, dict)
+            or not isinstance(answer_key, dict)
+            or not isinstance(marking_scheme, dict)
+        ):
             return None
 
         raw_sections = paper.get("sections")
@@ -373,7 +401,11 @@ class ExamPaperGeneratorService:
         chapters = self._resolve_chapters(subject=subject, units=units)
         curriculum_text = self._curriculum_text(subject, chapters)
         chunks = self._chunks_for_chapters(chapters)
-        chunk_snippets = [str(chunk.text or "").strip()[:900] for chunk in chunks if str(chunk.text or "").strip()]
+        chunk_snippets = [
+            str(chunk.text or "").strip()[:900]
+            for chunk in chunks
+            if str(chunk.text or "").strip()
+        ]
 
         messages = self._build_messages(
             subject=subject,
@@ -392,7 +424,9 @@ class ExamPaperGeneratorService:
         )
 
         if normalized_payload is None:
-            fix_messages = self._json_fix_messages(raw_output, total_marks, normalized_mix)
+            fix_messages = self._json_fix_messages(
+                raw_output, total_marks, normalized_mix
+            )
             fixed_output, fixed_usage = self._call_model(fix_messages)
             parsed = self._extract_json(fixed_output)
             normalized_payload = self._normalize_payload(
@@ -401,13 +435,19 @@ class ExamPaperGeneratorService:
                 expected_difficulty_mix=normalized_mix,
             )
             usage = {
-                "model": str(fixed_usage.get("model") or usage.get("model") or "fallback"),
-                "prompt_tokens": int(usage.get("prompt_tokens") or 0) + int(fixed_usage.get("prompt_tokens") or 0),
-                "completion_tokens": int(usage.get("completion_tokens") or 0) + int(fixed_usage.get("completion_tokens") or 0),
+                "model": str(
+                    fixed_usage.get("model") or usage.get("model") or "fallback"
+                ),
+                "prompt_tokens": int(usage.get("prompt_tokens") or 0)
+                + int(fixed_usage.get("prompt_tokens") or 0),
+                "completion_tokens": int(usage.get("completion_tokens") or 0)
+                + int(fixed_usage.get("completion_tokens") or 0),
             }
 
         if normalized_payload is None:
-            raise ExamPaperGenerationError("Model returned invalid exam JSON after one retry.")
+            raise ExamPaperGenerationError(
+                "Model returned invalid exam JSON after one retry."
+            )
 
         artifact_content = dict(normalized_payload)
         artifact_content["_meta"] = {
@@ -425,7 +465,9 @@ class ExamPaperGeneratorService:
             source_id=str(subject.id),
             lang="en",
             content=artifact_content,
-            created_by=self.user if getattr(self.user, "is_authenticated", False) else None,
+            created_by=(
+                self.user if getattr(self.user, "is_authenticated", False) else None
+            ),
         )
 
         try:

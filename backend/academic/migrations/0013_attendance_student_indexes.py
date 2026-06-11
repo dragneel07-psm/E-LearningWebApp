@@ -12,11 +12,15 @@ class Migration(migrations.Migration):
     operations = [
         migrations.AddIndex(
             model_name="attendance",
-            index=models.Index(fields=["student", "date"], name="acad_att_student_date_idx"),
+            index=models.Index(
+                fields=["student", "date"], name="acad_att_student_date_idx"
+            ),
         ),
         migrations.AddIndex(
             model_name="attendance",
-            index=models.Index(fields=["subject", "date"], name="acad_att_subject_date_idx"),
+            index=models.Index(
+                fields=["subject", "date"], name="acad_att_subject_date_idx"
+            ),
         ),
         migrations.AddIndex(
             model_name="student",

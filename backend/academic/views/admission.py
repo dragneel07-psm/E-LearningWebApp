@@ -17,10 +17,10 @@ from ..serializers.admission import AdmissionEnquirySerializer
 
 class AdmissionEnquiryViewSet(TenantScopedQuerysetMixin, viewsets.ModelViewSet):
     queryset = AdmissionEnquiry.objects.select_related(
-        'desired_class',
-        'converted_student__user',
-        'handled_by',
-        'tenant',
+        "desired_class",
+        "converted_student__user",
+        "handled_by",
+        "tenant",
     ).all()
     serializer_class = AdmissionEnquirySerializer
     permission_classes = [permissions.IsAuthenticated]
@@ -31,16 +31,17 @@ class AdmissionEnquiryViewSet(TenantScopedQuerysetMixin, viewsets.ModelViewSet):
             and user.is_authenticated
             and (
                 user.is_superuser
-                or getattr(user, 'role', None) in ['admin', 'staff', 'saas_admin', 'management']
+                or getattr(user, "role", None)
+                in ["admin", "staff", "saas_admin", "management"]
             )
         )
 
     def get_queryset(self):
         queryset = super().get_queryset()
-        status_param = self.request.query_params.get('status')
-        source_param = self.request.query_params.get('source')
-        class_param = self.request.query_params.get('desired_class')
-        query = self.request.query_params.get('q')
+        status_param = self.request.query_params.get("status")
+        source_param = self.request.query_params.get("source")
+        class_param = self.request.query_params.get("desired_class")
+        query = self.request.query_params.get("q")
 
         if status_param:
             queryset = queryset.filter(status=status_param)
@@ -61,67 +62,83 @@ class AdmissionEnquiryViewSet(TenantScopedQuerysetMixin, viewsets.ModelViewSet):
     def perform_create(self, serializer):
         tenant = self.get_tenant()
         if tenant is None:
-            raise ValidationError({'tenant': 'Tenant context is required to create admissions.'})
+            raise ValidationError(
+                {"tenant": "Tenant context is required to create admissions."}
+            )
         serializer.save(tenant=tenant, handled_by=self.request.user)
 
     def perform_update(self, serializer):
         serializer.save(handled_by=self.request.user)
 
-    @action(detail=False, methods=['get'])
+    @action(detail=False, methods=["get"])
     def pipeline(self, request):
         queryset = self.get_queryset()
         counts = {
-            row['status']: row['total']
-            for row in queryset.values('status').annotate(total=Count('enquiry_id'))
+            row["status"]: row["total"]
+            for row in queryset.values("status").annotate(total=Count("enquiry_id"))
         }
 
         payload = {}
         for key, label in AdmissionEnquiry.STATUS_CHOICES:
             payload[key] = {
-                'label': label,
-                'count': int(counts.get(key, 0)),
+                "label": label,
+                "count": int(counts.get(key, 0)),
             }
-        payload['total'] = int(queryset.count())
+        payload["total"] = int(queryset.count())
         return Response(payload)
 
-    @action(detail=True, methods=['post'])
+    @action(detail=True, methods=["post"])
     def convert_to_student(self, request, pk=None):
         if not self._is_admission_manager(request.user):
-            raise PermissionDenied('Only admin/staff can convert enquiries into students.')
+            raise PermissionDenied(
+                "Only admin/staff can convert enquiries into students."
+            )
 
         enquiry = self.get_object()
         if enquiry.converted_student_id:
             return Response(
                 {
-                    'detail': 'Enquiry already converted.',
-                    'student_id': str(enquiry.converted_student_id),
+                    "detail": "Enquiry already converted.",
+                    "student_id": str(enquiry.converted_student_id),
                 },
                 status=status.HTTP_200_OK,
             )
 
         tenant = self.get_tenant()
         if tenant is None:
-            raise ValidationError({'tenant': 'Tenant context is required for conversion.'})
+            raise ValidationError(
+                {"tenant": "Tenant context is required for conversion."}
+            )
 
-        email = (request.data.get('email') or enquiry.email or '').strip().lower()
-        password = request.data.get('password') or 'Student@123'
-        first_name = request.data.get('first_name') or enquiry.first_name
-        last_name = request.data.get('last_name') or enquiry.last_name
-        phone_number = request.data.get('phone_number') or enquiry.phone_number
+        email = (request.data.get("email") or enquiry.email or "").strip().lower()
+        password = request.data.get("password") or "Student@123"
+        first_name = request.data.get("first_name") or enquiry.first_name
+        last_name = request.data.get("last_name") or enquiry.last_name
+        phone_number = request.data.get("phone_number") or enquiry.phone_number
 
-        class_id = request.data.get('academic_class') or request.data.get('desired_class') or enquiry.desired_class_id
+        class_id = (
+            request.data.get("academic_class")
+            or request.data.get("desired_class")
+            or enquiry.desired_class_id
+        )
         if not class_id:
-            raise ValidationError({'academic_class': 'academic_class is required for conversion.'})
+            raise ValidationError(
+                {"academic_class": "academic_class is required for conversion."}
+            )
         academic_class = AcademicClass.objects.filter(pk=class_id).first()
         if not academic_class:
-            raise ValidationError({'academic_class': 'Selected class does not exist.'})
+            raise ValidationError({"academic_class": "Selected class does not exist."})
 
         section = None
-        section_id = request.data.get('section')
+        section_id = request.data.get("section")
         if section_id:
-            section = Section.objects.filter(pk=section_id, academic_class=academic_class).first()
+            section = Section.objects.filter(
+                pk=section_id, academic_class=academic_class
+            ).first()
             if section is None:
-                raise ValidationError({'section': 'Section does not belong to selected class.'})
+                raise ValidationError(
+                    {"section": "Section does not belong to selected class."}
+                )
         elif enquiry.desired_section_name:
             section = Section.objects.filter(
                 academic_class=academic_class,
@@ -129,10 +146,12 @@ class AdmissionEnquiryViewSet(TenantScopedQuerysetMixin, viewsets.ModelViewSet):
             ).first()
 
         if not email:
-            raise ValidationError({'email': 'email is required for student account creation.'})
+            raise ValidationError(
+                {"email": "email is required for student account creation."}
+            )
 
         def _build_username(base_text):
-            base = (base_text or 'student').split('@')[0].strip().lower() or 'student'
+            base = (base_text or "student").split("@")[0].strip().lower() or "student"
             candidate = base
             suffix = 1
             while UserAccount.objects.filter(username=candidate).exists():
@@ -145,20 +164,24 @@ class AdmissionEnquiryViewSet(TenantScopedQuerysetMixin, viewsets.ModelViewSet):
 
             if user:
                 if user.tenant_id and user.tenant_id != tenant.pk:
-                    raise ValidationError({'email': 'Email belongs to a different school tenant.'})
-                if user.role != 'student':
-                    raise ValidationError({'email': f"Email already belongs to a {user.role} account."})
+                    raise ValidationError(
+                        {"email": "Email belongs to a different school tenant."}
+                    )
+                if user.role != "student":
+                    raise ValidationError(
+                        {"email": f"Email already belongs to a {user.role} account."}
+                    )
 
                 user.first_name = first_name
                 user.last_name = last_name
                 user.phone_number = phone_number
                 if not user.tenant_id:
                     user.tenant = tenant
-                if request.data.get('password'):
+                if request.data.get("password"):
                     user.set_password(password)
                 user.save()
             else:
-                username = request.data.get('username') or _build_username(email)
+                username = request.data.get("username") or _build_username(email)
                 if UserAccount.objects.filter(username=username).exists():
                     username = _build_username(username)
                 user = UserAccount.objects.create_user(
@@ -168,7 +191,7 @@ class AdmissionEnquiryViewSet(TenantScopedQuerysetMixin, viewsets.ModelViewSet):
                     first_name=first_name,
                     last_name=last_name,
                     phone_number=phone_number,
-                    role='student',
+                    role="student",
                     tenant=tenant,
                 )
 
@@ -182,9 +205,9 @@ class AdmissionEnquiryViewSet(TenantScopedQuerysetMixin, viewsets.ModelViewSet):
             else:
                 student.academic_class = academic_class
                 student.section = section
-                student.save(update_fields=['academic_class', 'section'])
+                student.save(update_fields=["academic_class", "section"])
 
-            enquiry.status = 'converted'
+            enquiry.status = "converted"
             enquiry.email = email
             enquiry.phone_number = phone_number
             enquiry.desired_class = academic_class
@@ -192,21 +215,21 @@ class AdmissionEnquiryViewSet(TenantScopedQuerysetMixin, viewsets.ModelViewSet):
             enquiry.handled_by = request.user
             enquiry.save(
                 update_fields=[
-                    'status',
-                    'email',
-                    'phone_number',
-                    'desired_class',
-                    'converted_student',
-                    'handled_by',
-                    'updated_at',
+                    "status",
+                    "email",
+                    "phone_number",
+                    "desired_class",
+                    "converted_student",
+                    "handled_by",
+                    "updated_at",
                 ]
             )
 
         return Response(
             {
-                'detail': 'Enquiry converted to student successfully.',
-                'student_id': str(student.student_id),
-                'enquiry': self.get_serializer(enquiry).data,
+                "detail": "Enquiry converted to student successfully.",
+                "student_id": str(student.student_id),
+                "enquiry": self.get_serializer(enquiry).data,
             },
             status=status.HTTP_200_OK,
         )

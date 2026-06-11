@@ -5,7 +5,16 @@ from django_tenants.test.cases import FastTenantTestCase
 from rest_framework import status
 from rest_framework.test import APIClient
 
-from academic.models import AcademicClass, AcademicYear, Assessment, Exam, Parent, Student, Subject, Teacher
+from academic.models import (
+    AcademicClass,
+    AcademicYear,
+    Assessment,
+    Exam,
+    Parent,
+    Student,
+    Subject,
+    Teacher,
+)
 from users.models import UserAccount
 
 
@@ -70,7 +79,9 @@ class ExamAccessControlTests(FastTenantTestCase):
         teacher = Teacher.objects.create(user=self.teacher_user)
         teacher.assigned_classes.add(class_8)
 
-        self.student = Student.objects.create(user=self.student_user, academic_class=class_8)
+        self.student = Student.objects.create(
+            user=self.student_user, academic_class=class_8
+        )
         parent = Parent.objects.create(user=self.parent_user)
         parent.students.add(self.student)
 
@@ -112,12 +123,18 @@ class ExamAccessControlTests(FastTenantTestCase):
 
     def test_student_cannot_allocate_seating(self):
         self.client.force_authenticate(user=self.student_user)
-        response = self.client.post(f"/api/academic/exams/{self.exam_8.exam_id}/allocate_seating/", {}, format="json")
+        response = self.client.post(
+            f"/api/academic/exams/{self.exam_8.exam_id}/allocate_seating/",
+            {},
+            format="json",
+        )
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_teacher_cannot_publish_exam_outside_scope(self):
         self.client.force_authenticate(user=self.teacher_user)
-        response = self.client.post(f"/api/academic/exams/{self.exam_9.exam_id}/publish/", {}, format="json")
+        response = self.client.post(
+            f"/api/academic/exams/{self.exam_9.exam_id}/publish/", {}, format="json"
+        )
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
 
     def test_parent_only_sees_child_exam_scope(self):

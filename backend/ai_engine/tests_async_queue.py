@@ -1,13 +1,13 @@
 # Copyright (c) 2024-2026 Pramod Singh Manyal. All rights reserved.
 # Unauthorized copying, modification, or distribution of this file,
 # via any medium, is strictly prohibited. Proprietary and confidential.
+from unittest.mock import patch
+
 from django.contrib.auth import get_user_model
 from django.test import override_settings
 from django_tenants.test.cases import FastTenantTestCase
 from django_tenants.utils import tenant_context
 from rest_framework.test import APIClient
-from unittest.mock import patch
-
 
 User = get_user_model()
 
@@ -41,7 +41,10 @@ class AsyncAiQueueApiTests(FastTenantTestCase):
     def test_summary_job_enqueue_and_status(self, _mock_generate_response):
         response = self.client.post(
             "/api/ai/jobs/summaries/",
-            {"content": "Newton's three laws of motion with simple examples.", "max_points": 4},
+            {
+                "content": "Newton's three laws of motion with simple examples.",
+                "max_points": 4,
+            },
             format="json",
             HTTP_HOST=self.get_test_tenant_domain(),
             HTTP_X_TENANT_ID=self.tenant.schema_name,

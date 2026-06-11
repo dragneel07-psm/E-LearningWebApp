@@ -3,6 +3,7 @@
 # via any medium, is strictly prohibited. Proprietary and confidential.
 import io
 import logging
+
 from django.http import HttpResponse
 from django.template.loader import render_to_string
 
@@ -55,30 +56,36 @@ def generate_pdf_response(template_path, context, filename):
 
     pdf_bytes = _render_with_weasyprint(html) or _render_with_xhtml2pdf(html)
     if pdf_bytes:
-        response = HttpResponse(pdf_bytes, content_type='application/pdf')
-        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        response = HttpResponse(pdf_bytes, content_type="application/pdf")
+        response["Content-Disposition"] = f'attachment; filename="{filename}"'
         return response
 
-    logger.warning("Both PDF renderers failed for template %s; serving HTML", template_path)
-    response = HttpResponse(html, content_type='text/html; charset=utf-8')
-    response['Content-Disposition'] = f'attachment; filename="{filename.rsplit(".", 1)[0]}.html"'
-    response['X-Report-Fallback'] = 'html'
+    logger.warning(
+        "Both PDF renderers failed for template %s; serving HTML", template_path
+    )
+    response = HttpResponse(html, content_type="text/html; charset=utf-8")
+    response["Content-Disposition"] = (
+        f'attachment; filename="{filename.rsplit(".", 1)[0]}.html"'
+    )
+    response["X-Report-Fallback"] = "html"
     return response
+
 
 def generate_excel_response(data, columns, filename):
     """
     Generates an Excel response from a list of dictionaries.
     """
     import pandas as pd
+
     df = pd.DataFrame(data, columns=columns)
     output = io.BytesIO()
-    
-    with pd.ExcelWriter(output, engine='openpyxl') as writer:
-        df.to_excel(writer, index=False, sheet_name='Sheet1')
-    
+
+    with pd.ExcelWriter(output, engine="openpyxl") as writer:
+        df.to_excel(writer, index=False, sheet_name="Sheet1")
+
     response = HttpResponse(
         output.getvalue(),
-        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     )
-    response['Content-Disposition'] = f'attachment; filename="{filename}"'
+    response["Content-Disposition"] = f'attachment; filename="{filename}"'
     return response

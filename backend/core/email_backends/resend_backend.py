@@ -23,9 +23,19 @@ class ResendAPIEmailBackend(BaseEmailBackend):
     """
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
-        self.api_key = (kwargs.pop("api_key", None) or getattr(settings, "RESEND_API_KEY", "") or "").strip()
-        self.api_url = (kwargs.pop("api_url", None) or getattr(settings, "RESEND_API_URL", "") or "https://api.resend.com/emails").strip()
-        self.timeout = int(kwargs.pop("timeout", None) or getattr(settings, "RESEND_REQUEST_TIMEOUT", 10) or 10)
+        self.api_key = (
+            kwargs.pop("api_key", None) or getattr(settings, "RESEND_API_KEY", "") or ""
+        ).strip()
+        self.api_url = (
+            kwargs.pop("api_url", None)
+            or getattr(settings, "RESEND_API_URL", "")
+            or "https://api.resend.com/emails"
+        ).strip()
+        self.timeout = int(
+            kwargs.pop("timeout", None)
+            or getattr(settings, "RESEND_REQUEST_TIMEOUT", 10)
+            or 10
+        )
         super().__init__(*args, **kwargs)
 
         if not self.api_key and not self.fail_silently:

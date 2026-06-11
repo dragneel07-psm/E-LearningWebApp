@@ -7,8 +7,8 @@ import re
 
 from rest_framework.schemas import openapi as openapi_module
 from rest_framework.schemas.openapi import AutoSchema
-from core.vendor import inflection_fallback, uritemplate_fallback
 
+from core.vendor import inflection_fallback, uritemplate_fallback
 
 if openapi_module.inflection is None:
     openapi_module.inflection = inflection_fallback

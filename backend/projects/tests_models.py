@@ -5,6 +5,7 @@
 Model invariant tests for the projects app.
 Run with: python manage.py test projects.tests_models
 """
+
 from datetime import timedelta
 
 from django.core.exceptions import ValidationError
@@ -12,12 +13,7 @@ from django.utils import timezone
 from django_tenants.test.cases import FastTenantTestCase
 
 from academic.models import AcademicClass, Section, Student
-from projects.models import (
-    Project,
-    ProjectMember,
-    ProjectSubmission,
-    ProjectTask,
-)
+from projects.models import Project, ProjectMember, ProjectSubmission, ProjectTask
 from users.models import UserAccount
 
 
@@ -259,19 +255,27 @@ class ProjectMembershipTests(FastTenantTestCase):
             role="student",
             tenant=self.tenant,
         )
-        return Student.objects.create(user=user, academic_class=self.acad_class, section=self.section)
+        return Student.objects.create(
+            user=user, academic_class=self.acad_class, section=self.section
+        )
 
     def test_adding_within_cap_succeeds(self):
         s1 = self._make_student("mem_s1")
-        ProjectMember.objects.create(tenant=self.tenant, project=self.project, student=s1)
+        ProjectMember.objects.create(
+            tenant=self.tenant, project=self.project, student=s1
+        )
         # No exception expected.
 
     def test_exceeding_max_group_size_rejected(self):
         s1 = self._make_student("mem_s2")
         s2 = self._make_student("mem_s3")
         s3 = self._make_student("mem_s4")
-        ProjectMember.objects.create(tenant=self.tenant, project=self.project, student=s1)
-        ProjectMember.objects.create(tenant=self.tenant, project=self.project, student=s2)
+        ProjectMember.objects.create(
+            tenant=self.tenant, project=self.project, student=s1
+        )
+        ProjectMember.objects.create(
+            tenant=self.tenant, project=self.project, student=s2
+        )
         third = ProjectMember(tenant=self.tenant, project=self.project, student=s3)
         with self.assertRaises(ValidationError):
             third.clean()
@@ -304,7 +308,9 @@ class ProjectMembershipTests(FastTenantTestCase):
             role="student",
             tenant=self.tenant,
         )
-        s2 = Student.objects.create(user=u2, academic_class=other_class, section=other_section)
+        s2 = Student.objects.create(
+            user=u2, academic_class=other_class, section=other_section
+        )
         ProjectMember.objects.create(
             tenant=self.tenant, project=cross_class_project, student=s2
         )

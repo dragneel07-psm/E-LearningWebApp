@@ -1,49 +1,61 @@
 # Copyright (c) 2024-2026 Pramod Singh Manyal. All rights reserved.
 # Unauthorized copying, modification, or distribution of this file,
 # via any medium, is strictly prohibited. Proprietary and confidential.
+import uuid
+
 from django.contrib.auth.models import AbstractUser
 from django.db import models
-import uuid
+
 
 class UserAccount(AbstractUser):
     ROLE_CHOICES = (
-        ('student', 'Student'),
-        ('teacher', 'Teacher'),
-        ('parent', 'Parent'),
-        ('admin', 'Admin'),
-        ('staff', 'Staff'),
-        ('saas_admin', 'SaaS Admin'),
-        ('saas_staff', 'SaaS Staff'),
+        ("student", "Student"),
+        ("teacher", "Teacher"),
+        ("parent", "Parent"),
+        ("admin", "Admin"),
+        ("staff", "Staff"),
+        ("saas_admin", "SaaS Admin"),
+        ("saas_staff", "SaaS Staff"),
     )
 
     # Distinguishes different staff functions within the school
     STAFF_ROLE_CHOICES = (
-        ('', 'None'),
-        ('accountant', 'Accountant'),
-        ('librarian', 'Librarian'),
-        ('receptionist', 'Receptionist'),
-        ('hr_manager', 'HR Manager'),
-        ('hostel_warden', 'Hostel Warden'),
-        ('transport_manager', 'Transport Manager'),
+        ("", "None"),
+        ("accountant", "Accountant"),
+        ("librarian", "Librarian"),
+        ("receptionist", "Receptionist"),
+        ("hr_manager", "HR Manager"),
+        ("hostel_warden", "Hostel Warden"),
+        ("transport_manager", "Transport Manager"),
     )
 
     # Sub-roles for SaaS staff (separate from school staff_role)
     SAAS_STAFF_ROLE_CHOICES = (
-        ('', 'General'),
-        ('support', 'Customer Support'),
-        ('billing', 'Billing'),
-        ('schools_manager', 'Schools Manager'),
-        ('reports', 'Reports & Analytics'),
+        ("", "General"),
+        ("support", "Customer Support"),
+        ("billing", "Billing"),
+        ("schools_manager", "Schools Manager"),
+        ("reports", "Reports & Analytics"),
     )
 
     user_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     # Circular import risk if we import Tenant directly?
     # Use string reference 'core.Tenant'.
-    tenant = models.ForeignKey('core.Tenant', on_delete=models.CASCADE, null=True, blank=True, db_constraint=False)
-    role = models.CharField(max_length=20, choices=ROLE_CHOICES, default='student')
-    staff_role = models.CharField(max_length=30, choices=STAFF_ROLE_CHOICES, blank=True, default='')
-    saas_staff_role = models.CharField(max_length=30, choices=SAAS_STAFF_ROLE_CHOICES, blank=True, default='')
-    
+    tenant = models.ForeignKey(
+        "core.Tenant",
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        db_constraint=False,
+    )
+    role = models.CharField(max_length=20, choices=ROLE_CHOICES, default="student")
+    staff_role = models.CharField(
+        max_length=30, choices=STAFF_ROLE_CHOICES, blank=True, default=""
+    )
+    saas_staff_role = models.CharField(
+        max_length=30, choices=SAAS_STAFF_ROLE_CHOICES, blank=True, default=""
+    )
+
     # Extended Profile Fields
     phone_number = models.CharField(max_length=15, blank=True, null=True)
     address = models.TextField(blank=True, null=True)
@@ -65,12 +77,14 @@ class UserAccount(AbstractUser):
     email = models.EmailField(unique=True)
     first_name = models.CharField(max_length=150, db_index=True)
     last_name = models.CharField(max_length=150, db_index=True)
-    
-    USERNAME_FIELD = 'email'
-    REQUIRED_FIELDS = ['username', 'first_name', 'last_name']
+
+    USERNAME_FIELD = "email"
+    REQUIRED_FIELDS = ["username", "first_name", "last_name"]
 
     class Meta(AbstractUser.Meta):
         indexes = [
-            models.Index(fields=['tenant', 'role'], name='users_tenant_role_idx'),
-            models.Index(fields=['tenant', 'is_active'], name='users_tenant_active_idx'),
+            models.Index(fields=["tenant", "role"], name="users_tenant_role_idx"),
+            models.Index(
+                fields=["tenant", "is_active"], name="users_tenant_active_idx"
+            ),
         ]

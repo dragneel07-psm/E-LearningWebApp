@@ -2,6 +2,7 @@
 # Unauthorized copying, modification, or distribution of this file,
 # via any medium, is strictly prohibited. Proprietary and confidential.
 """Notification + Celery beat tests for the projects app."""
+
 from __future__ import annotations
 
 from datetime import timedelta
@@ -49,7 +50,10 @@ class TaskAssignmentNotificationTests(FastTenantTestCase):
             user=self.student_user, academic_class=self.acad_class, section=self.section
         )
         self.project = Project.objects.create(
-            tenant=self.tenant, title="Notif Project", mentor=self.mentor, status="active"
+            tenant=self.tenant,
+            title="Notif Project",
+            mentor=self.mentor,
+            status="active",
         )
 
     def test_creating_task_with_assignee_notifies(self):
@@ -68,18 +72,24 @@ class TaskAssignmentNotificationTests(FastTenantTestCase):
         task = ProjectTask.objects.create(
             tenant=self.tenant, project=self.project, title="Build slides"
         )
-        self.assertEqual(Notification.objects.filter(recipient=self.student_user).count(), 0)
+        self.assertEqual(
+            Notification.objects.filter(recipient=self.student_user).count(), 0
+        )
         # Now assign — exactly one notification should fire.
         task.assignee = self.student
         task.save()
         self.assertEqual(
-            Notification.objects.filter(recipient=self.student_user, title__icontains="Build slides").count(),
+            Notification.objects.filter(
+                recipient=self.student_user, title__icontains="Build slides"
+            ).count(),
             1,
         )
         # Saving again with the same assignee must not duplicate.
         task.save()
         self.assertEqual(
-            Notification.objects.filter(recipient=self.student_user, title__icontains="Build slides").count(),
+            Notification.objects.filter(
+                recipient=self.student_user, title__icontains="Build slides"
+            ).count(),
             1,
         )
 
@@ -147,10 +157,14 @@ class GradedNotificationTests(FastTenantTestCase):
             meta={"final_grade": 88.0},
         )
         self.assertTrue(
-            Notification.objects.filter(recipient=self.student_user, title__icontains="graded").exists()
+            Notification.objects.filter(
+                recipient=self.student_user, title__icontains="graded"
+            ).exists()
         )
         self.assertTrue(
-            Notification.objects.filter(recipient=self.parent_user, title__icontains="graded").exists()
+            Notification.objects.filter(
+                recipient=self.parent_user, title__icontains="graded"
+            ).exists()
         )
 
 

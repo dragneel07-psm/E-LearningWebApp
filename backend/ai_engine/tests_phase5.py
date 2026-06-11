@@ -5,24 +5,35 @@
 Unit tests for Phase 5: Token Budget / Cost Controls.
 Run with: python manage.py test ai_engine.tests_phase5
 """
+
 from datetime import timedelta
 from unittest.mock import MagicMock, patch
 
 from django.test import TestCase
 from django.utils import timezone
 
-from ai_engine.services.token_budget_service import TokenBudgetExceeded, TokenBudgetService
+from ai_engine.services.token_budget_service import (
+    TokenBudgetExceeded,
+    TokenBudgetService,
+)
 
 
-def _make_budget(daily_limit=1000, used_today=0, is_active=True, student=None, reset_future=True):
+def _make_budget(
+    daily_limit=1000, used_today=0, is_active=True, student=None, reset_future=True
+):
     """Build a mock AITokenBudget with the given parameters."""
     from ai_engine.models import AITokenBudget
+
     b = MagicMock(spec=AITokenBudget)
     b.daily_limit_tokens = daily_limit
     b.used_today = used_today
     b.is_active = is_active
-    b.student_id = getattr(student, 'pk', None)
-    b.reset_at = timezone.now() + timedelta(hours=10) if reset_future else timezone.now() - timedelta(hours=1)
+    b.student_id = getattr(student, "pk", None)
+    b.reset_at = (
+        timezone.now() + timedelta(hours=10)
+        if reset_future
+        else timezone.now() - timedelta(hours=1)
+    )
     b.pk = "budget-uuid"
     return b
 
@@ -35,10 +46,10 @@ class TokenBudgetServiceCheckTest(TestCase):
         self.student = MagicMock()
 
     def _patch_get_budget(self, budget):
-        return patch.object(self.svc, '_get_budget', return_value=budget)
+        return patch.object(self.svc, "_get_budget", return_value=budget)
 
     def _patch_refresh(self):
-        return patch.object(self.svc, '_refresh_if_stale')
+        return patch.object(self.svc, "_refresh_if_stale")
 
     # --- No budget configured → pass-through ---
 
@@ -112,7 +123,7 @@ class TokenBudgetRefreshTest(TestCase):
         with patch("ai_engine.models.AITokenBudget.objects") as mock_qs:
             mock_filter = MagicMock()
             mock_qs.using.return_value.filter.return_value.update = MagicMock()
-            self.svc._refresh_if_stale(budget, db_alias='default')
+            self.svc._refresh_if_stale(budget, db_alias="default")
 
         # used_today on the in-memory object should be zeroed
         self.assertEqual(budget.used_today, 0)
@@ -126,7 +137,7 @@ class TokenBudgetRefreshTest(TestCase):
         budget.reset_at = timezone.now() + timedelta(hours=12)
         budget.used_today = 300
 
-        self.svc._refresh_if_stale(budget, db_alias='default')
+        self.svc._refresh_if_stale(budget, db_alias="default")
         # Should not change (no DB call was made)
         self.assertEqual(budget.used_today, 300)
 
@@ -139,35 +150,35 @@ class TokenBudgetStatusTest(TestCase):
         self.student = MagicMock()
 
     def test_no_budget_returns_unlimited_true(self):
-        with patch.object(self.svc, '_get_budget', return_value=None):
+        with patch.object(self.svc, "_get_budget", return_value=None):
             result = self.svc.get_status(self.tenant, self.student)
-        self.assertFalse(result['budget_active'])
-        self.assertTrue(result['unlimited'])
+        self.assertFalse(result["budget_active"])
+        self.assertTrue(result["unlimited"])
 
     def test_active_budget_returns_correct_remaining(self):
         budget = _make_budget(daily_limit=2000, used_today=500)
-        with patch.object(self.svc, '_get_budget', return_value=budget):
-            with patch.object(self.svc, '_refresh_if_stale'):
+        with patch.object(self.svc, "_get_budget", return_value=budget):
+            with patch.object(self.svc, "_refresh_if_stale"):
                 result = self.svc.get_status(self.tenant, self.student)
-        self.assertTrue(result['budget_active'])
-        self.assertEqual(result['remaining'], 1500)
-        self.assertEqual(result['used_today'], 500)
-        self.assertEqual(result['daily_limit'], 2000)
+        self.assertTrue(result["budget_active"])
+        self.assertEqual(result["remaining"], 1500)
+        self.assertEqual(result["used_today"], 500)
+        self.assertEqual(result["daily_limit"], 2000)
 
     def test_unlimited_budget_has_none_remaining(self):
         budget = _make_budget(daily_limit=0, used_today=0)
-        with patch.object(self.svc, '_get_budget', return_value=budget):
-            with patch.object(self.svc, '_refresh_if_stale'):
+        with patch.object(self.svc, "_get_budget", return_value=budget):
+            with patch.object(self.svc, "_refresh_if_stale"):
                 result = self.svc.get_status(self.tenant, self.student)
-        self.assertTrue(result['unlimited'])
-        self.assertIsNone(result['remaining'])
+        self.assertTrue(result["unlimited"])
+        self.assertIsNone(result["remaining"])
 
     def test_remaining_never_negative(self):
         budget = _make_budget(daily_limit=100, used_today=999)
-        with patch.object(self.svc, '_get_budget', return_value=budget):
-            with patch.object(self.svc, '_refresh_if_stale'):
+        with patch.object(self.svc, "_get_budget", return_value=budget):
+            with patch.object(self.svc, "_refresh_if_stale"):
                 result = self.svc.get_status(self.tenant, self.student)
-        self.assertEqual(result['remaining'], 0)
+        self.assertEqual(result["remaining"], 0)
 
 
 class NextMidnightTest(TestCase):
@@ -185,6 +196,7 @@ class NextMidnightTest(TestCase):
 
     def test_next_midnight_is_at_hour_zero(self):
         from datetime import timezone as dt_tz
+
         svc = TokenBudgetService()
         midnight = svc._next_midnight_utc()
         utc_midnight = midnight.astimezone(dt_tz.utc)

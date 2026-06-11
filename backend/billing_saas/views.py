@@ -5,14 +5,18 @@ from datetime import date, timedelta
 
 from django.db.models import Count, Sum
 from django.db.models.functions import TruncMonth
+from django.utils import timezone
 from rest_framework import permissions, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from django.utils import timezone
 
-from billing.models_saas import Invoice, Subscription, SubscriptionPlan, SubscriptionPlanHistory
-from core.models import Tenant
+from billing.models_saas import (
+    Invoice,
+    Subscription,
+    SubscriptionPlan,
+    SubscriptionPlanHistory,
+)
 from billing.permissions import IsSaaSAdminUser
 from billing.plan_defaults import upsert_default_plans
 from billing.serializers import (
@@ -22,6 +26,7 @@ from billing.serializers import (
     SubscriptionSerializer,
 )
 from billing.shared_views import BillingSchemaGuardMixin
+from core.models import Tenant
 from core.reports import generate_pdf_response
 from core.utils.audit import record_audit_event
 from core.utils.plan_enforcement import (
@@ -77,7 +82,9 @@ class SubscriptionPlanViewSet(BillingSchemaGuardMixin, viewsets.ModelViewSet):
     @action(detail=False, methods=["post"], url_path="seed-defaults")
     def seed_defaults(self, request):
         role = (getattr(request.user, "role", "") or "").lower()
-        if not (request.user.is_superuser or request.user.is_staff or role == "saas_admin"):
+        if not (
+            request.user.is_superuser or request.user.is_staff or role == "saas_admin"
+        ):
             return Response(
                 {"error": "Only SaaS administrators can seed default plans."},
                 status=status.HTTP_403_FORBIDDEN,
@@ -97,9 +104,16 @@ class SubscriptionPlanViewSet(BillingSchemaGuardMixin, viewsets.ModelViewSet):
             status=status.HTTP_200_OK,
         )
 
-    @action(detail=False, methods=["get"], url_path="public", permission_classes=[permissions.AllowAny])
+    @action(
+        detail=False,
+        methods=["get"],
+        url_path="public",
+        permission_classes=[permissions.AllowAny],
+    )
     def public(self, request):
-        queryset = SubscriptionPlan.objects.filter(is_active=True).order_by("price_monthly", "name")
+        queryset = SubscriptionPlan.objects.filter(is_active=True).order_by(
+            "price_monthly", "name"
+        )
         serializer = self.get_serializer(queryset, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
@@ -124,7 +138,9 @@ class SubscriptionViewSet(BillingSchemaGuardMixin, viewsets.ModelViewSet):
         return Response(serializer.data)
 
 
-class SubscriptionPlanHistoryViewSet(BillingSchemaGuardMixin, viewsets.ReadOnlyModelViewSet):
+class SubscriptionPlanHistoryViewSet(
+    BillingSchemaGuardMixin, viewsets.ReadOnlyModelViewSet
+):
     require_public_schema = True
     queryset = SubscriptionPlanHistory.objects.select_related(
         "tenant", "subscription", "previous_plan", "new_plan", "changed_by"
@@ -180,7 +196,10 @@ class InvoiceViewSet(BillingSchemaGuardMixin, viewsets.ModelViewSet):
                     },
                 )
                 return response
-            return Response({"error": "PDF engine failure"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response(
+                {"error": "PDF engine failure"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
         except Exception as exc:
             return Response({"error": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -190,6 +209,7 @@ class SaasGrowthAnalyticsView(APIView):
     GET /billing/saas/analytics/growth/
     Returns platform-wide growth metrics computed from public schema data.
     """
+
     permission_classes = [IsSaaSAdminUser]
 
     def get(self, request):
@@ -197,81 +217,89 @@ class SaasGrowthAnalyticsView(APIView):
         twelve_months_ago = date.today().replace(day=1) - timedelta(days=365)
         monthly_signups = (
             Tenant.objects.filter(created_at__date__gte=twelve_months_ago)
-            .exclude(schema_name='public')
-            .annotate(month=TruncMonth('created_at'))
-            .values('month')
-            .annotate(count=Count('id'))
-            .order_by('month')
+            .exclude(schema_name="public")
+            .annotate(month=TruncMonth("created_at"))
+            .values("month")
+            .annotate(count=Count("id"))
+            .order_by("month")
         )
         signups_data = [
             {
-                'month': row['month'].strftime('%Y-%m'),
-                'label': row['month'].strftime('%b %Y'),
-                'count': row['count'],
+                "month": row["month"].strftime("%Y-%m"),
+                "label": row["month"].strftime("%b %Y"),
+                "count": row["count"],
             }
             for row in monthly_signups
         ]
 
         # ── Plan distribution ─────────────────────────────────────────────────
         plan_dist_raw = (
-            Subscription.objects
-            .values('plan__name')
-            .annotate(count=Count('subscription_id'))
-            .order_by('-count')
+            Subscription.objects.values("plan__name")
+            .annotate(count=Count("subscription_id"))
+            .order_by("-count")
         )
         plan_distribution = [
-            {'plan': row['plan__name'] or 'No Plan', 'count': row['count']}
+            {"plan": row["plan__name"] or "No Plan", "count": row["count"]}
             for row in plan_dist_raw
         ]
 
         # ── Status breakdown ──────────────────────────────────────────────────
-        status_counts = (
-            Subscription.objects
-            .values('status')
-            .annotate(count=Count('subscription_id'))
+        status_counts = Subscription.objects.values("status").annotate(
+            count=Count("subscription_id")
         )
-        status_breakdown = [{'status': r['status'], 'count': r['count']} for r in status_counts]
+        status_breakdown = [
+            {"status": r["status"], "count": r["count"]} for r in status_counts
+        ]
 
         # ── Revenue by plan ───────────────────────────────────────────────────
         revenue_by_plan = (
-            Invoice.objects
-            .filter(status='paid')
-            .values('subscription__plan__name')
-            .annotate(total=Sum('amount'))
-            .order_by('-total')
+            Invoice.objects.filter(status="paid")
+            .values("subscription__plan__name")
+            .annotate(total=Sum("amount"))
+            .order_by("-total")
         )
         revenue_data = [
-            {'plan': row['subscription__plan__name'] or 'Unknown', 'total': float(row['total'] or 0)}
+            {
+                "plan": row["subscription__plan__name"] or "Unknown",
+                "total": float(row["total"] or 0),
+            }
             for row in revenue_by_plan
         ]
 
         # ── Billing cycle split ───────────────────────────────────────────────
-        billing_cycle_data = (
-            Subscription.objects
-            .values('billing_cycle')
-            .annotate(count=Count('subscription_id'))
+        billing_cycle_data = Subscription.objects.values("billing_cycle").annotate(
+            count=Count("subscription_id")
         )
-        billing_cycles = [{'cycle': r['billing_cycle'], 'count': r['count']} for r in billing_cycle_data]
+        billing_cycles = [
+            {"cycle": r["billing_cycle"], "count": r["count"]}
+            for r in billing_cycle_data
+        ]
 
         # ── Total counts ──────────────────────────────────────────────────────
-        total_tenants = Tenant.objects.exclude(schema_name='public').count()
+        total_tenants = Tenant.objects.exclude(schema_name="public").count()
         total_revenue = float(
-            Invoice.objects.filter(status='paid').aggregate(t=Sum('amount'))['t'] or 0
+            Invoice.objects.filter(status="paid").aggregate(t=Sum("amount"))["t"] or 0
         )
 
-        return Response({
-            'summary': {
-                'total_tenants': total_tenants,
-                'total_revenue': total_revenue,
-                'active_subscriptions': Subscription.objects.filter(status='active').count(),
-                'trial_subscriptions': Subscription.objects.filter(status='trial').count(),
-            },
-            'monthly_signups': signups_data,
-            'plan_distribution': plan_distribution,
-            'status_breakdown': status_breakdown,
-            'revenue_by_plan': revenue_data,
-            'billing_cycles': billing_cycles,
-        })
+        return Response(
+            {
+                "summary": {
+                    "total_tenants": total_tenants,
+                    "total_revenue": total_revenue,
+                    "active_subscriptions": Subscription.objects.filter(
+                        status="active"
+                    ).count(),
+                    "trial_subscriptions": Subscription.objects.filter(
+                        status="trial"
+                    ).count(),
+                },
+                "monthly_signups": signups_data,
+                "plan_distribution": plan_distribution,
+                "status_breakdown": status_breakdown,
+                "revenue_by_plan": revenue_data,
+                "billing_cycles": billing_cycles,
+            }
+        )
 
 
 class SaasHealthMonitorView(APIView):
@@ -279,6 +307,7 @@ class SaasHealthMonitorView(APIView):
     GET /billing/saas/analytics/health/
     Returns proactive health alerts for the platform.
     """
+
     permission_classes = [IsSaaSAdminUser]
 
     def get(self, request):
@@ -287,35 +316,35 @@ class SaasHealthMonitorView(APIView):
 
         # ── Trials expiring within 7 days ─────────────────────────────────────
         expiring_trials = (
-            Subscription.objects
-            .filter(status='trial', end_date__lte=alert_window, end_date__gte=today)
-            .select_related('tenant', 'plan')
-            .order_by('end_date')
+            Subscription.objects.filter(
+                status="trial", end_date__lte=alert_window, end_date__gte=today
+            )
+            .select_related("tenant", "plan")
+            .order_by("end_date")
         )
         expiring_list = [
             {
-                'tenant_id': str(s.tenant_id),
-                'tenant_name': s.tenant.name,
-                'plan': s.plan.name if s.plan else 'No Plan',
-                'end_date': str(s.end_date),
-                'days_left': (s.end_date - today).days,
+                "tenant_id": str(s.tenant_id),
+                "tenant_name": s.tenant.name,
+                "plan": s.plan.name if s.plan else "No Plan",
+                "end_date": str(s.end_date),
+                "days_left": (s.end_date - today).days,
             }
             for s in expiring_trials
         ]
 
         # ── Past due subscriptions ────────────────────────────────────────────
         past_due = (
-            Subscription.objects
-            .filter(status='past_due')
-            .select_related('tenant', 'plan')
-            .order_by('end_date')
+            Subscription.objects.filter(status="past_due")
+            .select_related("tenant", "plan")
+            .order_by("end_date")
         )
         past_due_list = [
             {
-                'tenant_id': str(s.tenant_id),
-                'tenant_name': s.tenant.name,
-                'plan': s.plan.name if s.plan else 'No Plan',
-                'end_date': str(s.end_date) if s.end_date else None,
+                "tenant_id": str(s.tenant_id),
+                "tenant_name": s.tenant.name,
+                "plan": s.plan.name if s.plan else "No Plan",
+                "end_date": str(s.end_date) if s.end_date else None,
             }
             for s in past_due
         ]
@@ -323,43 +352,52 @@ class SaasHealthMonitorView(APIView):
         # ── Recent failed payments (last 30 days) ────────────────────────────
         since_30d = today - timedelta(days=30)
         failed_invoices = (
-            Invoice.objects
-            .filter(status='failed', issued_date__date__gte=since_30d)
-            .select_related('tenant')
-            .order_by('-issued_date')[:20]
+            Invoice.objects.filter(status="failed", issued_date__date__gte=since_30d)
+            .select_related("tenant")
+            .order_by("-issued_date")[:20]
         )
         failed_list = [
             {
-                'invoice_id': str(inv.invoice_id),
-                'tenant_name': inv.tenant.name if inv.tenant else 'Unknown',
-                'amount': float(inv.amount),
-                'issued_date': str(inv.issued_date.date()),
+                "invoice_id": str(inv.invoice_id),
+                "tenant_name": inv.tenant.name if inv.tenant else "Unknown",
+                "amount": float(inv.amount),
+                "issued_date": str(inv.issued_date.date()),
             }
             for inv in failed_invoices
         ]
 
         # ── Suspended tenants ─────────────────────────────────────────────────
         suspended = (
-            Tenant.objects
-            .exclude(schema_name='public')
-            .filter(status='suspended')
-            .order_by('name')
+            Tenant.objects.exclude(schema_name="public")
+            .filter(status="suspended")
+            .order_by("name")
         )
         suspended_list = [
-            {'tenant_id': str(t.id), 'tenant_name': t.name, 'subdomain': t.subdomain or ''}
+            {
+                "tenant_id": str(t.id),
+                "tenant_name": t.name,
+                "subdomain": t.subdomain or "",
+            }
             for t in suspended
         ]
 
         # ── Alert counts summary ──────────────────────────────────────────────
-        total_alerts = len(expiring_list) + len(past_due_list) + len(failed_list) + len(suspended_list)
+        total_alerts = (
+            len(expiring_list)
+            + len(past_due_list)
+            + len(failed_list)
+            + len(suspended_list)
+        )
 
-        return Response({
-            'total_alerts': total_alerts,
-            'expiring_trials': expiring_list,
-            'past_due': past_due_list,
-            'failed_payments': failed_list,
-            'suspended_tenants': suspended_list,
-        })
+        return Response(
+            {
+                "total_alerts": total_alerts,
+                "expiring_trials": expiring_list,
+                "past_due": past_due_list,
+                "failed_payments": failed_list,
+                "suspended_tenants": suspended_list,
+            }
+        )
 
 
 __all__ = [

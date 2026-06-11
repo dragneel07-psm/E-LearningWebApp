@@ -20,34 +20,64 @@ Run:
 
 import os
 import sys
+
 import django
 
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings.local")
 django.setup()
 
 from django_tenants.utils import schema_context
+
 from core.models import Tenant
 from core.models.tenant import Domain
 
 # ─── helpers ────────────────────────────────────────────────
-G = "\033[92m"; Y = "\033[93m"; R = "\033[91m"; C = "\033[96m"; B = "\033[1m"; X = "\033[0m"
-def ok(m):   print(f"  {G}✅ {m}{X}")
-def skip(m): print(f"  {Y}⏭  {m}{X}")
-def fail(m): print(f"  {R}❌ {m}{X}")
-def hdr(m):  print(f"\n{B}{C}{'─'*52}\n  {m}\n{'─'*52}{X}")
+G = "\033[92m"
+Y = "\033[93m"
+R = "\033[91m"
+C = "\033[96m"
+B = "\033[1m"
+X = "\033[0m"
 
 
-def upsert_user(UserAccount, *, email, username, first_name, last_name,
-                role, password, is_staff=False, is_superuser=False, tenant=None):
+def ok(m):
+    print(f"  {G}✅ {m}{X}")
+
+
+def skip(m):
+    print(f"  {Y}⏭  {m}{X}")
+
+
+def fail(m):
+    print(f"  {R}❌ {m}{X}")
+
+
+def hdr(m):
+    print(f"\n{B}{C}{'─'*52}\n  {m}\n{'─'*52}{X}")
+
+
+def upsert_user(
+    UserAccount,
+    *,
+    email,
+    username,
+    first_name,
+    last_name,
+    role,
+    password,
+    is_staff=False,
+    is_superuser=False,
+    tenant=None,
+):
     """Create or fully update a user – idempotent."""
     try:
         user = UserAccount.objects.get(email=email)
         # Update all mutable fields
-        user.username   = username
+        user.username = username
         user.first_name = first_name
-        user.last_name  = last_name
-        user.role       = role
-        user.is_staff   = is_staff
+        user.last_name = last_name
+        user.role = role
+        user.is_staff = is_staff
         user.is_superuser = is_superuser
         if tenant:
             user.tenant = tenant
@@ -61,11 +91,11 @@ def upsert_user(UserAccount, *, email, username, first_name, last_name,
     # Also check by username (avoid unique constraint clash)
     try:
         user = UserAccount.objects.get(username=username)
-        user.email      = email
+        user.email = email
         user.first_name = first_name
-        user.last_name  = last_name
-        user.role       = role
-        user.is_staff   = is_staff
+        user.last_name = last_name
+        user.role = role
+        user.is_staff = is_staff
         user.is_superuser = is_superuser
         if tenant:
             user.tenant = tenant
@@ -78,16 +108,16 @@ def upsert_user(UserAccount, *, email, username, first_name, last_name,
 
     # Fresh create
     user = UserAccount(
-        email      = email,
-        username   = username,
-        first_name = first_name,
-        last_name  = last_name,
-        role       = role,
-        is_staff   = is_staff,
-        is_superuser = is_superuser,
-        tenant     = tenant,
-        phone_number = "+977-9800000000",
-        bio        = f"Test {role} for local development.",
+        email=email,
+        username=username,
+        first_name=first_name,
+        last_name=last_name,
+        role=role,
+        is_staff=is_staff,
+        is_superuser=is_superuser,
+        tenant=tenant,
+        phone_number="+977-9800000000",
+        bio=f"Test {role} for local development.",
     )
     user.set_password(password)
     user.save()
@@ -100,8 +130,13 @@ hdr("Step 1 — Tenant & Domain")
 
 tenant, c = Tenant.objects.get_or_create(
     schema_name="demo",
-    defaults={"name": "Demo School", "type": "standard", "status": "active",
-              "contact_email": "admin@demo.school", "current_academic_year": "2025-2026"},
+    defaults={
+        "name": "Demo School",
+        "type": "standard",
+        "status": "active",
+        "contact_email": "admin@demo.school",
+        "current_academic_year": "2025-2026",
+    },
 )
 ok("Tenant 'demo' created") if c else skip("Tenant 'demo' already exists")
 
@@ -109,20 +144,28 @@ domain, c = Domain.objects.get_or_create(
     domain="demo.localhost",
     defaults={"tenant": tenant, "is_primary": True},
 )
-ok("Domain 'demo.localhost' created") if c else skip("Domain 'demo.localhost' already exists")
+(
+    ok("Domain 'demo.localhost' created")
+    if c
+    else skip("Domain 'demo.localhost' already exists")
+)
 
 
 # ─── Step 2: SaaS Admin (public schema) ─────────────────────
 hdr("Step 2 — SaaS Admin (public schema)")
 with schema_context("public"):
     from users.models import UserAccount
+
     upsert_user(
         UserAccount,
         email="saas@elearning.dev",
         username="saas_admin",
-        first_name="Super", last_name="Admin",
-        role="saas_admin", password="Admin@1234",
-        is_staff=True, is_superuser=True,
+        first_name="Super",
+        last_name="Admin",
+        role="saas_admin",
+        password="Admin@1234",
+        is_staff=True,
+        is_superuser=True,
     )
 
 
@@ -131,13 +174,61 @@ hdr("Step 3 — School users  (schema: demo)")
 
 USERS = [
     # role, email, username, first, last, password, is_staff
-    ("admin",   "admin@demo.school",    "school_admin",   "Ram",    "Sharma",  "Admin@1234",   True),
-    ("teacher", "math@demo.school",     "teacher_math",   "Sita",   "Gurung",  "Teacher@1234", False),
-    ("teacher", "science@demo.school",  "teacher_sci",    "Hari",   "Pradhan", "Teacher@1234", False),
-    ("student", "student1@demo.school", "student_one",    "Anita",  "Tamang",  "Student@1234", False),
-    ("student", "student2@demo.school", "student_two",    "Bikram", "Rai",     "Student@1234", False),
-    ("student", "student3@demo.school", "student_three",  "Priya",  "Thapa",   "Student@1234", False),
-    ("parent",  "parent@demo.school",   "parent_one",     "Mohan",  "Tamang",  "Parent@1234",  False),
+    ("admin", "admin@demo.school", "school_admin", "Ram", "Sharma", "Admin@1234", True),
+    (
+        "teacher",
+        "math@demo.school",
+        "teacher_math",
+        "Sita",
+        "Gurung",
+        "Teacher@1234",
+        False,
+    ),
+    (
+        "teacher",
+        "science@demo.school",
+        "teacher_sci",
+        "Hari",
+        "Pradhan",
+        "Teacher@1234",
+        False,
+    ),
+    (
+        "student",
+        "student1@demo.school",
+        "student_one",
+        "Anita",
+        "Tamang",
+        "Student@1234",
+        False,
+    ),
+    (
+        "student",
+        "student2@demo.school",
+        "student_two",
+        "Bikram",
+        "Rai",
+        "Student@1234",
+        False,
+    ),
+    (
+        "student",
+        "student3@demo.school",
+        "student_three",
+        "Priya",
+        "Thapa",
+        "Student@1234",
+        False,
+    ),
+    (
+        "parent",
+        "parent@demo.school",
+        "parent_one",
+        "Mohan",
+        "Tamang",
+        "Parent@1234",
+        False,
+    ),
 ]
 
 with schema_context("demo"):
@@ -148,10 +239,14 @@ with schema_context("demo"):
         try:
             user, _ = upsert_user(
                 TenantUser,
-                email=email, username=uname,
-                first_name=first, last_name=last,
-                role=role, password=pwd,
-                is_staff=staff, tenant=tenant,
+                email=email,
+                username=uname,
+                first_name=first,
+                last_name=last,
+                role=role,
+                password=pwd,
+                is_staff=staff,
+                tenant=tenant,
             )
             tenant_users[email] = user
         except Exception as e:
@@ -163,7 +258,7 @@ hdr("Step 4 — Student, Teacher, & Parent Profiles")
 
 with schema_context("demo"):
     try:
-        from academic.models import Student, AcademicClass, Teacher, Parent
+        from academic.models import AcademicClass, Parent, Student, Teacher
         from users.models import UserAccount as TenantUser  # reimport in same context
 
         cls_obj, _ = AcademicClass.objects.get_or_create(
@@ -186,7 +281,9 @@ with schema_context("demo"):
                     defaults={"academic_class": cls_obj},
                 )
                 students_created.append(student)
-                (ok if created else skip)(f"Student profile → {email} (Class 10, roll #{roll})")
+                (ok if created else skip)(
+                    f"Student profile → {email} (Class 10, roll #{roll})"
+                )
             except TenantUser.DoesNotExist:
                 skip(f"User not found in demo schema: {email}")
             except Exception as e:
@@ -197,7 +294,7 @@ with schema_context("demo"):
             ("math@demo.school", "subject_teacher"),
             ("science@demo.school", "subject_teacher"),
         ]
-        
+
         for email, designation in teacher_emails:
             try:
                 user = TenantUser.objects.get(email=email)
@@ -211,12 +308,12 @@ with schema_context("demo"):
                 skip(f"User not found in demo schema: {email}")
             except Exception as e:
                 skip(f"Teacher profile for {email}: {e}")
-                
+
         # Parents
         parent_emails = [
-            ("parent@demo.school", students_created[:1]), # bind to first student
+            ("parent@demo.school", students_created[:1]),  # bind to first student
         ]
-        
+
         for email, bound_students in parent_emails:
             try:
                 user = TenantUser.objects.get(email=email)

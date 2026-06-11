@@ -9,6 +9,7 @@ Project tracking is treated as baseline LMS functionality (matches the
 every tenant gets it. New tenants pick this up automatically through
 build_plan_entitled_features; this migration only patches existing rows.
 """
+
 from django.db import migrations
 
 

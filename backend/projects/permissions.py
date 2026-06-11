@@ -21,7 +21,9 @@ class IsProjectsEnabled(BasePermission):
     message = "The projects feature is not enabled for this school."
 
     def has_permission(self, request, view):
-        tenant = getattr(request.user, "tenant", None) or getattr(request, "tenant", None)
+        tenant = getattr(request.user, "tenant", None) or getattr(
+            request, "tenant", None
+        )
         return tenant_has_projects_enabled(tenant)
 
 

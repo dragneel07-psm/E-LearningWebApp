@@ -5,21 +5,28 @@
 Unit tests for Phase 4: Confidence Scoring, Socratic Mode, and Exact Citations.
 Run with: python manage.py test ai_engine.tests_phase4
 """
+
 from unittest.mock import MagicMock, patch
+
 from django.test import TestCase
+
 from ai_engine.services.rag_tutor_service import RAGTutorService
 
 
 def _make_service():
     tenant = MagicMock()
     tenant.name = "test-school"
-    with patch("ai_engine.services.rag_tutor_service.get_ai_provider_config") as mock_cfg:
+    with patch(
+        "ai_engine.services.rag_tutor_service.get_ai_provider_config"
+    ) as mock_cfg:
         mock_cfg.return_value = {"enabled": False, "configured": False}
         svc = RAGTutorService(tenant=tenant)
     return svc
 
 
-def _make_chunk(text="Sample content", source_type="lesson", source_id="42", metadata=None):
+def _make_chunk(
+    text="Sample content", source_type="lesson", source_id="42", metadata=None
+):
     chunk = MagicMock()
     chunk.source_type = source_type
     chunk.source_id = source_id
@@ -31,6 +38,7 @@ def _make_chunk(text="Sample content", source_type="lesson", source_id="42", met
 # ------------------------------------------------------------------
 # Confidence Scoring
 # ------------------------------------------------------------------
+
 
 class ConfidenceScoringTest(TestCase):
 
@@ -90,11 +98,14 @@ class ConfidenceLabelTest(TestCase):
 # Exact Citation Building
 # ------------------------------------------------------------------
 
+
 class CitationBuildingTest(TestCase):
 
     def test_citations_include_text_span(self):
         svc = _make_service()
-        chunk = _make_chunk(text="Full lesson content here.", source_type="lesson", source_id="10")
+        chunk = _make_chunk(
+            text="Full lesson content here.", source_type="lesson", source_id="10"
+        )
         grounded = [{"chunk": chunk, "similarity": 0.88}]
         citations = svc._build_citations(grounded)
         self.assertEqual(len(citations), 1)
@@ -126,8 +137,14 @@ class CitationBuildingTest(TestCase):
     def test_citations_multiple_sources(self):
         svc = _make_service()
         grounded = [
-            {"chunk": _make_chunk(source_type="lesson", source_id="1"), "similarity": 0.9},
-            {"chunk": _make_chunk(source_type="chapter", source_id="2"), "similarity": 0.75},
+            {
+                "chunk": _make_chunk(source_type="lesson", source_id="1"),
+                "similarity": 0.9,
+            },
+            {
+                "chunk": _make_chunk(source_type="chapter", source_id="2"),
+                "similarity": 0.75,
+            },
         ]
         citations = svc._build_citations(grounded)
         self.assertEqual(len(citations), 2)
@@ -138,6 +155,7 @@ class CitationBuildingTest(TestCase):
 # ------------------------------------------------------------------
 # Socratic Mode Prompting
 # ------------------------------------------------------------------
+
 
 class SocraticModeTest(TestCase):
 
@@ -188,6 +206,7 @@ class SocraticModeTest(TestCase):
 # answer_question returns confidence and mode
 # ------------------------------------------------------------------
 
+
 class AnswerQuestionOutputTest(TestCase):
 
     def test_no_context_returns_zero_confidence(self):
@@ -214,7 +233,18 @@ class AnswerQuestionOutputTest(TestCase):
         grounded = [{"chunk": chunk, "similarity": 0.88}]
 
         with patch.object(svc, "retrieve_relevant_chunks", return_value=grounded):
-            with patch.object(svc, "_call_chat_model", return_value=("Newton's first law...", {"model": "gpt-4o-mini", "prompt_tokens": 10, "completion_tokens": 20})):
+            with patch.object(
+                svc,
+                "_call_chat_model",
+                return_value=(
+                    "Newton's first law...",
+                    {
+                        "model": "gpt-4o-mini",
+                        "prompt_tokens": 10,
+                        "completion_tokens": 20,
+                    },
+                ),
+            ):
                 result = svc.answer_question("What is Newton's first law?")
 
         self.assertIn("confidence", result)
@@ -229,8 +259,21 @@ class AnswerQuestionOutputTest(TestCase):
         grounded = [{"chunk": chunk, "similarity": 0.80}]
 
         with patch.object(svc, "retrieve_relevant_chunks", return_value=grounded):
-            with patch.object(svc, "_call_chat_model", return_value=("Osmosis moves water...", {"model": "gpt-4o-mini", "prompt_tokens": 5, "completion_tokens": 10})):
-                result = svc.answer_question("Explain osmosis?", context={"mode": "socratic"})
+            with patch.object(
+                svc,
+                "_call_chat_model",
+                return_value=(
+                    "Osmosis moves water...",
+                    {
+                        "model": "gpt-4o-mini",
+                        "prompt_tokens": 5,
+                        "completion_tokens": 10,
+                    },
+                ),
+            ):
+                result = svc.answer_question(
+                    "Explain osmosis?", context={"mode": "socratic"}
+                )
 
         self.assertEqual(result["mode"], "socratic")
 
@@ -241,9 +284,22 @@ class AnswerQuestionOutputTest(TestCase):
         grounded = [{"chunk": chunk, "similarity": 0.82}]
 
         with patch.object(svc, "retrieve_relevant_chunks", return_value=grounded):
-            with patch.object(svc, "_call_chat_model", return_value=("Answer...", {"model": "gpt-4o-mini", "prompt_tokens": 5, "completion_tokens": 10})):
+            with patch.object(
+                svc,
+                "_call_chat_model",
+                return_value=(
+                    "Answer...",
+                    {
+                        "model": "gpt-4o-mini",
+                        "prompt_tokens": 5,
+                        "completion_tokens": 10,
+                    },
+                ),
+            ):
                 result = svc.answer_question("Question?")
 
         self.assertTrue(len(result["sources"]) > 0)
         self.assertIn("text_span", result["sources"][0])
-        self.assertEqual(result["sources"][0]["text_span"], "Full text of the lesson chunk.")
+        self.assertEqual(
+            result["sources"][0]["text_span"], "Full text of the lesson chunk."
+        )

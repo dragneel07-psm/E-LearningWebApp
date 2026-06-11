@@ -10,7 +10,6 @@ from rest_framework import status
 from rest_framework.test import APIClient
 from rest_framework_simplejwt.tokens import AccessToken, RefreshToken
 
-
 User = get_user_model()
 
 
@@ -62,10 +61,18 @@ class RoleBasedTokenPolicyTests(FastTenantTestCase):
         admin_tokens = self._login("role_admin@example.com", "AdminPass@123")
         student_tokens = self._login("role_student@example.com", "StudentPass@123")
 
-        admin_access_remaining = self._remaining_seconds(AccessToken, admin_tokens["access"])
-        student_access_remaining = self._remaining_seconds(AccessToken, student_tokens["access"])
-        admin_refresh_remaining = self._remaining_seconds(RefreshToken, admin_tokens["refresh"])
-        student_refresh_remaining = self._remaining_seconds(RefreshToken, student_tokens["refresh"])
+        admin_access_remaining = self._remaining_seconds(
+            AccessToken, admin_tokens["access"]
+        )
+        student_access_remaining = self._remaining_seconds(
+            AccessToken, student_tokens["access"]
+        )
+        admin_refresh_remaining = self._remaining_seconds(
+            RefreshToken, admin_tokens["refresh"]
+        )
+        student_refresh_remaining = self._remaining_seconds(
+            RefreshToken, student_tokens["refresh"]
+        )
 
         self.assertLess(admin_access_remaining, student_access_remaining)
         self.assertLess(admin_refresh_remaining, student_refresh_remaining)
@@ -79,7 +86,11 @@ class RoleBasedTokenPolicyTests(FastTenantTestCase):
             {"refresh": old_refresh},
             format="json",
         )
-        self.assertEqual(first_refresh_response.status_code, status.HTTP_200_OK, msg=first_refresh_response.data)
+        self.assertEqual(
+            first_refresh_response.status_code,
+            status.HTTP_200_OK,
+            msg=first_refresh_response.data,
+        )
         self.assertIn("refresh", first_refresh_response.data)
         self.assertNotEqual(first_refresh_response.data["refresh"], old_refresh)
 

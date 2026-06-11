@@ -14,6 +14,7 @@ Usage:
   transcript = service.transcribe_lesson(lesson, using="default")
   # Returns transcript text or None on failure.
 """
+
 from __future__ import annotations
 
 import logging
@@ -29,7 +30,16 @@ from ai_engine.services.provider_config import get_ai_provider_config
 logger = logging.getLogger(__name__)
 
 # Media file extensions Whisper accepts
-_SUPPORTED_EXTENSIONS = {".mp4", ".webm", ".mp3", ".wav", ".m4a", ".ogg", ".mpeg", ".mpga"}
+_SUPPORTED_EXTENSIONS = {
+    ".mp4",
+    ".webm",
+    ".mp3",
+    ".wav",
+    ".m4a",
+    ".ogg",
+    ".mpeg",
+    ".mpga",
+}
 # Domains that require special downloaders (not supported)
 _UNSUPPORTED_HOSTS = {"youtube.com", "youtu.be", "vimeo.com", "dailymotion.com"}
 # Max file size to download (50 MB — Whisper API limit)
@@ -74,6 +84,7 @@ class VideoTranscriptService:
         transcript = self._transcribe_url(video_url, ext)
         if transcript:
             from academic.models.lesson import Lesson as LessonModel
+
             LessonModel.objects.using(using).filter(pk=lesson.pk).update(
                 video_transcript=transcript
             )

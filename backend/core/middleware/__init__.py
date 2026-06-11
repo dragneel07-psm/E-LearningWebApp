@@ -11,18 +11,18 @@ Priority order:
   2. x-tenant-id header (debug + local development only)
 """
 
+import os
 import re
 import uuid
-import os
+
 from django.conf import settings
+from django.db import DatabaseError, connection
+from django.db.models import Q
 from django.http import JsonResponse
 from django_tenants.middleware.main import TenantMainMiddleware
 from django_tenants.utils import get_tenant_domain_model, get_tenant_model
-from django.db import connection
-from django.db import DatabaseError
-from django.db.models import Q
-from core.logging_context import reset_request_context, set_request_context
 
+from core.logging_context import reset_request_context, set_request_context
 
 REQUEST_ID_PATTERN = re.compile(r"^[A-Za-z0-9\-_.]{8,128}$")
 ACTIVE_TENANT_STATUSES = {"active", "trial"}
@@ -48,7 +48,9 @@ class RequestContextMiddleware:
 
     def __call__(self, request):
         incoming_id = (request.headers.get("X-Request-ID", "") or "").strip()
-        request_id = incoming_id if REQUEST_ID_PATTERN.match(incoming_id) else str(uuid.uuid4())
+        request_id = (
+            incoming_id if REQUEST_ID_PATTERN.match(incoming_id) else str(uuid.uuid4())
+        )
         request.request_id = request_id
         set_request_context(request_id=request_id)
         try:
@@ -96,7 +98,9 @@ class SecurityHeadersMiddleware:
     def __call__(self, request):
         response = self.get_response(request)
 
-        csp_header_value = _build_csp_header(getattr(settings, "SECURITY_CSP_POLICY", {}))
+        csp_header_value = _build_csp_header(
+            getattr(settings, "SECURITY_CSP_POLICY", {})
+        )
         if csp_header_value:
             csp_header_name = (
                 "Content-Security-Policy-Report-Only"
@@ -106,7 +110,9 @@ class SecurityHeadersMiddleware:
             if csp_header_name not in response:
                 response[csp_header_name] = csp_header_value
 
-        permissions_policy = str(getattr(settings, "SECURITY_PERMISSIONS_POLICY", "") or "").strip()
+        permissions_policy = str(
+            getattr(settings, "SECURITY_PERMISSIONS_POLICY", "") or ""
+        ).strip()
         if permissions_policy and "Permissions-Policy" not in response:
             response["Permissions-Policy"] = permissions_policy
 
@@ -160,7 +166,9 @@ class TenantFromHeaderMiddleware(TenantMainMiddleware):
             if self._subdomain_from_base_domain(tenant_host) is not None:
                 return tenant_host
 
-        forwarded_host = self._extract_hostname(request.headers.get("x-forwarded-host", ""))
+        forwarded_host = self._extract_hostname(
+            request.headers.get("x-forwarded-host", "")
+        )
         if forwarded_host:
             return forwarded_host
 
@@ -168,7 +176,11 @@ class TenantFromHeaderMiddleware(TenantMainMiddleware):
 
     @classmethod
     def _should_trust_tenant_header(cls, hostname: str) -> bool:
-        mode = str(getattr(settings, "TENANT_HEADER_TRUST_MODE", "dev_only")).strip().lower()
+        mode = (
+            str(getattr(settings, "TENANT_HEADER_TRUST_MODE", "dev_only"))
+            .strip()
+            .lower()
+        )
         if mode == "never":
             return False
         if not bool(getattr(settings, "DEBUG", False)):
@@ -180,7 +192,9 @@ class TenantFromHeaderMiddleware(TenantMainMiddleware):
 
     @staticmethod
     def _is_tenant_active(tenant) -> bool:
-        tenant_status = str(getattr(tenant, "status", "active") or "active").strip().lower()
+        tenant_status = (
+            str(getattr(tenant, "status", "active") or "active").strip().lower()
+        )
         return tenant_status in ACTIVE_TENANT_STATUSES
 
     @staticmethod
@@ -195,7 +209,9 @@ class TenantFromHeaderMiddleware(TenantMainMiddleware):
 
     @classmethod
     def _is_probe_request(cls, request) -> bool:
-        path = cls._normalize_path(getattr(request, "path_info", "") or getattr(request, "path", ""))
+        path = cls._normalize_path(
+            getattr(request, "path_info", "") or getattr(request, "path", "")
+        )
         return path in PROBE_PATHS
 
     @classmethod
@@ -205,7 +221,9 @@ class TenantFromHeaderMiddleware(TenantMainMiddleware):
         Only applies to hosts under BASE_DOMAIN.
         """
         host = cls._extract_hostname(hostname).strip(".")
-        base_domain = cls._extract_hostname(getattr(settings, "BASE_DOMAIN", "") or os.environ.get("BASE_DOMAIN", "")).strip(".")
+        base_domain = cls._extract_hostname(
+            getattr(settings, "BASE_DOMAIN", "") or os.environ.get("BASE_DOMAIN", "")
+        ).strip(".")
 
         if not host or not base_domain:
             return None
@@ -251,9 +269,13 @@ class TenantFromHeaderMiddleware(TenantMainMiddleware):
 
         # 2. Optional x-tenant-id fallback (debug + local only)
         tenant_id = (
-            request.META.get('HTTP_X_TENANT_ID', '')
-            or request.headers.get('x-tenant-id', '')
-        ).strip().lower()
+            (
+                request.META.get("HTTP_X_TENANT_ID", "")
+                or request.headers.get("x-tenant-id", "")
+            )
+            .strip()
+            .lower()
+        )
 
         trust_header = self._should_trust_tenant_header(hostname)
         if tenant is None and tenant_id and trust_header:
@@ -289,7 +311,9 @@ class TenantFromHeaderMiddleware(TenantMainMiddleware):
             if inferred_subdomain:
                 try:
                     if inferred_subdomain == "public":
-                        tenant = tenant_model.objects.filter(schema_name__iexact="public").first()
+                        tenant = tenant_model.objects.filter(
+                            schema_name__iexact="public"
+                        ).first()
                     else:
                         tenant = tenant_model.objects.filter(
                             Q(schema_name__iexact=inferred_subdomain)

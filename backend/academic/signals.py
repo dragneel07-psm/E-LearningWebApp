@@ -3,8 +3,11 @@
 # via any medium, is strictly prohibited. Proprietary and confidential.
 from django.db.models.signals import post_save, pre_save
 from django.dispatch import receiver
-from .models.student import Student
+
 from conversations.services import GroupSyncService
+
+from .models.student import Student
+
 
 @receiver(pre_save, sender=Student)
 def track_section_change(sender, instance, **kwargs):
@@ -20,16 +23,17 @@ def track_section_change(sender, instance, **kwargs):
     else:
         instance._old_section_id = None
 
+
 @receiver(post_save, sender=Student)
 def sync_student_groups(sender, instance, created, **kwargs):
     """
     Trigger GroupSyncService when a student is saved.
     """
     # 1. Handle Section Change (Removal from old)
-    old_section_id = getattr(instance, '_old_section_id', None)
+    old_section_id = getattr(instance, "_old_section_id", None)
     if old_section_id and old_section_id != instance.section_id:
         GroupSyncService.remove_from_old_sections(instance, old_section_id)
-    
+
     # 2. Sync with New Section
     if instance.section:
         GroupSyncService.sync_section_group(instance)

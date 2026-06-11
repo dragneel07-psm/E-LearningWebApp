@@ -23,9 +23,7 @@ import json
 import logging
 from typing import Any
 
-
-from ai_engine.models import SkillTag, SkillMastery, AIInteractionLog
-from ai_engine.models import SkillPrerequisite
+from ai_engine.models import AIInteractionLog, SkillMastery, SkillPrerequisite, SkillTag
 from ai_engine.services.provider_config import get_ai_provider_config
 
 logger = logging.getLogger(__name__)
@@ -46,31 +44,43 @@ class KnowledgeGraphService:
     #  Prerequisite management
     # ------------------------------------------------------------------ #
 
-    def add_prerequisite(self, skill_id: str, prerequisite_id: str, using="default") -> SkillPrerequisite:
+    def add_prerequisite(
+        self, skill_id: str, prerequisite_id: str, using="default"
+    ) -> SkillPrerequisite:
         """
         Add a prerequisite edge: skill requires prerequisite.
         Silently returns existing edge if already exists.
         """
         skill = SkillTag.objects.using(using).get(id=skill_id, tenant=self.tenant)
-        prereq = SkillTag.objects.using(using).get(id=prerequisite_id, tenant=self.tenant)
+        prereq = SkillTag.objects.using(using).get(
+            id=prerequisite_id, tenant=self.tenant
+        )
 
         # Prevent self-loops
         if skill.id == prereq.id:
             raise ValueError("A skill cannot be its own prerequisite.")
 
         # Prevent cycles (check if skill is already a prerequisite of prerequisite)
-        if self._is_reachable(start_id=str(prereq.id), target_id=str(skill.id), using=using):
-            raise ValueError(f"Adding this edge would create a cycle in the prerequisite graph.")
+        if self._is_reachable(
+            start_id=str(prereq.id), target_id=str(skill.id), using=using
+        ):
+            raise ValueError(
+                f"Adding this edge would create a cycle in the prerequisite graph."
+            )
 
         obj, _ = SkillPrerequisite.objects.using(using).get_or_create(
             skill=skill, prerequisite=prereq
         )
         return obj
 
-    def remove_prerequisite(self, skill_id: str, prerequisite_id: str, using="default") -> bool:
-        deleted, _ = SkillPrerequisite.objects.using(using).filter(
-            skill_id=skill_id, prerequisite_id=prerequisite_id
-        ).delete()
+    def remove_prerequisite(
+        self, skill_id: str, prerequisite_id: str, using="default"
+    ) -> bool:
+        deleted, _ = (
+            SkillPrerequisite.objects.using(using)
+            .filter(skill_id=skill_id, prerequisite_id=prerequisite_id)
+            .delete()
+        )
         return deleted > 0
 
     def get_graph_for_subject(self, subject_id, using="default") -> dict[str, Any]:
@@ -83,9 +93,11 @@ class KnowledgeGraphService:
         )
         skill_ids = {str(s.id) for s in skills}
 
-        edges = SkillPrerequisite.objects.using(using).filter(
-            skill_id__in=skill_ids
-        ).select_related("skill", "prerequisite")
+        edges = (
+            SkillPrerequisite.objects.using(using)
+            .filter(skill_id__in=skill_ids)
+            .select_related("skill", "prerequisite")
+        )
 
         nodes = [{"id": str(s.id), "name": s.name} for s in skills]
         edge_list = [
@@ -145,11 +157,15 @@ class KnowledgeGraphService:
         all_ids = set(root_causes.keys()) | low_mastery_ids
         tags = {
             str(t.id): t
-            for t in SkillTag.objects.using(using).filter(id__in=all_ids, tenant=self.tenant)
+            for t in SkillTag.objects.using(using).filter(
+                id__in=all_ids, tenant=self.tenant
+            )
         }
         skill_tags_all = {
             str(t.id): t
-            for t in SkillTag.objects.using(using).filter(tenant=self.tenant, id__in=low_mastery_ids)
+            for t in SkillTag.objects.using(using).filter(
+                tenant=self.tenant, id__in=low_mastery_ids
+            )
         }
 
         result = []
@@ -182,7 +198,9 @@ class KnowledgeGraphService:
     #  LLM-powered graph generation
     # ------------------------------------------------------------------ #
 
-    def generate_prerequisites_for_subject(self, subject_id, using="default") -> list[dict]:
+    def generate_prerequisites_for_subject(
+        self, subject_id, using="default"
+    ) -> list[dict]:
         """
         Use LLM to auto-generate prerequisite relationships between skills in a subject.
         Returns a list of { skill_name, prerequisite_name, created: bool } dicts.
@@ -197,7 +215,11 @@ class KnowledgeGraphService:
         if len(skills) < 2:
             return []
 
-        from ai_engine.services.ai_client import parse_json_content, provider_ready, structured_chat
+        from ai_engine.services.ai_client import (
+            parse_json_content,
+            provider_ready,
+            structured_chat,
+        )
 
         if not provider_ready():
             return []
@@ -270,7 +292,10 @@ class KnowledgeGraphService:
                 continue
             skill_name = pair.get("skill", "")
             prereq_name = pair.get("prerequisite", "")
-            if skill_name not in skill_name_to_id or prereq_name not in skill_name_to_id:
+            if (
+                skill_name not in skill_name_to_id
+                or prereq_name not in skill_name_to_id
+            ):
                 continue
             try:
                 self.add_prerequisite(
@@ -278,9 +303,22 @@ class KnowledgeGraphService:
                     prerequisite_id=skill_name_to_id[prereq_name],
                     using=using,
                 )
-                results.append({"skill_name": skill_name, "prerequisite_name": prereq_name, "created": True})
+                results.append(
+                    {
+                        "skill_name": skill_name,
+                        "prerequisite_name": prereq_name,
+                        "created": True,
+                    }
+                )
             except Exception as exc:
-                results.append({"skill_name": skill_name, "prerequisite_name": prereq_name, "created": False, "error": str(exc)})
+                results.append(
+                    {
+                        "skill_name": skill_name,
+                        "prerequisite_name": prereq_name,
+                        "created": False,
+                        "error": str(exc),
+                    }
+                )
 
         return results
 
@@ -301,9 +339,11 @@ class KnowledgeGraphService:
         if depth > MAX_DEPTH:
             return
 
-        prereqs = SkillPrerequisite.objects.using(using).filter(
-            skill_id=skill_id
-        ).values_list("prerequisite_id", flat=True)
+        prereqs = (
+            SkillPrerequisite.objects.using(using)
+            .filter(skill_id=skill_id)
+            .values_list("prerequisite_id", flat=True)
+        )
 
         for prereq_id in prereqs:
             prereq_id_str = str(prereq_id)
@@ -336,9 +376,11 @@ class KnowledgeGraphService:
             if current in visited:
                 continue
             visited.add(current)
-            prereqs = SkillPrerequisite.objects.using(using).filter(
-                skill_id=current
-            ).values_list("prerequisite_id", flat=True)
+            prereqs = (
+                SkillPrerequisite.objects.using(using)
+                .filter(skill_id=current)
+                .values_list("prerequisite_id", flat=True)
+            )
             queue.extend(str(p) for p in prereqs)
         return False
 

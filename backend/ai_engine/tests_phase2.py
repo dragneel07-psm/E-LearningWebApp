@@ -5,8 +5,11 @@
 Tests for Phase 2: Multi-query expansion + Persistent Conversation Memory.
 Run with: python manage.py test ai_engine.tests_phase2
 """
+
 from unittest.mock import MagicMock, patch
+
 from django.test import TestCase
+
 from ai_engine.services.rag_tutor_service import RAGTutorService
 from ai_engine.services.sm2_service import SM2Service
 
@@ -17,7 +20,9 @@ class MultiQueryExpansionTest(TestCase):
     def _make_service(self):
         tenant = MagicMock()
         tenant.name = "test-school"
-        with patch("ai_engine.services.rag_tutor_service.get_ai_provider_config") as mock_cfg:
+        with patch(
+            "ai_engine.services.rag_tutor_service.get_ai_provider_config"
+        ) as mock_cfg:
             mock_cfg.return_value = {"enabled": False, "configured": False}
             svc = RAGTutorService(tenant=tenant)
         return svc
@@ -36,8 +41,12 @@ class MultiQueryExpansionTest(TestCase):
             "How does photosynthesis work?\nExplain the process of photosynthesis"
         )
 
-        with patch("ai_engine.services.ai_client.provider_ready", return_value=True), \
-             patch("ai_engine.services.rag_tutor_service.chat_with_fallback", return_value=mock_response):
+        with patch(
+            "ai_engine.services.ai_client.provider_ready", return_value=True
+        ), patch(
+            "ai_engine.services.rag_tutor_service.chat_with_fallback",
+            return_value=mock_response,
+        ):
             result = svc._expand_query("What is photosynthesis?")
 
         self.assertEqual(len(result), 3)
@@ -52,8 +61,12 @@ class MultiQueryExpansionTest(TestCase):
             "Variant A\nVariant B\nVariant C\nVariant D"
         )
 
-        with patch("ai_engine.services.ai_client.provider_ready", return_value=True), \
-             patch("ai_engine.services.rag_tutor_service.chat_with_fallback", return_value=mock_response):
+        with patch(
+            "ai_engine.services.ai_client.provider_ready", return_value=True
+        ), patch(
+            "ai_engine.services.rag_tutor_service.chat_with_fallback",
+            return_value=mock_response,
+        ):
             result = svc._expand_query("original")
 
         self.assertEqual(len(result), 3)  # original + 2
@@ -62,8 +75,12 @@ class MultiQueryExpansionTest(TestCase):
         """If the LLM call raises an exception, returns only original."""
         svc = self._make_service()
 
-        with patch("ai_engine.services.ai_client.provider_ready", return_value=True), \
-             patch("ai_engine.services.rag_tutor_service.chat_with_fallback", side_effect=Exception("timeout")):
+        with patch(
+            "ai_engine.services.ai_client.provider_ready", return_value=True
+        ), patch(
+            "ai_engine.services.rag_tutor_service.chat_with_fallback",
+            side_effect=Exception("timeout"),
+        ):
             result = svc._expand_query("What is gravity?")
 
         self.assertEqual(result, ["What is gravity?"])
@@ -86,7 +103,9 @@ class MultiQueryExpansionTest(TestCase):
         result = svc._merge_and_rerank([list1, list2])
         ids = [r["chunk"].id for r in result]
 
-        self.assertEqual(len(ids), len(set(ids)), "Duplicate chunks found in reranked output")
+        self.assertEqual(
+            len(ids), len(set(ids)), "Duplicate chunks found in reranked output"
+        )
         self.assertIn("aaa", ids)
         self.assertIn("bbb", ids)
         self.assertIn("ccc", ids)

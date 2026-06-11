@@ -9,6 +9,7 @@ try:
     from celery import Celery
     from celery.schedules import crontab
 except Exception:
+
     class Celery:  # type: ignore[override]
         def __init__(self, *_args, **_kwargs):
             self.name = "config"
@@ -22,22 +23,25 @@ except Exception:
     def crontab(*_args, **_kwargs):  # type: ignore[misc]
         return None
 
+
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
 
 app = Celery("config")
 app.config_from_object("django.conf:settings", namespace="CELERY")
-app.autodiscover_tasks([
-    "academic",
-    "ai_engine",
-    "billing",
-    "billing_school",
-    "hr_payroll",
-    "library",
-    "notifications",
-    "projects",
-    "transport",
-    "hostel",
-])
+app.autodiscover_tasks(
+    [
+        "academic",
+        "ai_engine",
+        "billing",
+        "billing_school",
+        "hr_payroll",
+        "library",
+        "notifications",
+        "projects",
+        "transport",
+        "hostel",
+    ]
+)
 
 try:
     # Route heavy AI/LLM tasks to a dedicated queue so they don't starve

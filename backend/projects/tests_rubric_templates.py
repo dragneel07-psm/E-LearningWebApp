@@ -6,6 +6,7 @@ RBAC + visibility tests for the RubricTemplate API.
 
 Run with: python manage.py test projects.tests_rubric_templates
 """
+
 from django_tenants.test.cases import FastTenantTestCase
 from rest_framework import status
 from rest_framework.test import APIClient
@@ -145,7 +146,9 @@ class RubricTemplateApiTests(FastTenantTestCase):
             format="json",
         )
         # Either 403 (object permission) or 404 (filtered out of queryset).
-        self.assertIn(resp.status_code, {status.HTTP_403_FORBIDDEN, status.HTTP_404_NOT_FOUND})
+        self.assertIn(
+            resp.status_code, {status.HTTP_403_FORBIDDEN, status.HTTP_404_NOT_FOUND}
+        )
 
     def test_admin_can_edit_any_template(self):
         target = self._make_template(owner=self.teacher_b, name="Renamable")

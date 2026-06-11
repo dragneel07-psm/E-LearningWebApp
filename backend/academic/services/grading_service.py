@@ -4,6 +4,7 @@
 """
 Grading service for assessment submissions.
 """
+
 import logging
 
 logger = logging.getLogger(__name__)
@@ -25,13 +26,14 @@ class GradingService:
         """
         from academic.models.question import Question
 
-        db_alias = getattr(assessment._state, 'db', None) or 'default'
+        db_alias = getattr(assessment._state, "db", None) or "default"
         questions = Question.objects.using(db_alias).filter(assessment=assessment)
 
         # Lazy-load AI grader — optional dependency; None if unavailable.
         ai_grader = None
         try:
             from ai_engine.services.grading_service import grading_service
+
             ai_grader = grading_service
         except ImportError:
             pass
@@ -47,16 +49,17 @@ class GradingService:
             feedback = ""
 
             try:
-                if q.type == 'mcq':
+                if q.type == "mcq":
                     if user_answer == q.correct_answer:
                         is_correct = True
                         points_earned = q.points
 
-                elif q.type == 'short_answer':
+                elif q.type == "short_answer":
                     if (
                         user_answer
                         and q.correct_answer
-                        and str(user_answer).strip().lower() == str(q.correct_answer).strip().lower()
+                        and str(user_answer).strip().lower()
+                        == str(q.correct_answer).strip().lower()
                     ):
                         is_correct = True
                         points_earned = q.points
@@ -69,8 +72,8 @@ class GradingService:
                             correct_answer=q.correct_answer,
                             total_points=q.points,
                         )
-                        points_earned = ai_result.get('score', 0)
-                        feedback = ai_result.get('feedback', '')
+                        points_earned = ai_result.get("score", 0)
+                        feedback = ai_result.get("feedback", "")
                         is_correct = points_earned >= (q.points * 0.5)
                     except Exception as ai_err:
                         logger.warning(
@@ -90,11 +93,11 @@ class GradingService:
                 )
 
             graded_answers[str(q.question_id)] = {
-                'answer': user_answer,
-                'correct': is_correct,
-                'points_earned': points_earned,
-                'max_points': q.points,
-                'ai_feedback': feedback,
+                "answer": user_answer,
+                "correct": is_correct,
+                "points_earned": points_earned,
+                "max_points": q.points,
+                "ai_feedback": feedback,
             }
             total_score += points_earned
             max_possible += q.points

@@ -57,7 +57,9 @@ class ProjectTask(models.Model):
     class Meta:
         ordering = ["order", "created_at"]
         indexes = [
-            models.Index(fields=["project", "status"], name="proj_task_proj_status_idx"),
+            models.Index(
+                fields=["project", "status"], name="proj_task_proj_status_idx"
+            ),
             models.Index(fields=["assignee", "status"], name="proj_task_assignee_idx"),
         ]
 

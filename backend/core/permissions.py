@@ -3,7 +3,7 @@
 # via any medium, is strictly prohibited. Proprietary and confidential.
 from rest_framework.permissions import BasePermission
 
-ADMIN_ROLES = {'admin', 'staff', 'saas_admin'}
+ADMIN_ROLES = {"admin", "staff", "saas_admin"}
 
 
 class IsAdminOrStaff(BasePermission):
@@ -13,5 +13,5 @@ class IsAdminOrStaff(BasePermission):
         return bool(
             request.user
             and request.user.is_authenticated
-            and getattr(request.user, 'role', None) in ADMIN_ROLES
+            and getattr(request.user, "role", None) in ADMIN_ROLES
         )

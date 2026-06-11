@@ -12,7 +12,6 @@ from rest_framework.test import APIClient
 from notifications.models import Notification
 from notifications.services import NotificationService
 
-
 User = get_user_model()
 
 

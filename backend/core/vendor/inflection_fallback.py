@@ -24,4 +24,3 @@ def singularize(word: str) -> str:
     if value.endswith("s") and len(value) > 1:
         return value[:-1]
     return value
-

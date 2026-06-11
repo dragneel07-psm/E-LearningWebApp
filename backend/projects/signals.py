@@ -7,6 +7,7 @@ Signal handlers for the projects app.
   - Broadcast project events over the channel layer to ws/projects/<id>/
   - Emit Notification rows for assignee changes and project grading
 """
+
 from __future__ import annotations
 
 import logging
@@ -130,12 +131,20 @@ def _on_task_saved(sender, instance: ProjectTask, created, **kwargs):
     if created:
         _broadcast(
             project_id,
-            {"type": "project.task.created", "project_id": project_id, "task": _serialize_task(instance)},
+            {
+                "type": "project.task.created",
+                "project_id": project_id,
+                "task": _serialize_task(instance),
+            },
         )
     else:
         _broadcast(
             project_id,
-            {"type": "project.task.updated", "project_id": project_id, "task": _serialize_task(instance)},
+            {
+                "type": "project.task.updated",
+                "project_id": project_id,
+                "task": _serialize_task(instance),
+            },
         )
     _broadcast_project_progress(instance.project)
 
@@ -150,7 +159,11 @@ def _on_task_deleted(sender, instance: ProjectTask, **kwargs):
     project_id = str(instance.project_id)
     _broadcast(
         project_id,
-        {"type": "project.task.deleted", "project_id": project_id, "task_id": str(instance.task_id)},
+        {
+            "type": "project.task.deleted",
+            "project_id": project_id,
+            "task_id": str(instance.task_id),
+        },
     )
     try:
         _broadcast_project_progress(instance.project)
@@ -201,7 +214,9 @@ def _on_update_saved(sender, instance: ProjectUpdate, created, **kwargs):
 # --- Notifications ---
 
 
-def _emit_notification(*, recipient, title: str, message: str, link: str, tenant) -> None:
+def _emit_notification(
+    *, recipient, title: str, message: str, link: str, tenant
+) -> None:
     """Create a Notification row. Errors are swallowed — best-effort delivery."""
     if recipient is None:
         return
@@ -217,7 +232,10 @@ def _emit_notification(*, recipient, title: str, message: str, link: str, tenant
             is_read=False,
         )
     except Exception:
-        logger.exception("Failed to emit project notification for user=%s", getattr(recipient, "pk", None))
+        logger.exception(
+            "Failed to emit project notification for user=%s",
+            getattr(recipient, "pk", None),
+        )
 
 
 def _notify_task_assigned(task: ProjectTask) -> None:
@@ -262,7 +280,9 @@ def _notify_project_graded(project: Project) -> None:
         student_ids = list(project.members.values_list("student_id", flat=True))
         if project.leader_id and project.leader_id not in student_ids:
             student_ids.append(project.leader_id)
-        for parent in Parent.objects.filter(students__student_id__in=student_ids).distinct():
+        for parent in Parent.objects.filter(
+            students__student_id__in=student_ids
+        ).distinct():
             _emit_notification(
                 recipient=parent.user,
                 title=title,

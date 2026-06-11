@@ -12,19 +12,26 @@ from django.views.decorators.cache import cache_page
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from billing.models_school import Expense, FeeStructure, Payment, StudentFee
 from billing.permissions import IsSchoolFinanceManager
-from rest_framework.permissions import IsAuthenticated
-from billing.serializers import ExpenseSerializer, FeeStructureSerializer, PaymentSerializer, StudentFeeSerializer
+from billing.serializers import (
+    ExpenseSerializer,
+    FeeStructureSerializer,
+    PaymentSerializer,
+    StudentFeeSerializer,
+)
 from billing.shared_views import BillingIdempotencyMixin, BillingSchemaGuardMixin
 from core.mixins import TenantScopedQuerysetMixin
 from core.reports import generate_pdf_response
 from core.utils.audit import record_audit_event
 
 
-class FeeStructureViewSet(BillingSchemaGuardMixin, TenantScopedQuerysetMixin, viewsets.ModelViewSet):
+class FeeStructureViewSet(
+    BillingSchemaGuardMixin, TenantScopedQuerysetMixin, viewsets.ModelViewSet
+):
     require_tenant_schema = True
     allow_unscoped_for_saas = False
     queryset = FeeStructure.objects.all()
@@ -88,21 +95,25 @@ class FeeStructureViewSet(BillingSchemaGuardMixin, TenantScopedQuerysetMixin, vi
         )
 
 
-class FeeHeadViewSet(BillingSchemaGuardMixin, TenantScopedQuerysetMixin, viewsets.ModelViewSet):
+class FeeHeadViewSet(
+    BillingSchemaGuardMixin, TenantScopedQuerysetMixin, viewsets.ModelViewSet
+):
     """
     Phase C: CRUD for fee heads (line items under a FeeStructure).
 
     Frontend posts ?fee_structure=<uuid> to filter the list when editing one
     structure's heads. The viewset auto-scopes tenant on writes.
     """
+
     require_tenant_schema = True
     allow_unscoped_for_saas = False
     serializer_class = None  # bound in __init__ to avoid import cycle on module load
     permission_classes = [IsSchoolFinanceManager]
 
     def __init__(self, *args, **kwargs):
-        from billing.serializers import FeeHeadSerializer
         from billing.models_school import FeeHead
+        from billing.serializers import FeeHeadSerializer
+
         self.serializer_class = FeeHeadSerializer
         self.queryset = FeeHead.objects.all()
         super().__init__(*args, **kwargs)
@@ -116,38 +127,61 @@ class FeeHeadViewSet(BillingSchemaGuardMixin, TenantScopedQuerysetMixin, viewset
 
     def perform_create(self, serializer):
         from billing.models_school import FeeStructure
+
         tenant = self.request.user.tenant
         # Enforce the fee_structure belongs to this tenant.
         structure = serializer.validated_data.get("fee_structure")
         if structure and getattr(structure, "tenant_id", None) != tenant.id:
             from rest_framework.exceptions import PermissionDenied
+
             raise PermissionDenied("Fee structure does not belong to your tenant.")
         head = serializer.save(tenant=tenant)
         record_audit_event(
             action="billing.fee_head_created",
-            user=self.request.user, request=self.request,
-            details={"head_id": str(head.head_id), "fee_structure_id": str(head.fee_structure_id),
-                     "name": head.name, "amount": str(head.amount)},
+            user=self.request.user,
+            request=self.request,
+            details={
+                "head_id": str(head.head_id),
+                "fee_structure_id": str(head.fee_structure_id),
+                "name": head.name,
+                "amount": str(head.amount),
+            },
         )
 
     def perform_update(self, serializer):
         head = serializer.save()
         record_audit_event(
             action="billing.fee_head_updated",
-            user=self.request.user, request=self.request,
-            details={"head_id": str(head.head_id), "name": head.name, "amount": str(head.amount)},
+            user=self.request.user,
+            request=self.request,
+            details={
+                "head_id": str(head.head_id),
+                "name": head.name,
+                "amount": str(head.amount),
+            },
         )
 
     def perform_destroy(self, instance):
-        payload = {"head_id": str(instance.head_id), "name": instance.name, "amount": str(instance.amount)}
+        payload = {
+            "head_id": str(instance.head_id),
+            "name": instance.name,
+            "amount": str(instance.amount),
+        }
         super().perform_destroy(instance)
         record_audit_event(
             action="billing.fee_head_deleted",
-            user=self.request.user, request=self.request, details=payload,
+            user=self.request.user,
+            request=self.request,
+            details=payload,
         )
 
 
-class StudentFeeViewSet(BillingIdempotencyMixin, BillingSchemaGuardMixin, TenantScopedQuerysetMixin, viewsets.ModelViewSet):
+class StudentFeeViewSet(
+    BillingIdempotencyMixin,
+    BillingSchemaGuardMixin,
+    TenantScopedQuerysetMixin,
+    viewsets.ModelViewSet,
+):
     require_tenant_schema = True
     allow_unscoped_for_saas = False
     queryset = StudentFee.objects.all()
@@ -242,24 +276,34 @@ class StudentFeeViewSet(BillingIdempotencyMixin, BillingSchemaGuardMixin, Tenant
         try:
             student = Student.objects.get(user=request.user)
         except Student.DoesNotExist:
-            return Response({'detail': 'No student profile found.'}, status=status.HTTP_404_NOT_FOUND)
+            return Response(
+                {"detail": "No student profile found."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
 
-        fees = StudentFee.objects.filter(student=student).select_related('fee_structure').order_by('-due_date')
-        payments = Payment.objects.filter(student=student).order_by('-payment_date')
+        fees = (
+            StudentFee.objects.filter(student=student)
+            .select_related("fee_structure")
+            .order_by("-due_date")
+        )
+        payments = Payment.objects.filter(student=student).order_by("-payment_date")
 
         from decimal import Decimal as D
+
         total_due = sum(D(str(f.amount_due or 0)) for f in fees)
         total_paid = sum(D(str(f.amount_paid or 0)) for f in fees)
 
-        return Response({
-            'fees': StudentFeeSerializer(fees, many=True).data,
-            'payments': PaymentSerializer(payments, many=True).data,
-            'summary': {
-                'total_due': float(total_due),
-                'total_paid': float(total_paid),
-                'outstanding': float(total_due - total_paid),
-            },
-        })
+        return Response(
+            {
+                "fees": StudentFeeSerializer(fees, many=True).data,
+                "payments": PaymentSerializer(payments, many=True).data,
+                "summary": {
+                    "total_due": float(total_due),
+                    "total_paid": float(total_paid),
+                    "outstanding": float(total_due - total_paid),
+                },
+            }
+        )
 
     @action(detail=True, methods=["post"])
     def send_invoice(self, request, pk=None):
@@ -270,6 +314,7 @@ class StudentFeeViewSet(BillingIdempotencyMixin, BillingSchemaGuardMixin, Tenant
         fee = self.get_object()
         try:
             from notifications.services import NotificationService
+
             NotificationService.create_notification(
                 recipient=fee.student.user,
                 title=f"Fee Invoice: {fee.fee_structure.name}",
@@ -278,11 +323,14 @@ class StudentFeeViewSet(BillingIdempotencyMixin, BillingSchemaGuardMixin, Tenant
                     f"'{fee.fee_structure.name}' of {fee.amount_due} is due on "
                     f"{fee.due_date}. Outstanding balance: {fee.balance}."
                 ),
-                notification_type='fee_invoice',
+                notification_type="fee_invoice",
             )
         except Exception as e:
-            return Response({'detail': f'Invoice notification failed: {e}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-        return Response({'status': 'invoice_sent', 'student': str(fee.student_id)})
+            return Response(
+                {"detail": f"Invoice notification failed: {e}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+        return Response({"status": "invoice_sent", "student": str(fee.student_id)})
 
     @action(detail=False, methods=["post"], url_path="bulk-assign-multi")
     def bulk_assign_multi(self, request):
@@ -301,7 +349,9 @@ class StudentFeeViewSet(BillingIdempotencyMixin, BillingSchemaGuardMixin, Tenant
 
         tenant = getattr(request.user, "tenant", None)
         if not tenant:
-            return Response({"detail": "No tenant in scope."}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"detail": "No tenant in scope."}, status=status.HTTP_400_BAD_REQUEST
+            )
 
         class_ids = request.data.get("class_ids") or []
         structure_ids = request.data.get("fee_structure_ids") or []
@@ -310,23 +360,31 @@ class StudentFeeViewSet(BillingIdempotencyMixin, BillingSchemaGuardMixin, Tenant
 
         if not class_ids or not structure_ids or not due_date:
             return Response(
-                {"detail": "class_ids, fee_structure_ids and due_date are all required."},
+                {
+                    "detail": "class_ids, fee_structure_ids and due_date are all required."
+                },
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        structures = FeeStructure.objects.filter(tenant=tenant, fee_id__in=structure_ids)
+        structures = FeeStructure.objects.filter(
+            tenant=tenant, fee_id__in=structure_ids
+        )
         if structures.count() != len(set(map(str, structure_ids))):
-            return Response({"detail": "Some fee structures not found in this tenant."},
-                            status=status.HTTP_404_NOT_FOUND)
+            return Response(
+                {"detail": "Some fee structures not found in this tenant."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
 
         students = list(
-            Student.objects
-            .filter(academic_class_id__in=class_ids, user__tenant=tenant)
-            .select_related("user")
+            Student.objects.filter(
+                academic_class_id__in=class_ids, user__tenant=tenant
+            ).select_related("user")
         )
         if not students:
-            return Response({"detail": "No students found in the selected class(es)."},
-                            status=status.HTTP_404_NOT_FOUND)
+            return Response(
+                {"detail": "No students found in the selected class(es)."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
 
         summary = []
         total_created = 0
@@ -341,9 +399,9 @@ class StudentFeeViewSet(BillingIdempotencyMixin, BillingSchemaGuardMixin, Tenant
                 existing = set()
                 if skip_existing:
                     existing = set(
-                        StudentFee.objects
-                        .filter(tenant=tenant, fee_structure=structure, due_date=due_date)
-                        .values_list("student_id", flat=True)
+                        StudentFee.objects.filter(
+                            tenant=tenant, fee_structure=structure, due_date=due_date
+                        ).values_list("student_id", flat=True)
                     )
                 for s in students:
                     if skip_existing and s.student_id in existing:
@@ -359,33 +417,41 @@ class StudentFeeViewSet(BillingIdempotencyMixin, BillingSchemaGuardMixin, Tenant
                     )
                     created += 1
                     created_fee_ids.append(str(fee.student_fee_id))
-                summary.append({
-                    "fee_structure_id": str(structure.fee_id),
-                    "fee_structure_name": structure.name,
-                    "created": created,
-                    "skipped": skipped,
-                })
+                summary.append(
+                    {
+                        "fee_structure_id": str(structure.fee_id),
+                        "fee_structure_name": structure.name,
+                        "created": created,
+                        "skipped": skipped,
+                    }
+                )
                 total_created += created
                 total_skipped += skipped
 
         record_audit_event(
             action="billing.student_fee_bulk_assign_multi",
-            user=request.user, request=request,
+            user=request.user,
+            request=request,
             details={
-                "class_ids": class_ids, "structure_ids": structure_ids,
+                "class_ids": class_ids,
+                "structure_ids": structure_ids,
                 "due_date": due_date,
                 "students": len(students),
-                "created": total_created, "skipped": total_skipped,
+                "created": total_created,
+                "skipped": total_skipped,
             },
         )
 
-        return Response({
-            "created": total_created,
-            "skipped": total_skipped,
-            "student_count": len(students),
-            "summary": summary,
-            "created_fee_ids": created_fee_ids,
-        }, status=status.HTTP_201_CREATED)
+        return Response(
+            {
+                "created": total_created,
+                "skipped": total_skipped,
+                "student_count": len(students),
+                "summary": summary,
+                "created_fee_ids": created_fee_ids,
+            },
+            status=status.HTTP_201_CREATED,
+        )
 
     @action(detail=True, methods=["get"], url_path="generate-bill")
     def generate_bill(self, request, pk=None):
@@ -394,6 +460,7 @@ class StudentFeeViewSet(BillingIdempotencyMixin, BillingSchemaGuardMixin, Tenant
         outstanding balance + due date, suitable for distributing to parents.
         """
         from decimal import Decimal
+
         from billing_school.utils_bs_calendar import bs_date_display
 
         fee = self.get_object()
@@ -404,12 +471,15 @@ class StudentFeeViewSet(BillingIdempotencyMixin, BillingSchemaGuardMixin, Tenant
         balance = Decimal(str(fee.amount_due or 0)) - Decimal(str(fee.amount_paid or 0))
         try:
             from num2words import num2words
+
             amount_words = num2words(balance, lang="en").title() + " Only"
         except Exception:
             amount_words = ""
 
         try:
-            student_name = student.user.get_full_name() if student and student.user else ""
+            student_name = (
+                student.user.get_full_name() if student and student.user else ""
+            )
         except Exception:
             student_name = ""
 
@@ -421,7 +491,10 @@ class StudentFeeViewSet(BillingIdempotencyMixin, BillingSchemaGuardMixin, Tenant
         heads = []
         if structure and hasattr(structure, "heads"):
             try:
-                heads = [{"name": h.name, "amount": f"{h.amount:.2f}"} for h in structure.heads.all()]
+                heads = [
+                    {"name": h.name, "amount": f"{h.amount:.2f}"}
+                    for h in structure.heads.all()
+                ]
             except Exception:
                 heads = []
 
@@ -443,18 +516,19 @@ class StudentFeeViewSet(BillingIdempotencyMixin, BillingSchemaGuardMixin, Tenant
             "principal_name": getattr(tenant, "principal_name", "") or "",
             "accountant_name": getattr(tenant, "accountant_name", "") or "",
             "fiscal_year_bs": getattr(tenant, "fiscal_year_bs", "") or "",
-
             "bill_number": f"BILL-{str(fee.student_fee_id)[:8].upper()}",
             "student_name": student_name,
             "student_id": str(getattr(student, "student_id", "") or ""),
-            "class_name": str(student.academic_class) if getattr(student, "academic_class", None) else "",
-
+            "class_name": (
+                str(student.academic_class)
+                if getattr(student, "academic_class", None)
+                else ""
+            ),
             "due_date": fee.due_date.strftime("%d %b %Y"),
             "due_date_bs": due_date_bs,
             "fee_title": structure.name if structure else "Fee",
             "fee_period": getattr(structure, "frequency", "") if structure else "",
             "fee_heads": heads,
-
             "amount_due": f"{Decimal(str(fee.amount_due or 0)):.2f}",
             "amount_paid": f"{Decimal(str(fee.amount_paid or 0)):.2f}",
             "balance": f"{balance:.2f}",
@@ -468,7 +542,10 @@ class StudentFeeViewSet(BillingIdempotencyMixin, BillingSchemaGuardMixin, Tenant
         response = generate_pdf_response("reports/student_bill.html", context, filename)
         if response:
             return response
-        return Response({"error": "Failed to generate bill"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        return Response(
+            {"error": "Failed to generate bill"},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
 
     @action(detail=False, methods=["post"], url_path="bulk-bills-pdf")
     def bulk_bills_pdf(self, request):
@@ -477,19 +554,24 @@ class StudentFeeViewSet(BillingIdempotencyMixin, BillingSchemaGuardMixin, Tenant
         Body: { "student_fee_ids": [<uuid>, ...] }
         """
         from decimal import Decimal
+
         from billing_school.utils_bs_calendar import bs_date_display
 
         tenant = getattr(request.user, "tenant", None)
         if not tenant:
-            return Response({"detail": "No tenant in scope."}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"detail": "No tenant in scope."}, status=status.HTTP_400_BAD_REQUEST
+            )
 
         ids = request.data.get("student_fee_ids") or []
         if not ids:
-            return Response({"detail": "student_fee_ids is required."}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"detail": "student_fee_ids is required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         fees = (
-            StudentFee.objects
-            .filter(tenant=tenant, student_fee_id__in=ids)
+            StudentFee.objects.filter(tenant=tenant, student_fee_id__in=ids)
             .select_related("student__user", "fee_structure")
             .prefetch_related("fee_structure__heads")
             .order_by("student__user__first_name")
@@ -502,9 +584,15 @@ class StudentFeeViewSet(BillingIdempotencyMixin, BillingSchemaGuardMixin, Tenant
 
         bills = []
         for fee in fees:
-            balance = Decimal(str(fee.amount_due or 0)) - Decimal(str(fee.amount_paid or 0))
+            balance = Decimal(str(fee.amount_due or 0)) - Decimal(
+                str(fee.amount_paid or 0)
+            )
             try:
-                student_name = fee.student.user.get_full_name() if fee.student and fee.student.user else ""
+                student_name = (
+                    fee.student.user.get_full_name()
+                    if fee.student and fee.student.user
+                    else ""
+                )
             except Exception:
                 student_name = ""
             try:
@@ -513,7 +601,10 @@ class StudentFeeViewSet(BillingIdempotencyMixin, BillingSchemaGuardMixin, Tenant
                 due_date_bs = ""
             heads = []
             try:
-                heads = [{"name": h.name, "amount": f"{h.amount:.2f}"} for h in fee.fee_structure.heads.all()]
+                heads = [
+                    {"name": h.name, "amount": f"{h.amount:.2f}"}
+                    for h in fee.fee_structure.heads.all()
+                ]
             except Exception:
                 heads = []
             amount_words = ""
@@ -522,22 +613,28 @@ class StudentFeeViewSet(BillingIdempotencyMixin, BillingSchemaGuardMixin, Tenant
                     amount_words = num2words(balance, lang="en").title() + " Only"
                 except Exception:
                     amount_words = ""
-            bills.append({
-                "bill_number": f"BILL-{str(fee.student_fee_id)[:8].upper()}",
-                "student_name": student_name,
-                "student_id": str(getattr(fee.student, "student_id", "") or ""),
-                "class_name": str(fee.student.academic_class) if getattr(fee.student, "academic_class", None) else "",
-                "due_date": fee.due_date.strftime("%d %b %Y"),
-                "due_date_bs": due_date_bs,
-                "fee_title": fee.fee_structure.name if fee.fee_structure else "Fee",
-                "fee_heads": heads,
-                "amount_due": f"{Decimal(str(fee.amount_due or 0)):.2f}",
-                "amount_paid": f"{Decimal(str(fee.amount_paid or 0)):.2f}",
-                "balance": f"{balance:.2f}",
-                "late_fee": f"{Decimal(str(getattr(fee, 'late_fee_applied', 0) or 0)):.2f}",
-                "amount_words": amount_words,
-                "status": fee.get_status_display(),
-            })
+            bills.append(
+                {
+                    "bill_number": f"BILL-{str(fee.student_fee_id)[:8].upper()}",
+                    "student_name": student_name,
+                    "student_id": str(getattr(fee.student, "student_id", "") or ""),
+                    "class_name": (
+                        str(fee.student.academic_class)
+                        if getattr(fee.student, "academic_class", None)
+                        else ""
+                    ),
+                    "due_date": fee.due_date.strftime("%d %b %Y"),
+                    "due_date_bs": due_date_bs,
+                    "fee_title": fee.fee_structure.name if fee.fee_structure else "Fee",
+                    "fee_heads": heads,
+                    "amount_due": f"{Decimal(str(fee.amount_due or 0)):.2f}",
+                    "amount_paid": f"{Decimal(str(fee.amount_paid or 0)):.2f}",
+                    "balance": f"{balance:.2f}",
+                    "late_fee": f"{Decimal(str(getattr(fee, 'late_fee_applied', 0) or 0)):.2f}",
+                    "amount_words": amount_words,
+                    "status": fee.get_status_display(),
+                }
+            )
 
         logo_url = ""
         try:
@@ -560,15 +657,21 @@ class StudentFeeViewSet(BillingIdempotencyMixin, BillingSchemaGuardMixin, Tenant
             "generated_on": timezone.now().strftime("%d %b %Y %H:%M"),
         }
         filename = f"bills_{timezone.now().strftime('%Y%m%d_%H%M')}.pdf"
-        response = generate_pdf_response("reports/student_bills_bulk.html", context, filename)
+        response = generate_pdf_response(
+            "reports/student_bills_bulk.html", context, filename
+        )
         if response:
             record_audit_event(
                 action="billing.bulk_bills_exported",
-                user=request.user, request=request,
+                user=request.user,
+                request=request,
                 details={"count": len(bills)},
             )
             return response
-        return Response({"error": "Failed to generate bills"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        return Response(
+            {"error": "Failed to generate bills"},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
 
     @action(detail=False, methods=["post"])
     def assign_bulk(self, request):
@@ -584,7 +687,9 @@ class StudentFeeViewSet(BillingIdempotencyMixin, BillingSchemaGuardMixin, Tenant
 
             if not all([fee_structure_id, academic_class_id, due_date]):
                 return Response(
-                    {"error": "Missing required fields: fee_structure_id, academic_class_id, and due_date are required."},
+                    {
+                        "error": "Missing required fields: fee_structure_id, academic_class_id, and due_date are required."
+                    },
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
@@ -593,13 +698,23 @@ class StudentFeeViewSet(BillingIdempotencyMixin, BillingSchemaGuardMixin, Tenant
 
                 tenant = getattr(request.user, "tenant", None)
                 if not tenant:
-                    return Response({"error": "User has no associated tenant"}, status=status.HTTP_400_BAD_REQUEST)
+                    return Response(
+                        {"error": "User has no associated tenant"},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
 
-                fee_structure = FeeStructure.objects.get(fee_id=fee_structure_id, tenant=tenant)
-                students = Student.objects.filter(academic_class_id=academic_class_id, user__tenant=tenant)
+                fee_structure = FeeStructure.objects.get(
+                    fee_id=fee_structure_id, tenant=tenant
+                )
+                students = Student.objects.filter(
+                    academic_class_id=academic_class_id, user__tenant=tenant
+                )
 
                 if not students.exists():
-                    return Response({"error": "No students found in the selected class"}, status=status.HTTP_404_NOT_FOUND)
+                    return Response(
+                        {"error": "No students found in the selected class"},
+                        status=status.HTTP_404_NOT_FOUND,
+                    )
 
                 with transaction.atomic():
                     created_count = 0
@@ -625,11 +740,22 @@ class StudentFeeViewSet(BillingIdempotencyMixin, BillingSchemaGuardMixin, Tenant
                     },
                 )
 
-                return Response({"message": f"Successfully assigned fee to {created_count} students"}, status=status.HTTP_201_CREATED)
+                return Response(
+                    {
+                        "message": f"Successfully assigned fee to {created_count} students"
+                    },
+                    status=status.HTTP_201_CREATED,
+                )
             except FeeStructure.DoesNotExist:
-                return Response({"error": "Fee structure not found"}, status=status.HTTP_404_NOT_FOUND)
+                return Response(
+                    {"error": "Fee structure not found"},
+                    status=status.HTTP_404_NOT_FOUND,
+                )
             except Exception as exc:
-                return Response({"error": f"Assignment failed: {str(exc)}"}, status=status.HTTP_400_BAD_REQUEST)
+                return Response(
+                    {"error": f"Assignment failed: {str(exc)}"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
 
         return self._idempotent_execute(
             request,
@@ -640,7 +766,12 @@ class StudentFeeViewSet(BillingIdempotencyMixin, BillingSchemaGuardMixin, Tenant
         )
 
 
-class PaymentViewSet(BillingIdempotencyMixin, BillingSchemaGuardMixin, TenantScopedQuerysetMixin, viewsets.ModelViewSet):
+class PaymentViewSet(
+    BillingIdempotencyMixin,
+    BillingSchemaGuardMixin,
+    TenantScopedQuerysetMixin,
+    viewsets.ModelViewSet,
+):
     require_tenant_schema = True
     allow_unscoped_for_saas = False
     queryset = Payment.objects.all()
@@ -649,7 +780,9 @@ class PaymentViewSet(BillingIdempotencyMixin, BillingSchemaGuardMixin, TenantSco
 
     def get_queryset(self):
         queryset = super().get_queryset()
-        return queryset.select_related("student__user", "recorded_by", "student_fee__fee_structure")
+        return queryset.select_related(
+            "student__user", "recorded_by", "student_fee__fee_structure"
+        )
 
     def create(self, request, *args, **kwargs):
         def _execute():
@@ -665,7 +798,9 @@ class PaymentViewSet(BillingIdempotencyMixin, BillingSchemaGuardMixin, TenantSco
 
     def perform_create(self, serializer):
         if not getattr(self.request.user, "tenant", None):
-            raise PermissionDenied("Authenticated user is not associated with a tenant.")
+            raise PermissionDenied(
+                "Authenticated user is not associated with a tenant."
+            )
 
         from billing.bill_numbering import allocate_bill_number
 
@@ -703,7 +838,9 @@ class PaymentViewSet(BillingIdempotencyMixin, BillingSchemaGuardMixin, TenantSco
             details={
                 "payment_id": str(payment.payment_id),
                 "student_id": str(payment.student_id),
-                "student_fee_id": str(payment.student_fee_id) if payment.student_fee_id else None,
+                "student_fee_id": (
+                    str(payment.student_fee_id) if payment.student_fee_id else None
+                ),
                 "amount": str(payment.amount),
                 "method": payment.method,
                 "transaction_id": payment.transaction_id,
@@ -736,7 +873,9 @@ class PaymentViewSet(BillingIdempotencyMixin, BillingSchemaGuardMixin, TenantSco
             details={
                 "payment_id": str(payment.payment_id),
                 "student_id": str(payment.student_id),
-                "student_fee_id": str(payment.student_fee_id) if payment.student_fee_id else None,
+                "student_fee_id": (
+                    str(payment.student_fee_id) if payment.student_fee_id else None
+                ),
                 "before": before_snapshot,
                 "after": {
                     "amount": str(payment.amount),
@@ -751,7 +890,9 @@ class PaymentViewSet(BillingIdempotencyMixin, BillingSchemaGuardMixin, TenantSco
         payload = {
             "payment_id": str(instance.payment_id),
             "student_id": str(instance.student_id),
-            "student_fee_id": str(instance.student_fee_id) if instance.student_fee_id else None,
+            "student_fee_id": (
+                str(instance.student_fee_id) if instance.student_fee_id else None
+            ),
             "amount": str(instance.amount),
             "method": instance.method,
             "transaction_id": instance.transaction_id,
@@ -767,6 +908,7 @@ class PaymentViewSet(BillingIdempotencyMixin, BillingSchemaGuardMixin, TenantSco
     @action(detail=True, methods=["get"])
     def generate_receipt(self, request, pk=None):
         from decimal import Decimal
+
         from billing_school.utils_bs_calendar import bs_date_display
 
         payment = self.get_object()
@@ -778,8 +920,15 @@ class PaymentViewSet(BillingIdempotencyMixin, BillingSchemaGuardMixin, TenantSco
         # Remaining balance for this student fee
         balance_due = "0.00"
         if student_fee:
-            total_paid = student_fee.payments.aggregate(t=Sum("amount"))["t"] or Decimal("0")
-            charged = Decimal(str(getattr(student_fee, "amount_due", None) or (fee_structure.amount if fee_structure else 0)))
+            total_paid = student_fee.payments.aggregate(t=Sum("amount"))[
+                "t"
+            ] or Decimal("0")
+            charged = Decimal(
+                str(
+                    getattr(student_fee, "amount_due", None)
+                    or (fee_structure.amount if fee_structure else 0)
+                )
+            )
             remaining = charged - total_paid
             if remaining < 0:
                 remaining = Decimal("0")
@@ -790,27 +939,34 @@ class PaymentViewSet(BillingIdempotencyMixin, BillingSchemaGuardMixin, TenantSco
         if fee_structure and hasattr(fee_structure, "heads"):
             try:
                 for h in fee_structure.heads.all():
-                    fee_heads.append({
-                        "name": h.name,
-                        "amount": f"{h.amount:.2f}",
-                    })
+                    fee_heads.append(
+                        {
+                            "name": h.name,
+                            "amount": f"{h.amount:.2f}",
+                        }
+                    )
             except Exception:
                 fee_heads = []
 
         # Late fee surcharge (if accrued).
         late_fee = "0.00"
         if student_fee:
-            late_fee = f"{Decimal(str(getattr(student_fee, 'late_fee_applied', 0) or 0)):.2f}"
+            late_fee = (
+                f"{Decimal(str(getattr(student_fee, 'late_fee_applied', 0) or 0)):.2f}"
+            )
 
         # Student name — Student.user is db_constraint=False so it can be None.
         try:
-            student_name = student.user.get_full_name() if student and student.user else ""
+            student_name = (
+                student.user.get_full_name() if student and student.user else ""
+            )
         except Exception:
             student_name = ""
 
         # Amount in words (English) — IRD-style on every Nepali bill.
         try:
             from num2words import num2words
+
             amount_words = num2words(payment.amount, lang="en").title() + " Only"
         except Exception:
             amount_words = ""
@@ -840,29 +996,33 @@ class PaymentViewSet(BillingIdempotencyMixin, BillingSchemaGuardMixin, TenantSco
             "principal_name": getattr(tenant, "principal_name", "") or "",
             "accountant_name": getattr(tenant, "accountant_name", "") or "",
             "fiscal_year_bs": getattr(tenant, "fiscal_year_bs", "") or "",
-
             # Bill identity
             "bill_number": payment.bill_number or str(payment.payment_id)[:8].upper(),
-            "receipt_number": payment.bill_number or str(payment.payment_id)[:8].upper(),
-
+            "receipt_number": payment.bill_number
+            or str(payment.payment_id)[:8].upper(),
             # Customer (student / parent)
             "student_name": student_name,
             "student_id": str(getattr(student, "student_id", "") or ""),
-            "class_name": str(student.academic_class) if getattr(student, "academic_class", None) else "",
-
+            "class_name": (
+                str(student.academic_class)
+                if getattr(student, "academic_class", None)
+                else ""
+            ),
             # Payment
             "payment_date": payment.payment_date.strftime("%d %b %Y, %H:%M"),
             "payment_date_bs": payment_date_bs,
             "method": (payment.method or "").replace("_", " ").title(),
             "transaction_id": payment.transaction_id or "",
-            "recorded_by": payment.recorded_by.get_full_name() if payment.recorded_by else "Admin",
-
+            "recorded_by": (
+                payment.recorded_by.get_full_name() if payment.recorded_by else "Admin"
+            ),
             # Line item
             "fee_title": fee_structure.name if fee_structure else "General Fee",
-            "fee_period": getattr(fee_structure, "frequency", "") if fee_structure else "",
-            "fee_heads": fee_heads,            # head-wise breakdown (Phase C)
-            "late_fee": late_fee,              # late surcharge (Phase C)
-
+            "fee_period": (
+                getattr(fee_structure, "frequency", "") if fee_structure else ""
+            ),
+            "fee_heads": fee_heads,  # head-wise breakdown (Phase C)
+            "late_fee": late_fee,  # late surcharge (Phase C)
             # Amounts
             "amount": f"{payment.amount:.2f}",
             "amount_words": amount_words,
@@ -872,7 +1032,9 @@ class PaymentViewSet(BillingIdempotencyMixin, BillingSchemaGuardMixin, TenantSco
         }
 
         filename = f"receipt_{str(payment.payment_id)[:12]}.pdf"
-        response = generate_pdf_response("reports/payment_receipt.html", context, filename)
+        response = generate_pdf_response(
+            "reports/payment_receipt.html", context, filename
+        )
 
         record_audit_event(
             action="billing.payment_receipt_downloaded",
@@ -888,10 +1050,18 @@ class PaymentViewSet(BillingIdempotencyMixin, BillingSchemaGuardMixin, TenantSco
 
         if response:
             return response
-        return Response({"error": "Failed to generate receipt"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        return Response(
+            {"error": "Failed to generate receipt"},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
 
 
-class ExpenseViewSet(BillingIdempotencyMixin, BillingSchemaGuardMixin, TenantScopedQuerysetMixin, viewsets.ModelViewSet):
+class ExpenseViewSet(
+    BillingIdempotencyMixin,
+    BillingSchemaGuardMixin,
+    TenantScopedQuerysetMixin,
+    viewsets.ModelViewSet,
+):
     require_tenant_schema = True
     allow_unscoped_for_saas = False
     queryset = Expense.objects.all()
@@ -1030,16 +1200,24 @@ class FinanceDashboardViewSet(BillingSchemaGuardMixin, viewsets.ViewSet):
             pending_fees_qs = pending_fees_qs.filter(due_date__lte=end_date)
 
         total_due = pending_fees_qs.aggregate(total=Sum("amount_due"))["total"] or 0
-        total_paid_against_pending = pending_fees_qs.aggregate(total=Sum("amount_paid"))["total"] or 0
+        total_paid_against_pending = (
+            pending_fees_qs.aggregate(total=Sum("amount_paid"))["total"] or 0
+        )
         total_pending = max(0, total_due - total_paid_against_pending)
 
         expense_agg = expenses_qs.aggregate(total=Sum("amount"))
         total_expenses = expense_agg["total"] or 0
 
-        recent_payments = Payment.objects.filter(tenant=tenant).select_related(
-            "student__user", "student_fee__fee_structure"
-        ).order_by("-payment_date")[:5]
-        recent_expenses = Expense.objects.filter(tenant=tenant).select_related("recorded_by").order_by("-date")[:5]
+        recent_payments = (
+            Payment.objects.filter(tenant=tenant)
+            .select_related("student__user", "student_fee__fee_structure")
+            .order_by("-payment_date")[:5]
+        )
+        recent_expenses = (
+            Expense.objects.filter(tenant=tenant)
+            .select_related("recorded_by")
+            .order_by("-date")[:5]
+        )
 
         return Response(
             {
@@ -1051,7 +1229,6 @@ class FinanceDashboardViewSet(BillingSchemaGuardMixin, viewsets.ViewSet):
                 "recent_expenses": ExpenseSerializer(recent_expenses, many=True).data,
             }
         )
-
 
     @action(detail=False, methods=["get"], url_path="analytics")
     def analytics(self, request):
@@ -1066,19 +1243,22 @@ class FinanceDashboardViewSet(BillingSchemaGuardMixin, viewsets.ViewSet):
         user = request.user
         tenant = getattr(user, "tenant", None) or getattr(request, "tenant", None)
         if not tenant:
-            return Response({
-                "monthly_collections": [],
-                "expense_by_category": [],
-                "fee_status_breakdown": [],
-                "collection_rate": 0,
-                "top_defaulters": [],
-            })
+            return Response(
+                {
+                    "monthly_collections": [],
+                    "expense_by_category": [],
+                    "fee_status_breakdown": [],
+                    "collection_rate": 0,
+                    "top_defaulters": [],
+                }
+            )
 
         # ── Monthly collections (last 12 months) ────────────────────────────
         twelve_months_ago = date.today().replace(day=1) - timedelta(days=335)
         monthly_qs = (
-            Payment.objects
-            .filter(tenant=tenant, payment_date__date__gte=twelve_months_ago)
+            Payment.objects.filter(
+                tenant=tenant, payment_date__date__gte=twelve_months_ago
+            )
             .annotate(month=TruncMonth("payment_date"))
             .values("month")
             .annotate(total=Sum("amount"))
@@ -1095,21 +1275,23 @@ class FinanceDashboardViewSet(BillingSchemaGuardMixin, viewsets.ViewSet):
 
         # ── Expense by category ──────────────────────────────────────────────
         expense_cats = (
-            Expense.objects
-            .filter(tenant=tenant)
+            Expense.objects.filter(tenant=tenant)
             .values("category")
             .annotate(total=Sum("amount"), count=Count("expense_id"))
             .order_by("-total")
         )
         expense_by_category = [
-            {"category": item["category"], "total": float(item["total"] or 0), "count": item["count"]}
+            {
+                "category": item["category"],
+                "total": float(item["total"] or 0),
+                "count": item["count"],
+            }
             for item in expense_cats
         ]
 
         # ── Fee status breakdown ─────────────────────────────────────────────
         status_qs = (
-            StudentFee.objects
-            .filter(tenant=tenant)
+            StudentFee.objects.filter(tenant=tenant)
             .values("status")
             .annotate(
                 count=Count("student_fee_id"),
@@ -1134,13 +1316,19 @@ class FinanceDashboardViewSet(BillingSchemaGuardMixin, viewsets.ViewSet):
         )
         total_due_all = float(all_fees["total_due"] or 0)
         total_paid_all = float(all_fees["total_paid"] or 0)
-        collection_rate = round((total_paid_all / total_due_all * 100), 1) if total_due_all > 0 else 0.0
+        collection_rate = (
+            round((total_paid_all / total_due_all * 100), 1)
+            if total_due_all > 0
+            else 0.0
+        )
 
         # ── Top defaulters ───────────────────────────────────────────────────
         from academic.models import Student
+
         defaulter_fees = (
-            StudentFee.objects
-            .filter(tenant=tenant, status__in=["pending", "partial", "overdue"])
+            StudentFee.objects.filter(
+                tenant=tenant, status__in=["pending", "partial", "overdue"]
+            )
             .values("student_id")
             .annotate(
                 outstanding=Sum("amount_due") - Sum("amount_paid"),
@@ -1152,7 +1340,9 @@ class FinanceDashboardViewSet(BillingSchemaGuardMixin, viewsets.ViewSet):
         student_ids = [d["student_id"] for d in defaulter_fees]
         students_map = {
             str(s.student_id): s.user.get_full_name()
-            for s in Student.objects.filter(student_id__in=student_ids).select_related("user")
+            for s in Student.objects.filter(student_id__in=student_ids).select_related(
+                "user"
+            )
         }
         top_defaulters = [
             {
@@ -1164,13 +1354,15 @@ class FinanceDashboardViewSet(BillingSchemaGuardMixin, viewsets.ViewSet):
             for d in defaulter_fees
         ]
 
-        return Response({
-            "monthly_collections": monthly_collections,
-            "expense_by_category": expense_by_category,
-            "fee_status_breakdown": fee_status_breakdown,
-            "collection_rate": collection_rate,
-            "top_defaulters": top_defaulters,
-        })
+        return Response(
+            {
+                "monthly_collections": monthly_collections,
+                "expense_by_category": expense_by_category,
+                "fee_status_breakdown": fee_status_breakdown,
+                "collection_rate": collection_rate,
+                "top_defaulters": top_defaulters,
+            }
+        )
 
 
 __all__ = [

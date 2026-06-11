@@ -5,7 +5,9 @@
 Unit tests for the SM-2 Spaced Repetition Service.
 Run with: python manage.py test ai_engine.tests_sm2
 """
+
 from django.test import TestCase
+
 from ai_engine.services.sm2_service import SM2Service
 
 
@@ -49,14 +51,18 @@ class SM2ServiceTest(TestCase):
 
     def test_second_review_gives_6_day_interval(self):
         # After first pass, we have repetitions=1, interval=1
-        result = self.sm2.calculate(quality=4, ease_factor=2.5, interval_days=1, repetitions=1)
+        result = self.sm2.calculate(
+            quality=4, ease_factor=2.5, interval_days=1, repetitions=1
+        )
         self.assertEqual(result.interval_days, 6)
         self.assertEqual(result.repetitions, 2)
 
     # --- Third review onwards uses EF multiplier ---
 
     def test_third_review_uses_ef_multiplier(self):
-        result = self.sm2.calculate(quality=4, ease_factor=2.5, interval_days=6, repetitions=2)
+        result = self.sm2.calculate(
+            quality=4, ease_factor=2.5, interval_days=6, repetitions=2
+        )
         expected_interval = round(6 * 2.5)
         self.assertEqual(result.interval_days, expected_interval)
         self.assertEqual(result.repetitions, 3)
@@ -79,13 +85,18 @@ class SM2ServiceTest(TestCase):
 
     def test_next_review_at_is_in_future(self):
         from django.utils import timezone
+
         result = self.sm2.calculate(quality=4)
         self.assertGreater(result.next_review_at, timezone.now())
 
     def test_next_review_at_matches_interval(self):
         from datetime import timedelta
+
         from django.utils import timezone
-        result = self.sm2.calculate(quality=4, ease_factor=2.5, interval_days=6, repetitions=2)
+
+        result = self.sm2.calculate(
+            quality=4, ease_factor=2.5, interval_days=6, repetitions=2
+        )
         expected_days = round(6 * 2.5)
         delta = result.next_review_at - timezone.now()
         # Allow 2 seconds tolerance for test execution time
@@ -95,6 +106,7 @@ class SM2ServiceTest(TestCase):
 
     def test_initial_schedule(self):
         from django.utils import timezone
+
         result = self.sm2.initial_schedule()
         self.assertEqual(result.repetitions, 0)
         self.assertEqual(result.interval_days, 1)

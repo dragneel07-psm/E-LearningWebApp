@@ -7,7 +7,6 @@ import time
 
 from prometheus_client import Counter, Gauge, Histogram, generate_latest
 
-
 HTTP_REQUESTS_TOTAL = Counter(
     "http_requests_total",
     "Total HTTP requests processed by the API.",
@@ -63,10 +62,11 @@ class PrometheusMetricsMiddleware:
                 route=route,
                 status_code=str(status_code),
             ).inc()
-            HTTP_REQUEST_DURATION_SECONDS.labels(method=method, route=route).observe(duration)
+            HTTP_REQUEST_DURATION_SECONDS.labels(method=method, route=route).observe(
+                duration
+            )
             HTTP_REQUESTS_IN_PROGRESS.labels(method=method, route=route).dec()
 
 
 def prometheus_metrics_payload() -> bytes:
     return generate_latest()
-

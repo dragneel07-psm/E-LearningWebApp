@@ -1,11 +1,13 @@
 # Copyright (c) 2024-2026 Pramod Singh Manyal. All rights reserved.
 # Unauthorized copying, modification, or distribution of this file,
 # via any medium, is strictly prohibited. Proprietary and confidential.
-import requests
 import json
 from datetime import datetime, timedelta
 
+import requests
+
 BASE_URL = "http://localhost:8000/api"
+
 
 def get_token(email, password):
     url = f"{BASE_URL}/token/"
@@ -16,6 +18,7 @@ def get_token(email, password):
     else:
         print(f"Failed to get token for {email}: {response.text}")
         return None
+
 
 def verify_librarian_dashboard():
     print("🚀 Starting Librarian Dashboard Verification")
@@ -29,7 +32,7 @@ def verify_librarian_dashboard():
     headers = {
         "Authorization": f"Bearer {admin_token}",
         "Content-Type": "application/json",
-        "x-tenant-id": "demo"
+        "x-tenant-id": "demo",
     }
     print("✅ Logged in as Admin")
 
@@ -41,21 +44,27 @@ def verify_librarian_dashboard():
         "isbn": "9780201616224",
         "category": "technology",
         "total_copies": 5,
-        "description": "From journeyman to master"
+        "description": "From journeyman to master",
     }
-    resp = requests.post(f"{BASE_URL}/library/books/", headers=headers, json=new_book_data)
+    resp = requests.post(
+        f"{BASE_URL}/library/books/", headers=headers, json=new_book_data
+    )
     if resp.status_code != 201:
         print(f"❌ Failed to add book: {resp.text}")
         return
-    
+
     book = resp.json()
-    book_id = book['book_id']
-    print(f"✅ Book Added: {book['title']} (Copies: {book['available_copies']}/{book['total_copies']})")
+    book_id = book["book_id"]
+    print(
+        f"✅ Book Added: {book['title']} (Copies: {book['available_copies']}/{book['total_copies']})"
+    )
 
     # 3. Edit Book
     print("\n--- 2. Editing Book ---")
     update_data = {"total_copies": 10}
-    resp = requests.patch(f"{BASE_URL}/library/books/{book_id}/", headers=headers, json=update_data)
+    resp = requests.patch(
+        f"{BASE_URL}/library/books/{book_id}/", headers=headers, json=update_data
+    )
     if resp.status_code != 200:
         print(f"❌ Failed to edit book: {resp.text}")
     else:
@@ -64,13 +73,15 @@ def verify_librarian_dashboard():
 
     # 4. Search and List
     print("\n--- 3. Searching Books ---")
-    resp = requests.get(f"{BASE_URL}/library/books/?search=ragmatic", headers=headers) # Assuming simple filter exists or just list
+    resp = requests.get(
+        f"{BASE_URL}/library/books/?search=ragmatic", headers=headers
+    )  # Assuming simple filter exists or just list
     # The viewset generic filtering might not be setup for 'search' param by default unless SearchFilter is added backend.
     # But frontend does client-side filtering.
     # Let's just list and check.
     resp = requests.get(f"{BASE_URL}/library/books/", headers=headers)
     books = resp.json()
-    found = any(b['book_id'] == book_id for b in books)
+    found = any(b["book_id"] == book_id for b in books)
     if found:
         print("✅ Book found in catalog")
     else:
@@ -80,20 +91,22 @@ def verify_librarian_dashboard():
     print("\n--- 4. Returning Book ---")
     resp = requests.get(f"{BASE_URL}/library/issues/", headers=headers)
     issues = resp.json()
-    active_issues = [i for i in issues if i['status'] == 'issued']
-    
+    active_issues = [i for i in issues if i["status"] == "issued"]
+
     if active_issues:
         target_issue = active_issues[0]
-        issue_id = target_issue['issue_id']
-        book_title = target_issue['book_title']
+        issue_id = target_issue["issue_id"]
+        book_title = target_issue["book_title"]
         print(f"Target Issue: {issue_id} ({book_title})")
-        
+
         # Return it
-        resp = requests.post(f"{BASE_URL}/library/issues/{issue_id}/return_book/", headers=headers)
+        resp = requests.post(
+            f"{BASE_URL}/library/issues/{issue_id}/return_book/", headers=headers
+        )
         if resp.status_code == 200:
             result = resp.json()
             print(f"✅ Book Returned! Status: {result['status']}")
-            if float(result['fine_amount']) > 0:
+            if float(result["fine_amount"]) > 0:
                 print(f"💰 Fine Applied: ${result['fine_amount']}")
         else:
             print(f"❌ Failed to return book: {resp.text}")
@@ -109,6 +122,7 @@ def verify_librarian_dashboard():
         print(f"❌ Failed to delete book: {resp.text}")
 
     print("\n✅ Librarian Dashboard Logic Verified!")
+
 
 if __name__ == "__main__":
     verify_librarian_dashboard()

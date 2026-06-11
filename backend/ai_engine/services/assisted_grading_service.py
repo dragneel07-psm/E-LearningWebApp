@@ -34,7 +34,11 @@ class AssistedGradingService:
         if not candidate:
             return None
 
-        fenced = re.search(r"```(?:json)?\s*(\{.*\}|\[.*\])\s*```", candidate, re.DOTALL | re.IGNORECASE)
+        fenced = re.search(
+            r"```(?:json)?\s*(\{.*\}|\[.*\])\s*```",
+            candidate,
+            re.DOTALL | re.IGNORECASE,
+        )
         if fenced:
             candidate = fenced.group(1).strip()
 
@@ -65,11 +69,15 @@ class AssistedGradingService:
                     )
                     continue
                 if isinstance(item, dict):
-                    name = str(item.get("name") or item.get("criterion") or f"Criterion {idx}").strip()
+                    name = str(
+                        item.get("name") or item.get("criterion") or f"Criterion {idx}"
+                    ).strip()
                     if not name:
                         name = f"Criterion {idx}"
                     try:
-                        max_points = int(item.get("max_points") or item.get("points") or 0)
+                        max_points = int(
+                            item.get("max_points") or item.get("points") or 0
+                        )
                     except (TypeError, ValueError):
                         max_points = 0
                     if max_points <= 0:
@@ -85,20 +93,36 @@ class AssistedGradingService:
 
         if not normalized:
             normalized = [
-                {"name": "Accuracy", "max_points": max(1, int(round(total_points * 0.5))), "description": ""},
-                {"name": "Clarity", "max_points": max(1, int(round(total_points * 0.25))), "description": ""},
-                {"name": "Completeness", "max_points": max(1, int(round(total_points * 0.25))), "description": ""},
+                {
+                    "name": "Accuracy",
+                    "max_points": max(1, int(round(total_points * 0.5))),
+                    "description": "",
+                },
+                {
+                    "name": "Clarity",
+                    "max_points": max(1, int(round(total_points * 0.25))),
+                    "description": "",
+                },
+                {
+                    "name": "Completeness",
+                    "max_points": max(1, int(round(total_points * 0.25))),
+                    "description": "",
+                },
             ]
 
         allocated = sum(int(item["max_points"]) for item in normalized)
         if allocated != total_points:
             diff = total_points - allocated
-            normalized[0]["max_points"] = max(1, int(normalized[0]["max_points"]) + diff)
+            normalized[0]["max_points"] = max(
+                1, int(normalized[0]["max_points"]) + diff
+            )
 
         return normalized
 
     @staticmethod
-    def _fallback_grade(submission_text: str, criteria: list[dict[str, Any]], total_points: int) -> dict[str, Any]:
+    def _fallback_grade(
+        submission_text: str, criteria: list[dict[str, Any]], total_points: int
+    ) -> dict[str, Any]:
         text = str(submission_text or "").strip()
         words = len(text.split())
 
@@ -138,9 +162,15 @@ class AssistedGradingService:
         }
 
     @staticmethod
-    def _build_messages(*, submission: Submission, rubric: GradingRubric, criteria: list[dict[str, Any]]) -> list[dict[str, str]]:
+    def _build_messages(
+        *, submission: Submission, rubric: GradingRubric, criteria: list[dict[str, Any]]
+    ) -> list[dict[str, str]]:
         assessment = submission.assessment
-        student_name = submission.student.user.get_full_name() if getattr(submission.student, "user", None) else "Student"
+        student_name = (
+            submission.student.user.get_full_name()
+            if getattr(submission.student, "user", None)
+            else "Student"
+        )
         submission_text = str(submission.content or "").strip()
         criteria_text = "\n".join(
             f"- {item['name']} (max {item['max_points']}): {item.get('description', '')}"
@@ -189,7 +219,10 @@ class AssistedGradingService:
     @staticmethod
     def _json_fix_messages(raw_text: str, total_points: int) -> list[dict[str, str]]:
         return [
-            {"role": "system", "content": "Fix invalid grading JSON and return JSON only."},
+            {
+                "role": "system",
+                "content": "Fix invalid grading JSON and return JSON only.",
+            },
             {
                 "role": "user",
                 "content": (
@@ -201,7 +234,12 @@ class AssistedGradingService:
         ]
 
     @staticmethod
-    def _normalize_payload(payload: dict[str, Any] | None, *, criteria: list[dict[str, Any]], total_points: int) -> dict[str, Any] | None:
+    def _normalize_payload(
+        payload: dict[str, Any] | None,
+        *,
+        criteria: list[dict[str, Any]],
+        total_points: int,
+    ) -> dict[str, Any] | None:
         if not isinstance(payload, dict):
             return None
         try:
@@ -231,7 +269,11 @@ class AssistedGradingService:
                     match = row
                     break
             try:
-                max_points = float(match.get("max_points")) if match else float(criterion["max_points"])
+                max_points = (
+                    float(match.get("max_points"))
+                    if match
+                    else float(criterion["max_points"])
+                )
             except (TypeError, ValueError):
                 max_points = float(criterion["max_points"])
             if max_points <= 0:
@@ -260,7 +302,9 @@ class AssistedGradingService:
     def _call_model(self, messages: list[dict[str, str]]) -> tuple[str, dict[str, Any]]:
         return self.rag._call_chat_model(messages)
 
-    def generate_draft(self, *, submission_id: str, rubric_id: str, request=None) -> AIGradingDraft:
+    def generate_draft(
+        self, *, submission_id: str, rubric_id: str, request=None
+    ) -> AIGradingDraft:
         submission = (
             Submission.objects.select_related(
                 "assessment",
@@ -289,28 +333,42 @@ class AssistedGradingService:
                 feedback=str(fallback["feedback"]),
                 criteria_breakdown=fallback["criteria_breakdown"],
                 status="draft",
-                created_by=self.user if getattr(self.user, "is_authenticated", False) else None,
+                created_by=(
+                    self.user if getattr(self.user, "is_authenticated", False) else None
+                ),
             )
             return draft
 
-        messages = self._build_messages(submission=submission, rubric=rubric, criteria=criteria)
+        messages = self._build_messages(
+            submission=submission, rubric=rubric, criteria=criteria
+        )
         raw_output, usage = self._call_model(messages)
         parsed = self._extract_json(raw_output)
-        normalized = self._normalize_payload(parsed, criteria=criteria, total_points=int(rubric.total_points))
+        normalized = self._normalize_payload(
+            parsed, criteria=criteria, total_points=int(rubric.total_points)
+        )
 
         if normalized is None:
             fix_messages = self._json_fix_messages(raw_output, int(rubric.total_points))
             fixed_output, fixed_usage = self._call_model(fix_messages)
             parsed = self._extract_json(fixed_output)
-            normalized = self._normalize_payload(parsed, criteria=criteria, total_points=int(rubric.total_points))
+            normalized = self._normalize_payload(
+                parsed, criteria=criteria, total_points=int(rubric.total_points)
+            )
             usage = {
-                "model": str(fixed_usage.get("model") or usage.get("model") or "fallback"),
-                "prompt_tokens": int(usage.get("prompt_tokens") or 0) + int(fixed_usage.get("prompt_tokens") or 0),
-                "completion_tokens": int(usage.get("completion_tokens") or 0) + int(fixed_usage.get("completion_tokens") or 0),
+                "model": str(
+                    fixed_usage.get("model") or usage.get("model") or "fallback"
+                ),
+                "prompt_tokens": int(usage.get("prompt_tokens") or 0)
+                + int(fixed_usage.get("prompt_tokens") or 0),
+                "completion_tokens": int(usage.get("completion_tokens") or 0)
+                + int(fixed_usage.get("completion_tokens") or 0),
             }
 
         if normalized is None:
-            normalized = self._fallback_grade(str(submission.content or ""), criteria, int(rubric.total_points))
+            normalized = self._fallback_grade(
+                str(submission.content or ""), criteria, int(rubric.total_points)
+            )
             usage = {"model": "fallback", "prompt_tokens": 0, "completion_tokens": 0}
 
         draft = AIGradingDraft.objects.create(
@@ -321,7 +379,9 @@ class AssistedGradingService:
             feedback=str(normalized["feedback"]),
             criteria_breakdown=normalized["criteria_breakdown"],
             status="draft",
-            created_by=self.user if getattr(self.user, "is_authenticated", False) else None,
+            created_by=(
+                self.user if getattr(self.user, "is_authenticated", False) else None
+            ),
         )
 
         try:
@@ -374,7 +434,9 @@ class AssistedGradingService:
             defaults={
                 "score": int(round(float(draft.score))),
                 "ai_feedback": draft.feedback,
-                "graded_by": self.user if getattr(self.user, "is_authenticated", False) else None,
+                "graded_by": (
+                    self.user if getattr(self.user, "is_authenticated", False) else None
+                ),
             },
         )
 
@@ -383,7 +445,9 @@ class AssistedGradingService:
         submission.save(update_fields=["status", "is_graded", "submitted_at"])
 
         draft.status = "approved"
-        draft.approved_by = self.user if getattr(self.user, "is_authenticated", False) else None
+        draft.approved_by = (
+            self.user if getattr(self.user, "is_authenticated", False) else None
+        )
         draft.approved_at = timezone.now()
         draft.save(update_fields=["status", "approved_by", "approved_at", "updated_at"])
 

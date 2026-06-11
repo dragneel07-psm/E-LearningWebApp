@@ -3,20 +3,23 @@
 # via any medium, is strictly prohibited. Proprietary and confidential.
 import os
 import sys
+
 import django
 
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
 django.setup()
 
 from django.db import connections
 
-db_alias = 'tenant_pramod'
+db_alias = "tenant_pramod"
 
 with connections[db_alias].cursor() as cursor:
     # Check existing
-    cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'library_%'")
+    cursor.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'library_%'"
+    )
     before = [row[0] for row in cursor.fetchall()]
-    
+
     # Create library_book
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS library_book (
@@ -36,7 +39,7 @@ with connections[db_alias].cursor() as cursor:
             updated_at DATETIME NOT NULL
         )
     """)
-    
+
     # Create library_bookissue
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS library_bookissue (
@@ -51,12 +54,14 @@ with connections[db_alias].cursor() as cursor:
             remarks TEXT
         )
     """)
-    
+
     # Check after
-    cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'library_%'")
+    cursor.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'library_%'"
+    )
     after = [row[0] for row in cursor.fetchall()]
-    
-    with open('/tmp/table_creation_result.txt', 'w') as f:
+
+    with open("/tmp/table_creation_result.txt", "w") as f:
         f.write(f"Before: {before}\n")
         f.write(f"After: {after}\n")
         f.write("SUCCESS\n")

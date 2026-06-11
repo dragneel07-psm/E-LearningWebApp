@@ -2,6 +2,7 @@
 # Unauthorized copying, modification, or distribution of this file,
 # via any medium, is strictly prohibited. Proprietary and confidential.
 """Student Information System (SIS) views — health, discipline, documents."""
+
 from __future__ import annotations
 
 import csv
@@ -24,8 +25,8 @@ from ..models.discipline import DisciplinaryIncident
 from ..models.documents import StudentDocument
 from ..models.health import ImmunizationRecord, StudentHealthRecord
 
-
 # ─── Serializers ─────────────────────────────────────────────────────────────
+
 
 class ImmunizationSerializer(serializers.ModelSerializer):
     class Meta:
@@ -35,7 +36,9 @@ class ImmunizationSerializer(serializers.ModelSerializer):
 
 
 class StudentHealthRecordSerializer(serializers.ModelSerializer):
-    student_name = serializers.CharField(source="student.user.get_full_name", read_only=True)
+    student_name = serializers.CharField(
+        source="student.user.get_full_name", read_only=True
+    )
     immunizations = ImmunizationSerializer(many=True, read_only=True)
 
     class Meta:
@@ -45,7 +48,9 @@ class StudentHealthRecordSerializer(serializers.ModelSerializer):
 
 
 class DisciplinaryIncidentSerializer(serializers.ModelSerializer):
-    student_name = serializers.CharField(source="student.user.get_full_name", read_only=True)
+    student_name = serializers.CharField(
+        source="student.user.get_full_name", read_only=True
+    )
     reported_by_name = serializers.SerializerMethodField()
 
     class Meta:
@@ -60,9 +65,13 @@ class DisciplinaryIncidentSerializer(serializers.ModelSerializer):
 
 
 class StudentDocumentSerializer(serializers.ModelSerializer):
-    student_name = serializers.CharField(source="student.user.get_full_name", read_only=True)
+    student_name = serializers.CharField(
+        source="student.user.get_full_name", read_only=True
+    )
     issued_by_name = serializers.SerializerMethodField()
-    document_type_display = serializers.CharField(source="get_document_type_display", read_only=True)
+    document_type_display = serializers.CharField(
+        source="get_document_type_display", read_only=True
+    )
 
     class Meta:
         model = StudentDocument
@@ -77,7 +86,10 @@ class StudentDocumentSerializer(serializers.ModelSerializer):
 
 # ─── Base mixin ──────────────────────────────────────────────────────────────
 
-class _SISBase(BillingSchemaGuardMixin, TenantScopedQuerysetMixin, viewsets.ModelViewSet):
+
+class _SISBase(
+    BillingSchemaGuardMixin, TenantScopedQuerysetMixin, viewsets.ModelViewSet
+):
     require_tenant_schema = True
     allow_unscoped_for_saas = False
     permission_classes = [IsSISStaff]
@@ -88,8 +100,13 @@ class _SISBase(BillingSchemaGuardMixin, TenantScopedQuerysetMixin, viewsets.Mode
 
 # ─── Health Records ───────────────────────────────────────────────────────────
 
+
 class StudentHealthRecordViewSet(_SISBase):
-    queryset = StudentHealthRecord.objects.select_related("student__user").prefetch_related("immunizations").all()
+    queryset = (
+        StudentHealthRecord.objects.select_related("student__user")
+        .prefetch_related("immunizations")
+        .all()
+    )
     serializer_class = StudentHealthRecordSerializer
 
     def get_queryset(self):
@@ -105,7 +122,10 @@ class StudentHealthRecordViewSet(_SISBase):
             action="sis.health_record_created",
             user=self.request.user,
             request=self.request,
-            details={"health_id": str(record.health_id), "student": record.student_name},
+            details={
+                "health_id": str(record.health_id),
+                "student": record.student_name,
+            },
         )
 
     def perform_update(self, serializer):
@@ -125,11 +145,15 @@ class StudentHealthRecordViewSet(_SISBase):
         s.save(health_record=health_record)
         return Response(s.data, status=status.HTTP_201_CREATED)
 
-    @action(detail=True, methods=["delete"], url_path=r"immunizations/(?P<imm_id>[^/.]+)")
+    @action(
+        detail=True, methods=["delete"], url_path=r"immunizations/(?P<imm_id>[^/.]+)"
+    )
     def delete_immunization(self, request, pk=None, imm_id=None):
         health_record = self.get_object()
         try:
-            imm = ImmunizationRecord.objects.get(immunization_id=imm_id, health_record=health_record)
+            imm = ImmunizationRecord.objects.get(
+                immunization_id=imm_id, health_record=health_record
+            )
         except ImmunizationRecord.DoesNotExist:
             return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
         imm.delete()
@@ -138,8 +162,11 @@ class StudentHealthRecordViewSet(_SISBase):
 
 # ─── Disciplinary Incidents ───────────────────────────────────────────────────
 
+
 class DisciplinaryIncidentViewSet(_SISBase):
-    queryset = DisciplinaryIncident.objects.select_related("student__user", "reported_by").all()
+    queryset = DisciplinaryIncident.objects.select_related(
+        "student__user", "reported_by"
+    ).all()
     serializer_class = DisciplinaryIncidentSerializer
 
     def get_queryset(self):
@@ -180,7 +207,9 @@ class DisciplinaryIncidentViewSet(_SISBase):
         incident.status = DisciplinaryIncident.STATUS_RESOLVED
         incident.action_taken = action_taken or incident.action_taken
         incident.follow_up_notes = follow_up_notes or incident.follow_up_notes
-        incident.save(update_fields=["status", "action_taken", "follow_up_notes", "updated_at"])
+        incident.save(
+            update_fields=["status", "action_taken", "follow_up_notes", "updated_at"]
+        )
         record_audit_event(
             action="sis.incident_resolved",
             user=request.user,
@@ -206,8 +235,11 @@ class DisciplinaryIncidentViewSet(_SISBase):
 
 # ─── Student Documents ────────────────────────────────────────────────────────
 
+
 class StudentDocumentViewSet(_SISBase):
-    queryset = StudentDocument.objects.select_related("student__user", "issued_by").all()
+    queryset = StudentDocument.objects.select_related(
+        "student__user", "issued_by"
+    ).all()
     serializer_class = StudentDocumentSerializer
 
     def get_queryset(self):
@@ -238,7 +270,10 @@ class StudentDocumentViewSet(_SISBase):
     def cancel(self, request, pk=None):
         doc = self.get_object()
         if doc.is_cancelled:
-            return Response({"detail": "Document already cancelled."}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"detail": "Document already cancelled."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         reason = request.data.get("reason", "")
         doc.is_cancelled = True
         doc.cancellation_reason = reason
@@ -269,7 +304,11 @@ class StudentDocumentViewSet(_SISBase):
             "student": {
                 "name": user.get_full_name(),
                 "email": user.email,
-                "date_of_birth": str(user.date_of_birth) if getattr(user, "date_of_birth", None) else None,
+                "date_of_birth": (
+                    str(user.date_of_birth)
+                    if getattr(user, "date_of_birth", None)
+                    else None
+                ),
                 "class": student.academic_class.name if student.academic_class else "",
                 "section": student.section.name if student.section else "",
             },
@@ -287,6 +326,7 @@ class StudentDocumentViewSet(_SISBase):
 
 # ─── SIS Dashboard ────────────────────────────────────────────────────────────
 
+
 class SISDashboardViewSet(BillingSchemaGuardMixin, viewsets.ViewSet):
     require_tenant_schema = True
     permission_classes = [IsSISStaff]
@@ -298,12 +338,19 @@ class SISDashboardViewSet(BillingSchemaGuardMixin, viewsets.ViewSet):
     def stats(self, request):
         tenant = self._tenant(request)
         health_count = StudentHealthRecord.objects.filter(tenant=tenant).count()
-        open_incidents = DisciplinaryIncident.objects.filter(tenant=tenant, status=DisciplinaryIncident.STATUS_OPEN).count()
+        open_incidents = DisciplinaryIncident.objects.filter(
+            tenant=tenant, status=DisciplinaryIncident.STATUS_OPEN
+        ).count()
         total_incidents = DisciplinaryIncident.objects.filter(tenant=tenant).count()
-        docs_issued = StudentDocument.objects.filter(tenant=tenant, is_cancelled=False).count()
-        tc_issued = StudentDocument.objects.filter(tenant=tenant, document_type=StudentDocument.TYPE_TC, is_cancelled=False).count()
+        docs_issued = StudentDocument.objects.filter(
+            tenant=tenant, is_cancelled=False
+        ).count()
+        tc_issued = StudentDocument.objects.filter(
+            tenant=tenant, document_type=StudentDocument.TYPE_TC, is_cancelled=False
+        ).count()
 
         from django.db.models import Count
+
         incident_by_type = list(
             DisciplinaryIncident.objects.filter(tenant=tenant)
             .values("incident_type")
@@ -316,12 +363,14 @@ class SISDashboardViewSet(BillingSchemaGuardMixin, viewsets.ViewSet):
             .annotate(count=Count("incident_id"))
         )
 
-        return Response({
-            "health_records": health_count,
-            "open_incidents": open_incidents,
-            "total_incidents": total_incidents,
-            "documents_issued": docs_issued,
-            "transfer_certificates": tc_issued,
-            "incident_by_type": incident_by_type,
-            "incident_by_severity": incident_by_severity,
-        })
+        return Response(
+            {
+                "health_records": health_count,
+                "open_incidents": open_incidents,
+                "total_incidents": total_incidents,
+                "documents_issued": docs_issued,
+                "transfer_certificates": tc_issued,
+                "incident_by_type": incident_by_type,
+                "incident_by_severity": incident_by_severity,
+            }
+        )

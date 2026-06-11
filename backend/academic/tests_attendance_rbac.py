@@ -65,8 +65,12 @@ class AttendanceAccessControlTests(FastTenantTestCase):
         self.teacher = Teacher.objects.create(user=self.teacher_user)
         self.teacher.assigned_classes.add(class_8)
 
-        self.student = Student.objects.create(user=self.student_user, academic_class=class_8)
-        self.other_student = Student.objects.create(user=self.other_student_user, academic_class=class_9)
+        self.student = Student.objects.create(
+            user=self.student_user, academic_class=class_8
+        )
+        self.other_student = Student.objects.create(
+            user=self.other_student_user, academic_class=class_9
+        )
 
         parent = Parent.objects.create(user=self.parent_user)
         parent.students.add(self.student)

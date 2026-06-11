@@ -12,11 +12,11 @@ This allows the React frontend and mobile app running on localhost:3000 to
 send 'x-tenant-id: demo' and have all requests routed to the correct schema.
 """
 
+from django.db import DatabaseError, connection
+from django.db.models import Q
 from django_tenants.middleware.main import TenantMainMiddleware
 from django_tenants.utils import get_tenant_domain_model
-from django.db import connection
-from django.db import DatabaseError
-from django.db.models import Q
+
 from core.models.tenant import Tenant
 
 
@@ -48,24 +48,29 @@ class TenantFromHeaderMiddleware(TenantMainMiddleware):
         except domain_model.DoesNotExist:
             # Hostname didn't resolve — try x-tenant-id header
             tenant_id = (
-                request.META.get('HTTP_X_TENANT_ID', '')
-                or request.headers.get('x-tenant-id', '')
-            ).strip().lower()
+                (
+                    request.META.get("HTTP_X_TENANT_ID", "")
+                    or request.headers.get("x-tenant-id", "")
+                )
+                .strip()
+                .lower()
+            )
 
             if tenant_id:
                 try:
                     # Migration-safe lookup (avoid hard dependency on optional columns).
-                    domain = domain_model.objects.select_related('tenant').filter(
-                        Q(tenant__schema_name=tenant_id) |
-                        Q(domain=tenant_id)
-                    ).first()
+                    domain = (
+                        domain_model.objects.select_related("tenant")
+                        .filter(Q(tenant__schema_name=tenant_id) | Q(domain=tenant_id))
+                        .first()
+                    )
 
                     if domain:
                         tenant = domain.tenant
                     else:
                         # Fallback to public if the specific code wasn't found
                         # This allows the TenantCheckView to return a nice JSON false instead of a hard 404
-                        tenant = Tenant.objects.filter(schema_name='public').first()
+                        tenant = Tenant.objects.filter(schema_name="public").first()
                         if not tenant:
                             return self.no_tenant_found(request, hostname)
                 except DatabaseError:

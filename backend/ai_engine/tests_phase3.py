@@ -5,7 +5,9 @@
 Unit tests for Phase 3: Bayesian Knowledge Tracing (BKT) Service.
 Run with: python manage.py test ai_engine.tests_phase3
 """
+
 from django.test import TestCase
+
 from ai_engine.services.bkt_service import BKTService
 
 
@@ -13,9 +15,9 @@ class BKTUpdateTest(TestCase):
     def setUp(self):
         self.bkt = BKTService()
         # Default BKT parameters
-        self.T = BKTService.DEFAULT_P_TRANSIT   # 0.1
-        self.S = BKTService.DEFAULT_P_SLIP      # 0.1
-        self.G = BKTService.DEFAULT_P_GUESS     # 0.2
+        self.T = BKTService.DEFAULT_P_TRANSIT  # 0.1
+        self.S = BKTService.DEFAULT_P_SLIP  # 0.1
+        self.G = BKTService.DEFAULT_P_GUESS  # 0.2
 
     # --- Core update rule ---
 
@@ -60,7 +62,9 @@ class BKTUpdateTest(TestCase):
         p_evidence = (L * (1 - S)) / (L * (1 - S) + (1 - L) * G)
         # Learning: p_evidence + (1 - p_evidence) * T
         expected = p_evidence + (1 - p_evidence) * T
-        result = self.bkt.update(correct=True, p_mastery=L, p_transit=T, p_slip=S, p_guess=G)
+        result = self.bkt.update(
+            correct=True, p_mastery=L, p_transit=T, p_slip=S, p_guess=G
+        )
         self.assertAlmostEqual(result, expected, places=6)
 
     def test_manual_bkt_formula_incorrect(self):
@@ -68,7 +72,9 @@ class BKTUpdateTest(TestCase):
         L, T, S, G = 0.3, 0.1, 0.1, 0.2
         p_evidence = (L * S) / (L * S + (1 - L) * (1 - G))
         expected = p_evidence + (1 - p_evidence) * T
-        result = self.bkt.update(correct=False, p_mastery=L, p_transit=T, p_slip=S, p_guess=G)
+        result = self.bkt.update(
+            correct=False, p_mastery=L, p_transit=T, p_slip=S, p_guess=G
+        )
         self.assertAlmostEqual(result, expected, places=6)
 
     # --- Mastery threshold ---

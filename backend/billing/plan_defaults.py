@@ -2,7 +2,7 @@
 # Unauthorized copying, modification, or distribution of this file,
 # via any medium, is strictly prohibited. Proprietary and confidential.
 import json
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import ROUND_HALF_UP, Decimal
 from typing import Any
 from urllib.request import urlopen
 
@@ -29,13 +29,19 @@ def fetch_usd_to_npr_rate() -> tuple[Decimal, bool]:
 
 
 def to_nearest_hundred(amount: Decimal) -> Decimal:
-    return (amount / Decimal("100")).quantize(Decimal("1"), rounding=ROUND_HALF_UP) * Decimal("100")
+    return (amount / Decimal("100")).quantize(
+        Decimal("1"), rounding=ROUND_HALF_UP
+    ) * Decimal("100")
 
 
-def derive_market_prices(base_usd_monthly: Decimal, usd_to_npr: Decimal) -> tuple[Decimal, Decimal]:
+def derive_market_prices(
+    base_usd_monthly: Decimal, usd_to_npr: Decimal
+) -> tuple[Decimal, Decimal]:
     monthly_npr = to_nearest_hundred(base_usd_monthly * usd_to_npr)
     yearly_npr = to_nearest_hundred(
-        monthly_npr * Decimal("12") * (Decimal("1") - (MIN_YEARLY_BENEFIT_PERCENT / Decimal("100")))
+        monthly_npr
+        * Decimal("12")
+        * (Decimal("1") - (MIN_YEARLY_BENEFIT_PERCENT / Decimal("100")))
     )
     return monthly_npr, yearly_npr
 
@@ -44,7 +50,9 @@ def build_default_plan_payloads(usd_to_npr: Decimal) -> list[dict[str, Any]]:
     basic_monthly, basic_yearly = derive_market_prices(Decimal("39"), usd_to_npr)
     standard_monthly, standard_yearly = derive_market_prices(Decimal("99"), usd_to_npr)
     premium_monthly, premium_yearly = derive_market_prices(Decimal("199"), usd_to_npr)
-    enterprise_monthly, enterprise_yearly = derive_market_prices(Decimal("399"), usd_to_npr)
+    enterprise_monthly, enterprise_yearly = derive_market_prices(
+        Decimal("399"), usd_to_npr
+    )
 
     return [
         {
@@ -144,4 +152,3 @@ def upsert_default_plans() -> dict[str, Any]:
         "used_fallback": used_fallback,
         "plans": seeded_plans,
     }
-

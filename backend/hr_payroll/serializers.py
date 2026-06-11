@@ -17,7 +17,9 @@ from .models import (
 
 
 class DepartmentSerializer(serializers.ModelSerializer):
-    head_name = serializers.CharField(source="head.full_name", read_only=True, default=None)
+    head_name = serializers.CharField(
+        source="head.full_name", read_only=True, default=None
+    )
     employee_count = serializers.SerializerMethodField()
 
     class Meta:
@@ -32,7 +34,9 @@ class DepartmentSerializer(serializers.ModelSerializer):
 class EmployeeSerializer(serializers.ModelSerializer):
     full_name = serializers.CharField(source="user.get_full_name", read_only=True)
     email = serializers.EmailField(source="user.email", read_only=True)
-    department_name = serializers.CharField(source="department.name", read_only=True, default=None)
+    department_name = serializers.CharField(
+        source="department.name", read_only=True, default=None
+    )
     role = serializers.CharField(source="user.role", read_only=True)
 
     class Meta:
@@ -57,7 +61,9 @@ class EmployeeListSerializer(serializers.ModelSerializer):
 
     full_name = serializers.CharField(source="user.get_full_name", read_only=True)
     email = serializers.EmailField(source="user.email", read_only=True)
-    department_name = serializers.CharField(source="department.name", read_only=True, default=None)
+    department_name = serializers.CharField(
+        source="department.name", read_only=True, default=None
+    )
 
     class Meta:
         model = Employee
@@ -159,7 +165,9 @@ class PayrollPeriodSerializer(serializers.ModelSerializer):
 
 class SalarySlipSerializer(serializers.ModelSerializer):
     employee_name = serializers.CharField(source="employee.full_name", read_only=True)
-    employee_code = serializers.CharField(source="employee.employee_code", read_only=True)
+    employee_code = serializers.CharField(
+        source="employee.employee_code", read_only=True
+    )
     department_name = serializers.CharField(
         source="employee.department.name", read_only=True, default=None
     )

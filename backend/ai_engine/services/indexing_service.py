@@ -16,11 +16,9 @@ from django_tenants.utils import schema_context
 from openai import OpenAI
 
 from academic.models import Chapter, Lesson, LessonMaterial
-from core.models.tenant import Domain, Tenant
-
 from ai_engine.models import ContentChunk
 from ai_engine.services.provider_config import get_ai_provider_config
-
+from core.models.tenant import Domain, Tenant
 
 logger = logging.getLogger(__name__)
 
@@ -70,9 +68,11 @@ def _resolve_tenant(tenant_identifier: str) -> Tenant | None:
         by_subdomain = Tenant.objects.filter(subdomain__iexact=value).first()
         if by_subdomain:
             return by_subdomain
-        domain_hit = Domain.objects.select_related("tenant").filter(
-            Q(domain__iexact=value) | Q(domain__istartswith=f"{value}.")
-        ).first()
+        domain_hit = (
+            Domain.objects.select_related("tenant")
+            .filter(Q(domain__iexact=value) | Q(domain__istartswith=f"{value}."))
+            .first()
+        )
         return getattr(domain_hit, "tenant", None)
 
 
@@ -113,7 +113,10 @@ def _deterministic_stub_embedding(text: str, dimensions: int) -> list[float]:
 def _generate_embeddings(chunks: list[str]) -> tuple[list[list[float]], str]:
     dimensions = _embedding_dimensions()
     config = get_ai_provider_config()
-    model = str(getattr(settings, "AI_EMBEDDING_MODEL", "text-embedding-3-small") or "text-embedding-3-small")
+    model = str(
+        getattr(settings, "AI_EMBEDDING_MODEL", "text-embedding-3-small")
+        or "text-embedding-3-small"
+    )
 
     if config.get("enabled") and config.get("configured"):
         try:
@@ -135,9 +138,14 @@ def _generate_embeddings(chunks: list[str]) -> tuple[list[list[float]], str]:
             if len(vectors) == len(chunks):
                 return vectors, "openai"
         except Exception as exc:
-            logger.warning("Embedding provider unavailable; falling back to stub vectors: %s", exc)
+            logger.warning(
+                "Embedding provider unavailable; falling back to stub vectors: %s", exc
+            )
 
-    return ([_deterministic_stub_embedding(chunk, dimensions) for chunk in chunks], "stub")
+    return (
+        [_deterministic_stub_embedding(chunk, dimensions) for chunk in chunks],
+        "stub",
+    )
 
 
 def _source_documents() -> list[dict[str, Any]]:
@@ -187,7 +195,9 @@ def _source_documents() -> list[dict[str, Any]]:
                 }
             )
 
-    for material in LessonMaterial.objects.select_related("lesson", "lesson__chapter").all():
+    for material in LessonMaterial.objects.select_related(
+        "lesson", "lesson__chapter"
+    ).all():
         file_name = ""
         try:
             file_name = getattr(material.file, "name", "") or ""

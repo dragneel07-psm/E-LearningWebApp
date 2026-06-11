@@ -20,6 +20,7 @@ Usage:
         # return fallback
         ...
 """
+
 from __future__ import annotations
 
 import functools
@@ -28,7 +29,7 @@ import threading
 import time
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Callable, Any
+from typing import Any, Callable
 
 logger = logging.getLogger(__name__)
 
@@ -89,9 +90,11 @@ class CircuitBreaker:
 
     def __call__(self, fn: Callable) -> Callable:
         """Use as a decorator: @breaker"""
+
         @functools.wraps(fn)
         def wrapper(*args: Any, **kwargs: Any) -> Any:
             return self.call(fn, *args, **kwargs)
+
         return wrapper
 
     # ── Internal helpers ──────────────────────────────────────────────────────

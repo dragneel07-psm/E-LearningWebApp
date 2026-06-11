@@ -3,11 +3,11 @@
 # Unauthorized copying, modification, or distribution of this file,
 # via any medium, is strictly prohibited. Proprietary and confidential.
 
-import sqlite3
 import os
+import sqlite3
 
 # Absolute path to database
-db_path = '/Users/pramodsinghmanyal/Desktop/E-LearningWebApp/backend/config/school_pramod.sqlite3'
+db_path = "/Users/pramodsinghmanyal/Desktop/E-LearningWebApp/backend/config/school_pramod.sqlite3"
 
 print(f"Database path: {db_path}")
 print(f"Database exists: {os.path.exists(db_path)}")
@@ -18,7 +18,9 @@ cursor = conn.cursor()
 
 # Check existing tables
 print("\n=== Before creation ===")
-cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'library_%'")
+cursor.execute(
+    "SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'library_%'"
+)
 print(f"Existing library tables: {[row[0] for row in cursor.fetchall()]}")
 
 # Create library_book table
@@ -65,7 +67,9 @@ conn.commit()
 
 # Verify
 print("\n=== After creation ===")
-cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'library_%'")
+cursor.execute(
+    "SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'library_%'"
+)
 tables = [row[0] for row in cursor.fetchall()]
 print(f"Library tables: {tables}")
 
@@ -79,9 +83,9 @@ for table in tables:
 
 conn.close()
 
-print("\n" + "="*60)
+print("\n" + "=" * 60)
 print("✅ SUCCESS - Tables created!")
-print("="*60)
+print("=" * 60)
 print("\nNow:")
 print("1. Refresh your browser (the library page)")
 print("2. Try adding a book again")

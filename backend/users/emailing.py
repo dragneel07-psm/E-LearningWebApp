@@ -73,7 +73,10 @@ def _user_pk(user: UserAccount) -> str:
 
 
 def resolve_frontend_url_for_tenant(tenant: Tenant | None = None) -> str:
-    default_frontend = _normalize_base_url(getattr(settings, "FRONTEND_URL", "")) or "http://localhost:3000"
+    default_frontend = (
+        _normalize_base_url(getattr(settings, "FRONTEND_URL", ""))
+        or "http://localhost:3000"
+    )
     if not tenant:
         return default_frontend
 
@@ -94,7 +97,9 @@ def resolve_frontend_url_for_tenant(tenant: Tenant | None = None) -> str:
     return default_frontend
 
 
-def build_password_reset_link(user: UserAccount, *, tenant: Tenant | None = None) -> str:
+def build_password_reset_link(
+    user: UserAccount, *, tenant: Tenant | None = None
+) -> str:
     tenant_for_link: Tenant | None = tenant or _user_tenant(user)
     frontend_base = resolve_frontend_url_for_tenant(tenant_for_link)
     uidb64 = urlsafe_base64_encode(force_bytes(_user_pk(user)))
@@ -131,7 +136,10 @@ def send_password_reset_email(
         recipient_list=[_user_email(user)],
         fail_silently=False,
     )
-    logger.info("Password reset email sent", extra={"email": _user_email(user), "reason": reason})
+    logger.info(
+        "Password reset email sent",
+        extra={"email": _user_email(user), "reason": reason},
+    )
 
 
 def send_saas_admin_registration_email(user: UserAccount) -> None:
@@ -153,12 +161,18 @@ def send_saas_admin_registration_email(user: UserAccount) -> None:
         recipient_list=[_user_email(user)],
         fail_silently=False,
     )
-    logger.info("SaaS admin registration email sent", extra={"email": _user_email(user)})
+    logger.info(
+        "SaaS admin registration email sent", extra={"email": _user_email(user)}
+    )
 
 
-def send_saas_admin_login_alert(user: UserAccount, *, ip_address: str, user_agent: str) -> None:
+def send_saas_admin_login_alert(
+    user: UserAccount, *, ip_address: str, user_agent: str
+) -> None:
     """Send an email alert to a SaaS admin when a new login occurs."""
-    from datetime import datetime, timezone as dt_timezone
+    from datetime import datetime
+    from datetime import timezone as dt_timezone
+
     login_time = datetime.now(dt_timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
     login_url = f"{resolve_frontend_url_for_tenant(None)}/saas-login"
     subject = "Security Alert: New SaaS Admin Login"

@@ -37,7 +37,9 @@ class StudentCreationTests(FastTenantTestCase):
         self.client.force_authenticate(user=self.admin_user)
 
         self.academic_class = AcademicClass.objects.create(name="Grade 8", order=8)
-        self.section = Section.objects.create(name="A", academic_class=self.academic_class)
+        self.section = Section.objects.create(
+            name="A", academic_class=self.academic_class
+        )
 
     def _payload(self, email: str):
         return {
@@ -63,7 +65,9 @@ class StudentCreationTests(FastTenantTestCase):
         )
 
         users_before = User.objects.count()
-        response = self.client.post("/api/academic/students/", self._payload(existing_user.email), format="json")
+        response = self.client.post(
+            "/api/academic/students/", self._payload(existing_user.email), format="json"
+        )
 
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertEqual(User.objects.count(), users_before)
@@ -80,7 +84,11 @@ class StudentCreationTests(FastTenantTestCase):
             tenant=self.tenant,
         )
 
-        response = self.client.post("/api/academic/students/", self._payload("teacher_dup@example.com"), format="json")
+        response = self.client.post(
+            "/api/academic/students/",
+            self._payload("teacher_dup@example.com"),
+            format="json",
+        )
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("email", response.data)
@@ -104,7 +112,11 @@ class StudentCreationTests(FastTenantTestCase):
             daily_study_goal=30,
         )
 
-        response = self.client.post("/api/academic/students/", self._payload("student_dup@example.com"), format="json")
+        response = self.client.post(
+            "/api/academic/students/",
+            self._payload("student_dup@example.com"),
+            format="json",
+        )
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("email", response.data)
@@ -133,8 +145,14 @@ class StudentCreationTests(FastTenantTestCase):
 
         list_response = self.client.get("/api/academic/students/")
         self.assertEqual(list_response.status_code, status.HTTP_200_OK)
-        list_rows = list_response.data["results"] if isinstance(list_response.data, dict) else list_response.data
-        list_row = next(item for item in list_rows if str(item["id"]) == str(student.student_id))
+        list_rows = (
+            list_response.data["results"]
+            if isinstance(list_response.data, dict)
+            else list_response.data
+        )
+        list_row = next(
+            item for item in list_rows if str(item["id"]) == str(student.student_id)
+        )
         self.assertEqual(str(list_row["user_id"]), str(linked_user.user_id))
         self.assertEqual(list_row["username"], linked_user.username)
         self.assertEqual(list_row["email"], linked_user.email)
@@ -143,7 +161,9 @@ class StudentCreationTests(FastTenantTestCase):
         self.assertEqual(list_row["learning_style"], "practice")
         self.assertEqual(list_row["daily_study_goal"], 45)
 
-        detail_response = self.client.get(f"/api/academic/students/{student.student_id}/")
+        detail_response = self.client.get(
+            f"/api/academic/students/{student.student_id}/"
+        )
         self.assertEqual(detail_response.status_code, status.HTTP_200_OK)
         self.assertEqual(str(detail_response.data["user_id"]), str(linked_user.user_id))
         self.assertEqual(detail_response.data["username"], linked_user.username)

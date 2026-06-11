@@ -4,6 +4,7 @@
 """
 Tests for the reset_saas_admin_password management command.
 """
+
 from __future__ import annotations
 
 from io import StringIO
@@ -98,7 +99,9 @@ class ResetSaasAdminPasswordCommandTests(TestCase):
         self.saas_admin.refresh_from_db()
         self.assertTrue(self.saas_admin.check_password(self.NEW_PASSWORD))
         self.assertTrue(self.saas_admin.is_2fa_enabled)
-        self.assertNotEqual(self.saas_admin.two_factor_secret, "OLDSECRETOLDSECRETOLDSEC")
+        self.assertNotEqual(
+            self.saas_admin.two_factor_secret, "OLDSECRETOLDSECRETOLDSEC"
+        )
         # New secret must be a usable TOTP seed.
         try:
             pyotp.TOTP(self.saas_admin.two_factor_secret).now()

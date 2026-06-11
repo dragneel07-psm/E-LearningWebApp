@@ -7,10 +7,11 @@ Tests for WebSocket consumers.
 Uses channels.testing.WebsocketCommunicator (in-memory, no Redis needed).
 CHANNEL_LAYERS is overridden to use InMemoryChannelLayer for all tests.
 """
+
 from __future__ import annotations
 
-import json
 import datetime
+import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from channels.testing import WebsocketCommunicator
@@ -26,6 +27,7 @@ IN_MEMORY_CHANNEL_LAYERS = {
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_user(**kwargs):
     defaults = dict(username="wsuser", email="ws@test.com", pk=42, role="student")
@@ -44,11 +46,13 @@ def _anon_user():
 # NotificationConsumer tests
 # ---------------------------------------------------------------------------
 
+
 @override_settings(CHANNEL_LAYERS=IN_MEMORY_CHANNEL_LAYERS)
 class NotificationConsumerTests(TestCase):
 
     def _app(self):
         from notifications.consumers import NotificationConsumer
+
         return NotificationConsumer.as_asgi()
 
     async def test_unauthenticated_user_rejected(self):
@@ -103,6 +107,7 @@ class NotificationConsumerTests(TestCase):
     async def test_send_notification_event_delivered_to_client(self):
         """Channel layer group_send pushes the notification frame to the WebSocket."""
         from channels.layers import get_channel_layer
+
         from notifications.consumers import notification_group_name
 
         user = _make_user()
@@ -137,11 +142,13 @@ class NotificationConsumerTests(TestCase):
 # TutorStreamConsumer tests
 # ---------------------------------------------------------------------------
 
+
 @override_settings(CHANNEL_LAYERS=IN_MEMORY_CHANNEL_LAYERS)
 class TutorStreamConsumerTests(TestCase):
 
     def _app(self):
         from ai_engine.consumers import TutorStreamConsumer
+
         return TutorStreamConsumer.as_asgi()
 
     def _student_user(self):
@@ -220,7 +227,11 @@ class TutorStreamConsumerTests(TestCase):
             "ai_engine.services.token_budget_service.TokenBudgetService.check",
             side_effect=exc,
         ):
-            await comm.send_to(text_data=json.dumps({"type": "chat", "message": "tell me about gravity"}))
+            await comm.send_to(
+                text_data=json.dumps(
+                    {"type": "chat", "message": "tell me about gravity"}
+                )
+            )
             response = await comm.receive_json_from()
 
         self.assertEqual(response["type"], "budget_exceeded")
@@ -258,20 +269,32 @@ class TutorStreamConsumerTests(TestCase):
 
         with (
             patch("ai_engine.services.token_budget_service.TokenBudgetService.check"),
-            patch("ai_engine.services.token_budget_service.TokenBudgetService.deduct", return_value={}),
-            patch("ai_engine.services.rag_tutor_service.RAGTutorService.stream_answer", return_value=iter(fake_chunks)),
-            patch.object(TutorStreamConsumer, "_get_or_create_conversation", _fake_get_or_create),
+            patch(
+                "ai_engine.services.token_budget_service.TokenBudgetService.deduct",
+                return_value={},
+            ),
+            patch(
+                "ai_engine.services.rag_tutor_service.RAGTutorService.stream_answer",
+                return_value=iter(fake_chunks),
+            ),
+            patch.object(
+                TutorStreamConsumer, "_get_or_create_conversation", _fake_get_or_create
+            ),
             patch("ai_engine.models.TutorMessage.objects") as mock_msg_mgr,
             patch("ai_engine.models.AIInteractionLog.objects") as mock_log_mgr,
         ):
             mock_msg_mgr.using.return_value.create = MagicMock()
-            mock_msg_mgr.using.return_value.filter.return_value.order_by.return_value.values.return_value = []
+            mock_msg_mgr.using.return_value.filter.return_value.order_by.return_value.values.return_value = (
+                []
+            )
             mock_log_mgr.using.return_value.create = MagicMock()
 
             connected, _ = await comm.connect()
             self.assertTrue(connected)
 
-            await comm.send_to(text_data=json.dumps({"type": "chat", "message": "Explain gravity"}))
+            await comm.send_to(
+                text_data=json.dumps({"type": "chat", "message": "Explain gravity"})
+            )
 
             frames = []
             for _ in range(20):
@@ -309,14 +332,17 @@ class TutorStreamConsumerTests(TestCase):
 # Utility tests
 # ---------------------------------------------------------------------------
 
+
 class NotificationGroupNameTest(TestCase):
     def test_group_name_format(self):
         from notifications.consumers import notification_group_name
+
         self.assertEqual(notification_group_name(7), "notifications_7")
         self.assertEqual(notification_group_name("abc"), "notifications_abc")
 
     def test_group_name_is_stable(self):
         from notifications.consumers import notification_group_name
+
         name = notification_group_name(42)
         self.assertEqual(name, notification_group_name(42))
         self.assertIn("42", name)

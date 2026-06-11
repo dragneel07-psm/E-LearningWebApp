@@ -18,7 +18,10 @@ class Department(SchemaScopedBillingModel, models.Model):
 
     dept_id = models.UUIDField(primary_key=True, default=uuid_lib.uuid4, editable=False)
     tenant = models.ForeignKey(
-        Tenant, on_delete=models.CASCADE, related_name="hr_departments", db_constraint=False
+        Tenant,
+        on_delete=models.CASCADE,
+        related_name="hr_departments",
+        db_constraint=False,
     )
     name = models.CharField(max_length=100)
     code = models.CharField(max_length=20, blank=True)
@@ -57,7 +60,9 @@ class Employee(SchemaScopedBillingModel, models.Model):
         (CONTRACT_PART_TIME, "Part-Time"),
     )
 
-    employee_id = models.UUIDField(primary_key=True, default=uuid_lib.uuid4, editable=False)
+    employee_id = models.UUIDField(
+        primary_key=True, default=uuid_lib.uuid4, editable=False
+    )
     tenant = models.ForeignKey(
         Tenant, on_delete=models.CASCADE, related_name="employees", db_constraint=False
     )
@@ -85,7 +90,9 @@ class Employee(SchemaScopedBillingModel, models.Model):
     confirmation_date = models.DateField(null=True, blank=True)
 
     # Salary
-    basic_salary = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0"))
+    basic_salary = models.DecimalField(
+        max_digits=12, decimal_places=2, default=Decimal("0")
+    )
     salary_grade = models.CharField(max_length=20, blank=True)
 
     # Bank details
@@ -103,8 +110,12 @@ class Employee(SchemaScopedBillingModel, models.Model):
 
     class Meta:
         indexes = [
-            models.Index(fields=["tenant", "is_active"], name="hr_emp_tenant_active_idx"),
-            models.Index(fields=["tenant", "department"], name="hr_emp_tenant_dept_idx"),
+            models.Index(
+                fields=["tenant", "is_active"], name="hr_emp_tenant_active_idx"
+            ),
+            models.Index(
+                fields=["tenant", "department"], name="hr_emp_tenant_dept_idx"
+            ),
         ]
 
     def __str__(self):
@@ -122,9 +133,14 @@ class Employee(SchemaScopedBillingModel, models.Model):
 class LeaveType(SchemaScopedBillingModel, models.Model):
     SCHEMA_SCOPE = "tenant"
 
-    leave_type_id = models.UUIDField(primary_key=True, default=uuid_lib.uuid4, editable=False)
+    leave_type_id = models.UUIDField(
+        primary_key=True, default=uuid_lib.uuid4, editable=False
+    )
     tenant = models.ForeignKey(
-        Tenant, on_delete=models.CASCADE, related_name="leave_types", db_constraint=False
+        Tenant,
+        on_delete=models.CASCADE,
+        related_name="leave_types",
+        db_constraint=False,
     )
     name = models.CharField(max_length=80)
     code = models.CharField(max_length=10)
@@ -158,9 +174,14 @@ class LeaveApplication(SchemaScopedBillingModel, models.Model):
         (STATUS_CANCELLED, "Cancelled"),
     )
 
-    leave_id = models.UUIDField(primary_key=True, default=uuid_lib.uuid4, editable=False)
+    leave_id = models.UUIDField(
+        primary_key=True, default=uuid_lib.uuid4, editable=False
+    )
     tenant = models.ForeignKey(
-        Tenant, on_delete=models.CASCADE, related_name="leave_applications", db_constraint=False
+        Tenant,
+        on_delete=models.CASCADE,
+        related_name="leave_applications",
+        db_constraint=False,
     )
     employee = models.ForeignKey(
         Employee,
@@ -176,9 +197,13 @@ class LeaveApplication(SchemaScopedBillingModel, models.Model):
     )
     start_date = models.DateField()
     end_date = models.DateField()
-    total_days = models.DecimalField(max_digits=5, decimal_places=1, default=Decimal("1.0"))
+    total_days = models.DecimalField(
+        max_digits=5, decimal_places=1, default=Decimal("1.0")
+    )
     reason = models.TextField()
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_PENDING)
+    status = models.CharField(
+        max_length=20, choices=STATUS_CHOICES, default=STATUS_PENDING
+    )
     applied_at = models.DateTimeField(auto_now_add=True)
     reviewed_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -193,8 +218,12 @@ class LeaveApplication(SchemaScopedBillingModel, models.Model):
 
     class Meta:
         indexes = [
-            models.Index(fields=["tenant", "status"], name="hr_leave_tenant_status_idx"),
-            models.Index(fields=["tenant", "employee", "status"], name="hr_leave_emp_status_idx"),
+            models.Index(
+                fields=["tenant", "status"], name="hr_leave_tenant_status_idx"
+            ),
+            models.Index(
+                fields=["tenant", "employee", "status"], name="hr_leave_emp_status_idx"
+            ),
             models.Index(fields=["start_date", "end_date"], name="hr_leave_dates_idx"),
         ]
         ordering = ["-applied_at"]
@@ -221,9 +250,14 @@ class StaffAttendance(SchemaScopedBillingModel, models.Model):
         (STATUS_HOLIDAY, "Holiday"),
     )
 
-    attendance_id = models.UUIDField(primary_key=True, default=uuid_lib.uuid4, editable=False)
+    attendance_id = models.UUIDField(
+        primary_key=True, default=uuid_lib.uuid4, editable=False
+    )
     tenant = models.ForeignKey(
-        Tenant, on_delete=models.CASCADE, related_name="staff_attendance", db_constraint=False
+        Tenant,
+        on_delete=models.CASCADE,
+        related_name="staff_attendance",
+        db_constraint=False,
     )
     employee = models.ForeignKey(
         Employee,
@@ -232,7 +266,9 @@ class StaffAttendance(SchemaScopedBillingModel, models.Model):
         db_constraint=False,
     )
     date = models.DateField()
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_PRESENT)
+    status = models.CharField(
+        max_length=20, choices=STATUS_CHOICES, default=STATUS_PRESENT
+    )
     check_in_time = models.TimeField(null=True, blank=True)
     check_out_time = models.TimeField(null=True, blank=True)
     remarks = models.CharField(max_length=255, blank=True)
@@ -249,7 +285,9 @@ class StaffAttendance(SchemaScopedBillingModel, models.Model):
     class Meta:
         indexes = [
             models.Index(fields=["tenant", "date"], name="hr_att_tenant_date_idx"),
-            models.Index(fields=["tenant", "employee", "date"], name="hr_att_emp_date_idx"),
+            models.Index(
+                fields=["tenant", "employee", "date"], name="hr_att_emp_date_idx"
+            ),
         ]
         constraints = [
             models.UniqueConstraint(
@@ -276,9 +314,14 @@ class PayrollPeriod(SchemaScopedBillingModel, models.Model):
         (STATUS_PAID, "Paid"),
     )
 
-    period_id = models.UUIDField(primary_key=True, default=uuid_lib.uuid4, editable=False)
+    period_id = models.UUIDField(
+        primary_key=True, default=uuid_lib.uuid4, editable=False
+    )
     tenant = models.ForeignKey(
-        Tenant, on_delete=models.CASCADE, related_name="payroll_periods", db_constraint=False
+        Tenant,
+        on_delete=models.CASCADE,
+        related_name="payroll_periods",
+        db_constraint=False,
     )
     name = models.CharField(max_length=80)  # e.g. "March 2026"
     month = models.PositiveSmallIntegerField()  # 1–12
@@ -286,7 +329,9 @@ class PayrollPeriod(SchemaScopedBillingModel, models.Model):
     start_date = models.DateField()
     end_date = models.DateField()
     working_days = models.PositiveSmallIntegerField(default=26)
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_DRAFT)
+    status = models.CharField(
+        max_length=20, choices=STATUS_CHOICES, default=STATUS_DRAFT
+    )
     finalized_at = models.DateTimeField(null=True, blank=True)
     finalized_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -301,12 +346,17 @@ class PayrollPeriod(SchemaScopedBillingModel, models.Model):
 
     class Meta:
         indexes = [
-            models.Index(fields=["tenant", "year", "month"], name="hr_period_tenant_ym_idx"),
-            models.Index(fields=["tenant", "status"], name="hr_period_tenant_status_idx"),
+            models.Index(
+                fields=["tenant", "year", "month"], name="hr_period_tenant_ym_idx"
+            ),
+            models.Index(
+                fields=["tenant", "status"], name="hr_period_tenant_status_idx"
+            ),
         ]
         constraints = [
             models.UniqueConstraint(
-                fields=["tenant", "month", "year"], name="hr_period_unique_tenant_month_year"
+                fields=["tenant", "month", "year"],
+                name="hr_period_unique_tenant_month_year",
             )
         ]
         ordering = ["-year", "-month"]
@@ -340,7 +390,10 @@ class SalarySlip(SchemaScopedBillingModel, models.Model):
 
     slip_id = models.UUIDField(primary_key=True, default=uuid_lib.uuid4, editable=False)
     tenant = models.ForeignKey(
-        Tenant, on_delete=models.CASCADE, related_name="salary_slips", db_constraint=False
+        Tenant,
+        on_delete=models.CASCADE,
+        related_name="salary_slips",
+        db_constraint=False,
     )
     employee = models.ForeignKey(
         Employee,
@@ -362,29 +415,57 @@ class SalarySlip(SchemaScopedBillingModel, models.Model):
     lop_days = models.DecimalField(max_digits=4, decimal_places=1, default=Decimal("0"))
 
     # Earnings
-    basic_salary = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0"))
+    basic_salary = models.DecimalField(
+        max_digits=12, decimal_places=2, default=Decimal("0")
+    )
     hra = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0"))
     da = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0"))
-    transport_allowance = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("0"))
-    medical_allowance = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("0"))
-    other_allowance = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0"))
-    gross_salary = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0"))
+    transport_allowance = models.DecimalField(
+        max_digits=10, decimal_places=2, default=Decimal("0")
+    )
+    medical_allowance = models.DecimalField(
+        max_digits=10, decimal_places=2, default=Decimal("0")
+    )
+    other_allowance = models.DecimalField(
+        max_digits=12, decimal_places=2, default=Decimal("0")
+    )
+    gross_salary = models.DecimalField(
+        max_digits=12, decimal_places=2, default=Decimal("0")
+    )
 
     # Deductions
-    pf_employee = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("0"))
-    pf_employer = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("0"))
-    esi_employee = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("0"))
+    pf_employee = models.DecimalField(
+        max_digits=10, decimal_places=2, default=Decimal("0")
+    )
+    pf_employer = models.DecimalField(
+        max_digits=10, decimal_places=2, default=Decimal("0")
+    )
+    esi_employee = models.DecimalField(
+        max_digits=10, decimal_places=2, default=Decimal("0")
+    )
     tds = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("0"))
-    professional_tax = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("0"))
-    other_deduction = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("0"))
-    total_deductions = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0"))
+    professional_tax = models.DecimalField(
+        max_digits=10, decimal_places=2, default=Decimal("0")
+    )
+    other_deduction = models.DecimalField(
+        max_digits=10, decimal_places=2, default=Decimal("0")
+    )
+    total_deductions = models.DecimalField(
+        max_digits=12, decimal_places=2, default=Decimal("0")
+    )
 
-    net_salary = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0"))
+    net_salary = models.DecimalField(
+        max_digits=12, decimal_places=2, default=Decimal("0")
+    )
 
     # Payment info
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_DRAFT)
+    status = models.CharField(
+        max_length=20, choices=STATUS_CHOICES, default=STATUS_DRAFT
+    )
     payment_date = models.DateField(null=True, blank=True)
-    payment_method = models.CharField(max_length=20, choices=PAYMENT_METHOD_CHOICES, blank=True)
+    payment_method = models.CharField(
+        max_length=20, choices=PAYMENT_METHOD_CHOICES, blank=True
+    )
     transaction_reference = models.CharField(max_length=100, blank=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
@@ -392,7 +473,9 @@ class SalarySlip(SchemaScopedBillingModel, models.Model):
 
     class Meta:
         indexes = [
-            models.Index(fields=["tenant", "payroll_period"], name="hr_slip_tenant_period_idx"),
+            models.Index(
+                fields=["tenant", "payroll_period"], name="hr_slip_tenant_period_idx"
+            ),
             models.Index(fields=["tenant", "employee"], name="hr_slip_tenant_emp_idx"),
             models.Index(fields=["tenant", "status"], name="hr_slip_tenant_status_idx"),
         ]

@@ -13,11 +13,12 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.1/ref/settings/
 """
 
-from pathlib import Path
 import logging
 import os
 from datetime import timedelta
+from pathlib import Path
 from urllib.parse import urlsplit
+
 from django.core.exceptions import ImproperlyConfigured
 from dotenv import load_dotenv
 
@@ -25,7 +26,7 @@ from dotenv import load_dotenv
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
 # Load environment variables from .env file
-load_dotenv(BASE_DIR.parent / '.env')
+load_dotenv(BASE_DIR.parent / ".env")
 logger = logging.getLogger(__name__)
 
 
@@ -92,7 +93,9 @@ SECRET_KEY = (os.environ.get("SECRET_KEY", "") or "").strip()
 if not SECRET_KEY:
     if DEBUG:
         SECRET_KEY = "django-insecure-dev-only-do-not-use-in-production"
-        logger.warning("SECRET_KEY is not set; using insecure dev default (DEBUG=True).")
+        logger.warning(
+            "SECRET_KEY is not set; using insecure dev default (DEBUG=True)."
+        )
     else:
         raise ImproperlyConfigured(
             "SECRET_KEY environment variable must be set when DEBUG=False."
@@ -103,7 +106,9 @@ if DEBUG:
 else:
     ALLOWED_HOSTS = _csv_env_list("ALLOWED_HOSTS", [])
     if not ALLOWED_HOSTS:
-        raise RuntimeError("ALLOWED_HOSTS must be explicitly configured when DEBUG=False.")
+        raise RuntimeError(
+            "ALLOWED_HOSTS must be explicitly configured when DEBUG=False."
+        )
 
 
 def _append_allowed_host(host: str) -> None:
@@ -129,8 +134,8 @@ if BASE_DOMAIN:
 
 # Multi-Tenancy Configuration
 SHARED_APPS = [
-    "daphne",          # ASGI server — must be first for runserver to use ASGI
-    "channels",        # WebSocket layer
+    "daphne",  # ASGI server — must be first for runserver to use ASGI
+    "channels",  # WebSocket layer
     "django_tenants",  # mandatory
     "django.contrib.admin",
     "django.contrib.auth",
@@ -145,7 +150,7 @@ SHARED_APPS = [
     "core",
     "billing",
     "billing_saas",
-    "users", # Hybrid App (Exists in both)
+    "users",  # Hybrid App (Exists in both)
     "auditlog",
 ]
 
@@ -176,7 +181,9 @@ TENANT_APPS = [
     "projects",
 ]
 
-INSTALLED_APPS = list(SHARED_APPS) + [app for app in TENANT_APPS if app not in SHARED_APPS]
+INSTALLED_APPS = list(SHARED_APPS) + [
+    app for app in TENANT_APPS if app not in SHARED_APPS
+]
 
 # Hybrid *project* apps are allowed only when explicitly approved.
 # Framework-level overlaps (django/rest/auth/cors) are expected in django-tenants.
@@ -192,9 +199,12 @@ FRAMEWORK_OVERLAP_APPS = {
 PROJECT_OVERLAPPING_APPS = {
     app
     for app in OVERLAPPING_APPS
-    if not app.startswith(FRAMEWORK_OVERLAP_PREFIXES) and app not in FRAMEWORK_OVERLAP_APPS
+    if not app.startswith(FRAMEWORK_OVERLAP_PREFIXES)
+    and app not in FRAMEWORK_OVERLAP_APPS
 }
-UNEXPECTED_HYBRID_APPS = sorted(PROJECT_OVERLAPPING_APPS.difference(ALLOWED_HYBRID_APPS))
+UNEXPECTED_HYBRID_APPS = sorted(
+    PROJECT_OVERLAPPING_APPS.difference(ALLOWED_HYBRID_APPS)
+)
 if UNEXPECTED_HYBRID_APPS:
     raise ImproperlyConfigured(
         "Unexpected SHARED_APPS/TENANT_APPS overlap detected: "
@@ -206,7 +216,7 @@ TENANT_MODEL = "core.Tenant"
 TENANT_DOMAIN_MODEL = "core.Domain"
 
 
-AUTH_USER_MODEL = 'users.UserAccount'
+AUTH_USER_MODEL = "users.UserAccount"
 
 MIDDLEWARE = [
     "corsheaders.middleware.CorsMiddleware",  # Must be as high as possible
@@ -225,9 +235,7 @@ MIDDLEWARE = [
     "auditlog.middleware.AuditlogMiddleware",
 ]
 
-DATABASE_ROUTERS = (
-    'django_tenants.routers.TenantSyncRouter',
-)
+DATABASE_ROUTERS = ("django_tenants.routers.TenantSyncRouter",)
 
 ROOT_URLCONF = "config.urls"
 
@@ -262,7 +270,7 @@ if not DATABASE_URL:
 DATABASES = {
     "default": dj_database_url.parse(
         DATABASE_URL,
-        engine='django_tenants.postgresql_backend',
+        engine="django_tenants.postgresql_backend",
         conn_max_age=600,
     )
 }
@@ -362,7 +370,9 @@ elif DEBUG:
 else:
     CORS_ALLOWED_ORIGIN_REGEXES = []
 
-CORS_ALLOW_ALL_ORIGINS = os.environ.get("CORS_ALLOW_ALL_ORIGINS", "false").lower() == "true"
+CORS_ALLOW_ALL_ORIGINS = (
+    os.environ.get("CORS_ALLOW_ALL_ORIGINS", "false").lower() == "true"
+)
 if CORS_ALLOW_ALL_ORIGINS and not DEBUG:
     # Credentials are allowed below; combined with wildcard origins any site
     # could make authenticated requests on behalf of logged-in users.
@@ -378,38 +388,41 @@ CSRF_TRUSTED_ORIGINS = _csrf_safe_origins(
 )
 
 from corsheaders.defaults import default_headers
+
 CORS_ALLOW_HEADERS = list(default_headers) + [
     "x-tenant-id",
 ]
 
 # REST Framework Configuration - Allow public access for demo
 REST_FRAMEWORK = {
-    'DEFAULT_AUTHENTICATION_CLASSES': [
-        'users.authentication.TenantAwareJWTAuthentication',
-        'rest_framework.authentication.SessionAuthentication',
+    "DEFAULT_AUTHENTICATION_CLASSES": [
+        "users.authentication.TenantAwareJWTAuthentication",
+        "rest_framework.authentication.SessionAuthentication",
     ],
-    'DEFAULT_PERMISSION_CLASSES': [
-        'rest_framework.permissions.IsAuthenticated',
+    "DEFAULT_PERMISSION_CLASSES": [
+        "rest_framework.permissions.IsAuthenticated",
     ],
-    'DEFAULT_THROTTLE_CLASSES': [
-        'rest_framework.throttling.AnonRateThrottle',
-        'rest_framework.throttling.UserRateThrottle'
+    "DEFAULT_THROTTLE_CLASSES": [
+        "rest_framework.throttling.AnonRateThrottle",
+        "rest_framework.throttling.UserRateThrottle",
     ],
-    'DEFAULT_THROTTLE_RATES': {
+    "DEFAULT_THROTTLE_RATES": {
         # Keep anonymous traffic constrained, but avoid long lockouts for authenticated SPA usage.
-        'anon': os.environ.get('THROTTLE_ANON', '300/hour'),
-        'user': os.environ.get('THROTTLE_USER', '5000/hour'),
-        'auth_login': os.environ.get('THROTTLE_AUTH_LOGIN', '20/min'),
-        'auth_refresh': os.environ.get('THROTTLE_AUTH_REFRESH', '40/min'),
-        'auth_register': os.environ.get('THROTTLE_AUTH_REGISTER', '5/hour'),
-        'auth_password_reset': os.environ.get('THROTTLE_AUTH_PASSWORD_RESET', '5/hour'),
-        'auth_password_reset_confirm': os.environ.get('THROTTLE_AUTH_PASSWORD_RESET_CONFIRM', '10/hour'),
-        'ai_tutor_chat': os.environ.get('THROTTLE_AI_TUTOR_CHAT', '30/min'),
+        "anon": os.environ.get("THROTTLE_ANON", "300/hour"),
+        "user": os.environ.get("THROTTLE_USER", "5000/hour"),
+        "auth_login": os.environ.get("THROTTLE_AUTH_LOGIN", "20/min"),
+        "auth_refresh": os.environ.get("THROTTLE_AUTH_REFRESH", "40/min"),
+        "auth_register": os.environ.get("THROTTLE_AUTH_REGISTER", "5/hour"),
+        "auth_password_reset": os.environ.get("THROTTLE_AUTH_PASSWORD_RESET", "5/hour"),
+        "auth_password_reset_confirm": os.environ.get(
+            "THROTTLE_AUTH_PASSWORD_RESET_CONFIRM", "10/hour"
+        ),
+        "ai_tutor_chat": os.environ.get("THROTTLE_AI_TUTOR_CHAT", "30/min"),
     },
-    'DEFAULT_PAGINATION_CLASS': 'core.pagination.StandardResultsSetPagination',
-    'PAGE_SIZE': 20,
-    'EXCEPTION_HANDLER': 'core.exceptions.api_exception_handler',
-    'DEFAULT_SCHEMA_CLASS': 'core.schema.UniqueOperationIdAutoSchema',
+    "DEFAULT_PAGINATION_CLASS": "core.pagination.StandardResultsSetPagination",
+    "PAGE_SIZE": 20,
+    "EXCEPTION_HANDLER": "core.exceptions.api_exception_handler",
+    "DEFAULT_SCHEMA_CLASS": "core.schema.UniqueOperationIdAutoSchema",
 }
 
 MAX_PAGE_SIZE = int(os.environ.get("MAX_PAGE_SIZE", "100"))
@@ -418,49 +431,69 @@ _jwt_default_access_minutes = int(os.environ.get("JWT_ACCESS_MINUTES_DEFAULT", "
 _jwt_default_refresh_days = int(os.environ.get("JWT_REFRESH_DAYS_DEFAULT", "7"))
 
 SIMPLE_JWT = {
-    'USER_ID_FIELD': 'user_id',
-    'USER_ID_CLAIM': 'user_id',
-    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=_jwt_default_access_minutes),
-    'REFRESH_TOKEN_LIFETIME': timedelta(days=_jwt_default_refresh_days),
-    'ROTATE_REFRESH_TOKENS': True,
-    'BLACKLIST_AFTER_ROTATION': True,
-    'AUTH_HEADER_TYPES': ('Bearer',),
+    "USER_ID_FIELD": "user_id",
+    "USER_ID_CLAIM": "user_id",
+    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=_jwt_default_access_minutes),
+    "REFRESH_TOKEN_LIFETIME": timedelta(days=_jwt_default_refresh_days),
+    "ROTATE_REFRESH_TOKENS": True,
+    "BLACKLIST_AFTER_ROTATION": True,
+    "AUTH_HEADER_TYPES": ("Bearer",),
 }
 
 JWT_ROLE_TOKEN_LIFETIMES = {
     # High-risk roles get shorter lifetimes.
     "saas_admin": {
-        "access": timedelta(minutes=int(os.environ.get("JWT_ACCESS_MINUTES_SAAS_ADMIN", "15"))),
+        "access": timedelta(
+            minutes=int(os.environ.get("JWT_ACCESS_MINUTES_SAAS_ADMIN", "15"))
+        ),
         # Session-scoped: 8-hour workday maximum; configure via JWT_REFRESH_HOURS_SAAS_ADMIN
-        "refresh": timedelta(hours=int(os.environ.get("JWT_REFRESH_HOURS_SAAS_ADMIN", "8"))),
+        "refresh": timedelta(
+            hours=int(os.environ.get("JWT_REFRESH_HOURS_SAAS_ADMIN", "8"))
+        ),
     },
     "saas_staff": {
-        "access": timedelta(minutes=int(os.environ.get("JWT_ACCESS_MINUTES_SAAS_STAFF", "30"))),
-        "refresh": timedelta(hours=int(os.environ.get("JWT_REFRESH_HOURS_SAAS_STAFF", "8"))),
+        "access": timedelta(
+            minutes=int(os.environ.get("JWT_ACCESS_MINUTES_SAAS_STAFF", "30"))
+        ),
+        "refresh": timedelta(
+            hours=int(os.environ.get("JWT_REFRESH_HOURS_SAAS_STAFF", "8"))
+        ),
     },
     "admin": {
-        "access": timedelta(minutes=int(os.environ.get("JWT_ACCESS_MINUTES_ADMIN", "20"))),
+        "access": timedelta(
+            minutes=int(os.environ.get("JWT_ACCESS_MINUTES_ADMIN", "20"))
+        ),
         "refresh": timedelta(days=int(os.environ.get("JWT_REFRESH_DAYS_ADMIN", "2"))),
     },
     "staff": {
-        "access": timedelta(minutes=int(os.environ.get("JWT_ACCESS_MINUTES_STAFF", "30"))),
+        "access": timedelta(
+            minutes=int(os.environ.get("JWT_ACCESS_MINUTES_STAFF", "30"))
+        ),
         "refresh": timedelta(days=int(os.environ.get("JWT_REFRESH_DAYS_STAFF", "3"))),
     },
     "teacher": {
-        "access": timedelta(minutes=int(os.environ.get("JWT_ACCESS_MINUTES_TEACHER", "45"))),
+        "access": timedelta(
+            minutes=int(os.environ.get("JWT_ACCESS_MINUTES_TEACHER", "45"))
+        ),
         "refresh": timedelta(days=int(os.environ.get("JWT_REFRESH_DAYS_TEACHER", "5"))),
     },
     "parent": {
-        "access": timedelta(minutes=int(os.environ.get("JWT_ACCESS_MINUTES_PARENT", "60"))),
+        "access": timedelta(
+            minutes=int(os.environ.get("JWT_ACCESS_MINUTES_PARENT", "60"))
+        ),
         "refresh": timedelta(days=int(os.environ.get("JWT_REFRESH_DAYS_PARENT", "7"))),
     },
     "student": {
-        "access": timedelta(minutes=int(os.environ.get("JWT_ACCESS_MINUTES_STUDENT", "60"))),
+        "access": timedelta(
+            minutes=int(os.environ.get("JWT_ACCESS_MINUTES_STUDENT", "60"))
+        ),
         "refresh": timedelta(days=int(os.environ.get("JWT_REFRESH_DAYS_STUDENT", "7"))),
     },
 }
 
-JWT_STRICT_REFRESH_ROTATION = os.environ.get("JWT_STRICT_REFRESH_ROTATION", "true").lower() == "true"
+JWT_STRICT_REFRESH_ROTATION = (
+    os.environ.get("JWT_STRICT_REFRESH_ROTATION", "true").lower() == "true"
+)
 
 # SaaS Admin IP Allowlist — comma-separated CIDRs/IPs.
 # Empty = allow all (dev default). Set in production to restrict SaaS admin login
@@ -478,7 +511,11 @@ TOTP_ISSUER_NAME = os.environ.get("TOTP_ISSUER_NAME", "E-Learning Platform")
 # Uses console backend in DEBUG by default, SMTP in production.
 EMAIL_BACKEND = os.environ.get(
     "EMAIL_BACKEND",
-    "django.core.mail.backends.console.EmailBackend" if DEBUG else "django.core.mail.backends.smtp.EmailBackend",
+    (
+        "django.core.mail.backends.console.EmailBackend"
+        if DEBUG
+        else "django.core.mail.backends.smtp.EmailBackend"
+    ),
 )
 EMAIL_HOST = os.environ.get("EMAIL_HOST", "localhost")
 EMAIL_PORT = int(os.environ.get("EMAIL_PORT", "25"))
@@ -490,15 +527,22 @@ EMAIL_TIMEOUT = int(os.environ.get("EMAIL_TIMEOUT", "10"))
 DEFAULT_FROM_EMAIL = os.environ.get("DEFAULT_FROM_EMAIL", "support@elearning.dev")
 SERVER_EMAIL = os.environ.get("SERVER_EMAIL", DEFAULT_FROM_EMAIL)
 RESEND_API_KEY = (os.environ.get("RESEND_API_KEY", "") or "").strip()
-RESEND_API_URL = (os.environ.get("RESEND_API_URL", "https://api.resend.com/emails") or "").strip()
+RESEND_API_URL = (
+    os.environ.get("RESEND_API_URL", "https://api.resend.com/emails") or ""
+).strip()
 RESEND_REQUEST_TIMEOUT = int(os.environ.get("RESEND_REQUEST_TIMEOUT", "10"))
 
 if EMAIL_USE_TLS and EMAIL_USE_SSL:
     raise ImproperlyConfigured("EMAIL_USE_TLS and EMAIL_USE_SSL cannot both be true.")
 
-if EMAIL_BACKEND == "core.email_backends.resend_backend.ResendAPIEmailBackend" and not RESEND_API_KEY:
+if (
+    EMAIL_BACKEND == "core.email_backends.resend_backend.ResendAPIEmailBackend"
+    and not RESEND_API_KEY
+):
     if DEBUG:
-        logger.warning("EMAIL_BACKEND is set to Resend API backend but RESEND_API_KEY is empty.")
+        logger.warning(
+            "EMAIL_BACKEND is set to Resend API backend but RESEND_API_KEY is empty."
+        )
     else:
         raise ImproperlyConfigured(
             "RESEND_API_KEY must be configured when using ResendAPIEmailBackend."
@@ -510,9 +554,13 @@ if EMAIL_BACKEND == "core.email_backends.resend_backend.ResendAPIEmailBackend" a
 #   python manage.py ai_index_content --tenant <schema>
 # Set AI_EMBEDDING_MODEL=text-embedding-3-small in .env to keep the old model temporarily.
 AI_EMBEDDING_DIMENSIONS = int(os.environ.get("AI_EMBEDDING_DIMENSIONS", "3072"))
-AI_EMBEDDING_MODEL = os.environ.get("AI_EMBEDDING_MODEL", "text-embedding-3-large").strip()
+AI_EMBEDDING_MODEL = os.environ.get(
+    "AI_EMBEDDING_MODEL", "text-embedding-3-large"
+).strip()
 AI_CONTENT_CHUNK_WORDS = int(os.environ.get("AI_CONTENT_CHUNK_WORDS", "180"))
-AI_CONTENT_CHUNK_OVERLAP_WORDS = int(os.environ.get("AI_CONTENT_CHUNK_OVERLAP_WORDS", "30"))
+AI_CONTENT_CHUNK_OVERLAP_WORDS = int(
+    os.environ.get("AI_CONTENT_CHUNK_OVERLAP_WORDS", "30")
+)
 AI_TUTOR_TOP_K = int(os.environ.get("AI_TUTOR_TOP_K", "5"))
 AI_TUTOR_MIN_SIMILARITY = float(os.environ.get("AI_TUTOR_MIN_SIMILARITY", "0.58"))
 AI_WHISPER_MODEL = os.environ.get("AI_WHISPER_MODEL", "whisper-1")
@@ -521,14 +569,24 @@ AI_FALLBACK_MODEL = os.environ.get("AI_FALLBACK_MODEL", "gpt-4o-mini")
 # AI Risk Analytics
 AI_RISK_LOOKBACK_DAYS = int(os.environ.get("AI_RISK_LOOKBACK_DAYS", "30"))
 AI_RISK_INACTIVITY_DAYS = int(os.environ.get("AI_RISK_INACTIVITY_DAYS", "14"))
-AI_AT_RISK_NOTIFICATION_THRESHOLD = int(os.environ.get("AI_AT_RISK_NOTIFICATION_THRESHOLD", "75"))
+AI_AT_RISK_NOTIFICATION_THRESHOLD = int(
+    os.environ.get("AI_AT_RISK_NOTIFICATION_THRESHOLD", "75")
+)
 AI_AT_RISK_MIN_SCORE = int(os.environ.get("AI_AT_RISK_MIN_SCORE", "40"))
-AI_RISK_USE_LLM_EXPLANATIONS = os.environ.get("AI_RISK_USE_LLM_EXPLANATIONS", "false").lower() == "true"
+AI_RISK_USE_LLM_EXPLANATIONS = (
+    os.environ.get("AI_RISK_USE_LLM_EXPLANATIONS", "false").lower() == "true"
+)
 
 # AI Admin Assistant
-AI_ADMIN_ASSISTANT_LOOKBACK_DAYS = int(os.environ.get("AI_ADMIN_ASSISTANT_LOOKBACK_DAYS", "30"))
-AI_ADMIN_ASSISTANT_USE_LLM_CLASSIFIER = os.environ.get("AI_ADMIN_ASSISTANT_USE_LLM_CLASSIFIER", "false").lower() == "true"
-AI_ADMIN_ASSISTANT_USE_LLM_RESPONSE = os.environ.get("AI_ADMIN_ASSISTANT_USE_LLM_RESPONSE", "false").lower() == "true"
+AI_ADMIN_ASSISTANT_LOOKBACK_DAYS = int(
+    os.environ.get("AI_ADMIN_ASSISTANT_LOOKBACK_DAYS", "30")
+)
+AI_ADMIN_ASSISTANT_USE_LLM_CLASSIFIER = (
+    os.environ.get("AI_ADMIN_ASSISTANT_USE_LLM_CLASSIFIER", "false").lower() == "true"
+)
+AI_ADMIN_ASSISTANT_USE_LLM_RESPONSE = (
+    os.environ.get("AI_ADMIN_ASSISTANT_USE_LLM_RESPONSE", "false").lower() == "true"
+)
 
 # SMS (Sparrow SMS - Nepal)
 SPARROW_SMS_TOKEN = os.environ.get("SPARROW_SMS_TOKEN", "").strip()
@@ -536,16 +594,26 @@ SPARROW_SMS_FROM = os.environ.get("SPARROW_SMS_FROM", "School").strip()
 
 # Payment Gateways (Nepal)
 ESEWA_MERCHANT_CODE = os.environ.get("ESEWA_MERCHANT_CODE", "EPAYTEST").strip()
-ESEWA_PAYMENT_URL = os.environ.get("ESEWA_PAYMENT_URL", "https://uat.esewa.com.np/epay/main").strip()
-ESEWA_VERIFY_URL = os.environ.get("ESEWA_VERIFY_URL", "https://uat.esewa.com.np/epay/transrec").strip()
+ESEWA_PAYMENT_URL = os.environ.get(
+    "ESEWA_PAYMENT_URL", "https://uat.esewa.com.np/epay/main"
+).strip()
+ESEWA_VERIFY_URL = os.environ.get(
+    "ESEWA_VERIFY_URL", "https://uat.esewa.com.np/epay/transrec"
+).strip()
 KHALTI_SECRET_KEY = os.environ.get("KHALTI_SECRET_KEY", "").strip()
-KHALTI_INITIATE_URL = os.environ.get("KHALTI_INITIATE_URL", "https://a.khalti.com/api/v2/epayment/initiate/").strip()
-KHALTI_LOOKUP_URL = os.environ.get("KHALTI_LOOKUP_URL", "https://a.khalti.com/api/v2/epayment/lookup/").strip()
+KHALTI_INITIATE_URL = os.environ.get(
+    "KHALTI_INITIATE_URL", "https://a.khalti.com/api/v2/epayment/initiate/"
+).strip()
+KHALTI_LOOKUP_URL = os.environ.get(
+    "KHALTI_LOOKUP_URL", "https://a.khalti.com/api/v2/epayment/lookup/"
+).strip()
 
 # Tenant trust policy:
 # - dev_only (default): allow x-tenant-id only in DEBUG + localhost/127.0.0.1/*.local hosts
 # - never: ignore x-tenant-id in all envs
-TENANT_HEADER_TRUST_MODE = os.environ.get("TENANT_HEADER_TRUST_MODE", "dev_only").lower()
+TENANT_HEADER_TRUST_MODE = os.environ.get(
+    "TENANT_HEADER_TRUST_MODE", "dev_only"
+).lower()
 # Legacy `/api/billing/*` sunset date (RFC-1123 header generated by billing.legacy mixin).
 BILLING_LEGACY_SUNSET = os.environ.get("BILLING_LEGACY_SUNSET", "2026-12-31")
 
@@ -590,10 +658,18 @@ if DEBUG:
 else:
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True
-    SECURE_SSL_REDIRECT = os.environ.get("SECURE_SSL_REDIRECT", "false").lower() == "true"
-    SECURE_HSTS_SECONDS = int(os.environ.get("SECURE_HSTS_SECONDS", str(60 * 60 * 24 * 30)))
-    SECURE_HSTS_INCLUDE_SUBDOMAINS = os.environ.get("SECURE_HSTS_INCLUDE_SUBDOMAINS", "true").lower() == "true"
-    SECURE_HSTS_PRELOAD = os.environ.get("SECURE_HSTS_PRELOAD", "false").lower() == "true"
+    SECURE_SSL_REDIRECT = (
+        os.environ.get("SECURE_SSL_REDIRECT", "false").lower() == "true"
+    )
+    SECURE_HSTS_SECONDS = int(
+        os.environ.get("SECURE_HSTS_SECONDS", str(60 * 60 * 24 * 30))
+    )
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = (
+        os.environ.get("SECURE_HSTS_INCLUDE_SUBDOMAINS", "true").lower() == "true"
+    )
+    SECURE_HSTS_PRELOAD = (
+        os.environ.get("SECURE_HSTS_PRELOAD", "false").lower() == "true"
+    )
 
 # Keep liveness/readiness endpoints reachable over HTTP for platform health probes
 # even when SECURE_SSL_REDIRECT is enabled.
@@ -606,14 +682,18 @@ _default_secure_redirect_exempt = [
     "api/core/metrics/?$",
 ]
 SECURE_REDIRECT_EXEMPT = []
-for _pattern in _csv_env_list("SECURE_REDIRECT_EXEMPT", _default_secure_redirect_exempt):
+for _pattern in _csv_env_list(
+    "SECURE_REDIRECT_EXEMPT", _default_secure_redirect_exempt
+):
     _normalized_pattern = _pattern.strip().lstrip("/")
     if _normalized_pattern and _normalized_pattern not in SECURE_REDIRECT_EXEMPT:
         SECURE_REDIRECT_EXEMPT.append(_normalized_pattern)
 
 if os.environ.get("SECURE_PROXY_SSL_HEADER"):
     # expected format: HTTP_X_FORWARDED_PROTO,https
-    _proxy_parts = [p.strip() for p in os.environ["SECURE_PROXY_SSL_HEADER"].split(",", 1)]
+    _proxy_parts = [
+        p.strip() for p in os.environ["SECURE_PROXY_SSL_HEADER"].split(",", 1)
+    ]
     if len(_proxy_parts) == 2 and _proxy_parts[0] and _proxy_parts[1]:
         SECURE_PROXY_SSL_HEADER = (_proxy_parts[0], _proxy_parts[1])
 
@@ -621,14 +701,14 @@ if os.environ.get("SECURE_PROXY_SSL_HEADER"):
 USE_X_FORWARDED_HOST = os.environ.get("USE_X_FORWARDED_HOST", "false").lower() == "true"
 
 # Caching Configuration
-if 'REDIS_URL' in os.environ:
+if "REDIS_URL" in os.environ:
     CACHES = {
         "default": {
             "BACKEND": "django_redis.cache.RedisCache",
             "LOCATION": os.environ["REDIS_URL"],
             "OPTIONS": {
                 "CLIENT_CLASS": "django_redis.client.DefaultClient",
-            }
+            },
         }
     }
 else:
@@ -659,17 +739,25 @@ ASGI_APPLICATION = "config.asgi.application"
 
 CELERY_BROKER_URL = os.environ.get("CELERY_BROKER_URL", REDIS_URL)
 CELERY_RESULT_BACKEND = os.environ.get("CELERY_RESULT_BACKEND", REDIS_URL)
-CELERY_TASK_ALWAYS_EAGER = os.environ.get("CELERY_TASK_ALWAYS_EAGER", "false").lower() == "true"
-CELERY_TASK_EAGER_PROPAGATES = os.environ.get("CELERY_TASK_EAGER_PROPAGATES", "true").lower() == "true"
-CELERY_TASK_STORE_EAGER_RESULT = os.environ.get("CELERY_TASK_STORE_EAGER_RESULT", "true").lower() == "true"
+CELERY_TASK_ALWAYS_EAGER = (
+    os.environ.get("CELERY_TASK_ALWAYS_EAGER", "false").lower() == "true"
+)
+CELERY_TASK_EAGER_PROPAGATES = (
+    os.environ.get("CELERY_TASK_EAGER_PROPAGATES", "true").lower() == "true"
+)
+CELERY_TASK_STORE_EAGER_RESULT = (
+    os.environ.get("CELERY_TASK_STORE_EAGER_RESULT", "true").lower() == "true"
+)
 CELERY_TASK_DEFAULT_QUEUE = os.environ.get("CELERY_TASK_DEFAULT_QUEUE", "default")
 CELERY_ACCEPT_CONTENT = ["json"]
 CELERY_TASK_SERIALIZER = "json"
 CELERY_RESULT_SERIALIZER = "json"
-ASYNC_JOB_STATUS_TTL_SECONDS = int(os.environ.get("ASYNC_JOB_STATUS_TTL_SECONDS", str(60 * 60 * 24)))
+ASYNC_JOB_STATUS_TTL_SECONDS = int(
+    os.environ.get("ASYNC_JOB_STATUS_TTL_SECONDS", str(60 * 60 * 24))
+)
 
 # Audit Log Configuration
-AUDITLOG_LOGENTRY_MODEL = 'auditlog.LogEntry'
+AUDITLOG_LOGENTRY_MODEL = "auditlog.LogEntry"
 AUDITLOG_DISABLE_REMOTE_ADDR = False
 AUDITLOG_CID_GETTER = None
 AUDITLOG_CID_HEADER = None
@@ -712,7 +800,9 @@ if SENTRY_DSN:
         sentry_sdk.init(
             dsn=SENTRY_DSN,
             environment=os.environ.get("SENTRY_ENVIRONMENT", "production"),
-            traces_sample_rate=float(os.environ.get("SENTRY_TRACES_SAMPLE_RATE", "0.05")),
+            traces_sample_rate=float(
+                os.environ.get("SENTRY_TRACES_SAMPLE_RATE", "0.05")
+            ),
             send_default_pii=False,
             integrations=[DjangoIntegration()],
         )

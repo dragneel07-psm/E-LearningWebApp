@@ -10,7 +10,7 @@ from decimal import Decimal
 from typing import Any, Callable
 
 from django.conf import settings
-from django.db.models import Avg, Count, Q, Sum, F, FloatField, ExpressionWrapper
+from django.db.models import Avg, Count, ExpressionWrapper, F, FloatField, Q, Sum
 from django.db.models.functions import Coalesce
 from django.utils import timezone
 
@@ -26,9 +26,15 @@ class AdminAssistantService:
     def __init__(self, *, tenant, user=None):
         self.tenant = tenant
         self.user = user
-        self.lookback_days = int(getattr(settings, "AI_ADMIN_ASSISTANT_LOOKBACK_DAYS", 30))
-        self.use_llm_classifier = self._as_bool(getattr(settings, "AI_ADMIN_ASSISTANT_USE_LLM_CLASSIFIER", False))
-        self.use_llm_response = self._as_bool(getattr(settings, "AI_ADMIN_ASSISTANT_USE_LLM_RESPONSE", False))
+        self.lookback_days = int(
+            getattr(settings, "AI_ADMIN_ASSISTANT_LOOKBACK_DAYS", 30)
+        )
+        self.use_llm_classifier = self._as_bool(
+            getattr(settings, "AI_ADMIN_ASSISTANT_USE_LLM_CLASSIFIER", False)
+        )
+        self.use_llm_response = self._as_bool(
+            getattr(settings, "AI_ADMIN_ASSISTANT_USE_LLM_RESPONSE", False)
+        )
         self.rag = RAGTutorService(tenant=tenant)
 
     @staticmethod
@@ -52,7 +58,11 @@ class AdminAssistantService:
         candidate = raw.strip()
         if not candidate:
             return None
-        fenced = re.search(r"```(?:json)?\s*(\{.*\}|\[.*\])\s*```", candidate, re.DOTALL | re.IGNORECASE)
+        fenced = re.search(
+            r"```(?:json)?\s*(\{.*\}|\[.*\])\s*```",
+            candidate,
+            re.DOTALL | re.IGNORECASE,
+        )
         if fenced:
             candidate = fenced.group(1).strip()
         try:
@@ -85,13 +95,57 @@ class AdminAssistantService:
         if not q:
             return "overview"
 
-        if any(token in q for token in ("fee", "fees", "payment", "collection", "invoice", "dues", "outstanding", "revenue", "expense")):
+        if any(
+            token in q
+            for token in (
+                "fee",
+                "fees",
+                "payment",
+                "collection",
+                "invoice",
+                "dues",
+                "outstanding",
+                "revenue",
+                "expense",
+            )
+        ):
             return "fees"
-        if any(token in q for token in ("attendance", "absent", "present", "late", "leave", "attendance rate")):
+        if any(
+            token in q
+            for token in (
+                "attendance",
+                "absent",
+                "present",
+                "late",
+                "leave",
+                "attendance rate",
+            )
+        ):
             return "attendance"
-        if any(token in q for token in ("student", "students", "enrollment", "enrolment", "admission", "class strength")):
+        if any(
+            token in q
+            for token in (
+                "student",
+                "students",
+                "enrollment",
+                "enrolment",
+                "admission",
+                "class strength",
+            )
+        ):
             return "students"
-        if any(token in q for token in ("grade", "grades", "result", "results", "performance", "pass rate", "fail")):
+        if any(
+            token in q
+            for token in (
+                "grade",
+                "grades",
+                "result",
+                "results",
+                "performance",
+                "pass rate",
+                "fail",
+            )
+        ):
             return "performance"
         return "overview"
 
@@ -122,10 +176,14 @@ class AdminAssistantService:
         return self._rule_classify(question)
 
     def _tool_students(self) -> dict[str, Any]:
-        base_qs = Student.objects.filter(user__tenant=self.tenant).select_related("academic_class")
+        base_qs = Student.objects.filter(user__tenant=self.tenant).select_related(
+            "academic_class"
+        )
         total_students = base_qs.count()
         students_without_class = base_qs.filter(academic_class__isnull=True).count()
-        new_students_last_30_days = base_qs.filter(user__date_joined__gte=timezone.now() - timedelta(days=30)).count()
+        new_students_last_30_days = base_qs.filter(
+            user__date_joined__gte=timezone.now() - timedelta(days=30)
+        ).count()
 
         class_rows = (
             base_qs.filter(academic_class__isnull=False)
@@ -163,7 +221,9 @@ class AdminAssistantService:
         present_like = attendance_qs.filter(status__in=present_like_statuses).count()
         absent_count = attendance_qs.filter(status="absent").count()
         late_count = attendance_qs.filter(status="late").count()
-        attendance_rate = round((present_like / total_records) * 100.0, 2) if total_records else 0.0
+        attendance_rate = (
+            round((present_like / total_records) * 100.0, 2) if total_records else 0.0
+        )
 
         low_rows = (
             attendance_qs.values(
@@ -173,7 +233,9 @@ class AdminAssistantService:
             )
             .annotate(
                 total=Count("attendance_id"),
-                present_like=Count("attendance_id", filter=Q(status__in=present_like_statuses)),
+                present_like=Count(
+                    "attendance_id", filter=Q(status__in=present_like_statuses)
+                ),
             )
             .annotate(
                 attendance_pct=ExpressionWrapper(
@@ -187,7 +249,8 @@ class AdminAssistantService:
         low_attendance_students = [
             {
                 "student_id": str(row["student_id"]),
-                "student_name": f"{row['student__user__first_name']} {row['student__user__last_name']}".strip() or str(row["student_id"]),
+                "student_name": f"{row['student__user__first_name']} {row['student__user__last_name']}".strip()
+                or str(row["student_id"]),
                 "attendance_pct": round(float(row["attendance_pct"] or 0.0), 2),
                 "records": int(row["total"]),
             }
@@ -217,22 +280,27 @@ class AdminAssistantService:
         outstanding_amount = max(Decimal("0.00"), total_due - total_paid)
 
         overdue_count = base_fees.filter(
-            Q(status="overdue") | (Q(due_date__lt=today) & ~Q(status__in=["paid", "waived"]))
+            Q(status="overdue")
+            | (Q(due_date__lt=today) & ~Q(status__in=["paid", "waived"]))
         ).count()
-        pending_count = base_fees.filter(status__in=["pending", "partial", "overdue"]).count()
+        pending_count = base_fees.filter(
+            status__in=["pending", "partial", "overdue"]
+        ).count()
         paid_count = base_fees.filter(status="paid").count()
 
-        payments_30d = (
-            Payment.objects.filter(tenant=self.tenant, payment_date__gte=now - timedelta(days=30))
-            .aggregate(total_collected=Coalesce(Sum("amount"), Decimal("0.00")))
-            .get("total_collected")
-            or Decimal("0.00")
+        payments_30d = Payment.objects.filter(
+            tenant=self.tenant, payment_date__gte=now - timedelta(days=30)
+        ).aggregate(total_collected=Coalesce(Sum("amount"), Decimal("0.00"))).get(
+            "total_collected"
+        ) or Decimal(
+            "0.00"
         )
-        expenses_30d = (
-            Expense.objects.filter(tenant=self.tenant, date__gte=today - timedelta(days=30))
-            .aggregate(total_expense=Coalesce(Sum("amount"), Decimal("0.00")))
-            .get("total_expense")
-            or Decimal("0.00")
+        expenses_30d = Expense.objects.filter(
+            tenant=self.tenant, date__gte=today - timedelta(days=30)
+        ).aggregate(total_expense=Coalesce(Sum("amount"), Decimal("0.00"))).get(
+            "total_expense"
+        ) or Decimal(
+            "0.00"
         )
 
         return {
@@ -256,16 +324,26 @@ class AdminAssistantService:
         ).select_related("assessment", "student__user")
 
         total_results = results_qs.count()
-        pass_count = results_qs.filter(score__gte=F("assessment__passing_marks")).count()
-        pass_rate = round((pass_count / total_results) * 100.0, 2) if total_results else 0.0
+        pass_count = results_qs.filter(
+            score__gte=F("assessment__passing_marks")
+        ).count()
+        pass_rate = (
+            round((pass_count / total_results) * 100.0, 2) if total_results else 0.0
+        )
 
         normalized_scores: list[float] = []
         for row in results_qs[:5000]:
             total_marks = float(getattr(row.assessment, "total_marks", 0) or 0)
             if total_marks <= 0:
                 continue
-            normalized_scores.append(max(0.0, min(100.0, (float(row.score or 0) / total_marks) * 100.0)))
-        average_score_pct = round(sum(normalized_scores) / len(normalized_scores), 2) if normalized_scores else 0.0
+            normalized_scores.append(
+                max(0.0, min(100.0, (float(row.score or 0) / total_marks) * 100.0))
+            )
+        average_score_pct = (
+            round(sum(normalized_scores) / len(normalized_scores), 2)
+            if normalized_scores
+            else 0.0
+        )
 
         low_rows = (
             results_qs.values(
@@ -280,7 +358,8 @@ class AdminAssistantService:
         low_performers = [
             {
                 "student_id": str(row["student_id"]),
-                "student_name": f"{row['student__user__first_name']} {row['student__user__last_name']}".strip() or str(row["student_id"]),
+                "student_name": f"{row['student__user__first_name']} {row['student__user__last_name']}".strip()
+                or str(row["student_id"]),
                 "avg_score": round(float(row["avg_score"] or 0.0), 2),
                 "assessments": int(row["assessments"]),
             }
@@ -347,7 +426,9 @@ class AdminAssistantService:
             f"pass rate {performance.get('pass_rate_pct', 0)}%."
         )
 
-    def _llm_answer(self, *, question: str, query_type: str, data: dict[str, Any]) -> str | None:
+    def _llm_answer(
+        self, *, question: str, query_type: str, data: dict[str, Any]
+    ) -> str | None:
         if not self.use_llm_response:
             return None
 
@@ -379,7 +460,9 @@ class AdminAssistantService:
         query_type = self._normalize_query_type(requested_query_type)
         tool = self._tool_map().get(query_type, self._tool_overview)
         data = tool()
-        answer = self._llm_answer(question=question, query_type=query_type, data=data) or self._deterministic_answer(
+        answer = self._llm_answer(
+            question=question, query_type=query_type, data=data
+        ) or self._deterministic_answer(
             query_type=query_type,
             data=data,
         )

@@ -23,21 +23,49 @@ class DepartmentAdmin(admin.ModelAdmin):
 
 @admin.register(Employee)
 class EmployeeAdmin(admin.ModelAdmin):
-    list_display = ("user", "designation", "department", "contract_type", "join_date", "is_active")
+    list_display = (
+        "user",
+        "designation",
+        "department",
+        "contract_type",
+        "join_date",
+        "is_active",
+    )
     list_filter = ("contract_type", "is_active", "department")
-    search_fields = ("user__first_name", "user__last_name", "user__email", "employee_code", "designation")
+    search_fields = (
+        "user__first_name",
+        "user__last_name",
+        "user__email",
+        "employee_code",
+        "designation",
+    )
     raw_id_fields = ("user", "department", "tenant")
 
 
 @admin.register(LeaveType)
 class LeaveTypeAdmin(admin.ModelAdmin):
-    list_display = ("name", "code", "max_days_per_year", "is_paid", "carry_forward", "tenant")
+    list_display = (
+        "name",
+        "code",
+        "max_days_per_year",
+        "is_paid",
+        "carry_forward",
+        "tenant",
+    )
     list_filter = ("is_paid", "carry_forward")
 
 
 @admin.register(LeaveApplication)
 class LeaveApplicationAdmin(admin.ModelAdmin):
-    list_display = ("employee", "leave_type", "start_date", "end_date", "total_days", "status", "applied_at")
+    list_display = (
+        "employee",
+        "leave_type",
+        "start_date",
+        "end_date",
+        "total_days",
+        "status",
+        "applied_at",
+    )
     list_filter = ("status", "leave_type")
     search_fields = ("employee__user__first_name", "employee__user__last_name")
     raw_id_fields = ("employee", "leave_type", "reviewed_by", "tenant")
@@ -61,10 +89,21 @@ class PayrollPeriodAdmin(admin.ModelAdmin):
 @admin.register(SalarySlip)
 class SalarySlipAdmin(admin.ModelAdmin):
     list_display = (
-        "employee", "payroll_period", "basic_salary", "gross_salary",
-        "total_deductions", "net_salary", "status",
+        "employee",
+        "payroll_period",
+        "basic_salary",
+        "gross_salary",
+        "total_deductions",
+        "net_salary",
+        "status",
     )
     list_filter = ("status", "payroll_period__year", "payment_method")
     search_fields = ("employee__user__first_name", "employee__user__last_name")
     raw_id_fields = ("employee", "payroll_period", "tenant")
-    readonly_fields = ("gross_salary", "total_deductions", "net_salary", "created_at", "updated_at")
+    readonly_fields = (
+        "gross_salary",
+        "total_deductions",
+        "net_salary",
+        "created_at",
+        "updated_at",
+    )

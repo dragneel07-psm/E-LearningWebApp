@@ -2,13 +2,13 @@
 # Unauthorized copying, modification, or distribution of this file,
 # via any medium, is strictly prohibited. Proprietary and confidential.
 """Shared RBAC + visibility helpers for the projects app."""
+
 from typing import Optional
 
 from django.db.models import Q
 
 from academic.models import Parent, Student
 from projects.models import Project
-
 
 ADMIN_ROLES = {"admin", "staff", "saas_admin"}
 

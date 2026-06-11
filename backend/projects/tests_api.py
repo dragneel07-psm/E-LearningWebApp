@@ -5,6 +5,7 @@
 API + RBAC tests for the projects app.
 Run with: python manage.py test projects.tests_api
 """
+
 from datetime import timedelta
 
 from django.utils import timezone
@@ -137,10 +138,16 @@ class ProjectsApiBaseTestCase(FastTenantTestCase):
         defaults.update(overrides)
         project = Project.objects.create(**defaults)
         ProjectMember.objects.create(
-            tenant=self.tenant, project=project, student=self.leader_student, role="leader"
+            tenant=self.tenant,
+            project=project,
+            student=self.leader_student,
+            role="leader",
         )
         ProjectMember.objects.create(
-            tenant=self.tenant, project=project, student=self.member_student, role="member"
+            tenant=self.tenant,
+            project=project,
+            student=self.member_student,
+            role="member",
         )
         return project
 

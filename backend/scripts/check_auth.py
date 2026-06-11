@@ -2,13 +2,15 @@
 # Unauthorized copying, modification, or distribution of this file,
 # via any medium, is strictly prohibited. Proprietary and confidential.
 import os
+
 import django
 from django.contrib.auth.hashers import check_password
 
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
 django.setup()
 
 from users.models import UserAccount
+
 
 def test_password(email, password, db):
     try:
@@ -18,6 +20,7 @@ def test_password(email, password, db):
     except UserAccount.DoesNotExist:
         print(f"DB: {db} | User: {email} NOT FOUND")
 
-if __name__ == '__main__':
-    test_password('saas@demo.com', 'admin123', 'default')
-    test_password('saas@demo.com', 'admin123', 'school_demo')
+
+if __name__ == "__main__":
+    test_password("saas@demo.com", "admin123", "default")
+    test_password("saas@demo.com", "admin123", "school_demo")

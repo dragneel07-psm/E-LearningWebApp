@@ -7,6 +7,7 @@ Bikram Sambat (BS) ↔ Gregorian (AD) calendar conversion utility.
 Reference point: BS 2000 Baisakh 1 = AD 1943 April 13.
 Lookup table covers BS 2060–2095 (AD 2003–2038).
 """
+
 from datetime import date, timedelta
 
 # -------------------------------------------------------------------
@@ -60,14 +61,34 @@ _EPOCH_AD = date(2003, 4, 14)
 
 # Nepali month names
 BS_MONTH_NAMES_EN = [
-    '', 'Baisakh', 'Jestha', 'Ashadh', 'Shrawan',
-    'Bhadra', 'Ashwin', 'Kartik', 'Mangsir',
-    'Poush', 'Magh', 'Falgun', 'Chaitra',
+    "",
+    "Baisakh",
+    "Jestha",
+    "Ashadh",
+    "Shrawan",
+    "Bhadra",
+    "Ashwin",
+    "Kartik",
+    "Mangsir",
+    "Poush",
+    "Magh",
+    "Falgun",
+    "Chaitra",
 ]
 BS_MONTH_NAMES_NP = [
-    '', 'बैशाख', 'जेठ', 'असार', 'साउन',
-    'भदौ', 'असोज', 'कार्तिक', 'मंसिर',
-    'पुस', 'माघ', 'फागुन', 'चैत',
+    "",
+    "बैशाख",
+    "जेठ",
+    "असार",
+    "साउन",
+    "भदौ",
+    "असोज",
+    "कार्तिक",
+    "मंसिर",
+    "पुस",
+    "माघ",
+    "फागुन",
+    "चैत",
 ]
 
 
@@ -88,12 +109,16 @@ def _days_from_epoch_bs(year_bs: int, month_bs: int, day_bs: int) -> int:
 def bs_to_ad(year_bs: int, month_bs: int, day_bs: int) -> date:
     """Convert a BS date to a Gregorian date."""
     if year_bs not in _BS_MONTH_DAYS:
-        raise ValueError(f"BS year {year_bs} not supported. Supported range: 2060–2095.")
+        raise ValueError(
+            f"BS year {year_bs} not supported. Supported range: 2060–2095."
+        )
     if not (1 <= month_bs <= 12):
         raise ValueError(f"Invalid BS month: {month_bs}")
     days_in_month = _BS_MONTH_DAYS[year_bs][month_bs - 1]
     if not (1 <= day_bs <= days_in_month):
-        raise ValueError(f"Invalid BS day {day_bs} for month {month_bs} of year {year_bs}.")
+        raise ValueError(
+            f"Invalid BS day {day_bs} for month {month_bs} of year {year_bs}."
+        )
     delta = _days_from_epoch_bs(year_bs, month_bs, day_bs)
     return _EPOCH_AD + timedelta(days=delta)
 
@@ -102,12 +127,16 @@ def ad_to_bs(ad_date: date) -> tuple[int, int, int]:
     """Convert a Gregorian date to (year_bs, month_bs, day_bs)."""
     delta = (ad_date - _EPOCH_AD).days
     if delta < 0:
-        raise ValueError(f"Date {ad_date} is before the supported BS epoch (2003-04-14).")
+        raise ValueError(
+            f"Date {ad_date} is before the supported BS epoch (2003-04-14)."
+        )
 
     year_bs = _EPOCH_BS_YEAR
     while True:
         if year_bs not in _BS_MONTH_DAYS:
-            raise ValueError(f"BS year {year_bs} not in lookup table. Date {ad_date} is out of range.")
+            raise ValueError(
+                f"BS year {year_bs} not in lookup table. Date {ad_date} is out of range."
+            )
         days_in_year = sum(_BS_MONTH_DAYS[year_bs])
         if delta < days_in_year:
             break
@@ -126,16 +155,16 @@ def ad_to_bs(ad_date: date) -> tuple[int, int, int]:
     return (year_bs, month_bs, day_bs)
 
 
-def bs_date_str(ad_date: date, sep: str = '-') -> str:
+def bs_date_str(ad_date: date, sep: str = "-") -> str:
     """Return BS date string e.g. '2081-04-15' from an AD date."""
     y, m, d = ad_to_bs(ad_date)
     return f"{y}{sep}{m:02d}{sep}{d:02d}"
 
 
-def bs_date_display(ad_date: date, lang: str = 'en') -> str:
+def bs_date_display(ad_date: date, lang: str = "en") -> str:
     """Return human-readable BS date e.g. 'Shrawan 15, 2081'."""
     y, m, d = ad_to_bs(ad_date)
-    names = BS_MONTH_NAMES_EN if lang == 'en' else BS_MONTH_NAMES_NP
+    names = BS_MONTH_NAMES_EN if lang == "en" else BS_MONTH_NAMES_NP
     return f"{names[m]} {d}, {y}"
 
 

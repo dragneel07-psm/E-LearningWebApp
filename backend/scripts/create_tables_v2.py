@@ -1,12 +1,13 @@
 # Copyright (c) 2024-2026 Pramod Singh Manyal. All rights reserved.
 # Unauthorized copying, modification, or distribution of this file,
 # via any medium, is strictly prohibited. Proprietary and confidential.
-import sqlite3
 import os
+import sqlite3
 import uuid
 from datetime import datetime
 
-DB_PATH = '/Users/pramodsinghmanyal/Desktop/E-LearningWebApp/backend/config/school_pramod.sqlite3'
+DB_PATH = "/Users/pramodsinghmanyal/Desktop/E-LearningWebApp/backend/config/school_pramod.sqlite3"
+
 
 def create_tables():
     print(f"Connecting to database: {DB_PATH}")
@@ -64,7 +65,7 @@ def create_tables():
     # BILLING / FINANCE TABLES
     # ==========================
     print("Creating Billing/Finance tables...")
-    
+
     # 1. FeeStructure
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS billing_feestructure (
@@ -137,16 +138,19 @@ def create_tables():
     """)
 
     conn.commit()
-    
+
     # Check tables
-    cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND (name LIKE 'library_%' OR name LIKE 'billing_%')")
+    cursor.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND (name LIKE 'library_%' OR name LIKE 'billing_%')"
+    )
     tables = cursor.fetchall()
     print("\nConfirmed Tables in Database:")
     for t in tables:
         print(f" - {t[0]}")
-        
+
     conn.close()
     print("\nDone.")
+
 
 if __name__ == "__main__":
     create_tables()

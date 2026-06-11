@@ -21,6 +21,7 @@ Usage:
   )
   answer = response.choices[0].message.content
 """
+
 from __future__ import annotations
 
 import json
@@ -95,7 +96,9 @@ def structured_chat(
         status_code = getattr(exc, "status_code", None)
         if status_code != 400:
             raise
-        logger.info("structured_chat: provider rejected json_schema, retrying with json_object")
+        logger.info(
+            "structured_chat: provider rejected json_schema, retrying with json_object"
+        )
         return chat_with_fallback(
             messages,
             temperature=temperature,
@@ -124,7 +127,7 @@ def chat_with_fallback(
     Returns an OpenAI ChatCompletion response object.
     Raises the last exception if all models fail.
     """
-    from openai import OpenAI, RateLimitError, APIStatusError
+    from openai import APIStatusError, OpenAI, RateLimitError
 
     from ai_engine.services.provider_config import get_ai_provider_config
 
@@ -157,13 +160,17 @@ def chat_with_fallback(
                 logger.info("ai_client: used fallback model '%s'", model)
             return response
         except RateLimitError as exc:
-            logger.warning("ai_client: rate-limit on '%s', trying next model: %s", model, exc)
+            logger.warning(
+                "ai_client: rate-limit on '%s', trying next model: %s", model, exc
+            )
             last_exc = exc
         except APIStatusError as exc:
             if exc.status_code in _RETRYABLE_STATUS_CODES:
                 logger.warning(
                     "ai_client: status %s on '%s', trying next model: %s",
-                    exc.status_code, model, exc,
+                    exc.status_code,
+                    model,
+                    exc,
                 )
                 last_exc = exc
             else:
@@ -190,7 +197,7 @@ def stream_with_fallback(
     (e.g. at connection/quota check time), which is the common case
     for rate-limit errors.
     """
-    from openai import OpenAI, RateLimitError, APIStatusError
+    from openai import APIStatusError, OpenAI, RateLimitError
 
     from ai_engine.services.provider_config import get_ai_provider_config
 
@@ -207,7 +214,11 @@ def stream_with_fallback(
         timeout=timeout or float(getattr(settings, "OPENAI_TIMEOUT_SECONDS", 30)),
     )
 
-    call_kwargs: dict[str, Any] = {"messages": messages, "temperature": temperature, "stream": True}
+    call_kwargs: dict[str, Any] = {
+        "messages": messages,
+        "temperature": temperature,
+        "stream": True,
+    }
     if max_tokens:
         call_kwargs["max_tokens"] = max_tokens
 
@@ -221,13 +232,19 @@ def stream_with_fallback(
                 logger.info("ai_client: used fallback model '%s' for streaming", model)
             return stream
         except RateLimitError as exc:
-            logger.warning("ai_client: rate-limit on '%s' (stream), trying next model: %s", model, exc)
+            logger.warning(
+                "ai_client: rate-limit on '%s' (stream), trying next model: %s",
+                model,
+                exc,
+            )
             last_exc = exc
         except APIStatusError as exc:
             if exc.status_code in _RETRYABLE_STATUS_CODES:
                 logger.warning(
                     "ai_client: status %s on '%s' (stream), trying next model: %s",
-                    exc.status_code, model, exc,
+                    exc.status_code,
+                    model,
+                    exc,
                 )
                 last_exc = exc
             else:

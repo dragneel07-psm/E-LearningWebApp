@@ -9,7 +9,7 @@ from decimal import Decimal
 from celery import shared_task
 from django.db import transaction
 from django.db.models import Max, Sum
-from django_tenants.utils import schema_context, get_tenant_model
+from django_tenants.utils import get_tenant_model, schema_context
 
 logger = logging.getLogger(__name__)
 
@@ -21,12 +21,14 @@ def send_fee_due_reminders(self):
     and notify parents via in-app + SMS.
     """
     TenantModel = get_tenant_model()
-    for tenant in TenantModel.objects.exclude(schema_name='public'):
+    for tenant in TenantModel.objects.exclude(schema_name="public"):
         try:
             with schema_context(tenant.schema_name):
                 _process_tenant_fee_reminders(tenant)
         except Exception as exc:
-            logger.error("Fee reminder failed for tenant %s: %s", tenant.schema_name, exc)
+            logger.error(
+                "Fee reminder failed for tenant %s: %s", tenant.schema_name, exc
+            )
 
 
 def _process_tenant_fee_reminders(tenant):
@@ -40,10 +42,10 @@ def _process_tenant_fee_reminders(tenant):
         StudentFee.objects.filter(
             tenant=tenant,
             due_date__in=target_dates,
-            status__in=['pending', 'partial', 'overdue'],
+            status__in=["pending", "partial", "overdue"],
         )
-        .select_related('student__user', 'fee_structure')
-        .prefetch_related('student__parents__user')
+        .select_related("student__user", "fee_structure")
+        .prefetch_related("student__parents__user")
     )
 
     sent = 0
@@ -59,7 +61,7 @@ def _process_tenant_fee_reminders(tenant):
         else:
             timing = f"in {days_left} day(s)"
 
-        fee_name = getattr(fee.fee_structure, 'name', 'School Fee')
+        fee_name = getattr(fee.fee_structure, "name", "School Fee")
         message = (
             f"Dear Parent, NPR {balance:,.0f} for {fee_name} is due {timing}. "
             f"Please pay at the school or use the online portal to avoid late fees."
@@ -74,18 +76,21 @@ def _process_tenant_fee_reminders(tenant):
                     message=message,
                     tenant=tenant,
                     link="/fees",
-                    channels=['in_app', 'sms'],
+                    channels=["in_app", "sms"],
                 )
                 sent += 1
             except Exception as exc:
                 logger.warning("Could not notify parent %s: %s", parent.user_id, exc)
 
-    logger.info("Fee reminders: sent %d notifications for tenant %s", sent, tenant.schema_name)
+    logger.info(
+        "Fee reminders: sent %d notifications for tenant %s", sent, tenant.schema_name
+    )
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # M5: Annual depreciation auto-posting
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 @shared_task(name="billing_school.post_annual_depreciation", bind=True, max_retries=3)
 def post_annual_depreciation(self, fiscal_year: str = None):
@@ -101,80 +106,93 @@ def post_annual_depreciation(self, fiscal_year: str = None):
         fiscal_year: Nepali fiscal year string e.g. '2081/2082'. Defaults to
                      the current fiscal year derived from today's date.
     """
-    from billing_school.utils_bs_calendar import fiscal_year_bs, bs_date_str
+    from billing_school.utils_bs_calendar import bs_date_str, fiscal_year_bs
 
     if not fiscal_year:
         fiscal_year = fiscal_year_bs()
 
     TenantModel = get_tenant_model()
-    for tenant in TenantModel.objects.exclude(schema_name='public'):
+    for tenant in TenantModel.objects.exclude(schema_name="public"):
         try:
             with schema_context(tenant.schema_name):
                 _post_tenant_depreciation(tenant, fiscal_year)
         except Exception as exc:
             logger.error(
                 "Depreciation posting failed for tenant %s FY %s: %s",
-                tenant.schema_name, fiscal_year, exc,
+                tenant.schema_name,
+                fiscal_year,
+                exc,
             )
 
 
 def _post_tenant_depreciation(tenant, fiscal_year: str):
     """Create and post a single depreciation journal entry for all assets of a tenant."""
     from billing_school.models_nas import (
-        ChartOfAccount, InventoryItem, JournalEntry, JournalLine,
+        ChartOfAccount,
+        InventoryItem,
+        JournalEntry,
+        JournalLine,
     )
     from billing_school.utils_bs_calendar import bs_date_str, fiscal_year_bs
 
     # Idempotency: skip if a depreciation entry already exists for this FY
     already_posted = JournalEntry.objects.filter(
         tenant=tenant,
-        entry_type='depreciation',
+        entry_type="depreciation",
         fiscal_year=fiscal_year,
         is_posted=True,
     ).exists()
     if already_posted:
-        logger.info("Depreciation already posted for tenant %s FY %s — skipping", tenant, fiscal_year)
+        logger.info(
+            "Depreciation already posted for tenant %s FY %s — skipping",
+            tenant,
+            fiscal_year,
+        )
         return
 
     # Active capital assets with depreciable methods
     assets = InventoryItem.objects.filter(
         tenant=tenant,
-        form_type='401',
-        condition__in=['good', 'fair', 'poor'],
-        depreciation_method__in=['straight_line', 'diminishing'],
+        form_type="401",
+        condition__in=["good", "fair", "poor"],
+        depreciation_method__in=["straight_line", "diminishing"],
     )
     if not assets.exists():
         return
 
     total_dep = sum(item.annual_depreciation() for item in assets)
-    if total_dep <= Decimal('0'):
+    if total_dep <= Decimal("0"):
         return
 
     # Locate required accounts (must exist — created by seed_defaults)
     try:
-        dep_expense_acct = ChartOfAccount.objects.get(tenant=tenant, account_code='5500')
-        accum_dep_acct   = ChartOfAccount.objects.get(tenant=tenant, account_code='1590')
+        dep_expense_acct = ChartOfAccount.objects.get(
+            tenant=tenant, account_code="5500"
+        )
+        accum_dep_acct = ChartOfAccount.objects.get(tenant=tenant, account_code="1590")
     except ChartOfAccount.DoesNotExist as exc:
         logger.warning(
-            "Cannot post depreciation for tenant %s: required account missing (%s)", tenant, exc
+            "Cannot post depreciation for tenant %s: required account missing (%s)",
+            tenant,
+            exc,
         )
         return
 
     today = date.today()
     with transaction.atomic():
         max_num = (
-            JournalEntry.objects
-            .select_for_update()
+            JournalEntry.objects.select_for_update()
             .filter(tenant=tenant)
-            .aggregate(m=Max('entry_number'))['m']
+            .aggregate(m=Max("entry_number"))["m"]
         )
         seq = 1
         if max_num:
-            m_obj = _re.search(r'-(\d+)$', max_num)
+            m_obj = _re.search(r"-(\d+)$", max_num)
             if m_obj:
                 seq = int(m_obj.group(1)) + 1
 
         from billing_school.utils_bs_calendar import ad_to_bs
+
         y, _, _ = ad_to_bs(today)
         entry_number = f"JV-{y}-{seq:05d}"
 
@@ -183,19 +201,23 @@ def _post_tenant_depreciation(tenant, fiscal_year: str):
             entry_number=entry_number,
             date_ad=today,
             description=f"Annual Depreciation — FY {fiscal_year}",
-            entry_type='depreciation',
+            entry_type="depreciation",
             narration=f"Auto-posted by post_annual_depreciation task. {assets.count()} asset(s).",
         )
         # Dr Depreciation Expense  5500
         # Cr Accumulated Depreciation  1590
         JournalLine.objects.create(
-            entry=je, account=dep_expense_acct,
-            debit=total_dep, credit=Decimal('0'),
+            entry=je,
+            account=dep_expense_acct,
+            debit=total_dep,
+            credit=Decimal("0"),
             narration=f"Depreciation expense FY {fiscal_year}",
         )
         JournalLine.objects.create(
-            entry=je, account=accum_dep_acct,
-            debit=Decimal('0'), credit=total_dep,
+            entry=je,
+            account=accum_dep_acct,
+            debit=Decimal("0"),
+            credit=total_dep,
             narration=f"Accumulated depreciation FY {fiscal_year}",
         )
         je.post()
@@ -203,9 +225,12 @@ def _post_tenant_depreciation(tenant, fiscal_year: str):
         # Update accumulated_depreciation on each asset
         for item in assets:
             item.accumulated_depreciation += item.annual_depreciation()
-            item.save(update_fields=['accumulated_depreciation'])
+            item.save(update_fields=["accumulated_depreciation"])
 
     logger.info(
         "Depreciation posted for tenant %s FY %s: NPR %s (%d assets)",
-        tenant, fiscal_year, total_dep, assets.count(),
+        tenant,
+        fiscal_year,
+        total_dep,
+        assets.count(),
     )

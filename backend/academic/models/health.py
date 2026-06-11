@@ -7,35 +7,54 @@ import uuid as uuid_lib
 
 from django.db import models
 
-
 BLOOD_GROUP_CHOICES = (
-    ("A+", "A+"), ("A-", "A-"),
-    ("B+", "B+"), ("B-", "B-"),
-    ("AB+", "AB+"), ("AB-", "AB-"),
-    ("O+", "O+"), ("O-", "O-"),
+    ("A+", "A+"),
+    ("A-", "A-"),
+    ("B+", "B+"),
+    ("B-", "B-"),
+    ("AB+", "AB+"),
+    ("AB-", "AB-"),
+    ("O+", "O+"),
+    ("O-", "O-"),
     ("unknown", "Unknown"),
 )
 
 
 class StudentHealthRecord(models.Model):
-    health_id = models.UUIDField(primary_key=True, default=uuid_lib.uuid4, editable=False)
+    health_id = models.UUIDField(
+        primary_key=True, default=uuid_lib.uuid4, editable=False
+    )
     tenant = models.ForeignKey(
-        "core.Tenant", on_delete=models.CASCADE,
-        related_name="student_health_records", db_constraint=False
+        "core.Tenant",
+        on_delete=models.CASCADE,
+        related_name="student_health_records",
+        db_constraint=False,
     )
     student = models.OneToOneField(
-        "academic.Student", on_delete=models.CASCADE,
-        related_name="health_record", db_constraint=False
+        "academic.Student",
+        on_delete=models.CASCADE,
+        related_name="health_record",
+        db_constraint=False,
     )
 
     # Physical
-    blood_group = models.CharField(max_length=10, choices=BLOOD_GROUP_CHOICES, default="unknown")
-    height_cm = models.DecimalField(max_digits=5, decimal_places=1, null=True, blank=True)
-    weight_kg = models.DecimalField(max_digits=5, decimal_places=1, null=True, blank=True)
+    blood_group = models.CharField(
+        max_length=10, choices=BLOOD_GROUP_CHOICES, default="unknown"
+    )
+    height_cm = models.DecimalField(
+        max_digits=5, decimal_places=1, null=True, blank=True
+    )
+    weight_kg = models.DecimalField(
+        max_digits=5, decimal_places=1, null=True, blank=True
+    )
 
     # Medical
-    allergies = models.TextField(blank=True, help_text="Comma-separated list of known allergies")
-    chronic_conditions = models.TextField(blank=True, help_text="Asthma, diabetes, etc.")
+    allergies = models.TextField(
+        blank=True, help_text="Comma-separated list of known allergies"
+    )
+    chronic_conditions = models.TextField(
+        blank=True, help_text="Asthma, diabetes, etc."
+    )
     current_medications = models.TextField(blank=True)
     immunization_notes = models.TextField(blank=True)
 
@@ -68,10 +87,14 @@ class StudentHealthRecord(models.Model):
 class ImmunizationRecord(models.Model):
     """Individual vaccination entries linked to a health record."""
 
-    immunization_id = models.UUIDField(primary_key=True, default=uuid_lib.uuid4, editable=False)
+    immunization_id = models.UUIDField(
+        primary_key=True, default=uuid_lib.uuid4, editable=False
+    )
     health_record = models.ForeignKey(
-        StudentHealthRecord, on_delete=models.CASCADE,
-        related_name="immunizations", db_constraint=False
+        StudentHealthRecord,
+        on_delete=models.CASCADE,
+        related_name="immunizations",
+        db_constraint=False,
     )
     vaccine_name = models.CharField(max_length=120)
     date_administered = models.DateField(null=True, blank=True)

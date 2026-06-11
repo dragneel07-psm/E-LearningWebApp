@@ -10,8 +10,19 @@ New code should import directly from:
 """
 
 from billing.shared_views import BillingIdempotencyMixin, BillingSchemaGuardMixin
-from billing_saas.views import InvoiceViewSet, SubscriptionPlanHistoryViewSet, SubscriptionPlanViewSet, SubscriptionViewSet
-from billing_school.views import ExpenseViewSet, FeeStructureViewSet, FinanceDashboardViewSet, PaymentViewSet, StudentFeeViewSet
+from billing_saas.views import (
+    InvoiceViewSet,
+    SubscriptionPlanHistoryViewSet,
+    SubscriptionPlanViewSet,
+    SubscriptionViewSet,
+)
+from billing_school.views import (
+    ExpenseViewSet,
+    FeeStructureViewSet,
+    FinanceDashboardViewSet,
+    PaymentViewSet,
+    StudentFeeViewSet,
+)
 
 __all__ = [
     "BillingSchemaGuardMixin",

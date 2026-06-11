@@ -19,6 +19,7 @@ use :func:`error_response` so the wire format stays identical to the handler's
 output. This avoids the historical drift between ``{"error": ...}``,
 ``{"detail": ...}`` and ``{"message": ...}`` shapes.
 """
+
 from __future__ import annotations
 
 from typing import Any, Mapping

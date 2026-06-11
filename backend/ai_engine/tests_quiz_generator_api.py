@@ -43,8 +43,16 @@ class QuizGeneratorApiTests(FastTenantTestCase):
                 tenant=self.tenant,
             )
             academic_class = AcademicClass.objects.create(name="Grade 10")
-            subject = Subject.objects.create(name="Science", academic_class=academic_class, is_active=True)
-            chapter = Chapter.objects.create(subject=subject, title="Motion", description="Basics of motion", order=1, is_published=True)
+            subject = Subject.objects.create(
+                name="Science", academic_class=academic_class, is_active=True
+            )
+            chapter = Chapter.objects.create(
+                subject=subject,
+                title="Motion",
+                description="Basics of motion",
+                order=1,
+                is_published=True,
+            )
             self.lesson = Lesson.objects.create(
                 chapter=chapter,
                 title="Newton Laws",
@@ -60,7 +68,8 @@ class QuizGeneratorApiTests(FastTenantTestCase):
                 source_id=str(self.lesson.id),
                 text="Newton's first law describes inertia. Newton's second law links force, mass and acceleration.",
                 metadata={"lesson_id": self.lesson.id},
-                embedding=[0.01] * max(1, int(getattr(settings, "AI_EMBEDDING_DIMENSIONS", 1536))),
+                embedding=[0.01]
+                * max(1, int(getattr(settings, "AI_EMBEDDING_DIMENSIONS", 1536))),
             )
 
     def _client_for(self, user):
@@ -82,9 +91,13 @@ class QuizGeneratorApiTests(FastTenantTestCase):
         )
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
-    @patch("ai_engine.services.quiz_generator_service.QuizGeneratorService._retrieved_snippets")
+    @patch(
+        "ai_engine.services.quiz_generator_service.QuizGeneratorService._retrieved_snippets"
+    )
     @patch("ai_engine.services.quiz_generator_service.QuizGeneratorService._call_model")
-    def test_teacher_can_generate_quiz_and_records_are_created(self, mock_call_model, mock_retrieved_snippets):
+    def test_teacher_can_generate_quiz_and_records_are_created(
+        self, mock_call_model, mock_retrieved_snippets
+    ):
         mock_retrieved_snippets.return_value = ["Newton law context chunk"]
         mock_call_model.return_value = (
             (

@@ -16,6 +16,7 @@ it via self.scope["user"].
 If the token is missing or invalid, scope["user"] is set to AnonymousUser.
 Consumers should close the connection if scope["user"].is_anonymous is True.
 """
+
 from __future__ import annotations
 
 import logging
@@ -34,14 +35,16 @@ logger = logging.getLogger(__name__)
 def _get_user_from_token(token_str: str):
     from django.contrib.auth import get_user_model
     from django.db import connection
+
     from core.models.tenant import Tenant
+
     User = get_user_model()
     try:
         connection.set_schema_to_public()
         token = AccessToken(token_str)
         user_id = token["user_id"]
         tenant_schema = token.get("tenant_schema", "public")
-        
+
         tenant = None
         if tenant_schema != "public":
             try:
@@ -63,6 +66,7 @@ class JWTAuthMiddleware(BaseMiddleware):
     Reads ?token=<jwt> from the WebSocket URL query string and resolves
     the user and tenant, injecting them into scope["user"] and scope["tenant"].
     """
+
     async def __call__(self, scope, receive, send):
         query_string = scope.get("query_string", b"").decode("utf-8")
         params = parse_qs(query_string)

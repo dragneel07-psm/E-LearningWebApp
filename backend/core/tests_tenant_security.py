@@ -101,7 +101,14 @@ class TenantResolutionSecurityTests(FastTenantTestCase):
         DEBUG=False,
         TENANT_HEADER_TRUST_MODE="never",
         BASE_DOMAIN="manyaltech.com",
-        ALLOWED_HOSTS=["localhost", "127.0.0.1", ".localhost", ".local", "manyaltech.com", ".manyaltech.com"],
+        ALLOWED_HOSTS=[
+            "localhost",
+            "127.0.0.1",
+            ".localhost",
+            ".local",
+            "manyaltech.com",
+            ".manyaltech.com",
+        ],
     )
     def test_base_domain_subdomain_fallback_resolves_tenant_without_domain_row(self):
         response = self.client.get(
@@ -116,7 +123,14 @@ class TenantResolutionSecurityTests(FastTenantTestCase):
         DEBUG=False,
         TENANT_HEADER_TRUST_MODE="never",
         BASE_DOMAIN="manyaltech.com",
-        ALLOWED_HOSTS=["localhost", "127.0.0.1", ".localhost", ".local", "manyaltech.com", ".manyaltech.com"],
+        ALLOWED_HOSTS=[
+            "localhost",
+            "127.0.0.1",
+            ".localhost",
+            ".local",
+            "manyaltech.com",
+            ".manyaltech.com",
+        ],
     )
     def test_base_domain_fallback_keeps_unknown_subdomain_blocked(self):
         response = self.client.get(
@@ -130,7 +144,15 @@ class TenantResolutionSecurityTests(FastTenantTestCase):
         DEBUG=False,
         TENANT_HEADER_TRUST_MODE="never",
         BASE_DOMAIN="manyaltech.com",
-        ALLOWED_HOSTS=["localhost", "127.0.0.1", ".localhost", ".local", "manyaltech.com", ".manyaltech.com", ".railway.app"],
+        ALLOWED_HOSTS=[
+            "localhost",
+            "127.0.0.1",
+            ".localhost",
+            ".local",
+            "manyaltech.com",
+            ".manyaltech.com",
+            ".railway.app",
+        ],
     )
     def test_x_tenant_host_header_resolves_tenant(self):
         response = self.client.get(

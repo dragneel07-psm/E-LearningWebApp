@@ -41,4 +41,3 @@ def role_token_lifetimes(role: str | None) -> TokenLifetimes:
         access=_as_timedelta(policy.get("access"), default_access),
         refresh=_as_timedelta(policy.get("refresh"), default_refresh),
     )
-

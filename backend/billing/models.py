@@ -13,8 +13,19 @@ continue to work during phased app split.
 """
 
 from .models_base import SchemaScopedBillingModel
-from .models_saas import Invoice, Subscription, SubscriptionPlan, SubscriptionPlanHistory
-from .models_school import BillingIdempotencyKey, Expense, FeeStructure, Payment, StudentFee
+from .models_saas import (
+    Invoice,
+    Subscription,
+    SubscriptionPlan,
+    SubscriptionPlanHistory,
+)
+from .models_school import (
+    BillingIdempotencyKey,
+    Expense,
+    FeeStructure,
+    Payment,
+    StudentFee,
+)
 
 __all__ = [
     "SchemaScopedBillingModel",

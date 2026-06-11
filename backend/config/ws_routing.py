@@ -2,7 +2,8 @@
 # Unauthorized copying, modification, or distribution of this file,
 # via any medium, is strictly prohibited. Proprietary and confidential.
 from django.urls import re_path
-from ai_engine.consumers import TutorStreamConsumer, ProgressReportStreamConsumer
+
+from ai_engine.consumers import ProgressReportStreamConsumer, TutorStreamConsumer
 from notifications.consumers import NotificationConsumer
 from projects.consumers import MentorDigestStreamConsumer, ProjectStreamConsumer
 

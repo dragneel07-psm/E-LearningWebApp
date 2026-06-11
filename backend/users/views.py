@@ -1,18 +1,34 @@
 # Copyright (c) 2024-2026 Pramod Singh Manyal. All rights reserved.
 # Unauthorized copying, modification, or distribution of this file,
 # via any medium, is strictly prohibited. Proprietary and confidential.
-from rest_framework import viewsets, permissions, status, views
+import logging
+
+from django.conf import settings
+from django.contrib.auth.models import Group, Permission
+from django.db import connection, transaction
+from django.shortcuts import get_object_or_404
+from django_tenants.utils import schema_context
+from rest_framework import permissions, status, views, viewsets
 from rest_framework.decorators import action, throttle_classes
 from rest_framework.response import Response
-from django.contrib.auth.models import Group, Permission
-from .models import UserAccount
-from .serializers import (
-    UserAccountSerializer, UserManagementSerializer, GroupSerializer, PermissionSerializer,
-    PasswordResetSerializer, PasswordResetConfirmSerializer, RoleAwareTokenRefreshSerializer,
-    EmailVerificationSerializer,
-)
-from .permissions import IsAdminOrSaaSAdmin
+
 from core.mixins import TenantScopedQuerysetMixin
+from core.models import Tenant
+from core.utils.audit import record_audit_event
+
+from .emailing import send_password_reset_email, send_saas_admin_registration_email
+from .models import UserAccount
+from .permissions import IsAdminOrSaaSAdmin
+from .serializers import (
+    EmailVerificationSerializer,
+    GroupSerializer,
+    PasswordResetConfirmSerializer,
+    PasswordResetSerializer,
+    PermissionSerializer,
+    RoleAwareTokenRefreshSerializer,
+    UserAccountSerializer,
+    UserManagementSerializer,
+)
 from .throttling import (
     LoginRateThrottle,
     PasswordResetConfirmRateThrottle,
@@ -20,88 +36,92 @@ from .throttling import (
     RefreshRateThrottle,
     RegisterRateThrottle,
 )
-import logging
-from django.shortcuts import get_object_or_404
-from django.db import connection, transaction
-from django_tenants.utils import schema_context
-from core.utils.audit import record_audit_event
-from core.models import Tenant
-from .emailing import (
-    send_password_reset_email,
-    send_saas_admin_registration_email,
-)
 
 logger = logging.getLogger(__name__)
+
 
 class UserAccountViewSet(TenantScopedQuerysetMixin, viewsets.ModelViewSet):
     queryset = UserAccount.objects.all()
     serializer_class = UserAccountSerializer
 
     def get_permissions(self):
-        if self.action in ['me', 'change_password']:
+        if self.action in ["me", "change_password"]:
             return [permissions.IsAuthenticated()]
         return [IsAdminOrSaaSAdmin()]
 
     def get_serializer_class(self):
-        if self.action in ['create', 'update', 'partial_update']:
+        if self.action in ["create", "update", "partial_update"]:
             return UserManagementSerializer
         return UserAccountSerializer
-    
+
     @action(
         detail=False,
-        methods=['get', 'patch'],
+        methods=["get", "patch"],
         permission_classes=[permissions.IsAuthenticated],
         throttle_classes=[],
     )
     def me(self, request):
-        if request.method == 'GET':
+        if request.method == "GET":
             serializer = self.get_serializer(request.user)
             return Response(serializer.data)
-        elif request.method == 'PATCH':
-            serializer = self.get_serializer(request.user, data=request.data, partial=True)
+        elif request.method == "PATCH":
+            serializer = self.get_serializer(
+                request.user, data=request.data, partial=True
+            )
             if serializer.is_valid():
                 serializer.save()
                 return Response(serializer.data)
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-    @action(detail=False, methods=['post'], permission_classes=[permissions.IsAuthenticated], url_path='change-password')
+    @action(
+        detail=False,
+        methods=["post"],
+        permission_classes=[permissions.IsAuthenticated],
+        url_path="change-password",
+    )
     def change_password(self, request):
         user = request.user
-        old_password = request.data.get('old_password')
-        new_password = request.data.get('new_password')
+        old_password = request.data.get("old_password")
+        new_password = request.data.get("new_password")
 
         if not old_password or not new_password:
             return Response(
-                {'error': 'old_password and new_password are required.'}, 
-                status=status.HTTP_400_BAD_REQUEST
+                {"error": "old_password and new_password are required."},
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
         if not user.check_password(old_password):
             return Response(
-                {'error': 'Invalid current password.'}, 
-                status=status.HTTP_400_BAD_REQUEST
+                {"error": "Invalid current password."},
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
         try:
             user.set_password(new_password)
             user.save()
-            return Response({'message': 'Password updated successfully.'})
+            return Response({"message": "Password updated successfully."})
         except Exception as e:
-            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response(
+                {"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
-    @action(detail=False, methods=['post'], permission_classes=[permissions.IsAuthenticated])
+    @action(
+        detail=False, methods=["post"], permission_classes=[permissions.IsAuthenticated]
+    )
     def push_token(self, request):
         """
         POST /api/users/users/push-token/
         Body: { "token": "ExponentPushToken[...]" }
         Registers or updates the Expo push token for the authenticated user.
         """
-        token = (request.data.get('token') or '').strip()
+        token = (request.data.get("token") or "").strip()
         if not token:
-            return Response({'detail': 'token is required.'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"detail": "token is required."}, status=status.HTTP_400_BAD_REQUEST
+            )
         request.user.expo_push_token = token
-        request.user.save(update_fields=['expo_push_token'])
-        return Response({'status': 'registered'})
+        request.user.save(update_fields=["expo_push_token"])
+        return Response({"status": "registered"})
 
 
 class GroupViewSet(viewsets.ModelViewSet):
@@ -109,52 +129,57 @@ class GroupViewSet(viewsets.ModelViewSet):
     serializer_class = GroupSerializer
     permission_classes = [permissions.IsAdminUser]
 
+
 class PermissionViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = Permission.objects.all()
     serializer_class = PermissionSerializer
     permission_classes = [permissions.IsAdminUser]
 
-from rest_framework.views import APIView
-from rest_framework import status
+
 from django.shortcuts import get_object_or_404
+from rest_framework import status
+from rest_framework.views import APIView
+
 
 class AdminPasswordResetView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request):
         # 1. Check if requester is Admin/Staff
-        if not (request.user.role in ['admin', 'saas_admin']):
+        if not (request.user.role in ["admin", "saas_admin"]):
             return Response(
-                {'error': 'You do not have permission to reset passwords.'}, 
-                status=status.HTTP_403_FORBIDDEN
+                {"error": "You do not have permission to reset passwords."},
+                status=status.HTTP_403_FORBIDDEN,
             )
 
-        user_id = request.data.get('user_id')
-        new_password = request.data.get('new_password')
+        user_id = request.data.get("user_id")
+        new_password = request.data.get("new_password")
 
         if not user_id or not new_password:
             return Response(
-                {'error': 'user_id and new_password are required.'}, 
-                status=status.HTTP_400_BAD_REQUEST
+                {"error": "user_id and new_password are required."},
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
         try:
             target_user = get_object_or_404(UserAccount, pk=user_id)
-            
+
             # Tenant Isolation Check
             # 1. SaaS Admin can reset anyone's password
             # 2. Tenant Admin can only reset users in their own tenant
-            if request.user.role == 'admin':
+            if request.user.role == "admin":
                 if target_user.tenant != request.user.tenant:
                     return Response(
-                        {'error': 'User not found in your organization.'}, 
-                        status=status.HTTP_404_NOT_FOUND
+                        {"error": "User not found in your organization."},
+                        status=status.HTTP_404_NOT_FOUND,
                     )
-            elif request.user.role == 'saas_admin':
-                 # SaaS Admin is global
-                 pass
+            elif request.user.role == "saas_admin":
+                # SaaS Admin is global
+                pass
             else:
-                return Response({'error': 'Unauthorized role'}, status=status.HTTP_403_FORBIDDEN)
+                return Response(
+                    {"error": "Unauthorized role"}, status=status.HTTP_403_FORBIDDEN
+                )
 
             # Set password, activate, and audit atomically so a failure anywhere
             # rolls the whole change back — we never leave a new password in
@@ -165,9 +190,14 @@ class AdminPasswordResetView(APIView):
                 target_user.is_active = True
                 target_user.failed_login_attempts = 0
                 target_user.locked_until = None
-                target_user.save(update_fields=[
-                    "password", "is_active", "failed_login_attempts", "locked_until",
-                ])
+                target_user.save(
+                    update_fields=[
+                        "password",
+                        "is_active",
+                        "failed_login_attempts",
+                        "locked_until",
+                    ]
+                )
                 record_audit_event(
                     action="users.admin_password_reset",
                     user=request.user,
@@ -175,7 +205,9 @@ class AdminPasswordResetView(APIView):
                     details={
                         "target_user_id": str(target_user.user_id),
                         "target_email": target_user.email,
-                        "target_tenant_id": str(getattr(target_user, "tenant_id", "") or ""),
+                        "target_tenant_id": str(
+                            getattr(target_user, "tenant_id", "") or ""
+                        ),
                         "initiator_role": getattr(request.user, "role", None),
                     },
                 )
@@ -183,33 +215,39 @@ class AdminPasswordResetView(APIView):
                 "Admin password reset succeeded",
                 extra={
                     "target_user_id": str(target_user.user_id),
-                    "initiator_user_id": str(getattr(request.user, "user_id", "") or ""),
+                    "initiator_user_id": str(
+                        getattr(request.user, "user_id", "") or ""
+                    ),
                 },
             )
-            return Response({'message': 'Password reset successfully.'})
+            return Response({"message": "Password reset successfully."})
         except Exception:
             logger.exception("Admin password reset failed")
             return Response(
-                {'error': 'Password reset failed.'},
+                {"error": "Password reset failed."},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
 
 # User Registration View
 from rest_framework.decorators import api_view, permission_classes
+
 from .serializers import UserRegistrationSerializer
 
-@api_view(['POST'])
+
+@api_view(["POST"])
 @permission_classes([permissions.AllowAny])
 @throttle_classes([RegisterRateThrottle])
 def register_user(request):
     """
     Register a new user
-    
+
     POST /api/auth/register/
     """
-    serializer = UserRegistrationSerializer(data=request.data, context={'request': request})
-    
+    serializer = UserRegistrationSerializer(
+        data=request.data, context={"request": request}
+    )
+
     if serializer.is_valid():
         user = serializer.save()
         try:
@@ -218,26 +256,30 @@ def register_user(request):
         except Exception as exc:
             # Account should remain created even if email provider is temporarily unavailable.
             logger.warning("Failed to send SaaS admin registration email: %s", exc)
-        return Response({
-            'message': 'Registration successful. Please verify your email before signing in.',
-            'verification_required': True,
-            'user': {
-                'id': user.user_id,
-                'email': user.email,
-                'username': user.username,
-                'first_name': user.first_name,
-                'last_name': user.last_name,
-                'role': user.role,
+        return Response(
+            {
+                "message": "Registration successful. Please verify your email before signing in.",
+                "verification_required": True,
+                "user": {
+                    "id": user.user_id,
+                    "email": user.email,
+                    "username": user.username,
+                    "first_name": user.first_name,
+                    "last_name": user.last_name,
+                    "role": user.role,
+                },
             },
-        }, status=status.HTTP_201_CREATED)
-    
+            status=status.HTTP_201_CREATED,
+        )
+
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
 # Custom Login View
-from rest_framework_simplejwt.views import TokenObtainPairView
-from rest_framework_simplejwt.views import TokenRefreshView
+from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
+
 from .serializers import MyTokenObtainPairSerializer
+
 
 class CustomTokenObtainPairView(TokenObtainPairView):
     """
@@ -248,6 +290,7 @@ class CustomTokenObtainPairView(TokenObtainPairView):
     invoking the full serializer, so the frontend can guide the user through
     the setup or TOTP entry flow without leaking sensitive error details.
     """
+
     serializer_class = MyTokenObtainPairSerializer
     throttle_classes = [LoginRateThrottle]
 
@@ -256,8 +299,9 @@ class CustomTokenObtainPairView(TokenObtainPairView):
     _LOCKOUT_MINUTES = 15
 
     def post(self, request, *args, **kwargs):
-        from django.utils import timezone
         from datetime import timedelta
+
+        from django.utils import timezone
 
         email = (request.data.get("email") or "").strip().lower()
         password = request.data.get("password", "")
@@ -270,7 +314,10 @@ class CustomTokenObtainPairView(TokenObtainPairView):
 
                 # Enforce account lockout before attempting auth
                 if user.locked_until and user.locked_until > timezone.now():
-                    wait = int((user.locked_until - timezone.now()).total_seconds() / 60) + 1
+                    wait = (
+                        int((user.locked_until - timezone.now()).total_seconds() / 60)
+                        + 1
+                    )
                     return Response(
                         {
                             "code": "account_locked",
@@ -329,8 +376,9 @@ class CustomTokenObtainPairView(TokenObtainPairView):
         return response
 
     def _record_failed_attempt(self, email: str) -> None:
-        from django.utils import timezone
         from datetime import timedelta
+
+        from django.utils import timezone
 
         if not email:
             return
@@ -338,7 +386,9 @@ class CustomTokenObtainPairView(TokenObtainPairView):
             user = UserAccount.objects.get(email__iexact=email)
             user.failed_login_attempts += 1
             if user.failed_login_attempts >= self._MAX_ATTEMPTS:
-                user.locked_until = timezone.now() + timedelta(minutes=self._LOCKOUT_MINUTES)
+                user.locked_until = timezone.now() + timedelta(
+                    minutes=self._LOCKOUT_MINUTES
+                )
                 logger.warning(
                     "Account locked after repeated failed login attempts",
                     extra={"email": email, "attempts": user.failed_login_attempts},
@@ -363,6 +413,7 @@ class CustomTokenObtainPairView(TokenObtainPairView):
 class CustomTokenRefreshView(TokenRefreshView):
     throttle_classes = [RefreshRateThrottle]
     serializer_class = RoleAwareTokenRefreshSerializer
+
 
 # Password Reset via Email (Views)
 class PasswordResetView(views.APIView):
@@ -395,7 +446,9 @@ class PasswordResetView(views.APIView):
         for tenant in Tenant.objects.exclude(schema_name="public"):
             try:
                 with schema_context(tenant.schema_name):
-                    tenant_user = UserAccount.objects.filter(email__iexact=email, is_active=True).first()
+                    tenant_user = UserAccount.objects.filter(
+                        email__iexact=email, is_active=True
+                    ).first()
                     if not tenant_user:
                         continue
                     key = f"{tenant.schema_name}:{tenant_user.pk}"
@@ -404,7 +457,11 @@ class PasswordResetView(views.APIView):
                     seen.add(key)
                     targets.append((tenant_user, tenant))
             except Exception as exc:
-                logger.warning("Password reset lookup failed for schema %s: %s", tenant.schema_name, exc)
+                logger.warning(
+                    "Password reset lookup failed for schema %s: %s",
+                    tenant.schema_name,
+                    exc,
+                )
                 continue
 
         return targets
@@ -412,7 +469,7 @@ class PasswordResetView(views.APIView):
     def post(self, request):
         serializer = PasswordResetSerializer(data=request.data)
         if serializer.is_valid():
-            email = serializer.validated_data['email']
+            email = serializer.validated_data["email"]
             targets = self._tenant_targets_for_email(email, request)
             if not targets:
                 return Response(
@@ -423,8 +480,12 @@ class PasswordResetView(views.APIView):
             for user, tenant in targets:
                 send_password_reset_email(user, tenant=tenant, reason="forgot_password")
 
-            return Response({"message": "Password reset link sent to email."}, status=status.HTTP_200_OK)
+            return Response(
+                {"message": "Password reset link sent to email."},
+                status=status.HTTP_200_OK,
+            )
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
 
 class PasswordResetConfirmView(views.APIView):
     # Same reasoning as PasswordResetView — the user clicking a reset link in
@@ -473,6 +534,7 @@ class EmailVerificationView(views.APIView):
 
 # ── SaaS Admin 2FA Views ──────────────────────────────────────────────────────
 
+
 def _saas_admin_from_credentials(email: str, password: str):
     """
     Validate email + password for a saas_admin account.
@@ -480,7 +542,9 @@ def _saas_admin_from_credentials(email: str, password: str):
     """
     _CRED_ERR = {"error": "Invalid credentials."}
     try:
-        user = UserAccount.objects.get(email__iexact=email.strip().lower(), role="saas_admin")
+        user = UserAccount.objects.get(
+            email__iexact=email.strip().lower(), role="saas_admin"
+        )
     except UserAccount.DoesNotExist:
         return None, _CRED_ERR
     if not user.check_password(password):
@@ -500,11 +564,13 @@ class TwoFactorSetupView(views.APIView):
     POST /api/users/2fa/setup/
     Body: { email, password }
     """
+
     permission_classes = [permissions.AllowAny]
     throttle_classes = [LoginRateThrottle]
 
     def post(self, request):
         import pyotp
+
         email = request.data.get("email", "")
         password = request.data.get("password", "")
 
@@ -543,12 +609,14 @@ class TwoFactorActivateView(views.APIView):
     POST /api/users/2fa/activate/
     Body: { email, password, totp_code }
     """
+
     permission_classes = [permissions.AllowAny]
     throttle_classes = [LoginRateThrottle]
 
     def post(self, request):
         import pyotp
         from rest_framework_simplejwt.tokens import RefreshToken as _RT
+
         from .token_policy import role_token_lifetimes
 
         email = request.data.get("email", "")
@@ -561,7 +629,9 @@ class TwoFactorActivateView(views.APIView):
 
         if not user.two_factor_secret:
             return Response(
-                {"error": "No pending 2FA secret found. Call /api/users/2fa/setup/ first."},
+                {
+                    "error": "No pending 2FA secret found. Call /api/users/2fa/setup/ first."
+                },
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -614,7 +684,7 @@ class TwoFactorActivateView(views.APIView):
 # ── SaaS Staff Management (super admin only) ──────────────────────────────────
 
 from .permissions import IsSaaSAdmin as _IsSaaSAdmin
-from .serializers import SaasStaffSerializer, SaasStaffCreateSerializer
+from .serializers import SaasStaffCreateSerializer, SaasStaffSerializer
 
 
 class SaasStaffViewSet(viewsets.ViewSet):
@@ -622,10 +692,11 @@ class SaasStaffViewSet(viewsets.ViewSet):
     CRUD for saas_staff accounts.
     Only saas_admin (super admin) can access these endpoints.
     """
+
     permission_classes = [_IsSaaSAdmin]
 
     def _staff_qs(self):
-        return UserAccount.objects.filter(role='saas_staff').order_by('-date_joined')
+        return UserAccount.objects.filter(role="saas_staff").order_by("-date_joined")
 
     def list(self, request):
         staff = self._staff_qs()
@@ -647,10 +718,16 @@ class SaasStaffViewSet(viewsets.ViewSet):
         try:
             user = self._staff_qs().get(pk=pk)
         except UserAccount.DoesNotExist:
-            return Response({'error': 'Staff member not found.'}, status=status.HTTP_404_NOT_FOUND)
+            return Response(
+                {"error": "Staff member not found."}, status=status.HTTP_404_NOT_FOUND
+            )
 
         # Only allow toggling is_active, updating name fields, and assigning saas sub-role
-        allowed = {k: v for k, v in request.data.items() if k in ('is_active', 'first_name', 'last_name', 'saas_staff_role')}
+        allowed = {
+            k: v
+            for k, v in request.data.items()
+            if k in ("is_active", "first_name", "last_name", "saas_staff_role")
+        }
         for field, value in allowed.items():
             setattr(user, field, value)
         user.save(update_fields=list(allowed.keys()))
@@ -666,10 +743,12 @@ class SaasStaffViewSet(viewsets.ViewSet):
         try:
             user = self._staff_qs().get(pk=pk)
         except UserAccount.DoesNotExist:
-            return Response({'error': 'Staff member not found.'}, status=status.HTTP_404_NOT_FOUND)
+            return Response(
+                {"error": "Staff member not found."}, status=status.HTTP_404_NOT_FOUND
+            )
         email = user.email
         user.is_active = False
-        user.save(update_fields=['is_active'])
+        user.save(update_fields=["is_active"])
         record_audit_event(
             action="users.saas_staff_deactivated",
             user=request.user,
@@ -690,6 +769,7 @@ class WebSocketTicketView(views.APIView):
     a regular simplejwt AccessToken, so core.ws_middleware.JWTAuthMiddleware
     accepts it unchanged.
     """
+
     permission_classes = [permissions.IsAuthenticated]
 
     # Claims JWTAuthMiddleware and WS consumers rely on.

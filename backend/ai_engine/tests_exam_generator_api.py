@@ -76,7 +76,8 @@ class ExamGeneratorApiTests(FastTenantTestCase):
                 source_id=str(self.chapter_1.id),
                 text="Chapter on motion includes speed, velocity, and acceleration.",
                 metadata={"chapter_id": self.chapter_1.id},
-                embedding=[0.01] * max(1, int(getattr(settings, "AI_EMBEDDING_DIMENSIONS", 1536))),
+                embedding=[0.01]
+                * max(1, int(getattr(settings, "AI_EMBEDDING_DIMENSIONS", 1536))),
             )
 
     def _client_for(self, user):
@@ -99,7 +100,9 @@ class ExamGeneratorApiTests(FastTenantTestCase):
         )
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
-    @patch("ai_engine.services.exam_generator_service.ExamPaperGeneratorService._call_model")
+    @patch(
+        "ai_engine.services.exam_generator_service.ExamPaperGeneratorService._call_model"
+    )
     def test_teacher_generates_exam_paper_and_can_fetch_artifact(self, mock_call_model):
         mock_call_model.return_value = (
             (
@@ -110,13 +113,13 @@ class ExamGeneratorApiTests(FastTenantTestCase):
                 '{"type":"short_answer","prompt":"State Newton first law.","marks":10},'
                 '{"type":"short_answer","prompt":"Define acceleration.","marks":10},'
                 '{"type":"mcq","prompt":"SI unit of force?","marks":10,"options":["Newton","Joule","Watt","Pascal"]}'
-                ']},'
+                "]},"
                 '{"title":"Section B","instructions":"Attempt all","marks":60,"questions":['
                 '{"type":"long_answer","prompt":"Derive F=ma with example.","marks":20},'
                 '{"type":"long_answer","prompt":"Differentiate scalar and vector.","marks":20},'
                 '{"type":"long_answer","prompt":"Explain momentum conservation.","marks":20}'
-                ']}'
-                ']},'
+                "]}"
+                "]},"
                 '"answer_key":{"1":"Speed with direction","2":"An object remains at rest/uniform motion unless force acts","3":"Rate of change of velocity","4":"Newton"},'
                 '"marking_scheme":{"guidelines":["Award method marks","Award stepwise marks"],"difficulty_mix":{"easy":30,"medium":50,"hard":20}}}'
             ),

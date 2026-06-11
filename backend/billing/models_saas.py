@@ -42,9 +42,15 @@ class SubscriptionPlan(SchemaScopedBillingModel, models.Model):
 
 class Subscription(SchemaScopedBillingModel, models.Model):
     SCHEMA_SCOPE = "public"
-    subscription_id = models.UUIDField(primary_key=True, default=uuid_lib.uuid4, editable=False)
-    tenant = models.OneToOneField(Tenant, on_delete=models.CASCADE, related_name="subscription")
-    plan = models.ForeignKey(SubscriptionPlan, on_delete=models.SET_NULL, null=True, blank=True)
+    subscription_id = models.UUIDField(
+        primary_key=True, default=uuid_lib.uuid4, editable=False
+    )
+    tenant = models.OneToOneField(
+        Tenant, on_delete=models.CASCADE, related_name="subscription"
+    )
+    plan = models.ForeignKey(
+        SubscriptionPlan, on_delete=models.SET_NULL, null=True, blank=True
+    )
 
     STATUS_CHOICES = (
         ("active", "Active"),
@@ -73,9 +79,15 @@ class Subscription(SchemaScopedBillingModel, models.Model):
 
 class SubscriptionPlanHistory(SchemaScopedBillingModel, models.Model):
     SCHEMA_SCOPE = "public"
-    history_id = models.UUIDField(primary_key=True, default=uuid_lib.uuid4, editable=False)
-    tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE, related_name="subscription_plan_history")
-    subscription = models.ForeignKey(Subscription, on_delete=models.CASCADE, related_name="plan_history")
+    history_id = models.UUIDField(
+        primary_key=True, default=uuid_lib.uuid4, editable=False
+    )
+    tenant = models.ForeignKey(
+        Tenant, on_delete=models.CASCADE, related_name="subscription_plan_history"
+    )
+    subscription = models.ForeignKey(
+        Subscription, on_delete=models.CASCADE, related_name="plan_history"
+    )
 
     previous_plan = models.ForeignKey(
         SubscriptionPlan,
@@ -122,9 +134,15 @@ class SubscriptionPlanHistory(SchemaScopedBillingModel, models.Model):
 
 class Invoice(SchemaScopedBillingModel, models.Model):
     SCHEMA_SCOPE = "public"
-    invoice_id = models.UUIDField(primary_key=True, default=uuid_lib.uuid4, editable=False)
-    tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE, related_name="invoices")
-    subscription = models.ForeignKey(Subscription, on_delete=models.SET_NULL, null=True, blank=True)
+    invoice_id = models.UUIDField(
+        primary_key=True, default=uuid_lib.uuid4, editable=False
+    )
+    tenant = models.ForeignKey(
+        Tenant, on_delete=models.CASCADE, related_name="invoices"
+    )
+    subscription = models.ForeignKey(
+        Subscription, on_delete=models.SET_NULL, null=True, blank=True
+    )
     amount = models.DecimalField(max_digits=10, decimal_places=2)
     currency = models.CharField(max_length=10, default="USD")
     status = models.CharField(

@@ -10,49 +10,53 @@ This bypasses Django migrations and creates tables directly
 
 import os
 import sys
+
 import django
 
 # Setup Django
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
 django.setup()
 
-from django.db import connections
 from django.core.management import call_command
+from django.db import connections
+
 
 def main():
     print("=" * 70)
     print("LIBRARY MIGRATION FIX SCRIPT")
     print("=" * 70)
-    
+
     # Step 1: Check if tenant database exists
     print("\n[1] Checking tenant database connection...")
     try:
-        with connections['tenant_pramod'].cursor() as cursor:
+        with connections["tenant_pramod"].cursor() as cursor:
             cursor.execute("SELECT 1")
             print("    ✓ Tenant database connection successful")
     except Exception as e:
         print(f"    ✗ ERROR: {e}")
         return
-    
+
     # Step 2: Check current library tables
     print("\n[2] Checking existing library tables...")
-    with connections['tenant_pramod'].cursor() as cursor:
-        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'library_%';")
+    with connections["tenant_pramod"].cursor() as cursor:
+        cursor.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'library_%';"
+        )
         existing_tables = [row[0] for row in cursor.fetchall()]
         if existing_tables:
             print(f"    Found tables: {existing_tables}")
         else:
             print("    No library tables found")
-    
+
     # Step 3: Run migrations
     print("\n[3] Running library migrations on tenant_pramod database...")
     try:
-        call_command('migrate', 'library', database='tenant_pramod', verbosity=2)
+        call_command("migrate", "library", database="tenant_pramod", verbosity=2)
         print("    ✓ Migrations completed")
     except Exception as e:
         print(f"    ✗ Migration failed: {e}")
         print("\n[4] Attempting to create tables manually...")
-        
+
         # Manual table creation as fallback
         create_tables_sql = """
         CREATE TABLE IF NOT EXISTS library_book (
@@ -87,28 +91,30 @@ def main():
             FOREIGN KEY (student_id) REFERENCES academic_student(student_id)
         );
         """
-        
+
         try:
-            with connections['tenant_pramod'].cursor() as cursor:
-                for statement in create_tables_sql.split(';'):
+            with connections["tenant_pramod"].cursor() as cursor:
+                for statement in create_tables_sql.split(";"):
                     if statement.strip():
                         cursor.execute(statement)
             print("    ✓ Tables created manually")
         except Exception as e2:
             print(f"    ✗ Manual creation failed: {e2}")
             return
-    
+
     # Step 4: Verify tables were created
     print("\n[5] Verifying library tables...")
-    with connections['tenant_pramod'].cursor() as cursor:
-        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'library_%';")
+    with connections["tenant_pramod"].cursor() as cursor:
+        cursor.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'library_%';"
+        )
         tables = [row[0] for row in cursor.fetchall()]
-        
-        if 'library_book' in tables and 'library_bookissue' in tables:
+
+        if "library_book" in tables and "library_bookissue" in tables:
             print("    ✓ All library tables exist:")
             for table in tables:
                 print(f"      - {table}")
-                
+
             # Show table structure
             print("\n[6] Table structure:")
             cursor.execute("PRAGMA table_info(library_book);")
@@ -119,7 +125,7 @@ def main():
         else:
             print(f"    ✗ Missing tables. Found: {tables}")
             return
-    
+
     print("\n" + "=" * 70)
     print("✓ LIBRARY MIGRATION FIX COMPLETED SUCCESSFULLY")
     print("=" * 70)
@@ -128,5 +134,6 @@ def main():
     print("2. Refresh your browser")
     print("3. Try accessing the library page again")
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     main()

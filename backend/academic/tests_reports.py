@@ -23,7 +23,10 @@ class ResultCardReportTests(FastTenantTestCase):
         domain.is_primary = True
 
     def setUp(self):
-        self.client = APIClient(HTTP_HOST=self.get_test_tenant_domain(), HTTP_X_TENANT_ID=self.tenant.schema_name)
+        self.client = APIClient(
+            HTTP_HOST=self.get_test_tenant_domain(),
+            HTTP_X_TENANT_ID=self.tenant.schema_name,
+        )
         self.admin_user = User.objects.create_user(
             username="report_admin",
             email="report_admin@example.com",
@@ -71,7 +74,9 @@ class ResultCardReportTests(FastTenantTestCase):
         )
 
         self.academic_class = AcademicClass.objects.create(name="Grade 10", order=10)
-        self.section = Section.objects.create(name="A", academic_class=self.academic_class)
+        self.section = Section.objects.create(
+            name="A", academic_class=self.academic_class
+        )
         self.student = Student.objects.create(
             user=self.student_user,
             academic_class=self.academic_class,
@@ -107,7 +112,9 @@ class ResultCardReportTests(FastTenantTestCase):
         )
 
         self.other_class = AcademicClass.objects.create(name="Grade 11", order=11)
-        self.other_section = Section.objects.create(name="B", academic_class=self.other_class)
+        self.other_section = Section.objects.create(
+            name="B", academic_class=self.other_class
+        )
         self.other_student = Student.objects.create(
             user=self.other_student_user,
             academic_class=self.other_class,
@@ -142,7 +149,9 @@ class ResultCardReportTests(FastTenantTestCase):
         )
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertIn(response["Content-Type"].split(";")[0], ["application/pdf", "text/html"])
+        self.assertIn(
+            response["Content-Type"].split(";")[0], ["application/pdf", "text/html"]
+        )
         audit_row = AuditLog.objects.filter(
             action="academic.report_exported",
             details__report_type="result_card",
@@ -191,4 +200,6 @@ class ResultCardReportTests(FastTenantTestCase):
         self.assertEqual(allowed_result.status_code, status.HTTP_200_OK)
         self.assertEqual(blocked_result.status_code, status.HTTP_403_FORBIDDEN)
         self.assertEqual(allowed_attendance_summary.status_code, status.HTTP_200_OK)
-        self.assertEqual(blocked_attendance_summary.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(
+            blocked_attendance_summary.status_code, status.HTTP_403_FORBIDDEN
+        )

@@ -13,7 +13,6 @@ from academic.models import Parent, Student, Teacher
 from core.models import Tenant
 from users.models import UserAccount
 
-
 TENANT_ROLES = {"student", "teacher", "parent", "admin", "staff"}
 
 
@@ -95,7 +94,11 @@ class Command(BaseCommand):
         update_existing = bool(options["update_existing"])
         deactivate_source = bool(options["deactivate_source"])
 
-        tenants = list(Tenant.objects.exclude(schema_name="public").only("id", "schema_name", "subdomain"))
+        tenants = list(
+            Tenant.objects.exclude(schema_name="public").only(
+                "id", "schema_name", "subdomain"
+            )
+        )
         tenants_by_id = {str(t.id): t for t in tenants}
         tenants_by_schema = {str(t.schema_name).strip().lower(): t for t in tenants}
         for t in tenants:
@@ -104,10 +107,14 @@ class Command(BaseCommand):
                 tenants_by_schema[sub] = t
 
         source_users = self._source_users(only_email=only_email)
-        candidates = self._build_candidates(source_users, tenants_by_id, tenants_by_schema, only_tenant)
+        candidates = self._build_candidates(
+            source_users, tenants_by_id, tenants_by_schema, only_tenant
+        )
 
         if not candidates:
-            self.stdout.write(self.style.WARNING("No candidate users found in public schema."))
+            self.stdout.write(
+                self.style.WARNING("No candidate users found in public schema.")
+            )
             return
 
         self.stdout.write(
@@ -152,7 +159,9 @@ class Command(BaseCommand):
                     updated += 1
                 else:
                     skipped += 1
-            except Exception as exc:  # pragma: no cover - defensive for operational command
+            except (
+                Exception
+            ) as exc:  # pragma: no cover - defensive for operational command
                 self.stdout.write(self.style.ERROR(f"ERROR {item.email}: {exc}"))
                 errors += 1
 
@@ -229,7 +238,9 @@ class Command(BaseCommand):
         reason: str,
     ) -> str:
         with schema_context(tenant.schema_name):
-            existing_by_email = UserAccount.objects.filter(email__iexact=source_user.email).first()
+            existing_by_email = UserAccount.objects.filter(
+                email__iexact=source_user.email
+            ).first()
 
             if existing_by_email:
                 if not update_existing:
@@ -239,7 +250,9 @@ class Command(BaseCommand):
                     return "skipped"
 
                 if apply_changes:
-                    self._copy_mutable_fields(source_user, existing_by_email, tenant=tenant)
+                    self._copy_mutable_fields(
+                        source_user, existing_by_email, tenant=tenant
+                    )
                     existing_by_email.save()
                     _ensure_role_profile(existing_by_email.role, existing_by_email)
                     self._deactivate_source_if_needed(
@@ -282,7 +295,9 @@ class Command(BaseCommand):
                     migrated_user.save(force_insert=True)
                 except IntegrityError:
                     # Fallback for rare UUID collision or stale partial migrate.
-                    migrated_user = UserAccount.objects.filter(email__iexact=source_user.email).first()
+                    migrated_user = UserAccount.objects.filter(
+                        email__iexact=source_user.email
+                    ).first()
                     if migrated_user is None:
                         raise
                     self._copy_mutable_fields(source_user, migrated_user, tenant=tenant)
@@ -299,7 +314,9 @@ class Command(BaseCommand):
             )
             return "moved"
 
-    def _copy_mutable_fields(self, source: UserAccount, target: UserAccount, *, tenant: Tenant) -> None:
+    def _copy_mutable_fields(
+        self, source: UserAccount, target: UserAccount, *, tenant: Tenant
+    ) -> None:
         target.password = source.password
         target.last_login = source.last_login
         target.first_name = source.first_name
@@ -333,7 +350,9 @@ class Command(BaseCommand):
     def _unique_username(self, *, base: str, email: str) -> str:
         candidate = (base or "").strip()
         if not candidate:
-            candidate = (email.split("@", 1)[0] if "@" in email else "user").strip() or "user"
+            candidate = (
+                email.split("@", 1)[0] if "@" in email else "user"
+            ).strip() or "user"
 
         candidate = candidate[:140]
         if not UserAccount.objects.filter(username=candidate).exists():

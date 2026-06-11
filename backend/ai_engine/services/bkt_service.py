@@ -24,6 +24,7 @@ References:
   Corbett, A.T. & Anderson, J.R. (1994). Knowledge tracing: Modeling the
   acquisition of procedural knowledge. User Modeling and User-Adapted Interaction.
 """
+
 from __future__ import annotations
 
 import logging
@@ -102,9 +103,9 @@ class BKTService:
         skill_tag,
         correct: bool,
         score_pct: float = 0.0,
-        source_type: str = 'assessment',
-        source_id: str = '',
-        db_alias: str = 'default',
+        source_type: str = "assessment",
+        source_id: str = "",
+        db_alias: str = "default",
     ) -> BKTResult:
         """
         Record a practice event, update the student's SkillMastery, and persist everything.
@@ -120,11 +121,11 @@ class BKTService:
             student=student,
             skill_tag=skill_tag,
             defaults={
-                'p_mastery': self.DEFAULT_P_INIT,
-                'p_transit': self.DEFAULT_P_TRANSIT,
-                'p_slip': self.DEFAULT_P_SLIP,
-                'p_guess': self.DEFAULT_P_GUESS,
-            }
+                "p_mastery": self.DEFAULT_P_INIT,
+                "p_transit": self.DEFAULT_P_TRANSIT,
+                "p_slip": self.DEFAULT_P_SLIP,
+                "p_guess": self.DEFAULT_P_GUESS,
+            },
         )
 
         mastery_before = mastery.p_mastery
@@ -158,17 +159,20 @@ class BKTService:
             correct=correct,
         )
 
-    def get_skill_gaps(self, student, db_alias: str = 'default', limit: int = 5) -> list:
+    def get_skill_gaps(
+        self, student, db_alias: str = "default", limit: int = 5
+    ) -> list:
         """
         Return the student's lowest-mastery skills, ordered ascending.
         Used to prioritize learning path generation toward weak areas.
         """
         from ai_engine.models import SkillMastery
+
         return list(
             SkillMastery.objects.using(db_alias)
             .filter(student=student)
-            .select_related('skill_tag', 'skill_tag__subject')
-            .order_by('p_mastery')[:limit]
+            .select_related("skill_tag", "skill_tag__subject")
+            .order_by("p_mastery")[:limit]
         )
 
     def is_mastered(self, p_mastery: float) -> bool:

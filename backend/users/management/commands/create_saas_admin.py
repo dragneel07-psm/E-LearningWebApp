@@ -30,7 +30,9 @@ class Command(BaseCommand):
 
     def add_arguments(self, parser):
         parser.add_argument("--email", type=str, help="Admin email address")
-        parser.add_argument("--first-name", type=str, dest="first_name", help="First name")
+        parser.add_argument(
+            "--first-name", type=str, dest="first_name", help="First name"
+        )
         parser.add_argument("--last-name", type=str, dest="last_name", help="Last name")
         parser.add_argument(
             "--skip-2fa",
@@ -40,9 +42,13 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options):
-        from users.models import UserAccount  # local import avoids circular-import at module load
+        from users.models import (
+            UserAccount,  # local import avoids circular-import at module load
+        )
 
-        self.stdout.write(self.style.WARNING("\n=== SaaS Admin Account Provisioning ===\n"))
+        self.stdout.write(
+            self.style.WARNING("\n=== SaaS Admin Account Provisioning ===\n")
+        )
 
         # Collect inputs
         email = (options.get("email") or input("Email: ")).strip().lower()
@@ -65,7 +71,9 @@ class Command(BaseCommand):
                 continue
             confirm = getpass.getpass("Confirm password: ")
             if password != confirm:
-                self.stderr.write(self.style.ERROR("Passwords do not match. Try again."))
+                self.stderr.write(
+                    self.style.ERROR("Passwords do not match. Try again.")
+                )
                 continue
             break
 
@@ -85,10 +93,10 @@ class Command(BaseCommand):
             first_name=first_name,
             last_name=last_name,
             role="saas_admin",
-            tenant=None,        # SaaS admin is global, not tenant-scoped
+            tenant=None,  # SaaS admin is global, not tenant-scoped
             is_staff=True,
             is_superuser=True,
-            is_active=True,     # CLI creation — no email verification flow
+            is_active=True,  # CLI creation — no email verification flow
         )
 
         if not skip_2fa:
@@ -97,7 +105,11 @@ class Command(BaseCommand):
             user.save(update_fields=["two_factor_secret", "is_2fa_enabled"])
 
             self.stdout.write(self.style.SUCCESS(f"\n✓ SaaS admin created: {email}"))
-            self.stdout.write(self.style.WARNING("\n=== IMPORTANT: Save these 2FA credentials NOW ==="))
+            self.stdout.write(
+                self.style.WARNING(
+                    "\n=== IMPORTANT: Save these 2FA credentials NOW ==="
+                )
+            )
             self.stdout.write(f"\n  TOTP Secret : {secret}")
             self.stdout.write(f"\n  QR URI      : {qr_uri}")
             self.stdout.write(

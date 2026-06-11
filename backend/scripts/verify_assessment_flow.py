@@ -1,11 +1,13 @@
 # Copyright (c) 2024-2026 Pramod Singh Manyal. All rights reserved.
 # Unauthorized copying, modification, or distribution of this file,
 # via any medium, is strictly prohibited. Proprietary and confidential.
-import requests
 import json
 from datetime import datetime, timedelta
 
+import requests
+
 BASE_URL = "http://localhost:8000/api"
+
 
 def get_token(email, password):
     url = f"{BASE_URL}/token/"
@@ -17,6 +19,7 @@ def get_token(email, password):
         print(f"Failed to get token: {response.text}")
         return None
 
+
 def verify_assessment_flow():
     # Login as teacher (using admin for now if teacher logic is complex, or ideally a teacher account)
     # create_test_accounts.py creates test_teacher@demo.com / teacher123
@@ -24,7 +27,7 @@ def verify_assessment_flow():
     if not token:
         print("Falling back to admin token")
         token = get_token("admin@demo.com", "admin123")
-    
+
     if not token:
         print("❌ Could not login")
         return
@@ -32,7 +35,7 @@ def verify_assessment_flow():
     headers = {
         "Authorization": f"Bearer {token}",
         "Content-Type": "application/json",
-        "x-tenant-id": "demo" # Assuming demo tenant
+        "x-tenant-id": "demo",  # Assuming demo tenant
     }
 
     # 1. Get a Subject (Course)
@@ -46,8 +49,8 @@ def verify_assessment_flow():
         print("No subjects found")
         # return # Try to continue or fail?
         # Create one if needed? Assuming data exists
-    
-    subject_id = subjects[0]['id'] if subjects else None
+
+    subject_id = subjects[0]["id"] if subjects else None
     print(f"Using subject ID: {subject_id}")
 
     if not subject_id:
@@ -65,16 +68,18 @@ def verify_assessment_flow():
         "passing_marks": 4,
         "duration_minutes": 30,
         "blooms_level": "apply",
-        "scheduled_at": (datetime.now() + timedelta(days=1)).isoformat()
+        "scheduled_at": (datetime.now() + timedelta(days=1)).isoformat(),
     }
-    resp = requests.post(f"{BASE_URL}/academic/assessments/", headers=headers, json=quiz_data)
+    resp = requests.post(
+        f"{BASE_URL}/academic/assessments/", headers=headers, json=quiz_data
+    )
     print(f"Status: {resp.status_code}")
     if resp.status_code != 201:
         print(f"Error: {resp.text}")
         return
-    
+
     quiz = resp.json()
-    quiz_id = quiz['assessment_id']
+    quiz_id = quiz["assessment_id"]
     print(f"✅ Created Quiz: {quiz['title']} ({quiz_id})")
 
     # 3. Add MCQ Question
@@ -86,9 +91,11 @@ def verify_assessment_flow():
         "points": 5,
         "options": ["5", "6", "8", "9"],
         "correct_answer": "8",
-        "order": 1
+        "order": 1,
     }
-    resp = requests.post(f"{BASE_URL}/academic/questions/", headers=headers, json=mcq_data)
+    resp = requests.post(
+        f"{BASE_URL}/academic/questions/", headers=headers, json=mcq_data
+    )
     print(f"Status: {resp.status_code}")
     if resp.status_code != 201:
         print(f"Error: {resp.text}")
@@ -103,9 +110,11 @@ def verify_assessment_flow():
         "text": "Explain the concept of recursion.",
         "type": "short_answer",
         "points": 5,
-        "order": 2
+        "order": 2,
     }
-    resp = requests.post(f"{BASE_URL}/academic/questions/", headers=headers, json=sa_data)
+    resp = requests.post(
+        f"{BASE_URL}/academic/questions/", headers=headers, json=sa_data
+    )
     print(f"Status: {resp.status_code}")
     if resp.status_code != 201:
         print(f"Error: {resp.text}")
@@ -115,15 +124,18 @@ def verify_assessment_flow():
 
     # 5. Verify Questions List
     print("\n--- 5. Verifying Questions List ---")
-    resp = requests.get(f"{BASE_URL}/academic/questions/?assessment={quiz_id}", headers=headers)
+    resp = requests.get(
+        f"{BASE_URL}/academic/questions/?assessment={quiz_id}", headers=headers
+    )
     questions = resp.json()
     print(f"Questions found: {len(questions)}")
     for q in questions:
         print(f"  - [{q['type']}] {q['text']} ({q['points']} pts)")
-        if q['type'] == 'mcq':
-             print(f"    Options: {q['options']}")
+        if q["type"] == "mcq":
+            print(f"    Options: {q['options']}")
 
     print("\n✅ Assessment Flow Verified Successfully!")
+
 
 if __name__ == "__main__":
     verify_assessment_flow()

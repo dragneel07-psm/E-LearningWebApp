@@ -189,3 +189,6 @@ backend/.expo/
 # Playwright reports inside tests/
 tests/playwright-report/
 tests/test-results/
+
+# Local stray virtualenv backup
+backend/.venv_py311_backup/

@@ -16,7 +16,15 @@ from .models import (
 
 @admin.register(Project)
 class ProjectAdmin(admin.ModelAdmin):
-    list_display = ("title", "status", "is_group", "mentor", "section", "due_date", "created_at")
+    list_display = (
+        "title",
+        "status",
+        "is_group",
+        "mentor",
+        "section",
+        "due_date",
+        "created_at",
+    )
     list_filter = ("status", "is_group")
     search_fields = ("title", "description")
     readonly_fields = ("created_at", "updated_at")
@@ -32,7 +40,15 @@ class ProjectMemberAdmin(admin.ModelAdmin):
 
 @admin.register(ProjectTask)
 class ProjectTaskAdmin(admin.ModelAdmin):
-    list_display = ("title", "project", "assignee", "status", "weight", "due_date", "completed_at")
+    list_display = (
+        "title",
+        "project",
+        "assignee",
+        "status",
+        "weight",
+        "due_date",
+        "completed_at",
+    )
     list_filter = ("status",)
     search_fields = ("title", "description")
     raw_id_fields = ("project", "assignee", "created_by", "tenant")
@@ -56,7 +72,14 @@ class ProjectSubmissionAdmin(admin.ModelAdmin):
 
 @admin.register(ProjectAttachment)
 class ProjectAttachmentAdmin(admin.ModelAdmin):
-    list_display = ("attachment_id", "project", "task", "uploaded_by", "uploaded_at", "size_bytes")
+    list_display = (
+        "attachment_id",
+        "project",
+        "task",
+        "uploaded_by",
+        "uploaded_at",
+        "size_bytes",
+    )
     raw_id_fields = ("project", "task", "update", "uploaded_by", "tenant")
     readonly_fields = ("uploaded_at",)
 

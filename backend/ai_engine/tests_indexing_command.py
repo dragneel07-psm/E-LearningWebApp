@@ -25,8 +25,16 @@ class AIIndexContentCommandTests(FastTenantTestCase):
     def setUp(self):
         with tenant_context(self.tenant):
             academic_class = AcademicClass.objects.create(name="Grade Index 9")
-            subject = Subject.objects.create(name="Science Index", academic_class=academic_class, is_active=True)
-            chapter = Chapter.objects.create(subject=subject, title="Motion", description="Motion basics", order=1, is_published=True)
+            subject = Subject.objects.create(
+                name="Science Index", academic_class=academic_class, is_active=True
+            )
+            chapter = Chapter.objects.create(
+                subject=subject,
+                title="Motion",
+                description="Motion basics",
+                order=1,
+                is_published=True,
+            )
             self.lesson = Lesson.objects.create(
                 chapter=chapter,
                 title="Newton's Laws",
@@ -48,7 +56,9 @@ class AIIndexContentCommandTests(FastTenantTestCase):
         return ([[0.01] * dimensions for _ in chunks], "stub-mock")
 
     @patch("ai_engine.services.indexing_service._generate_embeddings")
-    def test_command_indexes_and_is_idempotent_for_same_source(self, mock_generate_embeddings):
+    def test_command_indexes_and_is_idempotent_for_same_source(
+        self, mock_generate_embeddings
+    ):
         mock_generate_embeddings.side_effect = self._mock_embeddings
 
         output = StringIO()
@@ -63,7 +73,9 @@ class AIIndexContentCommandTests(FastTenantTestCase):
             self.assertGreater(lesson_chunks_first, 0)
 
         output_second = StringIO()
-        call_command("ai_index_content", tenant=self.tenant.schema_name, stdout=output_second)
+        call_command(
+            "ai_index_content", tenant=self.tenant.schema_name, stdout=output_second
+        )
 
         with tenant_context(self.tenant):
             lesson_chunks_second = ContentChunk.objects.filter(

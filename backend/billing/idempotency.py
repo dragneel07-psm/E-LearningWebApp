@@ -6,7 +6,6 @@ import json
 
 from django.core.serializers.json import DjangoJSONEncoder
 
-
 MAX_IDEMPOTENCY_KEY_LENGTH = 255
 
 
@@ -30,5 +29,7 @@ def json_safe(payload):
 
 
 def payload_fingerprint(payload) -> str:
-    canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"), cls=DjangoJSONEncoder)
+    canonical = json.dumps(
+        payload, sort_keys=True, separators=(",", ":"), cls=DjangoJSONEncoder
+    )
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()

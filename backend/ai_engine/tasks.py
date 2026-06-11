@@ -10,6 +10,7 @@ try:
     from celery import shared_task
 except Exception:
     from core.async_jobs import background_task as shared_task
+
 from django.contrib.auth import get_user_model
 from django_tenants.utils import schema_context
 
@@ -258,16 +259,16 @@ def send_parent_digest_task(self, *, tenant_schema: str) -> dict[str, Any]:
         if tenant is None:
             return {"error": "Tenant not found", "schema": schema_name}
 
-        from academic.models.student import Student
         from academic.models.parent import Parent
+        from academic.models.student import Student
         from ai_engine.services.parent_digest_service import ParentDigestService
         from notifications.services import NotificationService
 
         service = ParentDigestService(tenant=tenant)
 
-        students = Student.objects.filter(
-            academic_class__isnull=False
-        ).select_related("user")
+        students = Student.objects.filter(academic_class__isnull=False).select_related(
+            "user"
+        )
 
         for student in students:
             try:
@@ -292,6 +293,7 @@ def send_parent_digest_task(self, *, tenant_schema: str) -> dict[str, Any]:
                         sent_count += 1
             except Exception as exc:
                 import logging
+
                 logging.getLogger(__name__).warning(
                     "ParentDigest failed for student %s: %s", student.student_id, exc
                 )
@@ -309,7 +311,9 @@ def send_parent_digest_task(self, *, tenant_schema: str) -> dict[str, Any]:
     retry_backoff_max=600,
     retry_jitter=True,
 )
-def transcribe_lesson_task(self, *, tenant_schema: str, lesson_id: int) -> dict[str, Any]:
+def transcribe_lesson_task(
+    self, *, tenant_schema: str, lesson_id: int
+) -> dict[str, Any]:
     """
     Phase 11 — Video Transcript Indexing.
 
@@ -318,6 +322,7 @@ def transcribe_lesson_task(self, *, tenant_schema: str, lesson_id: int) -> dict[
     in the RAG vector store so the transcript becomes searchable.
     """
     import logging as _logging
+
     _log = _logging.getLogger(__name__)
 
     schema_name = _tenant_schema(tenant_schema)
@@ -327,8 +332,8 @@ def transcribe_lesson_task(self, *, tenant_schema: str, lesson_id: int) -> dict[
             return {"error": "Tenant not found", "schema": schema_name}
 
         from academic.models.lesson import Lesson
-        from ai_engine.services.video_transcript_service import VideoTranscriptService
         from ai_engine.services.indexing_service import index_raw_content
+        from ai_engine.services.video_transcript_service import VideoTranscriptService
 
         lesson = Lesson.objects.filter(pk=lesson_id).first()
         if lesson is None:
@@ -338,24 +343,41 @@ def transcribe_lesson_task(self, *, tenant_schema: str, lesson_id: int) -> dict[
         transcript = service.transcribe_lesson(lesson)
 
         if not transcript:
-            return {"lesson_id": lesson_id, "status": "skipped", "reason": "no transcript generated"}
+            return {
+                "lesson_id": lesson_id,
+                "status": "skipped",
+                "reason": "no transcript generated",
+            }
 
         # Re-index lesson so transcript is included in RAG retrieval
-        full_text = " ".join(filter(None, [
-            lesson.title,
-            lesson.content or "",
-            transcript,
-        ]))
+        full_text = " ".join(
+            filter(
+                None,
+                [
+                    lesson.title,
+                    lesson.content or "",
+                    transcript,
+                ],
+            )
+        )
         try:
             index_raw_content(
                 tenant_schema=schema_name,
                 source_type="lesson",
                 source_id=str(lesson_id),
                 text=full_text,
-                metadata={"lesson_id": lesson_id, "title": lesson.title, "has_transcript": True},
+                metadata={
+                    "lesson_id": lesson_id,
+                    "title": lesson.title,
+                    "has_transcript": True,
+                },
             )
         except Exception as exc:
-            _log.warning("transcribe_lesson_task: re-index failed for lesson %s: %s", lesson_id, exc)
+            _log.warning(
+                "transcribe_lesson_task: re-index failed for lesson %s: %s",
+                lesson_id,
+                exc,
+            )
 
         return {
             "lesson_id": lesson_id,

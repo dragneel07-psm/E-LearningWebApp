@@ -1,20 +1,23 @@
 # Copyright (c) 2024-2026 Pramod Singh Manyal. All rights reserved.
 # Unauthorized copying, modification, or distribution of this file,
 # via any medium, is strictly prohibited. Proprietary and confidential.
-import requests
 import json
 import secrets
 import string
 
+import requests
+
 BASE_URL = "http://localhost:8000/api"
+
 
 def get_token(email, password):
     url = f"{BASE_URL}/users/login/"
     response = requests.post(url, json={"email": email, "password": password})
     if response.status_code == 200:
-        return response.json().get('access')
+        return response.json().get("access")
     print(f"❌ Login failed for {email}: {response.status_code} - {response.text}")
     return None
+
 
 def verify_assessments():
     # 1. Login as Teacher
@@ -30,7 +33,7 @@ def verify_assessments():
         print("❌ Failed to get subjects")
         return
     subject = subjects_res.json()[0]
-    subject_id = subject['id']
+    subject_id = subject["id"]
     print(f"✅ Found subject: {subject['name']}")
 
     # 3. Create an Assessment
@@ -40,14 +43,16 @@ def verify_assessments():
         "description": "A quiz created by the verification script",
         "type": "quiz",
         "total_marks": 10,
-        "duration_minutes": 15
+        "duration_minutes": 15,
     }
-    create_res = requests.post(f"{BASE_URL}/academic/assessments/", headers=headers, json=assessment_data)
+    create_res = requests.post(
+        f"{BASE_URL}/academic/assessments/", headers=headers, json=assessment_data
+    )
     if create_res.status_code != 201:
         print(f"❌ Failed to create assessment: {create_res.text}")
         return
     assessment = create_res.json()
-    assessment_id = assessment['id']
+    assessment_id = assessment["id"]
     print(f"✅ Created assessment: {assessment['title']}")
 
     # 4. Add Questions
@@ -58,7 +63,7 @@ def verify_assessments():
         "options": ["3", "4", "5"],
         "correct_answer": "4",
         "points": 5,
-        "order": 1
+        "order": 1,
     }
     q2_data = {
         "assessment": assessment_id,
@@ -66,7 +71,7 @@ def verify_assessments():
         "type": "short_answer",
         "correct_answer": "Paris",
         "points": 5,
-        "order": 2
+        "order": 2,
     }
     requests.post(f"{BASE_URL}/academic/questions/", headers=headers, json=q1_data)
     requests.post(f"{BASE_URL}/academic/questions/", headers=headers, json=q2_data)
@@ -83,39 +88,49 @@ def verify_assessments():
     submission_data = {
         "assessment": assessment_id,
         "answers": {
-            q1_data['text']: "4", # Wait, I need question IDs
+            q1_data["text"]: "4",  # Wait, I need question IDs
         },
-        "time_taken": 2
+        "time_taken": 2,
     }
     # Get questions to get their IDs
-    qs_res = requests.get(f"{BASE_URL}/academic/questions/?assessment={assessment_id}", headers=student_headers)
+    qs_res = requests.get(
+        f"{BASE_URL}/academic/questions/?assessment={assessment_id}",
+        headers=student_headers,
+    )
     questions = qs_res.json()
-    
+
     submission_answers = {}
     for q in questions:
-        if "2+2" in q['text']:
-            submission_answers[q['id']] = "4"
-        elif "France" in q['text']:
-            submission_answers[q['id']] = "Paris"
-            
+        if "2+2" in q["text"]:
+            submission_answers[q["id"]] = "4"
+        elif "France" in q["text"]:
+            submission_answers[q["id"]] = "Paris"
+
     submit_data = {
         "assessment": assessment_id,
         "answers": submission_answers,
-        "time_taken": 2
+        "time_taken": 2,
     }
-    
-    submit_res = requests.post(f"{BASE_URL}/academic/submissions/submit_exam/", headers=student_headers, json=submit_data)
+
+    submit_res = requests.post(
+        f"{BASE_URL}/academic/submissions/submit_exam/",
+        headers=student_headers,
+        json=submit_data,
+    )
     if submit_res.status_code != 200:
         print(f"❌ Failed to submit quiz: {submit_res.text}")
         return
-    
+
     result = submit_res.json()
     print(f"✅ Quiz submitted! Score: {result['score']}/{result['max_score']}")
-    
-    if result['score'] == 10:
+
+    if result["score"] == 10:
         print("🎉 Verification SUCCESSFUL! Auto-grading works.")
     else:
-        print(f"⚠️ Verification partially successful. Expected score 10, got {result['score']}")
+        print(
+            f"⚠️ Verification partially successful. Expected score 10, got {result['score']}"
+        )
+
 
 if __name__ == "__main__":
     verify_assessments()

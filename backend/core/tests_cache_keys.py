@@ -28,7 +28,9 @@ class TenantCacheKeyTests(SimpleTestCase):
             headers={},
         )
 
-        key = tenant_cache_key("attendance_summary_data", "1", "2026-01-01", request=request)
+        key = tenant_cache_key(
+            "attendance_summary_data", "1", "2026-01-01", request=request
+        )
 
         self.assertTrue(key.startswith("tenant:beta_school:attendance_summary_data:"))
 
@@ -40,12 +42,18 @@ class TenantCacheKeyTests(SimpleTestCase):
         )
         explicit_tenant = SimpleNamespace(schema_name="explicit_school")
 
-        key = tenant_cache_key("attendance_summary_data", "1", request=request, tenant=explicit_tenant)
+        key = tenant_cache_key(
+            "attendance_summary_data", "1", request=request, tenant=explicit_tenant
+        )
 
-        self.assertTrue(key.startswith("tenant:explicit_school:attendance_summary_data:"))
+        self.assertTrue(
+            key.startswith("tenant:explicit_school:attendance_summary_data:")
+        )
 
     def test_falls_back_to_public_schema_when_no_tenant_context(self):
-        request = SimpleNamespace(tenant=None, user=SimpleNamespace(tenant=None), headers={})
+        request = SimpleNamespace(
+            tenant=None, user=SimpleNamespace(tenant=None), headers={}
+        )
 
         key = tenant_cache_key("academic_stats", request=request)
 

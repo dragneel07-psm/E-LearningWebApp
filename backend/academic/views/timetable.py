@@ -65,19 +65,30 @@ class TimetableViewSet(viewsets.ModelViewSet):
     def _ordered_queryset(self, queryset):
         return queryset.annotate(
             _day_order=Case(
-                *[When(day_of_week=day, then=Value(idx)) for idx, day in enumerate(self.DAY_SEQUENCE, start=1)],
+                *[
+                    When(day_of_week=day, then=Value(idx))
+                    for idx, day in enumerate(self.DAY_SEQUENCE, start=1)
+                ],
                 default=Value(99),
                 output_field=IntegerField(),
             )
         ).order_by("_day_order", "start_time", "timetable_id")
 
     def _is_timetable_manager(self, user):
-        return bool(user and user.is_authenticated and user.role in ["admin", "staff", "management", "saas_admin"])
+        return bool(
+            user
+            and user.is_authenticated
+            and user.role in ["admin", "staff", "management", "saas_admin"]
+        )
 
     def _teacher_profile(self, user):
         if not user or not user.is_authenticated or user.role != "teacher":
             return None
-        return Teacher.objects.prefetch_related("assigned_classes").filter(user=user).first()
+        return (
+            Teacher.objects.prefetch_related("assigned_classes")
+            .filter(user=user)
+            .first()
+        )
 
     def _assigned_class_ids(self, teacher_profile):
         if not teacher_profile:
@@ -99,18 +110,25 @@ class TimetableViewSet(viewsets.ModelViewSet):
 
         if user.role == "teacher":
             teacher_profile = self._teacher_profile(user)
-            return bool(teacher_profile and class_id in self._assigned_class_ids(teacher_profile))
+            return bool(
+                teacher_profile
+                and class_id in self._assigned_class_ids(teacher_profile)
+            )
 
         if user.role == "student":
             student = Student.objects.filter(user=user).first()
             return bool(student and student.academic_class_id == class_id)
 
         if user.role == "parent":
-            parent = Parent.objects.prefetch_related("students").filter(user=user).first()
+            parent = (
+                Parent.objects.prefetch_related("students").filter(user=user).first()
+            )
             if not parent:
                 return False
             return class_id in set(
-                cid for cid in parent.students.values_list("academic_class_id", flat=True) if cid
+                cid
+                for cid in parent.students.values_list("academic_class_id", flat=True)
+                if cid
             )
 
         return False
@@ -166,7 +184,9 @@ class TimetableViewSet(viewsets.ModelViewSet):
         if overlap_errors:
             raise ValidationError({"slots": overlap_errors})
 
-    def _build_main_slot_objects(self, *, academic_year, academic_class_id, validated_slots, actor):
+    def _build_main_slot_objects(
+        self, *, academic_year, academic_class_id, validated_slots, actor
+    ):
         approved_time = timezone.now()
         return [
             Timetable(
@@ -195,10 +215,18 @@ class TimetableViewSet(viewsets.ModelViewSet):
             grouped.setdefault(item["day_of_week"], []).append(item)
 
         total_slots = len(serialized_slots)
-        approved_slots = sum(1 for item in serialized_slots if item.get("status") == "approved")
-        pending_slots = sum(1 for item in serialized_slots if item.get("status") == "pending")
-        main_slots = sum(1 for item in serialized_slots if item.get("entry_type") == "main")
-        extra_slots = sum(1 for item in serialized_slots if item.get("entry_type") == "extra")
+        approved_slots = sum(
+            1 for item in serialized_slots if item.get("status") == "approved"
+        )
+        pending_slots = sum(
+            1 for item in serialized_slots if item.get("status") == "pending"
+        )
+        main_slots = sum(
+            1 for item in serialized_slots if item.get("entry_type") == "main"
+        )
+        extra_slots = sum(
+            1 for item in serialized_slots if item.get("entry_type") == "extra"
+        )
 
         day_payload = []
         for day in self.DAY_SEQUENCE:
@@ -207,16 +235,28 @@ class TimetableViewSet(viewsets.ModelViewSet):
                 {
                     "day_of_week": day,
                     "total_slots": len(day_slots),
-                    "approved_slots": sum(1 for item in day_slots if item.get("status") == "approved"),
-                    "main_slots": sum(1 for item in day_slots if item.get("entry_type") == "main"),
-                    "extra_slots": sum(1 for item in day_slots if item.get("entry_type") == "extra"),
+                    "approved_slots": sum(
+                        1 for item in day_slots if item.get("status") == "approved"
+                    ),
+                    "main_slots": sum(
+                        1 for item in day_slots if item.get("entry_type") == "main"
+                    ),
+                    "extra_slots": sum(
+                        1 for item in day_slots if item.get("entry_type") == "extra"
+                    ),
                     "slots": day_slots,
                 }
             )
 
         return {
-            "academic_year": serialized_slots[0]["academic_year"] if serialized_slots else None,
-            "academic_year_name": serialized_slots[0].get("academic_year_name") if serialized_slots else None,
+            "academic_year": (
+                serialized_slots[0]["academic_year"] if serialized_slots else None
+            ),
+            "academic_year_name": (
+                serialized_slots[0].get("academic_year_name")
+                if serialized_slots
+                else None
+            ),
             "academic_class": academic_class.id,
             "academic_class_name": academic_class.name,
             "total_slots": total_slots,
@@ -231,7 +271,9 @@ class TimetableViewSet(viewsets.ModelViewSet):
         user = self.request.user
         queryset = self._base_queryset().all()
 
-        class_id = self.request.query_params.get("academic_class") or self.request.query_params.get("class")
+        class_id = self.request.query_params.get(
+            "academic_class"
+        ) or self.request.query_params.get("class")
         if class_id:
             queryset = queryset.filter(academic_class_id=class_id)
 
@@ -255,34 +297,57 @@ class TimetableViewSet(viewsets.ModelViewSet):
             if not teacher_profile:
                 return Timetable.objects.none()
 
-            assigned_class_ids = list(teacher_profile.assigned_classes.values_list("id", flat=True))
+            assigned_class_ids = list(
+                teacher_profile.assigned_classes.values_list("id", flat=True)
+            )
             visible = Q(created_by=user) | Q(teacher=teacher_profile, status="approved")
             if assigned_class_ids:
-                visible |= Q(academic_class_id__in=assigned_class_ids, status="approved")
+                visible |= Q(
+                    academic_class_id__in=assigned_class_ids, status="approved"
+                )
             return self._ordered_queryset(queryset.filter(visible).distinct())
 
         if user.role == "student":
-            student = Student.objects.select_related("academic_class").filter(user=user).first()
+            student = (
+                Student.objects.select_related("academic_class")
+                .filter(user=user)
+                .first()
+            )
             if not student or not student.academic_class_id:
                 return Timetable.objects.none()
-            return self._ordered_queryset(queryset.filter(academic_class_id=student.academic_class_id, status="approved"))
+            return self._ordered_queryset(
+                queryset.filter(
+                    academic_class_id=student.academic_class_id, status="approved"
+                )
+            )
 
         if user.role == "parent":
-            parent = Parent.objects.prefetch_related("students").filter(user=user).first()
+            parent = (
+                Parent.objects.prefetch_related("students").filter(user=user).first()
+            )
             if not parent:
                 return Timetable.objects.none()
 
-            class_ids = [cid for cid in parent.students.values_list("academic_class_id", flat=True) if cid]
+            class_ids = [
+                cid
+                for cid in parent.students.values_list("academic_class_id", flat=True)
+                if cid
+            ]
             if not class_ids:
                 return Timetable.objects.none()
 
-            return self._ordered_queryset(queryset.filter(academic_class_id__in=class_ids, status="approved"))
+            return self._ordered_queryset(
+                queryset.filter(academic_class_id__in=class_ids, status="approved")
+            )
 
         return Timetable.objects.none()
 
     def perform_create(self, serializer):
         user = self.request.user
-        academic_year = serializer.validated_data.get("academic_year") or ensure_current_academic_year()
+        academic_year = (
+            serializer.validated_data.get("academic_year")
+            or ensure_current_academic_year()
+        )
         if not academic_year:
             raise ValidationError({"academic_year": "No active academic year found."})
 
@@ -294,15 +359,26 @@ class TimetableViewSet(viewsets.ModelViewSet):
 
             requested_entry_type = serializer.validated_data.get("entry_type", "extra")
             if requested_entry_type != "extra":
-                raise PermissionDenied("Teachers can only create extra timetable requests.")
+                raise PermissionDenied(
+                    "Teachers can only create extra timetable requests."
+                )
 
             requested_class = serializer.validated_data.get("academic_class")
             if not requested_class or requested_class.id not in assigned_class_ids:
-                raise PermissionDenied("Teachers can only request extra classes for their assigned classes.")
+                raise PermissionDenied(
+                    "Teachers can only request extra classes for their assigned classes."
+                )
 
             requested_teacher = serializer.validated_data.get("teacher")
-            if requested_teacher and requested_teacher.teacher_id != teacher_profile.teacher_id:
-                raise ValidationError({"teacher": "Teachers can only assign themselves for extra class requests."})
+            if (
+                requested_teacher
+                and requested_teacher.teacher_id != teacher_profile.teacher_id
+            ):
+                raise ValidationError(
+                    {
+                        "teacher": "Teachers can only assign themselves for extra class requests."
+                    }
+                )
 
             self._validate_no_overlap(
                 academic_year_id=academic_year.id,
@@ -341,7 +417,9 @@ class TimetableViewSet(viewsets.ModelViewSet):
                 )
 
             approved_by = user if requested_status in {"approved", "rejected"} else None
-            approved_at = timezone.now() if requested_status in {"approved", "rejected"} else None
+            approved_at = (
+                timezone.now() if requested_status in {"approved", "rejected"} else None
+            )
 
             serializer.save(
                 academic_year=academic_year,
@@ -351,7 +429,9 @@ class TimetableViewSet(viewsets.ModelViewSet):
             )
             return
 
-        raise PermissionDenied("You do not have permission to create timetable entries.")
+        raise PermissionDenied(
+            "You do not have permission to create timetable entries."
+        )
 
     def perform_update(self, serializer):
         user = self.request.user
@@ -359,12 +439,23 @@ class TimetableViewSet(viewsets.ModelViewSet):
 
         if self._is_timetable_manager(user):
             new_status = serializer.validated_data.get("status", instance.status)
-            target_year = serializer.validated_data.get("academic_year", instance.academic_year) or ensure_current_academic_year()
+            target_year = (
+                serializer.validated_data.get("academic_year", instance.academic_year)
+                or ensure_current_academic_year()
+            )
             if not target_year:
-                raise ValidationError({"academic_year": "No active academic year found."})
-            target_class = serializer.validated_data.get("academic_class", instance.academic_class)
-            target_day = serializer.validated_data.get("day_of_week", instance.day_of_week)
-            target_start = serializer.validated_data.get("start_time", instance.start_time)
+                raise ValidationError(
+                    {"academic_year": "No active academic year found."}
+                )
+            target_class = serializer.validated_data.get(
+                "academic_class", instance.academic_class
+            )
+            target_day = serializer.validated_data.get(
+                "day_of_week", instance.day_of_week
+            )
+            target_start = serializer.validated_data.get(
+                "start_time", instance.start_time
+            )
             target_end = serializer.validated_data.get("end_time", instance.end_time)
 
             if new_status == "approved":
@@ -398,22 +489,36 @@ class TimetableViewSet(viewsets.ModelViewSet):
             assigned_class_ids = self._assigned_class_ids(teacher_profile)
 
             if instance.entry_type != "extra" or instance.created_by_id != user.id:
-                raise PermissionDenied("Teachers can only edit their own extra class requests.")
+                raise PermissionDenied(
+                    "Teachers can only edit their own extra class requests."
+                )
             if instance.status == "approved":
-                raise PermissionDenied("Approved extra classes can only be edited by admin/management.")
+                raise PermissionDenied(
+                    "Approved extra classes can only be edited by admin/management."
+                )
             if (
                 "entry_type" in serializer.validated_data
                 or "status" in serializer.validated_data
                 or "academic_year" in serializer.validated_data
             ):
-                raise PermissionDenied("Teachers cannot change entry type or approval status.")
+                raise PermissionDenied(
+                    "Teachers cannot change entry type or approval status."
+                )
 
-            target_class = serializer.validated_data.get("academic_class", instance.academic_class)
+            target_class = serializer.validated_data.get(
+                "academic_class", instance.academic_class
+            )
             if target_class.id not in assigned_class_ids:
-                raise PermissionDenied("Teachers can only request extra classes for their assigned classes.")
+                raise PermissionDenied(
+                    "Teachers can only request extra classes for their assigned classes."
+                )
 
-            target_day = serializer.validated_data.get("day_of_week", instance.day_of_week)
-            target_start = serializer.validated_data.get("start_time", instance.start_time)
+            target_day = serializer.validated_data.get(
+                "day_of_week", instance.day_of_week
+            )
+            target_start = serializer.validated_data.get(
+                "start_time", instance.start_time
+            )
             target_end = serializer.validated_data.get("end_time", instance.end_time)
             self._validate_no_overlap(
                 academic_year_id=instance.academic_year_id,
@@ -426,8 +531,15 @@ class TimetableViewSet(viewsets.ModelViewSet):
             )
 
             requested_teacher = serializer.validated_data.get("teacher")
-            if requested_teacher and requested_teacher.teacher_id != teacher_profile.teacher_id:
-                raise ValidationError({"teacher": "Teachers can only assign themselves for extra class requests."})
+            if (
+                requested_teacher
+                and requested_teacher.teacher_id != teacher_profile.teacher_id
+            ):
+                raise ValidationError(
+                    {
+                        "teacher": "Teachers can only assign themselves for extra class requests."
+                    }
+                )
 
             serializer.save(
                 teacher=requested_teacher or teacher_profile,
@@ -437,7 +549,9 @@ class TimetableViewSet(viewsets.ModelViewSet):
             )
             return
 
-        raise PermissionDenied("You do not have permission to update timetable entries.")
+        raise PermissionDenied(
+            "You do not have permission to update timetable entries."
+        )
 
     def destroy(self, request, *args, **kwargs):
         user = request.user
@@ -448,18 +562,26 @@ class TimetableViewSet(viewsets.ModelViewSet):
 
         if user.role == "teacher":
             if instance.entry_type != "extra" or instance.created_by_id != user.id:
-                raise PermissionDenied("Teachers can only delete their own extra class requests.")
+                raise PermissionDenied(
+                    "Teachers can only delete their own extra class requests."
+                )
             if instance.status == "approved":
-                raise PermissionDenied("Approved extra classes can only be deleted by admin/management.")
+                raise PermissionDenied(
+                    "Approved extra classes can only be deleted by admin/management."
+                )
             return super().destroy(request, *args, **kwargs)
 
-        raise PermissionDenied("You do not have permission to delete timetable entries.")
+        raise PermissionDenied(
+            "You do not have permission to delete timetable entries."
+        )
 
     @action(detail=False, methods=["get"])
     def my_timetable(self, request):
         if request.user.role not in ["student", "teacher", "parent"]:
             return Response(
-                {"detail": "This endpoint is available for student/teacher/parent roles."},
+                {
+                    "detail": "This endpoint is available for student/teacher/parent roles."
+                },
                 status=status.HTTP_403_FORBIDDEN,
             )
 
@@ -475,7 +597,11 @@ class TimetableViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_403_FORBIDDEN,
             )
 
-        queryset = self._base_queryset().filter(created_by=request.user, entry_type="extra").order_by("-timetable_id")
+        queryset = (
+            self._base_queryset()
+            .filter(created_by=request.user, entry_type="extra")
+            .order_by("-timetable_id")
+        )
         serializer = self.get_serializer(queryset, many=True)
         return Response(serializer.data)
 
@@ -495,62 +621,107 @@ class TimetableViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=["get"])
     def overview(self, request):
-        class_id_raw = request.query_params.get("academic_class") or request.query_params.get("class")
+        class_id_raw = request.query_params.get(
+            "academic_class"
+        ) or request.query_params.get("class")
         if not class_id_raw:
-            return Response({"detail": "academic_class is required."}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"detail": "academic_class is required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         try:
             class_id = int(class_id_raw)
         except (TypeError, ValueError):
-            return Response({"detail": "academic_class must be a valid integer."}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"detail": "academic_class must be a valid integer."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         academic_class = AcademicClass.objects.filter(id=class_id).first()
         if not academic_class:
-            return Response({"detail": "Class not found."}, status=status.HTTP_404_NOT_FOUND)
+            return Response(
+                {"detail": "Class not found."}, status=status.HTTP_404_NOT_FOUND
+            )
 
         if not self._can_view_class(request.user, class_id):
-            return Response({"detail": "You do not have access to this class timetable."}, status=status.HTTP_403_FORBIDDEN)
+            return Response(
+                {"detail": "You do not have access to this class timetable."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
 
         class_slots = list(self.get_queryset().filter(academic_class_id=class_id))
-        return Response(self._build_overview_payload(academic_class=academic_class, slots=class_slots))
+        return Response(
+            self._build_overview_payload(
+                academic_class=academic_class, slots=class_slots
+            )
+        )
 
     @action(detail=False, methods=["post"])
     def bulk_replace_main(self, request):
         if not self._is_timetable_manager(request.user):
             return Response(
-                {"detail": "Only admin/management can bulk replace the main timetable."},
+                {
+                    "detail": "Only admin/management can bulk replace the main timetable."
+                },
                 status=status.HTTP_403_FORBIDDEN,
             )
 
         class_id_raw = request.data.get("academic_class") or request.data.get("class")
         slots_payload = request.data.get("slots")
         academic_year_raw = request.data.get("academic_year")
-        overwrite_existing = self._to_bool(request.data.get("overwrite_existing"), default=True)
+        overwrite_existing = self._to_bool(
+            request.data.get("overwrite_existing"), default=True
+        )
 
         if not class_id_raw:
-            return Response({"detail": "academic_class is required."}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"detail": "academic_class is required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         if not isinstance(slots_payload, list) or not slots_payload:
-            return Response({"detail": "slots must be a non-empty list."}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"detail": "slots must be a non-empty list."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         if len(slots_payload) > 400:
-            return Response({"detail": "slots cannot exceed 400 entries per request."}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"detail": "slots cannot exceed 400 entries per request."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         try:
             class_id = int(class_id_raw)
         except (TypeError, ValueError):
-            return Response({"detail": "academic_class must be a valid integer."}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"detail": "academic_class must be a valid integer."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         academic_class = AcademicClass.objects.filter(id=class_id).first()
         if not academic_class:
-            return Response({"detail": "Class not found."}, status=status.HTTP_404_NOT_FOUND)
+            return Response(
+                {"detail": "Class not found."}, status=status.HTTP_404_NOT_FOUND
+            )
 
-        academic_year = self._find_academic_year(academic_year_raw) if academic_year_raw else ensure_current_academic_year()
+        academic_year = (
+            self._find_academic_year(academic_year_raw)
+            if academic_year_raw
+            else ensure_current_academic_year()
+        )
         if not academic_year:
-            return Response({"detail": "Academic year not found."}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"detail": "Academic year not found."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         normalized_payload = []
         for slot in slots_payload:
             if not isinstance(slot, dict):
-                return Response({"detail": "Each slot must be an object."}, status=status.HTTP_400_BAD_REQUEST)
+                return Response(
+                    {"detail": "Each slot must be an object."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
             normalized_payload.append(
                 {
                     **slot,
@@ -575,7 +746,9 @@ class TimetableViewSet(viewsets.ModelViewSet):
                 existing_main_qs.delete()
             elif existing_main_qs.exists():
                 return Response(
-                    {"detail": "Main timetable already exists. Enable overwrite_existing to replace it."},
+                    {
+                        "detail": "Main timetable already exists. Enable overwrite_existing to replace it."
+                    },
                     status=status.HTTP_409_CONFLICT,
                 )
 
@@ -607,7 +780,9 @@ class TimetableViewSet(viewsets.ModelViewSet):
                 )
             )
         )
-        payload = self._build_overview_payload(academic_class=academic_class, slots=class_slots)
+        payload = self._build_overview_payload(
+            academic_class=academic_class, slots=class_slots
+        )
         payload["created_count"] = len(validated_slots)
         return Response(payload, status=status.HTTP_201_CREATED)
 
@@ -622,7 +797,9 @@ class TimetableViewSet(viewsets.ModelViewSet):
         source_class_raw = request.data.get("source_class")
         target_class_raw = request.data.get("target_class")
         academic_year_raw = request.data.get("academic_year")
-        overwrite_existing = self._to_bool(request.data.get("overwrite_existing"), default=True)
+        overwrite_existing = self._to_bool(
+            request.data.get("overwrite_existing"), default=True
+        )
 
         try:
             source_class_id = int(source_class_raw)
@@ -642,11 +819,21 @@ class TimetableViewSet(viewsets.ModelViewSet):
         source_class = AcademicClass.objects.filter(id=source_class_id).first()
         target_class = AcademicClass.objects.filter(id=target_class_id).first()
         if not source_class or not target_class:
-            return Response({"detail": "Source or target class not found."}, status=status.HTTP_404_NOT_FOUND)
+            return Response(
+                {"detail": "Source or target class not found."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
 
-        academic_year = self._find_academic_year(academic_year_raw) if academic_year_raw else ensure_current_academic_year()
+        academic_year = (
+            self._find_academic_year(academic_year_raw)
+            if academic_year_raw
+            else ensure_current_academic_year()
+        )
         if not academic_year:
-            return Response({"detail": "Academic year not found."}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"detail": "Academic year not found."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         source_slots = list(
             self._ordered_queryset(
@@ -660,7 +847,9 @@ class TimetableViewSet(viewsets.ModelViewSet):
         )
         if not source_slots:
             return Response(
-                {"detail": "No approved main timetable slots found for the source class."},
+                {
+                    "detail": "No approved main timetable slots found for the source class."
+                },
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -687,7 +876,9 @@ class TimetableViewSet(viewsets.ModelViewSet):
                 target_main_qs.delete()
             elif target_main_qs.exists():
                 return Response(
-                    {"detail": "Target class already has a main timetable. Enable overwrite_existing to replace it."},
+                    {
+                        "detail": "Target class already has a main timetable. Enable overwrite_existing to replace it."
+                    },
                     status=status.HTTP_409_CONFLICT,
                 )
 
@@ -719,7 +910,9 @@ class TimetableViewSet(viewsets.ModelViewSet):
                 )
             )
         )
-        payload = self._build_overview_payload(academic_class=target_class, slots=target_slots)
+        payload = self._build_overview_payload(
+            academic_class=target_class, slots=target_slots
+        )
         payload["created_count"] = len(template_slots)
         payload["source_class"] = source_class_id
         payload["target_class"] = target_class_id
@@ -741,7 +934,9 @@ class TimetableViewSet(viewsets.ModelViewSet):
             )
         if timetable_entry.status != "pending":
             return Response(
-                {"detail": "Only pending extra class requests can be approved or rejected."},
+                {
+                    "detail": "Only pending extra class requests can be approved or rejected."
+                },
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -767,7 +962,9 @@ class TimetableViewSet(viewsets.ModelViewSet):
         timetable_entry.approval_comment = request.data.get("approval_comment", "")
         timetable_entry.approved_by = request.user
         timetable_entry.approved_at = timezone.now()
-        timetable_entry.save(update_fields=["status", "approval_comment", "approved_by", "approved_at"])
+        timetable_entry.save(
+            update_fields=["status", "approval_comment", "approved_by", "approved_at"]
+        )
 
         serializer = self.get_serializer(timetable_entry)
         return Response(serializer.data)

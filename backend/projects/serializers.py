@@ -13,7 +13,6 @@ from .models import (
     RubricTemplate,
 )
 
-
 # --- Light summary serializers used as nested read-only fields ---
 
 

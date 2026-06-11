@@ -152,7 +152,9 @@ class AcademicYearRolloverAndPromotionTests(FastTenantTestCase):
                 "auto_upgrade_students": True,
             },
         }
-        response = self.client.post("/api/academic/years/rollover/", payload, format="json")
+        response = self.client.post(
+            "/api/academic/years/rollover/", payload, format="json"
+        )
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         target_year = AcademicYear.objects.get(name="2092-2093")
@@ -170,11 +172,23 @@ class AcademicYearRolloverAndPromotionTests(FastTenantTestCase):
             academic_class=class_8,
             academic_year=target_year,
         )
-        self.assertTrue(Chapter.objects.filter(subject=target_subject, title="Numbers").exists())
+        self.assertTrue(
+            Chapter.objects.filter(subject=target_subject, title="Numbers").exists()
+        )
         target_chapter = Chapter.objects.get(subject=target_subject, title="Numbers")
-        self.assertTrue(Lesson.objects.filter(chapter=target_chapter, title="Whole Numbers").exists())
-        target_lesson = Lesson.objects.get(chapter=target_chapter, title="Whole Numbers")
-        self.assertTrue(LessonMaterial.objects.filter(lesson=target_lesson, title="Worksheet").exists())
+        self.assertTrue(
+            Lesson.objects.filter(
+                chapter=target_chapter, title="Whole Numbers"
+            ).exists()
+        )
+        target_lesson = Lesson.objects.get(
+            chapter=target_chapter, title="Whole Numbers"
+        )
+        self.assertTrue(
+            LessonMaterial.objects.filter(
+                lesson=target_lesson, title="Worksheet"
+            ).exists()
+        )
         self.assertTrue(
             Assessment.objects.filter(
                 academic_year=target_year,
@@ -247,7 +261,9 @@ class AcademicYearRolloverAndPromotionTests(FastTenantTestCase):
         )
         self.assertFalse(AcademicYear.objects.filter(name="2062-2063").exists())
 
-        missing_confirm = self.client.post("/api/academic/years/rollover/", base_payload, format="json")
+        missing_confirm = self.client.post(
+            "/api/academic/years/rollover/", base_payload, format="json"
+        )
         self.assertEqual(missing_confirm.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("confirm", str(missing_confirm.data.get("detail", "")).lower())
 
@@ -316,7 +332,12 @@ class AcademicYearRolloverAndPromotionTests(FastTenantTestCase):
             passing_marks=40,
             is_final_assessment=True,
         )
-        Result.objects.create(assessment=assessment, student=promoted_student, score=85, time_taken_minutes=45)
+        Result.objects.create(
+            assessment=assessment,
+            student=promoted_student,
+            score=85,
+            time_taken_minutes=45,
+        )
 
         response = self.client.post(
             f"/api/academic/assessments/{assessment.assessment_id}/publish_results/?academic_year={year.id}",
@@ -402,14 +423,49 @@ class AcademicYearRolloverAndPromotionTests(FastTenantTestCase):
             is_final_assessment=True,
         )
 
-        Result.objects.create(assessment=assessment, student=low_score_student, score=30, time_taken_minutes=40)
-        Result.objects.create(assessment=assessment, student=manual_promote_student, score=20, time_taken_minutes=40)
-        Result.objects.create(assessment=assessment, student=manual_hold_student, score=95, time_taken_minutes=40)
+        Result.objects.create(
+            assessment=assessment,
+            student=low_score_student,
+            score=30,
+            time_taken_minutes=40,
+        )
+        Result.objects.create(
+            assessment=assessment,
+            student=manual_promote_student,
+            score=20,
+            time_taken_minutes=40,
+        )
+        Result.objects.create(
+            assessment=assessment,
+            student=manual_hold_student,
+            score=95,
+            time_taken_minutes=40,
+        )
 
-        Attendance.objects.create(student=low_score_student, subject=subject, date="2023-05-02", status="present")
-        Attendance.objects.create(student=low_score_student, subject=subject, date="2023-05-03", status="absent")
-        Attendance.objects.create(student=manual_promote_student, subject=subject, date="2023-05-02", status="absent")
-        Attendance.objects.create(student=manual_hold_student, subject=subject, date="2023-05-02", status="present")
+        Attendance.objects.create(
+            student=low_score_student,
+            subject=subject,
+            date="2023-05-02",
+            status="present",
+        )
+        Attendance.objects.create(
+            student=low_score_student,
+            subject=subject,
+            date="2023-05-03",
+            status="absent",
+        )
+        Attendance.objects.create(
+            student=manual_promote_student,
+            subject=subject,
+            date="2023-05-02",
+            status="absent",
+        )
+        Attendance.objects.create(
+            student=manual_hold_student,
+            subject=subject,
+            date="2023-05-02",
+            status="present",
+        )
 
         response = self.client.post(
             f"/api/academic/assessments/{assessment.assessment_id}/publish_results/?academic_year={year.id}",
@@ -419,7 +475,9 @@ class AcademicYearRolloverAndPromotionTests(FastTenantTestCase):
                 "promotion_rules": {
                     "min_score_percentage": 40,
                     "min_attendance_percentage": 60,
-                    "manual_promote_student_ids": [str(manual_promote_student.student_id)],
+                    "manual_promote_student_ids": [
+                        str(manual_promote_student.student_id)
+                    ],
                     "manual_hold_student_ids": [str(manual_hold_student.student_id)],
                 },
             },
@@ -509,16 +567,52 @@ class AcademicYearRolloverAndPromotionTests(FastTenantTestCase):
             is_final_assessment=True,
         )
 
-        Result.objects.create(assessment=assessment, student=low_score_student, score=30, time_taken_minutes=30)
-        Result.objects.create(assessment=assessment, student=low_attendance_student, score=80, time_taken_minutes=30)
-        Result.objects.create(assessment=assessment, student=pass_student, score=82, time_taken_minutes=30)
+        Result.objects.create(
+            assessment=assessment,
+            student=low_score_student,
+            score=30,
+            time_taken_minutes=30,
+        )
+        Result.objects.create(
+            assessment=assessment,
+            student=low_attendance_student,
+            score=80,
+            time_taken_minutes=30,
+        )
+        Result.objects.create(
+            assessment=assessment, student=pass_student, score=82, time_taken_minutes=30
+        )
 
-        Attendance.objects.create(student=low_score_student, subject=subject, date="2027-05-01", status="present")
-        Attendance.objects.create(student=low_score_student, subject=subject, date="2027-05-02", status="present")
-        Attendance.objects.create(student=low_attendance_student, subject=subject, date="2027-05-01", status="present")
-        Attendance.objects.create(student=low_attendance_student, subject=subject, date="2027-05-02", status="absent")
-        Attendance.objects.create(student=pass_student, subject=subject, date="2027-05-01", status="present")
-        Attendance.objects.create(student=pass_student, subject=subject, date="2027-05-02", status="present")
+        Attendance.objects.create(
+            student=low_score_student,
+            subject=subject,
+            date="2027-05-01",
+            status="present",
+        )
+        Attendance.objects.create(
+            student=low_score_student,
+            subject=subject,
+            date="2027-05-02",
+            status="present",
+        )
+        Attendance.objects.create(
+            student=low_attendance_student,
+            subject=subject,
+            date="2027-05-01",
+            status="present",
+        )
+        Attendance.objects.create(
+            student=low_attendance_student,
+            subject=subject,
+            date="2027-05-02",
+            status="absent",
+        )
+        Attendance.objects.create(
+            student=pass_student, subject=subject, date="2027-05-01", status="present"
+        )
+        Attendance.objects.create(
+            student=pass_student, subject=subject, date="2027-05-02", status="present"
+        )
 
         list_response = self.client.get(
             (
@@ -530,9 +624,17 @@ class AcademicYearRolloverAndPromotionTests(FastTenantTestCase):
         self.assertEqual(list_response.data["summary"]["recommended_hold"], 2)
 
         rows = {item["student_id"]: item for item in list_response.data["students"]}
-        self.assertEqual(rows[str(low_score_student.student_id)]["hold_reason"], "score_below_threshold")
-        self.assertEqual(rows[str(low_attendance_student.student_id)]["hold_reason"], "attendance_below_threshold")
-        self.assertEqual(rows[str(pass_student.student_id)]["recommended_action"], "promote")
+        self.assertEqual(
+            rows[str(low_score_student.student_id)]["hold_reason"],
+            "score_below_threshold",
+        )
+        self.assertEqual(
+            rows[str(low_attendance_student.student_id)]["hold_reason"],
+            "attendance_below_threshold",
+        )
+        self.assertEqual(
+            rows[str(pass_student.student_id)]["recommended_action"], "promote"
+        )
 
         bulk_response = self.client.post(
             f"/api/academic/assessments/{assessment.assessment_id}/promotion_exceptions/bulk/?academic_year={year.id}",
@@ -569,8 +671,12 @@ class AcademicYearRolloverAndPromotionTests(FastTenantTestCase):
             },
             format="json",
         )
-        self.assertEqual(missing_reason_response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn("decision_reason", str(missing_reason_response.data.get("detail", "")))
+        self.assertEqual(
+            missing_reason_response.status_code, status.HTTP_400_BAD_REQUEST
+        )
+        self.assertIn(
+            "decision_reason", str(missing_reason_response.data.get("detail", ""))
+        )
 
         self.assertEqual(
             StudentPromotionDecision.objects.filter(assessment=assessment).count(),
@@ -581,7 +687,9 @@ class AcademicYearRolloverAndPromotionTests(FastTenantTestCase):
             student=low_score_student,
         )
         self.assertEqual(promoted_decision.decision, "promote")
-        self.assertEqual(promoted_decision.decision_reason, "Approved by exam committee")
+        self.assertEqual(
+            promoted_decision.decision_reason, "Approved by exam committee"
+        )
         self.assertEqual(promoted_decision.decided_by_id, self.admin_user.pk)
 
         held_decision = StudentPromotionDecision.objects.get(
@@ -589,10 +697,14 @@ class AcademicYearRolloverAndPromotionTests(FastTenantTestCase):
             student=pass_student,
         )
         self.assertEqual(held_decision.decision, "hold")
-        self.assertEqual(held_decision.decision_reason, "Disciplinary hold after review")
+        self.assertEqual(
+            held_decision.decision_reason, "Disciplinary hold after review"
+        )
         self.assertEqual(held_decision.decided_by_id, self.admin_user.pk)
 
-        history_rows = StudentPromotionDecisionHistory.objects.filter(assessment=assessment)
+        history_rows = StudentPromotionDecisionHistory.objects.filter(
+            assessment=assessment
+        )
         self.assertEqual(history_rows.count(), 2)
         self.assertTrue(
             history_rows.filter(
@@ -622,10 +734,23 @@ class AcademicYearRolloverAndPromotionTests(FastTenantTestCase):
             )
         )
         self.assertEqual(refreshed_list.status_code, status.HTTP_200_OK)
-        refreshed_rows = {item["student_id"]: item for item in refreshed_list.data["students"]}
-        self.assertEqual(refreshed_rows[str(pass_student.student_id)]["decision"]["decision_reason"], "Disciplinary hold after review")
-        self.assertEqual(refreshed_rows[str(pass_student.student_id)]["history"][0]["new_decision"], "hold")
-        self.assertEqual(refreshed_rows[str(pass_student.student_id)]["history"][0]["decision_reason"], "Disciplinary hold after review")
+        refreshed_rows = {
+            item["student_id"]: item for item in refreshed_list.data["students"]
+        }
+        self.assertEqual(
+            refreshed_rows[str(pass_student.student_id)]["decision"]["decision_reason"],
+            "Disciplinary hold after review",
+        )
+        self.assertEqual(
+            refreshed_rows[str(pass_student.student_id)]["history"][0]["new_decision"],
+            "hold",
+        )
+        self.assertEqual(
+            refreshed_rows[str(pass_student.student_id)]["history"][0][
+                "decision_reason"
+            ],
+            "Disciplinary hold after review",
+        )
 
         publish_response = self.client.post(
             f"/api/academic/assessments/{assessment.assessment_id}/publish_results/?academic_year={year.id}",
@@ -674,7 +799,9 @@ class AcademicYearRolloverAndPromotionTests(FastTenantTestCase):
             format="json",
         )
         self.assertEqual(reopen_without_reason.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn("reason", str(reopen_without_reason.data.get("detail", "")).lower())
+        self.assertIn(
+            "reason", str(reopen_without_reason.data.get("detail", "")).lower()
+        )
 
         reopen_response = self.client.post(
             f"/api/academic/assessments/{assessment.assessment_id}/reopen_results/?academic_year={year.id}",
@@ -698,7 +825,9 @@ class AcademicYearRolloverAndPromotionTests(FastTenantTestCase):
         )
         self.assertEqual(unlocked_decide.status_code, status.HTTP_200_OK)
 
-        audit_rows = AssessmentResultPublicationAudit.objects.filter(assessment=assessment)
+        audit_rows = AssessmentResultPublicationAudit.objects.filter(
+            assessment=assessment
+        )
         self.assertTrue(
             audit_rows.filter(
                 action="publish",

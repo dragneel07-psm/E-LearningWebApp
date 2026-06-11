@@ -19,7 +19,9 @@ class ProjectUpdate(models.Model):
         ("grade", "Grade"),
     ]
 
-    update_id = models.UUIDField(primary_key=True, default=uuid_lib.uuid4, editable=False)
+    update_id = models.UUIDField(
+        primary_key=True, default=uuid_lib.uuid4, editable=False
+    )
     tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE, db_constraint=False)
     project = models.ForeignKey(
         "projects.Project", on_delete=models.CASCADE, related_name="updates"
@@ -48,7 +50,9 @@ class ProjectUpdate(models.Model):
     class Meta:
         ordering = ["-created_at"]
         indexes = [
-            models.Index(fields=["project", "-created_at"], name="proj_upd_proj_time_idx"),
+            models.Index(
+                fields=["project", "-created_at"], name="proj_upd_proj_time_idx"
+            ),
         ]
 
     def __str__(self):

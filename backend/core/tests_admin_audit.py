@@ -1,10 +1,11 @@
 # Copyright (c) 2024-2026 Pramod Singh Manyal. All rights reserved.
 # Unauthorized copying, modification, or distribution of this file,
 # via any medium, is strictly prohibited. Proprietary and confidential.
+from types import SimpleNamespace
+from unittest.mock import patch
+
 from django_tenants.test.cases import FastTenantTestCase
 from django_tenants.utils import schema_context
-from unittest.mock import patch
-from types import SimpleNamespace
 from rest_framework import status
 from rest_framework.test import APIClient, APIRequestFactory, force_authenticate
 
@@ -27,7 +28,11 @@ class SaasAdminMutationAuditTests(FastTenantTestCase):
     def setUp(self):
         self.factory = APIRequestFactory()
         with schema_context("public"):
-            public_domain = Domain.objects.filter(tenant__schema_name="public").order_by("-is_primary").first()
+            public_domain = (
+                Domain.objects.filter(tenant__schema_name="public")
+                .order_by("-is_primary")
+                .first()
+            )
             public_host = public_domain.domain if public_domain else "localhost"
             self.public_tenant = Tenant.objects.filter(schema_name="public").first()
         self.public_client = APIClient(HTTP_HOST=public_host)
@@ -64,7 +69,11 @@ class SaasAdminMutationAuditTests(FastTenantTestCase):
             tenant_id=str(self.tenant.id),
             user_id=str(self.tenant_user.user_id),
         )
-        self.assertEqual(response.status_code, status.HTTP_200_OK, msg=getattr(response, "data", None))
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+            msg=getattr(response, "data", None),
+        )
 
         row = AuditLog.objects.filter(
             action="core.tenant_user_password_reset",
@@ -81,7 +90,11 @@ class SaasAdminMutationAuditTests(FastTenantTestCase):
         )
         force_authenticate(request, user=self.saas_admin)
         response = GlobalSettingsViewSet.as_view({"post": "create"})(request)
-        self.assertEqual(response.status_code, status.HTTP_200_OK, msg=getattr(response, "data", None))
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+            msg=getattr(response, "data", None),
+        )
 
         row = AuditLog.objects.filter(action="core.global_settings_updated").first()
         self.assertIsNotNone(row)
@@ -100,7 +113,11 @@ class SaasAdminMutationAuditTests(FastTenantTestCase):
         request.tenant = self.public_tenant or SimpleNamespace(schema_name="public")
         with patch("core.views.call_command") as mocked_call_command:
             response = BackupViewSet.as_view({"post": "create"})(request)
-        self.assertEqual(response.status_code, status.HTTP_200_OK, msg=getattr(response, "data", None))
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_200_OK,
+            msg=getattr(response, "data", None),
+        )
         mocked_call_command.assert_called()
 
         row = AuditLog.objects.filter(action="core.backup_created").first()
@@ -109,8 +126,14 @@ class SaasAdminMutationAuditTests(FastTenantTestCase):
 
     @patch("core.views.record_audit_event")
     @patch("core.views.connection.set_schema_to_public")
-    def test_tenant_delete_uses_public_schema_and_force_drop(self, mock_set_public, mock_audit):
-        request = self.factory.delete(f"/api/core/tenants/{self.tenant.id}/", {"password": "Saas@1234"}, format="json")
+    def test_tenant_delete_uses_public_schema_and_force_drop(
+        self, mock_set_public, mock_audit
+    ):
+        request = self.factory.delete(
+            f"/api/core/tenants/{self.tenant.id}/",
+            {"password": "Saas@1234"},
+            format="json",
+        )
         force_authenticate(request, user=self.saas_admin)
 
         view = TenantViewSet()

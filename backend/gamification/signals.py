@@ -1,13 +1,16 @@
 # Copyright (c) 2024-2026 Pramod Singh Manyal. All rights reserved.
 # Unauthorized copying, modification, or distribution of this file,
 # via any medium, is strictly prohibited. Proprietary and confidential.
+import logging
+
 from django.db.models.signals import post_save
 from django.dispatch import receiver
+
 from academic.models import LessonProgress
 from academic.models.assessment import Result
 from academic.models.submission import Submission
-from .models import PointTransaction, Badge, StudentBadge
-import logging
+
+from .models import Badge, PointTransaction, StudentBadge
 
 logger = logging.getLogger(__name__)
 
@@ -19,6 +22,7 @@ def _db_alias(instance):
 
 def _get_evaluator(student, using="default"):
     from gamification.badge_evaluator import BadgeEvaluatorService
+
     try:
         tenant = student.user.tenant
     except Exception:
@@ -32,10 +36,14 @@ def award_lesson_xp(sender, instance, created, **kwargs):
         return
 
     using = _db_alias(instance)
-    exists = PointTransaction.objects.using(using).filter(
-        student=instance.student,
-        description__contains=f"Completed lesson: {instance.lesson.title}",
-    ).exists()
+    exists = (
+        PointTransaction.objects.using(using)
+        .filter(
+            student=instance.student,
+            description__contains=f"Completed lesson: {instance.lesson.title}",
+        )
+        .exists()
+    )
 
     if not exists:
         points = 50
@@ -52,7 +60,12 @@ def award_lesson_xp(sender, instance, created, **kwargs):
                 description=f"Completed lesson: {instance.lesson.title}",
                 activity_type="lesson",
             )
-            logger.info("Awarded %d XP to %s for lesson %s", points, instance.student, instance.lesson.title)
+            logger.info(
+                "Awarded %d XP to %s for lesson %s",
+                points,
+                instance.student,
+                instance.lesson.title,
+            )
 
     try:
         evaluator = _get_evaluator(instance.student, using=using)

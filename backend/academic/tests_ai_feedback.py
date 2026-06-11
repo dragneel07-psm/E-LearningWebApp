@@ -35,7 +35,10 @@ class ResultAIFeedbackTests(SimpleTestCase):
         result.save = _save
         return result, saved
 
-    @patch("ai_engine.services.tutor_service.ai_tutor_service.get_chat_response", return_value="AI feedback text")
+    @patch(
+        "ai_engine.services.tutor_service.ai_tutor_service.get_chat_response",
+        return_value="AI feedback text",
+    )
     def test_generate_ai_feedback_uses_tutor_service(self, _mock_chat):
         result, saved = self._dummy_result()
         view = ResultViewSet()
@@ -47,7 +50,10 @@ class ResultAIFeedbackTests(SimpleTestCase):
         self.assertEqual(response.data.get("ai_feedback"), "AI feedback text")
         self.assertTrue(saved["called"])
 
-    @patch("ai_engine.services.tutor_service.ai_tutor_service.get_chat_response", side_effect=Exception("provider down"))
+    @patch(
+        "ai_engine.services.tutor_service.ai_tutor_service.get_chat_response",
+        side_effect=Exception("provider down"),
+    )
     def test_generate_ai_feedback_fallback_when_ai_fails(self, _mock_chat):
         result, saved = self._dummy_result()
         view = ResultViewSet()

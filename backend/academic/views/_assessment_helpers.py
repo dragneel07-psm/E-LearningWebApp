@@ -4,8 +4,11 @@
 """
 Shared RBAC helpers for assessment views.
 """
+
 import logging
+
 from django.db import models
+
 from academic.models import AcademicYear
 from academic.models.teacher import Teacher
 from academic.services.academic_year_service import ensure_current_academic_year
@@ -19,12 +22,12 @@ def _to_bool(value, default=False):
     if isinstance(value, bool):
         return value
     if isinstance(value, str):
-        return value.strip().lower() in {'1', 'true', 'yes', 'on'}
+        return value.strip().lower() in {"1", "true", "yes", "on"}
     return bool(value)
 
 
 def _find_academic_year(raw_year):
-    if raw_year is None or raw_year == '':
+    if raw_year is None or raw_year == "":
         return None
     if isinstance(raw_year, AcademicYear):
         return raw_year
@@ -34,7 +37,7 @@ def _find_academic_year(raw_year):
 
 
 def _resolve_request_year(request):
-    raw_year = request.query_params.get('academic_year')
+    raw_year = request.query_params.get("academic_year")
     if raw_year:
         return _find_academic_year(raw_year), True
     return ensure_current_academic_year(), False
@@ -53,7 +56,9 @@ def _is_content_manager(user) -> bool:
 
 
 def _teacher_profile(user):
-    return Teacher.objects.prefetch_related("assigned_classes").filter(user=user).first()
+    return (
+        Teacher.objects.prefetch_related("assigned_classes").filter(user=user).first()
+    )
 
 
 def _teacher_assessment_visibility_q(user, prefix: str = ""):
@@ -61,7 +66,9 @@ def _teacher_assessment_visibility_q(user, prefix: str = ""):
     if not teacher:
         return models.Q(pk__in=[])
 
-    class_ids = [cid for cid in teacher.assigned_classes.values_list("id", flat=True) if cid]
+    class_ids = [
+        cid for cid in teacher.assigned_classes.values_list("id", flat=True) if cid
+    ]
     pre = f"{prefix}__" if prefix else ""
     return (
         models.Q(**{f"{pre}subject__teacher": teacher})

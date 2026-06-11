@@ -11,7 +11,9 @@ from core.models.tenant import Tenant
 
 
 class ProjectSubmission(models.Model):
-    submission_id = models.UUIDField(primary_key=True, default=uuid_lib.uuid4, editable=False)
+    submission_id = models.UUIDField(
+        primary_key=True, default=uuid_lib.uuid4, editable=False
+    )
     tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE, db_constraint=False)
     project = models.ForeignKey(
         "projects.Project", on_delete=models.CASCADE, related_name="submissions"
@@ -32,7 +34,9 @@ class ProjectSubmission(models.Model):
     class Meta:
         ordering = ["-submitted_at"]
         indexes = [
-            models.Index(fields=["project", "-submitted_at"], name="proj_sub_proj_time_idx"),
+            models.Index(
+                fields=["project", "-submitted_at"], name="proj_sub_proj_time_idx"
+            ),
         ]
 
     def __str__(self):

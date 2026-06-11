@@ -41,7 +41,9 @@ class RequestContextLogFilterTests(SimpleTestCase):
         self.assertEqual(record.tenant_id, "tenant-1")
 
     def test_filter_uses_safe_defaults_after_reset(self):
-        set_request_context(request_id="trace-1", tenant_schema="demo", tenant_id="id-1")
+        set_request_context(
+            request_id="trace-1", tenant_schema="demo", tenant_id="id-1"
+        )
         reset_request_context()
         record = logging.LogRecord(
             name="test.logger",

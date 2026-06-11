@@ -1,10 +1,12 @@
 # Copyright (c) 2024-2026 Pramod Singh Manyal. All rights reserved.
 # Unauthorized copying, modification, or distribution of this file,
 # via any medium, is strictly prohibited. Proprietary and confidential.
-import requests
 import json
 
+import requests
+
 BASE_URL = "http://localhost:8000/api"
+
 
 def get_token(email, password):
     url = f"{BASE_URL}/token/"
@@ -16,6 +18,7 @@ def get_token(email, password):
         print(f"Failed to get token: {response.text}")
         return None
 
+
 def test_student_endpoints():
     token = get_token("student@demo.com", "student123")
     if not token:
@@ -25,7 +28,7 @@ def test_student_endpoints():
     headers = {
         "Authorization": f"Bearer {token}",
         "Content-Type": "application/json",
-        "x-tenant-id": "demo"
+        "x-tenant-id": "demo",
     }
 
     print("\n✅ Student logged in successfully\n")
@@ -40,7 +43,7 @@ def test_student_endpoints():
         print(f"Student: {student.get('first_name')} {student.get('last_name')}")
         print(f"Class: {student.get('class_name', 'N/A')}")
         print(f"Email: {student.get('email')}")
-        student_id = student.get('id') or student.get('student_id')
+        student_id = student.get("id") or student.get("student_id")
     else:
         print(f"Error: {resp.text}")
         return
@@ -65,7 +68,9 @@ def test_student_endpoints():
 
     # Test 4: Get AI Recommendations
     print("\n--- Testing AI Recommendations ---")
-    resp = requests.get(f"{BASE_URL}/ai/personalization/recommendations/", headers=headers)
+    resp = requests.get(
+        f"{BASE_URL}/ai/personalization/recommendations/", headers=headers
+    )
     print(f"Status: {resp.status_code}")
     if resp.status_code == 200:
         print("✅ AI Recommendations working!")
@@ -81,6 +86,7 @@ def test_student_endpoints():
     if resp.status_code == 200:
         attendance = resp.json()
         print(f"Attendance records: {len(attendance)}")
+
 
 if __name__ == "__main__":
     test_student_endpoints()

@@ -19,6 +19,7 @@ Data sources used (all Phase 1–8 work feeds into this):
   • Daily token budget consumption
   • Learning streak and focus score from Student model
 """
+
 from __future__ import annotations
 
 import json
@@ -33,10 +34,11 @@ from ai_engine.services.lang_utils import get_lang_instruction
 logger = logging.getLogger(__name__)
 
 LOOKBACK_DAYS = 30
-MIN_REPORT_INTERVAL_DAYS = 7    # Don't regenerate more often than this
+MIN_REPORT_INTERVAL_DAYS = 7  # Don't regenerate more often than this
 
 
 # ── helpers ──────────────────────────────────────────────────────────────────
+
 
 def _safe_pct(numerator: float, denominator: float) -> float:
     return round((numerator / denominator) * 100, 1) if denominator else 0.0
@@ -63,6 +65,7 @@ def _extract_json(raw: str) -> dict:
 
 # ── service ──────────────────────────────────────────────────────────────────
 
+
 class ProgressReportService:
     """Generate and persist AI progress reports for students."""
 
@@ -75,7 +78,9 @@ class ProgressReportService:
     # Public API
     # ------------------------------------------------------------------ #
 
-    def get_or_generate(self, student, report_type: str = "student", force: bool = False) -> dict:
+    def get_or_generate(
+        self, student, report_type: str = "student", force: bool = False
+    ) -> dict:
         """
         Return a cached report if one was generated within MIN_REPORT_INTERVAL_DAYS,
         otherwise generate a fresh one.
@@ -86,14 +91,22 @@ class ProgressReportService:
             cutoff = timezone.now() - timedelta(days=MIN_REPORT_INTERVAL_DAYS)
             latest = (
                 StudentAIReport.objects.using(self.db_alias)
-                .filter(student=student, report_type=report_type, generated_at__gte=cutoff)
+                .filter(
+                    student=student, report_type=report_type, generated_at__gte=cutoff
+                )
                 .order_by("-generated_at")
                 .first()
             )
             if latest:
-                return {"cached": True, "report": latest.report_data, "generated_at": latest.generated_at.isoformat()}
+                return {
+                    "cached": True,
+                    "report": latest.report_data,
+                    "generated_at": latest.generated_at.isoformat(),
+                }
 
-        return self.generate(student, report_type=report_type, save=True, is_automated=False)
+        return self.generate(
+            student, report_type=report_type, save=True, is_automated=False
+        )
 
     def generate(
         self,
@@ -117,6 +130,7 @@ class ProgressReportService:
 
         if save:
             from ai_engine.models import StudentAIReport
+
             StudentAIReport.objects.using(self.db_alias).create(
                 tenant=self.tenant,
                 student=student,
@@ -125,10 +139,17 @@ class ProgressReportService:
                 is_automated=is_automated,
             )
 
-        return {"cached": False, "report": report_data, "generated_at": report_data["generated_at"]}
+        return {
+            "cached": False,
+            "report": report_data,
+            "generated_at": report_data["generated_at"],
+        }
 
-    def list_history(self, student, report_type: str | None = None, limit: int = 10) -> list[dict]:
+    def list_history(
+        self, student, report_type: str | None = None, limit: int = 10
+    ) -> list[dict]:
         from ai_engine.models import StudentAIReport
+
         qs = StudentAIReport.objects.using(self.db_alias).filter(student=student)
         if report_type:
             qs = qs.filter(report_type=report_type)
@@ -154,10 +175,15 @@ class ProgressReportService:
 
         # ── Basic info ────────────────────────────────────────────────────
         student_name = student.user.get_full_name() or student.user.username
-        class_name = student.academic_class.name if getattr(student, "academic_class", None) else "N/A"
+        class_name = (
+            student.academic_class.name
+            if getattr(student, "academic_class", None)
+            else "N/A"
+        )
 
         # ── Assessment results ────────────────────────────────────────────
         from academic.models import Result, Subject
+
         results = list(
             Result.objects.using(db)
             .filter(student=student, submitted_at__gte=cutoff)
@@ -181,27 +207,46 @@ class ProgressReportService:
 
         # ── Attendance ────────────────────────────────────────────────────
         from academic.models import Attendance
-        att = list(Attendance.objects.using(db).filter(student=student, date__gte=cutoff.date()))
+
+        att = list(
+            Attendance.objects.using(db).filter(
+                student=student, date__gte=cutoff.date()
+            )
+        )
         att_rate = _safe_pct(sum(1 for a in att if a.status == "present"), len(att))
 
         # ── SM-2 spaced repetition ─────────────────────────────────────────
         from ai_engine.models import LearningNode
+
         nodes = list(
             LearningNode.objects.using(db)
             .filter(learning_path__student=student, status="completed")
             .values("last_quality", "ease_factor", "interval_days", "repetitions")
         )
-        avg_quality = round(sum(n["last_quality"] or 0 for n in nodes) / len(nodes), 2) if nodes else 0
+        avg_quality = (
+            round(sum(n["last_quality"] or 0 for n in nodes) / len(nodes), 2)
+            if nodes
+            else 0
+        )
         reviews_completed = len(nodes)
-        avg_ease = round(sum(n["ease_factor"] for n in nodes) / len(nodes), 2) if nodes else 2.5
-        due_reviews = LearningNode.objects.using(db).filter(
-            learning_path__student=student,
-            next_review_at__date__lte=now.date(),
-            status__in=["completed", "unlocked", "in_progress"],
-        ).count()
+        avg_ease = (
+            round(sum(n["ease_factor"] for n in nodes) / len(nodes), 2)
+            if nodes
+            else 2.5
+        )
+        due_reviews = (
+            LearningNode.objects.using(db)
+            .filter(
+                learning_path__student=student,
+                next_review_at__date__lte=now.date(),
+                status__in=["completed", "unlocked", "in_progress"],
+            )
+            .count()
+        )
 
         # ── BKT skill mastery ─────────────────────────────────────────────
         from ai_engine.models import SkillMastery
+
         masteries = list(
             SkillMastery.objects.using(db)
             .filter(student=student)
@@ -210,29 +255,41 @@ class ProgressReportService:
         )
         skill_gaps = [
             {"skill": m.skill_tag.name, "mastery_pct": round(m.p_mastery * 100, 1)}
-            for m in masteries if m.p_mastery < 0.60
+            for m in masteries
+            if m.p_mastery < 0.60
         ][:5]
         skill_strengths = [
             {"skill": m.skill_tag.name, "mastery_pct": round(m.p_mastery * 100, 1)}
-            for m in sorted(masteries, key=lambda x: -x.p_mastery) if m.p_mastery >= 0.75
+            for m in sorted(masteries, key=lambda x: -x.p_mastery)
+            if m.p_mastery >= 0.75
         ][:5]
 
         # ── AI tutor usage ────────────────────────────────────────────────
         from ai_engine.models import TutorConversation, TutorMessage
-        conversations = TutorConversation.objects.using(db).filter(
-            student=student, created_at__gte=cutoff
-        ).count()
-        messages = TutorMessage.objects.using(db).filter(
-            conversation__student=student,
-            created_at__gte=cutoff,
-            role="user",
-        ).count()
+
+        conversations = (
+            TutorConversation.objects.using(db)
+            .filter(student=student, created_at__gte=cutoff)
+            .count()
+        )
+        messages = (
+            TutorMessage.objects.using(db)
+            .filter(
+                conversation__student=student,
+                created_at__gte=cutoff,
+                role="user",
+            )
+            .count()
+        )
 
         # ── Token budget ──────────────────────────────────────────────────
         from ai_engine.models import AITokenBudget
-        budget = AITokenBudget.objects.using(db).filter(
-            tenant=self.tenant, student=student
-        ).first()
+
+        budget = (
+            AITokenBudget.objects.using(db)
+            .filter(tenant=self.tenant, student=student)
+            .first()
+        )
         budget_pct = 0.0
         if budget and budget.daily_limit_tokens:
             budget_pct = _safe_pct(budget.used_today, budget.daily_limit_tokens)
@@ -244,6 +301,7 @@ class ProgressReportService:
 
         # ── Study plan completion ─────────────────────────────────────────
         from ai_engine.models import StudyEvent
+
         plan_events = StudyEvent.objects.using(db).filter(
             student=student, start_time__gte=cutoff
         )
@@ -285,7 +343,9 @@ class ProgressReportService:
     # LLM section generation
     # ------------------------------------------------------------------ #
 
-    def _generate_ai_section(self, metrics: dict, report_type: str, lang: str = "en") -> dict:
+    def _generate_ai_section(
+        self, metrics: dict, report_type: str, lang: str = "en"
+    ) -> dict:
         prompt = self._build_prompt(metrics, report_type, lang=lang)
         raw = self._call_llm(prompt, lang=lang)
         parsed = _extract_json(raw)
@@ -294,8 +354,19 @@ class ProgressReportService:
         return parsed
 
     def _build_prompt(self, m: dict, report_type: str, lang: str = "en") -> str:
-        skills_gap_str = ", ".join(f"{g['skill']} ({g['mastery_pct']}%)" for g in m["bkt"]["skill_gaps"]) or "none"
-        skills_str = ", ".join(f"{s['skill']} ({s['mastery_pct']}%)" for s in m["bkt"]["skill_strengths"]) or "none"
+        skills_gap_str = (
+            ", ".join(
+                f"{g['skill']} ({g['mastery_pct']}%)" for g in m["bkt"]["skill_gaps"]
+            )
+            or "none"
+        )
+        skills_str = (
+            ", ".join(
+                f"{s['skill']} ({s['mastery_pct']}%)"
+                for s in m["bkt"]["skill_strengths"]
+            )
+            or "none"
+        )
 
         base = f"""
 Student: {m['student_name']} | Class: {m['class_name']}
@@ -420,7 +491,8 @@ Return valid JSON only with these keys:
                     f"with {m['attendance_rate']}% attendance."
                 ),
                 "strengths": m["strengths"][:3] or ["Keep up the consistent effort"],
-                "areas_to_improve": m["weak_subjects"][:2] or ["Continue reviewing weak topics"],
+                "areas_to_improve": m["weak_subjects"][:2]
+                or ["Continue reviewing weak topics"],
                 "weekly_goals": [
                     f"Complete all {m['sm2']['due_reviews']} pending spaced reviews",
                     "Ask the AI tutor at least one question per day",
@@ -445,9 +517,15 @@ Return valid JSON only with these keys:
             }
         else:
             return {
-                "risk_level": "medium" if m["avg_score"] < 60 or m["attendance_rate"] < 75 else "low",
+                "risk_level": (
+                    "medium"
+                    if m["avg_score"] < 60 or m["attendance_rate"] < 75
+                    else "low"
+                ),
                 "risk_reasons": (
-                    [f"Average score {m['avg_score']}% is below 60%"] if m["avg_score"] < 60 else []
+                    [f"Average score {m['avg_score']}% is below 60%"]
+                    if m["avg_score"] < 60
+                    else []
                 ),
                 "academic_summary": (
                     f"Average score: {m['avg_score']}%. "

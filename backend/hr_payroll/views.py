@@ -5,10 +5,10 @@ from __future__ import annotations
 
 from django.db import transaction
 from django.utils import timezone
+from django.utils.timezone import localtime
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from django.utils.timezone import localtime
 
 from billing.shared_views import BillingSchemaGuardMixin
 from core.mixins import TenantScopedQuerysetMixin
@@ -36,7 +36,9 @@ from .serializers import (
 )
 
 
-class _HRBase(BillingSchemaGuardMixin, TenantScopedQuerysetMixin, viewsets.ModelViewSet):
+class _HRBase(
+    BillingSchemaGuardMixin, TenantScopedQuerysetMixin, viewsets.ModelViewSet
+):
     require_tenant_schema = True
     allow_unscoped_for_saas = False
 
@@ -127,7 +129,10 @@ class EmployeeViewSet(_HRBase):
             action="hr.employee_deleted",
             user=self.request.user,
             request=self.request,
-            details={"employee_id": str(instance.employee_id), "name": instance.full_name},
+            details={
+                "employee_id": str(instance.employee_id),
+                "name": instance.full_name,
+            },
         )
         instance.delete()
 
@@ -169,7 +174,11 @@ class LeaveTypeViewSet(_HRBase):
             action="hr.leave_type_created",
             user=self.request.user,
             request=self.request,
-            details={"leave_type_id": str(lt.leave_type_id), "name": lt.name, "code": lt.code},
+            details={
+                "leave_type_id": str(lt.leave_type_id),
+                "name": lt.name,
+                "code": lt.code,
+            },
         )
 
     def perform_update(self, serializer):
@@ -190,6 +199,7 @@ class LeaveApplicationViewSet(_HRBase):
         qs = super().get_queryset()
         user = self.request.user
         from .permissions import _role
+
         if _role(user) not in {"admin", "staff"}:
             # Employees only see their own leaves
             employee = getattr(user, "employee_profile", None)
@@ -222,7 +232,12 @@ class LeaveApplicationViewSet(_HRBase):
             },
         )
 
-    @action(detail=True, methods=["post"], url_path="approve", permission_classes=[IsHRManager])
+    @action(
+        detail=True,
+        methods=["post"],
+        url_path="approve",
+        permission_classes=[IsHRManager],
+    )
     def approve(self, request, pk=None):
         leave = self.get_object()
         if leave.status != LeaveApplication.STATUS_PENDING:
@@ -236,16 +251,26 @@ class LeaveApplicationViewSet(_HRBase):
             leave.reviewed_by = request.user
             leave.reviewed_at = timezone.now()
             leave.review_remarks = remarks
-            leave.save(update_fields=["status", "reviewed_by", "reviewed_at", "review_remarks"])
+            leave.save(
+                update_fields=["status", "reviewed_by", "reviewed_at", "review_remarks"]
+            )
         record_audit_event(
             action="hr.leave_approved",
             user=request.user,
             request=request,
-            details={"leave_id": str(leave.leave_id), "employee": leave.employee.full_name},
+            details={
+                "leave_id": str(leave.leave_id),
+                "employee": leave.employee.full_name,
+            },
         )
         return Response(LeaveApplicationSerializer(leave).data)
 
-    @action(detail=True, methods=["post"], url_path="reject", permission_classes=[IsHRManager])
+    @action(
+        detail=True,
+        methods=["post"],
+        url_path="reject",
+        permission_classes=[IsHRManager],
+    )
     def reject(self, request, pk=None):
         leave = self.get_object()
         if leave.status != LeaveApplication.STATUS_PENDING:
@@ -264,7 +289,9 @@ class LeaveApplicationViewSet(_HRBase):
             leave.reviewed_by = request.user
             leave.reviewed_at = timezone.now()
             leave.review_remarks = remarks
-            leave.save(update_fields=["status", "reviewed_by", "reviewed_at", "review_remarks"])
+            leave.save(
+                update_fields=["status", "reviewed_by", "reviewed_at", "review_remarks"]
+            )
         record_audit_event(
             action="hr.leave_rejected",
             user=request.user,
@@ -276,7 +303,10 @@ class LeaveApplicationViewSet(_HRBase):
     @action(detail=True, methods=["post"], url_path="cancel")
     def cancel(self, request, pk=None):
         leave = self.get_object()
-        if leave.status not in {LeaveApplication.STATUS_PENDING, LeaveApplication.STATUS_APPROVED}:
+        if leave.status not in {
+            LeaveApplication.STATUS_PENDING,
+            LeaveApplication.STATUS_APPROVED,
+        }:
             return Response(
                 {"detail": "This application cannot be cancelled."},
                 status=status.HTTP_400_BAD_REQUEST,
@@ -287,7 +317,9 @@ class LeaveApplicationViewSet(_HRBase):
 
 
 class StaffAttendanceViewSet(_HRBase):
-    queryset = StaffAttendance.objects.select_related("employee__user", "marked_by").all()
+    queryset = StaffAttendance.objects.select_related(
+        "employee__user", "marked_by"
+    ).all()
     serializer_class = StaffAttendanceSerializer
     permission_classes = [IsHRManager]
 
@@ -385,7 +417,9 @@ class PayrollPeriodViewSet(_HRBase):
             )
         if not period.salary_slips.exists():
             return Response(
-                {"detail": "No salary slips exist for this period. Generate slips first."},
+                {
+                    "detail": "No salary slips exist for this period. Generate slips first."
+                },
                 status=status.HTTP_400_BAD_REQUEST,
             )
         with transaction.atomic():
@@ -420,7 +454,9 @@ class PayrollPeriodViewSet(_HRBase):
         skipped_count = 0
         with transaction.atomic():
             for emp in employees:
-                if SalarySlip.objects.filter(employee=emp, payroll_period=period).exists():
+                if SalarySlip.objects.filter(
+                    employee=emp, payroll_period=period
+                ).exists():
                     skipped_count += 1
                     continue
                 slip = SalarySlip(
@@ -491,6 +527,7 @@ class SalarySlipViewSet(_HRBase):
     def payslip_pdf(self, request, pk=None):
         """Generate and return a PDF payslip for this salary slip."""
         from core.reports import generate_pdf_response
+
         slip = self.get_object()
         tenant = getattr(request.user, "tenant", None)
         school_name = tenant.name if tenant else "School"
@@ -503,9 +540,17 @@ class SalarySlipViewSet(_HRBase):
             "slip_id": str(slip.slip_id)[:12],
             "period_name": slip.payroll_period.name if slip.payroll_period else "",
             "status": slip.status,
-            "employee_name": slip.employee.user.get_full_name() if slip.employee and slip.employee.user else "",
+            "employee_name": (
+                slip.employee.user.get_full_name()
+                if slip.employee and slip.employee.user
+                else ""
+            ),
             "employee_code": slip.employee.employee_code if slip.employee else "",
-            "department": slip.employee.department.name if slip.employee and slip.employee.department else "",
+            "department": (
+                slip.employee.department.name
+                if slip.employee and slip.employee.department
+                else ""
+            ),
             "designation": slip.employee.designation if slip.employee else "",
             "working_days": slip.working_days,
             "paid_days": slip.paid_days,
@@ -527,24 +572,38 @@ class SalarySlipViewSet(_HRBase):
             "total_deductions": fmt(slip.total_deductions),
             "net_salary": fmt(slip.net_salary),
             "payment_date": str(slip.payment_date) if slip.payment_date else "",
-            "payment_method": slip.payment_method.replace("_", " ").title() if slip.payment_method else "",
+            "payment_method": (
+                slip.payment_method.replace("_", " ").title()
+                if slip.payment_method
+                else ""
+            ),
             "transaction_reference": slip.transaction_reference or "",
             "currency": "$",
             "generated_on": localtime(timezone.now()).strftime("%d %b %Y, %I:%M %p"),
         }
 
-        emp_name_safe = (slip.employee.user.get_full_name() if slip.employee and slip.employee.user else "employee").replace(" ", "_")
+        emp_name_safe = (
+            slip.employee.user.get_full_name()
+            if slip.employee and slip.employee.user
+            else "employee"
+        ).replace(" ", "_")
         filename = f"payslip_{emp_name_safe}_{str(slip.slip_id)[:8]}.pdf"
         response = generate_pdf_response("reports/payslip.html", context, filename)
         record_audit_event(
             action="hr.payslip_downloaded",
             user=request.user,
             request=request,
-            details={"slip_id": str(slip.slip_id), "employee": context["employee_name"]},
+            details={
+                "slip_id": str(slip.slip_id),
+                "employee": context["employee_name"],
+            },
         )
         if response:
             return response
-        return Response({"error": "Failed to generate payslip PDF"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        return Response(
+            {"error": "Failed to generate payslip PDF"},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
 
     @action(detail=True, methods=["post"], url_path="mark-paid")
     def mark_paid(self, request, pk=None):
@@ -567,7 +626,14 @@ class SalarySlipViewSet(_HRBase):
             slip.payment_date = payment_date
             slip.payment_method = payment_method
             slip.transaction_reference = transaction_reference
-            slip.save(update_fields=["status", "payment_date", "payment_method", "transaction_reference"])
+            slip.save(
+                update_fields=[
+                    "status",
+                    "payment_date",
+                    "payment_method",
+                    "transaction_reference",
+                ]
+            )
         record_audit_event(
             action="hr.salary_slip_paid",
             user=request.user,
@@ -603,6 +669,7 @@ class HRDashboardViewSet(BillingSchemaGuardMixin, viewsets.ViewSet):
 
         # Contract type breakdown
         from django.db.models import Count
+
         contract_breakdown = list(
             Employee.objects.filter(tenant=tenant, is_active=True)
             .values("contract_type")
@@ -611,7 +678,9 @@ class HRDashboardViewSet(BillingSchemaGuardMixin, viewsets.ViewSet):
 
         # Department headcount
         dept_headcount = list(
-            Employee.objects.filter(tenant=tenant, is_active=True, department__isnull=False)
+            Employee.objects.filter(
+                tenant=tenant, is_active=True, department__isnull=False
+            )
             .values("department__name")
             .annotate(count=Count("employee_id"))
             .order_by("-count")[:10]

@@ -42,9 +42,12 @@ class BadgeEvaluatorService:
     def on_lesson_completed(self):
         """Call after a lesson is marked complete."""
         from academic.models import LessonProgress
-        count = LessonProgress.objects.using(self.using).filter(
-            student=self.student, completed=True
-        ).count()
+
+        count = (
+            LessonProgress.objects.using(self.using)
+            .filter(student=self.student, completed=True)
+            .count()
+        )
         self._check_criteria("lessons_completed", count)
 
     def on_assessment_result(self, result):
@@ -53,11 +56,15 @@ class BadgeEvaluatorService:
         result: academic.models.assessment.Result instance.
         """
         from academic.models.assessment import Result
+
         passed = self._count_passed_assessments()
         self._check_criteria("assessments_passed", passed)
 
         # perfect_score: score == total_marks
-        if result.assessment.total_marks > 0 and result.score >= result.assessment.total_marks:
+        if (
+            result.assessment.total_marks > 0
+            and result.score >= result.assessment.total_marks
+        ):
             self._check_criteria("perfect_score", 1)
 
     def on_early_submission(self, submission):
@@ -65,10 +72,16 @@ class BadgeEvaluatorService:
         Call after a Submission that was submitted before the due date.
         submission: academic.models.submission.Submission instance.
         """
-        from academic.models.submission import Submission
         from django.utils import timezone
+
+        from academic.models.submission import Submission
+
         assessment = submission.assessment
-        if assessment.due_date and submission.submitted_at and submission.submitted_at < assessment.due_date:
+        if (
+            assessment.due_date
+            and submission.submitted_at
+            and submission.submitted_at < assessment.due_date
+        ):
             early_count = self._count_early_submissions()
             self._check_criteria("early_bird", early_count)
 
@@ -103,7 +116,8 @@ class BadgeEvaluatorService:
         if self.tenant is None:
             return
 
-        from gamification.models import Badge, StudentBadge, PointTransaction
+        from gamification.models import Badge, PointTransaction, StudentBadge
+
         badges = Badge.objects.using(self.using).filter(
             tenant=self.tenant,
             criteria_type=criteria_type,
@@ -125,8 +139,10 @@ class BadgeEvaluatorService:
     # ------------------------------------------------------------------ #
 
     def _count_passed_assessments(self) -> int:
-        from academic.models.assessment import Result
         from django.db.models import F
+
+        from academic.models.assessment import Result
+
         return (
             Result.objects.using(self.using)
             .filter(
@@ -139,18 +155,23 @@ class BadgeEvaluatorService:
 
     def _count_early_submissions(self) -> int:
         from academic.models.submission import Submission
+
         subs = (
             Submission.objects.using(self.using)
             .filter(student=self.student, status="submitted")
             .select_related("assessment")
         )
         return sum(
-            1 for s in subs
-            if s.assessment.due_date and s.submitted_at and s.submitted_at < s.assessment.due_date
+            1
+            for s in subs
+            if s.assessment.due_date
+            and s.submitted_at
+            and s.submitted_at < s.assessment.due_date
         )
 
     def _grant_xp(self, badge):
-        from gamification.models import PointTransaction, GamificationProfile
+        from gamification.models import GamificationProfile, PointTransaction
+
         if badge.xp_reward <= 0:
             return
         PointTransaction.objects.using(self.using).create(
@@ -166,11 +187,14 @@ class BadgeEvaluatorService:
             )
             profile.add_xp(badge.xp_reward)
         except Exception as exc:
-            logger.warning("BadgeEvaluator: failed to update GamificationProfile: %s", exc)
+            logger.warning(
+                "BadgeEvaluator: failed to update GamificationProfile: %s", exc
+            )
 
     def _notify(self, badge):
         try:
             from notifications.services import NotificationService
+
             NotificationService.create_notification(
                 recipient=self.student.user,
                 title=f"🏅 Badge Unlocked: {badge.name}",

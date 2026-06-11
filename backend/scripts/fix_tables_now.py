@@ -4,7 +4,7 @@
 import sqlite3
 import sys
 
-db_path = '/Users/pramodsinghmanyal/Desktop/E-LearningWebApp/backend/config/school_pramod.sqlite3'
+db_path = "/Users/pramodsinghmanyal/Desktop/E-LearningWebApp/backend/config/school_pramod.sqlite3"
 
 print(f"Connecting to: {db_path}", file=sys.stderr)
 
@@ -49,7 +49,9 @@ CREATE TABLE IF NOT EXISTS library_bookissue (
 conn.commit()
 
 # Verify
-cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'library_%'")
+cursor.execute(
+    "SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'library_%'"
+)
 tables = cursor.fetchall()
 
 print(f"✓ Created tables: {[t[0] for t in tables]}", file=sys.stderr)

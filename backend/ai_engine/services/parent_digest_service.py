@@ -16,8 +16,9 @@ falls back to a template-based digest).
 from __future__ import annotations
 
 import logging
-from django.utils import timezone
 from datetime import timedelta
+
+from django.utils import timezone
 
 logger = logging.getLogger(__name__)
 
@@ -63,10 +64,15 @@ class ParentDigestService:
             name = "Your child"
 
         # Lessons completed today
-        lessons_today = LessonProgress.objects.using(using).filter(
-            student=student, completed=True,
-            # Approximate: LessonProgress has no completed_at, use last active proxy
-        ).count()
+        lessons_today = (
+            LessonProgress.objects.using(using)
+            .filter(
+                student=student,
+                completed=True,
+                # Approximate: LessonProgress has no completed_at, use last active proxy
+            )
+            .count()
+        )
 
         # Recent quiz results
         recent_results = list(
@@ -90,8 +96,14 @@ class ParentDigestService:
             "streak": streak,
             "recent_results": [
                 {
-                    "subject": r.assessment.subject.name if r.assessment.subject else "Unknown",
-                    "score_pct": round((r.score / r.assessment.total_marks) * 100) if r.assessment.total_marks else 0,
+                    "subject": (
+                        r.assessment.subject.name if r.assessment.subject else "Unknown"
+                    ),
+                    "score_pct": (
+                        round((r.score / r.assessment.total_marks) * 100)
+                        if r.assessment.total_marks
+                        else 0
+                    ),
                     "title": r.assessment.title,
                 }
                 for r in recent_results
@@ -110,11 +122,17 @@ class ParentDigestService:
         sentences = []
 
         if parts["streak"] > 0:
-            sentences.append(f"{name} is on a {parts['streak']}-day learning streak — great consistency!")
+            sentences.append(
+                f"{name} is on a {parts['streak']}-day learning streak — great consistency!"
+            )
 
         if parts["recent_results"]:
             top = parts["recent_results"][0]
-            emoji = "🎉" if top["score_pct"] >= 80 else ("📚" if top["score_pct"] >= 60 else "💪")
+            emoji = (
+                "🎉"
+                if top["score_pct"] >= 80
+                else ("📚" if top["score_pct"] >= 60 else "💪")
+            )
             sentences.append(
                 f"{emoji} {name} scored {top['score_pct']}% on the {top['subject']} {top['title']}."
             )
@@ -122,12 +140,14 @@ class ParentDigestService:
         if parts["tutor_topics"]:
             topic_preview = parts["tutor_topics"][0][:80]
             sentences.append(
-                f"Today's AI tutor session covered: \"{topic_preview}\" — ask {name} about it!"
+                f'Today\'s AI tutor session covered: "{topic_preview}" — ask {name} about it!'
             )
 
         if not sentences:
             if parts["lessons_today"] > 0:
-                sentences.append(f"{name} completed {parts['lessons_today']} lesson(s) today.")
+                sentences.append(
+                    f"{name} completed {parts['lessons_today']} lesson(s) today."
+                )
             else:
                 return ""
 
@@ -164,6 +184,7 @@ class ParentDigestService:
                 max_tokens=150,
             )
             from ai_engine.models import AIInteractionLog
+
             usage = resp.usage
             AIInteractionLog.objects.using(using).create(
                 tenant=self.tenant,

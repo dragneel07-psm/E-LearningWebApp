@@ -18,10 +18,12 @@ Quality ratings (0-5):
 Quality >= 3 → node is "passed" → progress the interval
 Quality < 3  → node is "failed" → reset, review again tomorrow
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import timedelta
+
 from django.utils import timezone
 
 

@@ -2,6 +2,7 @@
 # Unauthorized copying, modification, or distribution of this file,
 # via any medium, is strictly prohibited. Proprietary and confidential.
 from typing import Any, Dict, Optional
+
 from django.utils import timezone
 
 
@@ -34,7 +35,11 @@ def get_tenant_plan(tenant) -> Optional[Any]:
         sub = getattr(tenant, "subscription", None)
     except Exception as e:
         import sys
-        print(f"DEBUG: Error retrieving subscription for tenant {getattr(tenant, 'schema_name', 'unknown')}: {e}", file=sys.stderr)
+
+        print(
+            f"DEBUG: Error retrieving subscription for tenant {getattr(tenant, 'schema_name', 'unknown')}: {e}",
+            file=sys.stderr,
+        )
         # Missing reverse O2O (no subscription yet) or inconsistent tenant relation.
         return None
 
@@ -92,7 +97,9 @@ def compute_effective_features(plan, overrides) -> Dict[str, bool]:
 def sync_tenant_with_plan(tenant, plan=None, save: bool = True):
     active_plan = plan or get_tenant_plan(tenant)
     tenant.type = derive_tenant_type_from_plan(active_plan)
-    tenant.features = compute_effective_features(active_plan, getattr(tenant, "feature_overrides", None))
+    tenant.features = compute_effective_features(
+        active_plan, getattr(tenant, "feature_overrides", None)
+    )
     if save:
         tenant.save(update_fields=["type", "features"])
     return tenant
@@ -104,10 +111,14 @@ def sync_subscription_limits_with_plan(subscription, plan=None, save: bool = Tru
         return subscription
 
     subscription.student_limit = int(getattr(active_plan, "student_limit", 0) or 0)
-    subscription.storage_limit_gb = int(getattr(active_plan, "storage_limit_gb", 0) or 0)
+    subscription.storage_limit_gb = int(
+        getattr(active_plan, "storage_limit_gb", 0) or 0
+    )
     subscription.ai_token_limit = int(getattr(active_plan, "ai_token_limit", 0) or 0)
     if save:
-        subscription.save(update_fields=["student_limit", "storage_limit_gb", "ai_token_limit"])
+        subscription.save(
+            update_fields=["student_limit", "storage_limit_gb", "ai_token_limit"]
+        )
     return subscription
 
 
@@ -157,13 +168,23 @@ def record_subscription_plan_history(
         new_plan=new_plan,
         previous_plan_name=(getattr(previous_plan, "name", "") or ""),
         new_plan_name=(getattr(new_plan, "name", "") or ""),
-        previous_plan_snapshot=previous_plan_snapshot if previous_plan_snapshot is not None else build_plan_snapshot(previous_plan),
-        new_plan_snapshot=new_plan_snapshot if new_plan_snapshot is not None else build_plan_snapshot(new_plan),
+        previous_plan_snapshot=(
+            previous_plan_snapshot
+            if previous_plan_snapshot is not None
+            else build_plan_snapshot(previous_plan)
+        ),
+        new_plan_snapshot=(
+            new_plan_snapshot
+            if new_plan_snapshot is not None
+            else build_plan_snapshot(new_plan)
+        ),
         previous_status=previous_status or "",
         new_status=getattr(subscription, "status", "") or "",
         previous_billing_cycle=previous_billing_cycle or "",
         new_billing_cycle=getattr(subscription, "billing_cycle", "") or "",
         reason=reason or "",
-        changed_by=changed_by if getattr(changed_by, "is_authenticated", False) else None,
+        changed_by=(
+            changed_by if getattr(changed_by, "is_authenticated", False) else None
+        ),
         effective_date=effective_date or timezone.now().date(),
     )

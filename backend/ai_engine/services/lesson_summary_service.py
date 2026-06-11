@@ -31,7 +31,9 @@ class LessonSummaryService:
         return candidate if candidate in cls.VALID_LANGS else "en"
 
     @staticmethod
-    def _normalize_content(payload: dict[str, Any] | None) -> dict[str, list[str] | str]:
+    def _normalize_content(
+        payload: dict[str, Any] | None,
+    ) -> dict[str, list[str] | str]:
         data = payload if isinstance(payload, dict) else {}
         summary = str(data.get("summary") or "").strip()
         if not summary:
@@ -50,7 +52,9 @@ class LessonSummaryService:
             "practice_questions": _list("practice_questions", 8),
         }
 
-    def _cached_artifact(self, *, artifact_type: str, source_type: str, source_id: str, lang: str) -> AiGeneratedArtifact | None:
+    def _cached_artifact(
+        self, *, artifact_type: str, source_type: str, source_id: str, lang: str
+    ) -> AiGeneratedArtifact | None:
         return (
             AiGeneratedArtifact.objects.filter(
                 tenant=self.tenant,
@@ -80,7 +84,9 @@ class LessonSummaryService:
         if not candidate:
             return None
 
-        fence_match = re.search(r"```(?:json)?\s*(\{.*\})\s*```", candidate, flags=re.DOTALL | re.IGNORECASE)
+        fence_match = re.search(
+            r"```(?:json)?\s*(\{.*\})\s*```", candidate, flags=re.DOTALL | re.IGNORECASE
+        )
         if fence_match:
             candidate = fence_match.group(1).strip()
 
@@ -90,7 +96,9 @@ class LessonSummaryService:
         except Exception:
             return None
 
-    def _fallback_payload(self, lang: str, chunks: list[ContentChunk]) -> dict[str, Any]:
+    def _fallback_payload(
+        self, lang: str, chunks: list[ContentChunk]
+    ) -> dict[str, Any]:
         if lang == "ne":
             if not chunks:
                 return {
@@ -103,7 +111,9 @@ class LessonSummaryService:
                 "summary": "तलको बुँदाहरू पाठको मुख्य सार हुन्।",
                 "bullets": [chunk.text[:140] for chunk in chunks[:4]],
                 "key_terms": [],
-                "practice_questions": ["यस पाठको मुख्य अवधारणा आफ्नै शब्दमा लेख्नुहोस्।"],
+                "practice_questions": [
+                    "यस पाठको मुख्य अवधारणा आफ्नै शब्दमा लेख्नुहोस्।"
+                ],
             }
 
         if not chunks:
@@ -117,19 +127,26 @@ class LessonSummaryService:
             "summary": "Here is a grounded summary based on indexed lesson chunks.",
             "bullets": [chunk.text[:140] for chunk in chunks[:4]],
             "key_terms": [],
-            "practice_questions": ["Explain the main concept from this lesson in your own words."],
+            "practice_questions": [
+                "Explain the main concept from this lesson in your own words."
+            ],
         }
 
-    def _build_messages(self, *, lesson: Lesson, artifact_type: str, lang: str, chunks: list[ContentChunk]) -> list[dict[str, str]]:
+    def _build_messages(
+        self,
+        *,
+        lesson: Lesson,
+        artifact_type: str,
+        lang: str,
+        chunks: list[ContentChunk],
+    ) -> list[dict[str, str]]:
         if artifact_type == "exam_notes":
             task_label = "exam preparation notes"
         else:
             task_label = "lesson summary"
 
         if lang == "ne":
-            language_instruction = (
-                "Write in clear Nepali. You may keep technical terms in English inside parentheses when needed."
-            )
+            language_instruction = "Write in clear Nepali. You may keep technical terms in English inside parentheses when needed."
         else:
             language_instruction = "Write in clear English suitable for students."
 
@@ -165,7 +182,9 @@ class LessonSummaryService:
     def _call_model(self, messages: list[dict[str, str]]) -> tuple[str, dict[str, Any]]:
         return self.rag._call_chat_model(messages)
 
-    def generate(self, *, lesson_id: int, artifact_type: str, lang: str = "en") -> dict[str, Any]:
+    def generate(
+        self, *, lesson_id: int, artifact_type: str, lang: str = "en"
+    ) -> dict[str, Any]:
         normalized_type = str(artifact_type or "").strip().lower()
         if normalized_type not in self.VALID_TYPES:
             raise ValueError("Unsupported artifact type.")
@@ -196,7 +215,9 @@ class LessonSummaryService:
                 chunks=chunks,
             )
             text, _usage = self._call_model(messages)
-            parsed = self._extract_json(text) or self._fallback_payload(normalized_lang, chunks)
+            parsed = self._extract_json(text) or self._fallback_payload(
+                normalized_lang, chunks
+            )
             payload = self._normalize_content(parsed)
 
         AiGeneratedArtifact.objects.create(
@@ -206,6 +227,8 @@ class LessonSummaryService:
             source_id=source_id,
             lang=normalized_lang,
             content=payload,
-            created_by=self.user if getattr(self.user, "is_authenticated", False) else None,
+            created_by=(
+                self.user if getattr(self.user, "is_authenticated", False) else None
+            ),
         )
         return payload

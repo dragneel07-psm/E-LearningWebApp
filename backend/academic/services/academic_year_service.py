@@ -81,10 +81,18 @@ class PromotionRules:
             return tuple(cleaned)
 
         return cls(
-            min_score_percentage=_to_optional_percent(payload.get("min_score_percentage")),
-            min_attendance_percentage=_to_optional_percent(payload.get("min_attendance_percentage")),
-            manual_promote_student_ids=_to_student_ids(payload.get("manual_promote_student_ids")),
-            manual_hold_student_ids=_to_student_ids(payload.get("manual_hold_student_ids")),
+            min_score_percentage=_to_optional_percent(
+                payload.get("min_score_percentage")
+            ),
+            min_attendance_percentage=_to_optional_percent(
+                payload.get("min_attendance_percentage")
+            ),
+            manual_promote_student_ids=_to_student_ids(
+                payload.get("manual_promote_student_ids")
+            ),
+            manual_hold_student_ids=_to_student_ids(
+                payload.get("manual_hold_student_ids")
+            ),
         )
 
 
@@ -130,7 +138,9 @@ def _sync_tenant_current_academic_year(year: AcademicYear) -> None:
         schema_name = getattr(connection, "schema_name", None)
         if not schema_name:
             return
-        Tenant.objects.filter(schema_name=schema_name).update(current_academic_year=year.name)
+        Tenant.objects.filter(schema_name=schema_name).update(
+            current_academic_year=year.name
+        )
     except Exception:
         # Best-effort sync only.
         return
@@ -183,8 +193,13 @@ def plan_next_academic_year(
     }
 
 
-def create_next_academic_year(source_year: Optional[AcademicYear] = None, *, name: Optional[str] = None,
-                              start_date: Optional[date] = None, end_date: Optional[date] = None) -> AcademicYear:
+def create_next_academic_year(
+    source_year: Optional[AcademicYear] = None,
+    *,
+    name: Optional[str] = None,
+    start_date: Optional[date] = None,
+    end_date: Optional[date] = None,
+) -> AcademicYear:
     plan = plan_next_academic_year(
         source_year,
         name=name,
@@ -206,18 +221,26 @@ def create_next_academic_year(source_year: Optional[AcademicYear] = None, *, nam
     return next_year
 
 
-def ensure_current_academic_year(today: Optional[date] = None) -> Optional[AcademicYear]:
+def ensure_current_academic_year(
+    today: Optional[date] = None,
+) -> Optional[AcademicYear]:
     today = today or timezone.localdate()
 
-    current = AcademicYear.objects.filter(is_current=True).order_by("-start_date").first()
+    current = (
+        AcademicYear.objects.filter(is_current=True).order_by("-start_date").first()
+    )
     if current and current.start_date <= today <= current.end_date:
         _sync_tenant_current_academic_year(current)
         return current
 
-    active_for_day = AcademicYear.objects.filter(
-        start_date__lte=today,
-        end_date__gte=today,
-    ).order_by("-start_date").first()
+    active_for_day = (
+        AcademicYear.objects.filter(
+            start_date__lte=today,
+            end_date__gte=today,
+        )
+        .order_by("-start_date")
+        .first()
+    )
     if active_for_day:
         return _set_current_year(active_for_day)
 
@@ -300,21 +323,28 @@ def _evaluate_single_student_promotion(
                 }
                 if not include_unpublished_results:
                     result_filter["assessment__results_published"] = True
-                result_qs = Result.objects.filter(**result_filter).select_related("assessment")
+                result_qs = Result.objects.filter(**result_filter).select_related(
+                    "assessment"
+                )
 
                 if academic_year is not None:
-                    result_qs = result_qs.filter(assessment__academic_year=academic_year)
+                    result_qs = result_qs.filter(
+                        assessment__academic_year=academic_year
+                    )
 
                 if student.section_id:
                     result_qs = result_qs.filter(
-                        Q(assessment__section=student.section) | Q(assessment__section__isnull=True)
+                        Q(assessment__section=student.section)
+                        | Q(assessment__section__isnull=True)
                     )
                 else:
                     result_qs = result_qs.filter(assessment__section__isnull=True)
 
                 percentages = []
                 for result in result_qs:
-                    total_marks = max(float(getattr(result.assessment, "total_marks", 0) or 0), 1.0)
+                    total_marks = max(
+                        float(getattr(result.assessment, "total_marks", 0) or 0), 1.0
+                    )
                     percentages.append((float(result.score) / total_marks) * 100.0)
 
                 if not percentages:
@@ -339,7 +369,9 @@ def _evaluate_single_student_promotion(
                 if total_attendance <= 0:
                     hold_reason = "insufficient_data"
                 else:
-                    attended_count = attendance_qs.filter(status__in=["present", "late", "excused"]).count()
+                    attended_count = attendance_qs.filter(
+                        status__in=["present", "late", "excused"]
+                    ).count()
                     attendance_percentage = (attended_count / total_attendance) * 100.0
                     if attendance_percentage < rules.min_attendance_percentage:
                         hold_reason = "attendance_below_threshold"
@@ -370,10 +402,20 @@ def _evaluate_single_student_promotion(
         "section_name": getattr(student.section, "name", None),
         "recommended_action": recommended_action,
         "hold_reason": hold_reason,
-        "hold_reason_label": PROMOTION_HOLD_REASON_LABELS.get(hold_reason, "") if hold_reason else "",
+        "hold_reason_label": (
+            PROMOTION_HOLD_REASON_LABELS.get(hold_reason, "") if hold_reason else ""
+        ),
         "warning_reasons": warning_reasons,
-        "average_score_percentage": round(average_score_percentage, 2) if average_score_percentage is not None else None,
-        "attendance_percentage": round(attendance_percentage, 2) if attendance_percentage is not None else None,
+        "average_score_percentage": (
+            round(average_score_percentage, 2)
+            if average_score_percentage is not None
+            else None
+        ),
+        "attendance_percentage": (
+            round(attendance_percentage, 2)
+            if attendance_percentage is not None
+            else None
+        ),
         "manual_promote_applied": manual_promote_applied,
         "manual_hold_applied": manual_hold_applied,
         "failed_score": hold_reason == "score_below_threshold",
@@ -577,19 +619,27 @@ def build_rollover_preview(
     target_year_id = getattr(target_year, "pk", None)
 
     source_subjects = list(
-        Subject.objects.filter(academic_year=source_year).select_related("academic_class", "teacher")
+        Subject.objects.filter(academic_year=source_year).select_related(
+            "academic_class", "teacher"
+        )
     )
-    source_subjects_by_id: Dict[int, Subject] = {subject.id: subject for subject in source_subjects}
+    source_subjects_by_id: Dict[int, Subject] = {
+        subject.id: subject for subject in source_subjects
+    }
 
     target_subjects_by_key: Dict[tuple[str, int], Subject] = {}
     if target_exists and target_year_id is not None:
-        for subject in Subject.objects.filter(academic_year_id=target_year_id).select_related("academic_class"):
+        for subject in Subject.objects.filter(
+            academic_year_id=target_year_id
+        ).select_related("academic_class"):
             target_subjects_by_key[(subject.name, subject.academic_class_id)] = subject
 
     subject_map: Dict[int, Subject] = {}
     if options.migrate_subjects:
         for source_subject in source_subjects:
-            mapped = target_subjects_by_key.get((source_subject.name, source_subject.academic_class_id))
+            mapped = target_subjects_by_key.get(
+                (source_subject.name, source_subject.academic_class_id)
+            )
             if mapped is None:
                 summary["subjects_to_migrate"] += 1
                 if target_exists:
@@ -599,7 +649,9 @@ def build_rollover_preview(
             subject_map[source_subject.id] = mapped
     else:
         for source_subject in source_subjects:
-            mapped = target_subjects_by_key.get((source_subject.name, source_subject.academic_class_id))
+            mapped = target_subjects_by_key.get(
+                (source_subject.name, source_subject.academic_class_id)
+            )
             if mapped:
                 subject_map[source_subject.id] = mapped
 
@@ -609,17 +661,23 @@ def build_rollover_preview(
         )
 
     if options.migrate_assessments and subject_map:
-        source_assessments = Assessment.objects.filter(
-            academic_year=source_year,
-            subject_id__in=subject_map.keys(),
-        ).select_related("section", "subject").prefetch_related("questions")
+        source_assessments = (
+            Assessment.objects.filter(
+                academic_year=source_year,
+                subject_id__in=subject_map.keys(),
+            )
+            .select_related("section", "subject")
+            .prefetch_related("questions")
+        )
 
         for source_assessment in source_assessments:
             source_subject = source_subjects_by_id.get(source_assessment.subject_id)
             if source_subject is None:
                 continue
 
-            target_subject = target_subjects_by_key.get((source_subject.name, source_subject.academic_class_id))
+            target_subject = target_subjects_by_key.get(
+                (source_subject.name, source_subject.academic_class_id)
+            )
             if target_subject is None and target_exists:
                 continue
 
@@ -645,15 +703,19 @@ def build_rollover_preview(
                 summary["questions_to_migrate"] += source_assessment.questions.count()
 
     if options.migrate_lessons and subject_map:
-        source_chapters = Chapter.objects.filter(
-            subject_id__in=subject_map.keys()
-        ).select_related("subject").prefetch_related("lessons__materials")
+        source_chapters = (
+            Chapter.objects.filter(subject_id__in=subject_map.keys())
+            .select_related("subject")
+            .prefetch_related("lessons__materials")
+        )
 
         for source_chapter in source_chapters:
             source_subject = source_subjects_by_id.get(source_chapter.subject_id)
             if source_subject is None:
                 continue
-            target_subject = target_subjects_by_key.get((source_subject.name, source_subject.academic_class_id))
+            target_subject = target_subjects_by_key.get(
+                (source_subject.name, source_subject.academic_class_id)
+            )
 
             chapter_exists = False
             existing_chapter = None
@@ -740,7 +802,9 @@ def rollover_academic_year(
             return None
         return value + timedelta(days=year_delta_days)
 
-    source_subjects = Subject.objects.filter(academic_year=source_year).select_related("academic_class", "teacher")
+    source_subjects = Subject.objects.filter(academic_year=source_year).select_related(
+        "academic_class", "teacher"
+    )
     subject_map: Dict[int, Subject] = {}
 
     if options.migrate_subjects:
@@ -759,7 +823,9 @@ def rollover_academic_year(
                 },
             )
             if created:
-                target_subject.additional_teachers.set(source_subject.additional_teachers.all())
+                target_subject.additional_teachers.set(
+                    source_subject.additional_teachers.all()
+                )
                 summary["subjects_migrated"] += 1
             subject_map[source_subject.id] = target_subject
     else:
@@ -775,10 +841,14 @@ def rollover_academic_year(
 
     assessment_map: Dict[str, Assessment] = {}
     if options.migrate_assessments and subject_map:
-        source_assessments = Assessment.objects.filter(
-            academic_year=source_year,
-            subject_id__in=subject_map.keys(),
-        ).select_related("subject", "section").prefetch_related("questions")
+        source_assessments = (
+            Assessment.objects.filter(
+                academic_year=source_year,
+                subject_id__in=subject_map.keys(),
+            )
+            .select_related("subject", "section")
+            .prefetch_related("questions")
+        )
 
         for source_assessment in source_assessments:
             target_subject = subject_map.get(source_assessment.subject_id)
@@ -834,9 +904,11 @@ def rollover_academic_year(
                     summary["questions_migrated"] += len(questions_to_create)
 
     if options.migrate_lessons and subject_map:
-        source_chapters = Chapter.objects.filter(
-            subject_id__in=subject_map.keys()
-        ).select_related("subject").prefetch_related("lessons__materials")
+        source_chapters = (
+            Chapter.objects.filter(subject_id__in=subject_map.keys())
+            .select_related("subject")
+            .prefetch_related("lessons__materials")
+        )
 
         for source_chapter in source_chapters:
             target_subject = subject_map.get(source_chapter.subject_id)
@@ -858,7 +930,9 @@ def rollover_academic_year(
             for source_lesson in source_chapter.lessons.all():
                 linked_assessment = None
                 if source_lesson.assessment_id:
-                    linked_assessment = assessment_map.get(str(source_lesson.assessment_id))
+                    linked_assessment = assessment_map.get(
+                        str(source_lesson.assessment_id)
+                    )
 
                 target_lesson, lesson_created = Lesson.objects.get_or_create(
                     chapter=target_chapter,
@@ -875,7 +949,11 @@ def rollover_academic_year(
                     },
                 )
 
-                if not lesson_created and linked_assessment and target_lesson.assessment_id != linked_assessment.assessment_id:
+                if (
+                    not lesson_created
+                    and linked_assessment
+                    and target_lesson.assessment_id != linked_assessment.assessment_id
+                ):
                     target_lesson.assessment = linked_assessment
                     target_lesson.save(update_fields=["assessment"])
 
@@ -893,11 +971,15 @@ def rollover_academic_year(
                             )
                         )
                     if materials_to_create:
-                        LessonMaterial.objects.bulk_create(materials_to_create, batch_size=200)
+                        LessonMaterial.objects.bulk_create(
+                            materials_to_create, batch_size=200
+                        )
                         summary["materials_migrated"] += len(materials_to_create)
 
     if options.migrate_timetable:
-        source_slots = Timetable.objects.filter(academic_year=source_year).select_related("teacher")
+        source_slots = Timetable.objects.filter(
+            academic_year=source_year
+        ).select_related("teacher")
         timetable_to_create = []
         for source_slot in source_slots:
             already_exists = Timetable.objects.filter(

@@ -10,7 +10,6 @@ from academic.models import Parent, Student, Teacher
 from core.models import Tenant
 from users.models import UserAccount
 
-
 ROLE_CHOICES = {"student", "teacher", "parent", "admin", "staff", "saas_admin"}
 
 
@@ -27,13 +26,21 @@ class Command(BaseCommand):
     help = "Create or update a tenant user directly in a tenant schema."
 
     def add_arguments(self, parser):
-        parser.add_argument("--schema", required=True, help="Tenant schema name (e.g. demo).")
+        parser.add_argument(
+            "--schema", required=True, help="Tenant schema name (e.g. demo)."
+        )
         parser.add_argument("--email", required=True, help="User email.")
         parser.add_argument("--password", required=True, help="User password.")
-        parser.add_argument("--role", default="student", help="Role (student/teacher/parent/admin/staff/saas_admin).")
+        parser.add_argument(
+            "--role",
+            default="student",
+            help="Role (student/teacher/parent/admin/staff/saas_admin).",
+        )
         parser.add_argument("--first-name", default="Demo", help="First name.")
         parser.add_argument("--last-name", default="User", help="Last name.")
-        parser.add_argument("--username", default="", help="Optional username. Defaults from email.")
+        parser.add_argument(
+            "--username", default="", help="Optional username. Defaults from email."
+        )
         parser.add_argument(
             "--inactive",
             action="store_true",

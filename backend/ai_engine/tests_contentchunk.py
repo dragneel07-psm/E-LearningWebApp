@@ -31,7 +31,9 @@ class ContentChunkModelTests(FastTenantTestCase):
                 embedding=embedding,
             )
 
-            fetched = ContentChunk.objects.filter(source_type="lesson", source_id="lesson-1").first()
+            fetched = ContentChunk.objects.filter(
+                source_type="lesson", source_id="lesson-1"
+            ).first()
 
         self.assertIsNotNone(fetched)
         self.assertEqual(str(fetched.id), str(chunk.id))

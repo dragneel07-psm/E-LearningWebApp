@@ -12,7 +12,9 @@ def backfill_academic_year_on_existing_data(apps, schema_editor):
     Timetable = apps.get_model("academic", "Timetable")
     Assessment = apps.get_model("academic", "Assessment")
 
-    current_year = AcademicYear.objects.filter(is_current=True).order_by("-start_date").first()
+    current_year = (
+        AcademicYear.objects.filter(is_current=True).order_by("-start_date").first()
+    )
     if current_year is None:
         today = timezone.localdate()
         if (today.month, today.day) >= (4, 1):
@@ -32,9 +34,15 @@ def backfill_academic_year_on_existing_data(apps, schema_editor):
             current_year.is_current = True
             current_year.save(update_fields=["is_current"])
 
-    Subject.objects.filter(academic_year__isnull=True).update(academic_year=current_year)
-    Timetable.objects.filter(academic_year__isnull=True).update(academic_year=current_year)
-    Assessment.objects.filter(academic_year__isnull=True).update(academic_year=current_year)
+    Subject.objects.filter(academic_year__isnull=True).update(
+        academic_year=current_year
+    )
+    Timetable.objects.filter(academic_year__isnull=True).update(
+        academic_year=current_year
+    )
+    Assessment.objects.filter(academic_year__isnull=True).update(
+        academic_year=current_year
+    )
 
 
 def noop_reverse(apps, schema_editor):

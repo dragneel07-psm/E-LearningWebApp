@@ -19,68 +19,83 @@ class FeeDiscount(models.Model):
     # any StudentFee linked to this discount can be aggregated into the
     # Scholarship Register report (SSDP / EGRP audit requirement).
     SCHOLARSHIP_CATEGORY_CHOICES = [
-        ('',                  'Not a Scholarship'),
-        ('dalit',             'Dalit'),
-        ('janajati',          'Janajati'),
-        ('madhesi',           'Madhesi'),
-        ('muslim',            'Muslim'),
-        ('karnali',           'Karnali Province'),
-        ('differently_abled', 'Differently-abled'),
-        ('female_remote',     'Girl Student (Remote Area)'),
-        ('orphan',            'Orphan / Single-parent'),
-        ('martyr_family',     'Martyr / Conflict-victim Family'),
-        ('free_books',        'Free Books Scheme'),
-        ('staff_child',       'Staff Child Concession'),
-        ('sibling',           'Sibling Discount'),
-        ('merit',             'Merit / Top Performer'),
-        ('other',             'Other'),
+        ("", "Not a Scholarship"),
+        ("dalit", "Dalit"),
+        ("janajati", "Janajati"),
+        ("madhesi", "Madhesi"),
+        ("muslim", "Muslim"),
+        ("karnali", "Karnali Province"),
+        ("differently_abled", "Differently-abled"),
+        ("female_remote", "Girl Student (Remote Area)"),
+        ("orphan", "Orphan / Single-parent"),
+        ("martyr_family", "Martyr / Conflict-victim Family"),
+        ("free_books", "Free Books Scheme"),
+        ("staff_child", "Staff Child Concession"),
+        ("sibling", "Sibling Discount"),
+        ("merit", "Merit / Top Performer"),
+        ("other", "Other"),
     ]
     SCHOLARSHIP_SOURCE_CHOICES = [
-        ('',                  'Not a Scholarship'),
-        ('school_own',        'School-funded'),
-        ('govt_ssdp',         'Govt SSDP'),
-        ('govt_egrp',         'Govt EGRP'),
-        ('govt_local',        'Local Govt / Palika'),
-        ('donor_private',     'Private Donor'),
-        ('donor_ngo',         'NGO / INGO'),
-        ('other',             'Other'),
+        ("", "Not a Scholarship"),
+        ("school_own", "School-funded"),
+        ("govt_ssdp", "Govt SSDP"),
+        ("govt_egrp", "Govt EGRP"),
+        ("govt_local", "Local Govt / Palika"),
+        ("donor_private", "Private Donor"),
+        ("donor_ngo", "NGO / INGO"),
+        ("other", "Other"),
     ]
 
     discount_id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     tenant = models.ForeignKey(
-        'core.Tenant', on_delete=models.CASCADE,
-        related_name='fee_discounts', db_constraint=False,
+        "core.Tenant",
+        on_delete=models.CASCADE,
+        related_name="fee_discounts",
+        db_constraint=False,
     )
     name = models.CharField(max_length=100)
-    DISCOUNT_TYPES = [('percentage', 'Percentage'), ('flat', 'Flat Amount')]
-    discount_type = models.CharField(max_length=20, choices=DISCOUNT_TYPES, default='percentage')
+    DISCOUNT_TYPES = [("percentage", "Percentage"), ("flat", "Flat Amount")]
+    discount_type = models.CharField(
+        max_length=20, choices=DISCOUNT_TYPES, default="percentage"
+    )
     value = models.DecimalField(max_digits=10, decimal_places=2)
-    max_cap = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True,
-                                   help_text='Maximum discount cap (for percentage type)')
+    max_cap = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text="Maximum discount cap (for percentage type)",
+    )
     reason = models.CharField(max_length=200, blank=True)
     is_active = models.BooleanField(default=True)
 
     # Phase E: Scholarship Register fields (audit-ready)
     scholarship_category = models.CharField(
-        max_length=24, choices=SCHOLARSHIP_CATEGORY_CHOICES, blank=True, default='',
+        max_length=24,
+        choices=SCHOLARSHIP_CATEGORY_CHOICES,
+        blank=True,
+        default="",
     )
     scholarship_source = models.CharField(
-        max_length=24, choices=SCHOLARSHIP_SOURCE_CHOICES, blank=True, default='',
+        max_length=24,
+        choices=SCHOLARSHIP_SOURCE_CHOICES,
+        blank=True,
+        default="",
     )
 
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        ordering = ['name']
+        ordering = ["name"]
 
     def __str__(self):
-        if self.discount_type == 'percentage':
+        if self.discount_type == "percentage":
             return f"{self.name} ({self.value}%)"
         return f"{self.name} (NPR {self.value})"
 
     def compute_discount(self, amount):
         """Return the actual discount amount for a given fee amount."""
-        if self.discount_type == 'percentage':
+        if self.discount_type == "percentage":
             disc = amount * self.value / 100
             if self.max_cap:
                 disc = min(disc, self.max_cap)
@@ -96,7 +111,12 @@ class FeeStructure(SchemaScopedBillingModel, models.Model):
 
     SCHEMA_SCOPE = "tenant"
     fee_id = models.UUIDField(primary_key=True, default=uuid_lib.uuid4, editable=False)
-    tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE, related_name="fee_structures", db_constraint=False)
+    tenant = models.ForeignKey(
+        Tenant,
+        on_delete=models.CASCADE,
+        related_name="fee_structures",
+        db_constraint=False,
+    )
     name = models.CharField(max_length=100)
     amount = models.DecimalField(max_digits=10, decimal_places=2)
     academic_class = models.ForeignKey(
@@ -125,9 +145,13 @@ class FeeStructure(SchemaScopedBillingModel, models.Model):
         ("flat", "Flat Amount"),
         ("percent", "Percent of Balance"),
     )
-    late_fee_type = models.CharField(max_length=10, choices=LATE_FEE_TYPE_CHOICES, default="none")
+    late_fee_type = models.CharField(
+        max_length=10, choices=LATE_FEE_TYPE_CHOICES, default="none"
+    )
     late_fee_amount = models.DecimalField(
-        max_digits=10, decimal_places=2, default=0,
+        max_digits=10,
+        decimal_places=2,
+        default=0,
         help_text="Flat NPR amount or percent (0–100) depending on late_fee_type.",
     )
     grace_days = models.PositiveIntegerField(
@@ -153,17 +177,25 @@ class FeeHead(SchemaScopedBillingModel, models.Model):
 
     SCHEMA_SCOPE = "tenant"
     head_id = models.UUIDField(primary_key=True, default=uuid_lib.uuid4, editable=False)
-    tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE, related_name="fee_heads", db_constraint=False)
-    fee_structure = models.ForeignKey(
-        FeeStructure, on_delete=models.CASCADE, related_name="heads", db_constraint=False,
+    tenant = models.ForeignKey(
+        Tenant, on_delete=models.CASCADE, related_name="fee_heads", db_constraint=False
     )
-    name = models.CharField(max_length=80, help_text="e.g. Admission, Tuition, Library, Transport")
+    fee_structure = models.ForeignKey(
+        FeeStructure,
+        on_delete=models.CASCADE,
+        related_name="heads",
+        db_constraint=False,
+    )
+    name = models.CharField(
+        max_length=80, help_text="e.g. Admission, Tuition, Library, Transport"
+    )
     amount = models.DecimalField(max_digits=10, decimal_places=2)
     sort_order = models.PositiveIntegerField(default=0)
     coa_account = models.ForeignKey(
         "billing_school.ChartOfAccount",
         on_delete=models.SET_NULL,
-        null=True, blank=True,
+        null=True,
+        blank=True,
         related_name="fee_heads",
         db_constraint=False,
         help_text="Income account this head posts to (optional).",
@@ -173,7 +205,9 @@ class FeeHead(SchemaScopedBillingModel, models.Model):
     class Meta:
         ordering = ["sort_order", "name"]
         indexes = [
-            models.Index(fields=["tenant", "fee_structure"], name="bill_feehead_t_struct_idx"),
+            models.Index(
+                fields=["tenant", "fee_structure"], name="bill_feehead_t_struct_idx"
+            ),
         ]
 
     def __str__(self):
@@ -186,10 +220,27 @@ class StudentFee(SchemaScopedBillingModel, models.Model):
     """
 
     SCHEMA_SCOPE = "tenant"
-    student_fee_id = models.UUIDField(primary_key=True, default=uuid_lib.uuid4, editable=False)
-    tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE, related_name="student_fees", db_constraint=False)
-    student = models.ForeignKey("academic.Student", on_delete=models.CASCADE, related_name="fees", db_constraint=False)
-    fee_structure = models.ForeignKey(FeeStructure, on_delete=models.CASCADE, related_name="assigned_fees", db_constraint=False)
+    student_fee_id = models.UUIDField(
+        primary_key=True, default=uuid_lib.uuid4, editable=False
+    )
+    tenant = models.ForeignKey(
+        Tenant,
+        on_delete=models.CASCADE,
+        related_name="student_fees",
+        db_constraint=False,
+    )
+    student = models.ForeignKey(
+        "academic.Student",
+        on_delete=models.CASCADE,
+        related_name="fees",
+        db_constraint=False,
+    )
+    fee_structure = models.ForeignKey(
+        FeeStructure,
+        on_delete=models.CASCADE,
+        related_name="assigned_fees",
+        db_constraint=False,
+    )
 
     amount_due = models.DecimalField(max_digits=10, decimal_places=2)
     amount_paid = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
@@ -205,8 +256,12 @@ class StudentFee(SchemaScopedBillingModel, models.Model):
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="pending")
 
     discount = models.ForeignKey(
-        FeeDiscount, on_delete=models.SET_NULL,
-        null=True, blank=True, related_name='applied_fees', db_constraint=False,
+        FeeDiscount,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="applied_fees",
+        db_constraint=False,
     )
     discount_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
 
@@ -221,8 +276,13 @@ class StudentFee(SchemaScopedBillingModel, models.Model):
 
     class Meta:
         indexes = [
-            models.Index(fields=["tenant", "status", "due_date"], name="bill_stfee_t_stat_due_idx"),
-            models.Index(fields=["student", "status"], name="bill_stfee_student_stat_idx"),
+            models.Index(
+                fields=["tenant", "status", "due_date"],
+                name="bill_stfee_t_stat_due_idx",
+            ),
+            models.Index(
+                fields=["student", "status"], name="bill_stfee_student_stat_idx"
+            ),
         ]
 
     def __str__(self):
@@ -235,8 +295,12 @@ class Payment(SchemaScopedBillingModel, models.Model):
     """
 
     SCHEMA_SCOPE = "tenant"
-    payment_id = models.UUIDField(primary_key=True, default=uuid_lib.uuid4, editable=False)
-    tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE, related_name="payments", db_constraint=False)
+    payment_id = models.UUIDField(
+        primary_key=True, default=uuid_lib.uuid4, editable=False
+    )
+    tenant = models.ForeignKey(
+        Tenant, on_delete=models.CASCADE, related_name="payments", db_constraint=False
+    )
     student = models.ForeignKey(
         "academic.Student",
         on_delete=models.CASCADE,
@@ -258,9 +322,11 @@ class Payment(SchemaScopedBillingModel, models.Model):
     # Sequential bill / receipt number per tenant per fiscal year, e.g. BL-2082/83-00001.
     # Allocated by billing.bill_numbering.allocate_bill_number on create.
     bill_number = models.CharField(
-        max_length=40, blank=True, default='',
+        max_length=40,
+        blank=True,
+        default="",
         db_index=True,
-        help_text='Sequential bill number per tenant per FY (Nepali IRD convention).',
+        help_text="Sequential bill number per tenant per FY (Nepali IRD convention).",
     )
 
     METHOD_CHOICES = (
@@ -284,8 +350,12 @@ class Payment(SchemaScopedBillingModel, models.Model):
 
     class Meta:
         indexes = [
-            models.Index(fields=["tenant", "payment_date"], name="bill_pay_tenant_date_idx"),
-            models.Index(fields=["student", "payment_date"], name="bill_pay_student_date_idx"),
+            models.Index(
+                fields=["tenant", "payment_date"], name="bill_pay_tenant_date_idx"
+            ),
+            models.Index(
+                fields=["student", "payment_date"], name="bill_pay_student_date_idx"
+            ),
         ]
         constraints = [
             # Bill numbers must be unique per tenant once allocated (blank ones are OK during migration backfill).
@@ -306,8 +376,12 @@ class Expense(SchemaScopedBillingModel, models.Model):
     """
 
     SCHEMA_SCOPE = "tenant"
-    expense_id = models.UUIDField(primary_key=True, default=uuid_lib.uuid4, editable=False)
-    tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE, related_name="expenses", db_constraint=False)
+    expense_id = models.UUIDField(
+        primary_key=True, default=uuid_lib.uuid4, editable=False
+    )
+    tenant = models.ForeignKey(
+        Tenant, on_delete=models.CASCADE, related_name="expenses", db_constraint=False
+    )
 
     title = models.CharField(max_length=200)
     amount = models.DecimalField(max_digits=10, decimal_places=2)
@@ -321,7 +395,9 @@ class Expense(SchemaScopedBillingModel, models.Model):
         ("transport", "Transport"),
         ("other", "Other"),
     )
-    category = models.CharField(max_length=20, choices=CATEGORY_CHOICES, default="other")
+    category = models.CharField(
+        max_length=20, choices=CATEGORY_CHOICES, default="other"
+    )
 
     date = models.DateField()
     description = models.TextField(blank=True, null=True)
@@ -338,7 +414,9 @@ class Expense(SchemaScopedBillingModel, models.Model):
     class Meta:
         indexes = [
             models.Index(fields=["tenant", "date"], name="bill_exp_tenant_date_idx"),
-            models.Index(fields=["tenant", "category", "date"], name="bill_exp_t_cat_d_idx"),
+            models.Index(
+                fields=["tenant", "category", "date"], name="bill_exp_t_cat_d_idx"
+            ),
         ]
 
     def __str__(self):
@@ -352,7 +430,9 @@ class BillingIdempotencyKey(SchemaScopedBillingModel, models.Model):
 
     SCHEMA_SCOPE = "tenant"
 
-    idempotency_id = models.UUIDField(primary_key=True, default=uuid_lib.uuid4, editable=False)
+    idempotency_id = models.UUIDField(
+        primary_key=True, default=uuid_lib.uuid4, editable=False
+    )
     tenant = models.ForeignKey(
         Tenant,
         on_delete=models.CASCADE,
@@ -385,7 +465,9 @@ class BillingIdempotencyKey(SchemaScopedBillingModel, models.Model):
             )
         ]
         indexes = [
-            models.Index(fields=["tenant", "created_at"], name="bill_idem_tenant_c_idx"),
+            models.Index(
+                fields=["tenant", "created_at"], name="bill_idem_tenant_c_idx"
+            ),
             models.Index(fields=["endpoint", "created_at"], name="bill_idem_ep_c_idx"),
         ]
 

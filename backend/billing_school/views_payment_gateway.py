@@ -2,16 +2,17 @@
 # Unauthorized copying, modification, or distribution of this file,
 # via any medium, is strictly prohibited. Proprietary and confidential.
 """Views for eSewa and Khalti payment gateway initiation and callbacks."""
+
 import logging
 import uuid as uuid_lib
 from decimal import Decimal, InvalidOperation
 
 from django.db import connection, transaction
-from rest_framework.permissions import IsAuthenticated, AllowAny
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from billing.models_school import StudentFee, Payment
+from billing.models_school import Payment, StudentFee
 from billing_school.payment_gateways import EsewaGateway, KhaltiGateway
 
 logger = logging.getLogger(__name__)
@@ -19,7 +20,9 @@ logger = logging.getLogger(__name__)
 
 def _ensure_tenant_schema() -> bool:
     """Reject gateway callbacks that resolved to the public schema."""
-    schema_name = str(getattr(connection, "schema_name", "public") or "public").strip().lower()
+    schema_name = (
+        str(getattr(connection, "schema_name", "public") or "public").strip().lower()
+    )
     return schema_name != "public"
 
 
@@ -30,7 +33,7 @@ def _resolve_fee_by_pid_prefix(oid: str):
     (PK index scan) is used to find the fee. Returns None if the pid is
     malformed or does not resolve to exactly one fee in this tenant schema.
     """
-    parts = (oid or "").split('_')
+    parts = (oid or "").split("_")
     if len(parts) < 2 or len(parts[1]) < 16:
         logger.warning("Malformed payment order id: %s", oid)
         return None
@@ -42,14 +45,13 @@ def _resolve_fee_by_pid_prefix(oid: str):
         logger.warning("Non-hex payment order id prefix: %s", oid)
         return None
     candidates = list(
-        StudentFee.objects.filter(
-            student_fee_id__gte=lo, student_fee_id__lte=hi
-        )[:2]
+        StudentFee.objects.filter(student_fee_id__gte=lo, student_fee_id__lte=hi)[:2]
     )
     if len(candidates) != 1:
         logger.warning(
             "Payment callback could not uniquely resolve fee for oid=%s (matches=%d)",
-            oid, len(candidates),
+            oid,
+            len(candidates),
         )
         return None
     return candidates[0]
@@ -83,13 +85,15 @@ def _record_payment(fee, amount, method, gateway_ref, request):
             method=method,
             transaction_id=gateway_ref,
             recorded_by=recorded_by,
-            remarks=f'Online payment via {method.upper()}',
+            remarks=f"Online payment via {method.upper()}",
         )
-        locked_fee.amount_paid = (locked_fee.amount_paid or Decimal("0")) + Decimal(str(amount))
+        locked_fee.amount_paid = (locked_fee.amount_paid or Decimal("0")) + Decimal(
+            str(amount)
+        )
         if locked_fee.amount_paid >= locked_fee.amount_due:
-            locked_fee.status = 'paid'
+            locked_fee.status = "paid"
         else:
-            locked_fee.status = 'partial'
+            locked_fee.status = "partial"
         locked_fee.save(update_fields=["amount_paid", "status", "updated_at"])
         return payment
 
@@ -98,19 +102,19 @@ class EsewaInitiateView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
-        fee_id = request.data.get('student_fee_id')
+        fee_id = request.data.get("student_fee_id")
         if not fee_id:
-            return Response({'error': 'student_fee_id is required.'}, status=400)
+            return Response({"error": "student_fee_id is required."}, status=400)
         try:
             fee = StudentFee.objects.get(pk=fee_id, tenant=request.user.tenant)
         except StudentFee.DoesNotExist:
-            return Response({'error': 'Fee not found.'}, status=404)
+            return Response({"error": "Fee not found."}, status=404)
 
         balance = float(fee.amount_due - (fee.amount_paid or 0))
         if balance <= 0:
-            return Response({'error': 'No outstanding balance.'}, status=400)
+            return Response({"error": "No outstanding balance."}, status=400)
 
-        frontend_url = request.headers.get('Origin', 'http://localhost:3000')
+        frontend_url = request.headers.get("Origin", "http://localhost:3000")
         fields = EsewaGateway.build_form_fields(
             student_fee_id=str(fee_id),
             amount=balance,
@@ -125,54 +129,58 @@ class EsewaCallbackView(APIView):
 
     def get(self, request):
         if not _ensure_tenant_schema():
-            return Response({'error': 'Tenant context required.'}, status=400)
+            return Response({"error": "Tenant context required."}, status=400)
 
-        oid = request.query_params.get('oid', '')
-        amt = request.query_params.get('amt', '')
-        ref_id = request.query_params.get('refId', '')
+        oid = request.query_params.get("oid", "")
+        amt = request.query_params.get("amt", "")
+        ref_id = request.query_params.get("refId", "")
 
         if not all([oid, amt, ref_id]):
-            return Response({'error': 'Missing parameters.'}, status=400)
+            return Response({"error": "Missing parameters."}, status=400)
 
         try:
             amount = Decimal(amt)
         except (InvalidOperation, TypeError, ValueError):
-            return Response({'error': 'Invalid amount.'}, status=400)
+            return Response({"error": "Invalid amount."}, status=400)
         if amount <= 0:
-            return Response({'error': 'Invalid amount.'}, status=400)
+            return Response({"error": "Invalid amount."}, status=400)
 
         fee = _resolve_fee_by_pid_prefix(oid)
         if fee is None:
-            return Response({'error': 'Fee not found.'}, status=404)
+            return Response({"error": "Fee not found."}, status=404)
 
         if not EsewaGateway.verify_payment(oid, amt, ref_id):
-            return Response({'error': 'Payment verification failed.'}, status=400)
+            return Response({"error": "Payment verification failed."}, status=400)
 
-        payment = _record_payment(fee, amount, 'esewa', ref_id, request)
-        return Response({'status': 'success', 'payment_id': str(payment.pk)})
+        payment = _record_payment(fee, amount, "esewa", ref_id, request)
+        return Response({"status": "success", "payment_id": str(payment.pk)})
 
 
 class KhaltiInitiateView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
-        fee_id = request.data.get('student_fee_id')
+        fee_id = request.data.get("student_fee_id")
         if not fee_id:
-            return Response({'error': 'student_fee_id is required.'}, status=400)
+            return Response({"error": "student_fee_id is required."}, status=400)
         try:
             fee = StudentFee.objects.get(pk=fee_id, tenant=request.user.tenant)
         except StudentFee.DoesNotExist:
-            return Response({'error': 'Fee not found.'}, status=404)
+            return Response({"error": "Fee not found."}, status=404)
 
         balance = float(fee.amount_due - (fee.amount_paid or 0))
         if balance <= 0:
-            return Response({'error': 'No outstanding balance.'}, status=400)
+            return Response({"error": "No outstanding balance."}, status=400)
 
-        frontend_url = request.headers.get('Origin', 'http://localhost:3000')
+        frontend_url = request.headers.get("Origin", "http://localhost:3000")
         return_url = f"{frontend_url}/student/fees/payment-result?gateway=khalti"
-        fee_name = getattr(fee.fee_structure, 'name', 'School Fee') if hasattr(fee, 'fee_structure') else 'School Fee'
+        fee_name = (
+            getattr(fee.fee_structure, "name", "School Fee")
+            if hasattr(fee, "fee_structure")
+            else "School Fee"
+        )
         user = request.user
-        customer_name = f"{user.first_name} {user.last_name}".strip() or 'Student'
+        customer_name = f"{user.first_name} {user.last_name}".strip() or "Student"
 
         try:
             result = KhaltiGateway.initiate(
@@ -181,17 +189,19 @@ class KhaltiInitiateView(APIView):
                 return_url=return_url,
                 purchase_order_name=fee_name,
                 customer_name=customer_name,
-                customer_phone=getattr(user, 'phone_number', ''),
+                customer_phone=getattr(user, "phone_number", ""),
             )
         except Exception as exc:
             logger.error("Khalti initiation error: %s", exc)
-            return Response({'error': 'Payment initiation failed.'}, status=500)
+            return Response({"error": "Payment initiation failed."}, status=500)
 
-        return Response({
-            'pidx': result.get('pidx'),
-            'payment_url': result.get('payment_url'),
-            'expires_at': result.get('expires_at'),
-        })
+        return Response(
+            {
+                "pidx": result.get("pidx"),
+                "payment_url": result.get("payment_url"),
+                "expires_at": result.get("expires_at"),
+            }
+        )
 
 
 class KhaltiCallbackView(APIView):
@@ -199,42 +209,42 @@ class KhaltiCallbackView(APIView):
 
     def get(self, request):
         if not _ensure_tenant_schema():
-            return Response({'error': 'Tenant context required.'}, status=400)
+            return Response({"error": "Tenant context required."}, status=400)
 
-        pidx = request.query_params.get('pidx')
+        pidx = request.query_params.get("pidx")
         if not pidx:
-            return Response({'error': 'pidx required.'}, status=400)
+            return Response({"error": "pidx required."}, status=400)
 
         try:
             result = KhaltiGateway.verify(pidx)
         except Exception as exc:
             logger.error("Khalti verification error: %s", exc)
-            return Response({'error': 'Verification failed.'}, status=400)
+            return Response({"error": "Verification failed."}, status=400)
 
-        if result.get('status') != 'Completed':
+        if result.get("status") != "Completed":
             return Response(
-                {'error': f"Payment not completed. Status: {result.get('status')}"},
+                {"error": f"Payment not completed. Status: {result.get('status')}"},
                 status=400,
             )
 
-        purchase_order_id = result.get('purchase_order_id') or ''
+        purchase_order_id = result.get("purchase_order_id") or ""
         try:
             fee_uuid = uuid_lib.UUID(str(purchase_order_id))
         except (ValueError, TypeError):
             logger.warning("Invalid Khalti purchase_order_id: %s", purchase_order_id)
-            return Response({'error': 'Invalid order id.'}, status=400)
+            return Response({"error": "Invalid order id."}, status=400)
 
         try:
-            amount_npr = Decimal(str(result.get('total_amount', 0))) / Decimal(100)
+            amount_npr = Decimal(str(result.get("total_amount", 0))) / Decimal(100)
         except (InvalidOperation, TypeError, ValueError):
-            return Response({'error': 'Invalid amount.'}, status=400)
+            return Response({"error": "Invalid amount."}, status=400)
         if amount_npr <= 0:
-            return Response({'error': 'Invalid amount.'}, status=400)
+            return Response({"error": "Invalid amount."}, status=400)
 
         try:
             fee = StudentFee.objects.get(pk=fee_uuid)
         except StudentFee.DoesNotExist:
-            return Response({'error': 'Fee not found.'}, status=404)
+            return Response({"error": "Fee not found."}, status=404)
 
-        payment = _record_payment(fee, amount_npr, 'khalti', pidx, request)
-        return Response({'status': 'success', 'payment_id': str(payment.pk)})
+        payment = _record_payment(fee, amount_npr, "khalti", pidx, request)
+        return Response({"status": "success", "payment_id": str(payment.pk)})

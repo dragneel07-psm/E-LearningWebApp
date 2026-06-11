@@ -2,4 +2,3 @@
 # Unauthorized copying, modification, or distribution of this file,
 # via any medium, is strictly prohibited. Proprietary and confidential.
 """Vendor fallbacks for optional dependencies."""
-

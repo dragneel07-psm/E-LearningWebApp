@@ -21,4 +21,3 @@ class StandardResultsSetPagination(PageNumberPagination):
     @property
     def max_page_size(self):
         return int(getattr(settings, "MAX_PAGE_SIZE", 100))
-

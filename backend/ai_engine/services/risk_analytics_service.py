@@ -12,7 +12,16 @@ from django.conf import settings
 from django.db.models import Q
 from django.utils import timezone
 
-from academic.models import Assessment, Attendance, Lesson, LessonProgress, Parent, Result, Student, Teacher
+from academic.models import (
+    Assessment,
+    Attendance,
+    Lesson,
+    LessonProgress,
+    Parent,
+    Result,
+    Student,
+    Teacher,
+)
 from academic.models.submission import Submission
 from ai_engine.services.rag_tutor_service import RAGTutorService
 from notifications.models import Notification
@@ -25,9 +34,13 @@ class RiskAnalyticsService:
         self.user = user
         self.lookback_days = int(getattr(settings, "AI_RISK_LOOKBACK_DAYS", 30))
         self.inactivity_days = int(getattr(settings, "AI_RISK_INACTIVITY_DAYS", 14))
-        self.notification_threshold = int(getattr(settings, "AI_AT_RISK_NOTIFICATION_THRESHOLD", 75))
+        self.notification_threshold = int(
+            getattr(settings, "AI_AT_RISK_NOTIFICATION_THRESHOLD", 75)
+        )
         self.min_score = int(getattr(settings, "AI_AT_RISK_MIN_SCORE", 40))
-        self.use_llm_explanations = bool(getattr(settings, "AI_RISK_USE_LLM_EXPLANATIONS", False))
+        self.use_llm_explanations = bool(
+            getattr(settings, "AI_RISK_USE_LLM_EXPLANATIONS", False)
+        )
         self.rag = RAGTutorService(tenant=tenant)
 
     @staticmethod
@@ -55,15 +68,18 @@ class RiskAnalyticsService:
     def _attendance_rate(records: list[Attendance]) -> float:
         if not records:
             return 0.0
-        present_like = sum(1 for row in records if row.status in {"present", "late", "excused"})
+        present_like = sum(
+            1 for row in records if row.status in {"present", "late", "excused"}
+        )
         return (present_like / len(records)) * 100.0
 
     def _attendance_signal(self, student: Student) -> dict[str, Any]:
         today = timezone.localdate()
         start = today - timedelta(days=self.lookback_days)
         records = list(
-            Attendance.objects.filter(student=student, date__gte=start, date__lte=today)
-            .order_by("date")
+            Attendance.objects.filter(
+                student=student, date__gte=start, date__lte=today
+            ).order_by("date")
         )
 
         reasons: list[str] = []
@@ -90,18 +106,29 @@ class RiskAnalyticsService:
 
         if recent_rate < 75:
             score += 20
-            reasons.append(f"Attendance is low at {round(recent_rate)}% in recent classes.")
-            actions.append("Schedule an attendance improvement plan with parent and class teacher.")
+            reasons.append(
+                f"Attendance is low at {round(recent_rate)}% in recent classes."
+            )
+            actions.append(
+                "Schedule an attendance improvement plan with parent and class teacher."
+            )
         if trend_drop >= 10:
             score += 10
-            reasons.append(f"Attendance dropped by {round(trend_drop)} percentage points compared to earlier period.")
-            actions.append("Investigate recent absenteeism reasons and set weekly follow-up.")
+            reasons.append(
+                f"Attendance dropped by {round(trend_drop)} percentage points compared to earlier period."
+            )
+            actions.append(
+                "Investigate recent absenteeism reasons and set weekly follow-up."
+            )
 
         return {
             "score": score,
             "reasons": reasons,
             "actions": actions,
-            "metrics": {"recent_attendance_pct": round(recent_rate, 1), "trend_drop_pct": round(trend_drop, 1)},
+            "metrics": {
+                "recent_attendance_pct": round(recent_rate, 1),
+                "trend_drop_pct": round(trend_drop, 1),
+            },
         }
 
     def _grade_signal(self, student: Student, class_id: int) -> dict[str, Any]:
@@ -134,7 +161,11 @@ class RiskAnalyticsService:
         recent_values = percentages[:3]
         previous_values = percentages[3:]
         recent_avg = sum(recent_values) / max(1, len(recent_values))
-        previous_avg = sum(previous_values) / max(1, len(previous_values)) if previous_values else recent_avg
+        previous_avg = (
+            sum(previous_values) / max(1, len(previous_values))
+            if previous_values
+            else recent_avg
+        )
         trend_drop = previous_avg - recent_avg
 
         if recent_avg < 55:
@@ -143,17 +174,26 @@ class RiskAnalyticsService:
             actions.append("Provide targeted remediation worksheets for weak topics.")
         if trend_drop >= 10:
             score += 15
-            reasons.append(f"Grades declined by {round(trend_drop)} percentage points across recent assessments.")
-            actions.append("Conduct a one-on-one academic review and weekly progress checks.")
+            reasons.append(
+                f"Grades declined by {round(trend_drop)} percentage points across recent assessments."
+            )
+            actions.append(
+                "Conduct a one-on-one academic review and weekly progress checks."
+            )
 
         return {
             "score": score,
             "reasons": reasons,
             "actions": actions,
-            "metrics": {"recent_grade_pct": round(recent_avg, 1), "trend_drop_pct": round(trend_drop, 1)},
+            "metrics": {
+                "recent_grade_pct": round(recent_avg, 1),
+                "trend_drop_pct": round(trend_drop, 1),
+            },
         }
 
-    def _missing_assignments_signal(self, student: Student, class_id: int) -> dict[str, Any]:
+    def _missing_assignments_signal(
+        self, student: Student, class_id: int
+    ) -> dict[str, Any]:
         now = timezone.now()
         assessment_qs = Assessment.objects.filter(
             subject__academic_class_id=class_id,
@@ -163,17 +203,26 @@ class RiskAnalyticsService:
         )
 
         if student.section_id:
-            assessment_qs = assessment_qs.filter(Q(section_id=student.section_id) | Q(section__isnull=True))
+            assessment_qs = assessment_qs.filter(
+                Q(section_id=student.section_id) | Q(section__isnull=True)
+            )
         else:
             assessment_qs = assessment_qs.filter(section__isnull=True)
 
         due_assessments = list(assessment_qs.values_list("assessment_id", flat=True))
         due_count = len(due_assessments)
         if due_count == 0:
-            return {"score": 0, "reasons": [], "actions": [], "metrics": {"missing_assignments": 0}}
+            return {
+                "score": 0,
+                "reasons": [],
+                "actions": [],
+                "metrics": {"missing_assignments": 0},
+            }
 
         submission_count = (
-            Submission.objects.filter(student=student, assessment_id__in=due_assessments)
+            Submission.objects.filter(
+                student=student, assessment_id__in=due_assessments
+            )
             .exclude(status="draft")
             .values("assessment_id")
             .distinct()
@@ -181,11 +230,18 @@ class RiskAnalyticsService:
         )
         missing_count = max(0, due_count - submission_count)
         if missing_count == 0:
-            return {"score": 0, "reasons": [], "actions": [], "metrics": {"missing_assignments": 0}}
+            return {
+                "score": 0,
+                "reasons": [],
+                "actions": [],
+                "metrics": {"missing_assignments": 0},
+            }
 
         score = min(20, missing_count * 7)
         reasons = [f"{missing_count} assignment(s) are overdue and not submitted."]
-        actions = ["Coordinate with student and parent to clear pending assignments this week."]
+        actions = [
+            "Coordinate with student and parent to clear pending assignments this week."
+        ]
         return {
             "score": score,
             "reasons": reasons,
@@ -209,10 +265,16 @@ class RiskAnalyticsService:
                 "metrics": {"lesson_completion_pct": None, "inactive_days": None},
             }
 
-        progress_qs = LessonProgress.objects.filter(student=student, lesson_id__in=lesson_ids)
+        progress_qs = LessonProgress.objects.filter(
+            student=student, lesson_id__in=lesson_ids
+        )
         completed_count = progress_qs.filter(completed=True).count()
         completion_pct = (completed_count / total_lessons) * 100.0
-        last_accessed = progress_qs.order_by("-last_accessed").values_list("last_accessed", flat=True).first()
+        last_accessed = (
+            progress_qs.order_by("-last_accessed")
+            .values_list("last_accessed", flat=True)
+            .first()
+        )
 
         score = 0
         reasons: list[str] = []
@@ -233,13 +295,18 @@ class RiskAnalyticsService:
             if inactive_days >= self.inactivity_days:
                 score += 10
                 reasons.append(f"No lesson access for {inactive_days} days.")
-                actions.append("Re-engage student with mentor check-in and short learning tasks.")
+                actions.append(
+                    "Re-engage student with mentor check-in and short learning tasks."
+                )
 
         return {
             "score": score,
             "reasons": reasons,
             "actions": actions,
-            "metrics": {"lesson_completion_pct": round(completion_pct, 1), "inactive_days": inactive_days},
+            "metrics": {
+                "lesson_completion_pct": round(completion_pct, 1),
+                "inactive_days": inactive_days,
+            },
         }
 
     @staticmethod
@@ -249,7 +316,11 @@ class RiskAnalyticsService:
         candidate = raw.strip()
         if not candidate:
             return None
-        fenced = re.search(r"```(?:json)?\s*(\{.*\}|\[.*\])\s*```", candidate, re.DOTALL | re.IGNORECASE)
+        fenced = re.search(
+            r"```(?:json)?\s*(\{.*\}|\[.*\])\s*```",
+            candidate,
+            re.DOTALL | re.IGNORECASE,
+        )
         if fenced:
             candidate = fenced.group(1).strip()
         try:
@@ -258,7 +329,14 @@ class RiskAnalyticsService:
             return None
         return payload if isinstance(payload, dict) else None
 
-    def _maybe_llm_enhance(self, *, student_name: str, risk_score: int, reasons: list[str], actions: list[str]) -> tuple[list[str], list[str]]:
+    def _maybe_llm_enhance(
+        self,
+        *,
+        student_name: str,
+        risk_score: int,
+        reasons: list[str],
+        actions: list[str],
+    ) -> tuple[list[str], list[str]]:
         if not self.use_llm_explanations:
             return reasons, actions
 
@@ -291,27 +369,47 @@ class RiskAnalyticsService:
         if not isinstance(parsed_reasons, list) or not isinstance(parsed_actions, list):
             return reasons, actions
 
-        normalized_reasons = [str(item).strip() for item in parsed_reasons if str(item).strip()]
-        normalized_actions = [str(item).strip() for item in parsed_actions if str(item).strip()]
+        normalized_reasons = [
+            str(item).strip() for item in parsed_reasons if str(item).strip()
+        ]
+        normalized_actions = [
+            str(item).strip() for item in parsed_actions if str(item).strip()
+        ]
         if not normalized_reasons or not normalized_actions:
             return reasons, actions
         return normalized_reasons[:6], normalized_actions[:6]
 
     def _teacher_recipients_for_class(self, class_id: int) -> list[Any]:
-        queryset = Teacher.objects.select_related("user").filter(assigned_classes__id=class_id).distinct()
-        class_teachers = [row.user for row in queryset if row.designation == "class_teacher" and getattr(row, "user", None)]
+        queryset = (
+            Teacher.objects.select_related("user")
+            .filter(assigned_classes__id=class_id)
+            .distinct()
+        )
+        class_teachers = [
+            row.user
+            for row in queryset
+            if row.designation == "class_teacher" and getattr(row, "user", None)
+        ]
         if class_teachers:
             return class_teachers
         return [row.user for row in queryset if getattr(row, "user", None)]
 
     @staticmethod
     def _parent_recipients_for_student(student: Student) -> list[Any]:
-        return [row.user for row in Parent.objects.select_related("user").filter(students=student) if getattr(row, "user", None)]
+        return [
+            row.user
+            for row in Parent.objects.select_related("user").filter(students=student)
+            if getattr(row, "user", None)
+        ]
 
-    def _create_risk_notifications(self, *, student: Student, class_id: int, risk_score: int, reasons: list[str]) -> None:
+    def _create_risk_notifications(
+        self, *, student: Student, class_id: int, risk_score: int, reasons: list[str]
+    ) -> None:
         teacher_recipients = self._teacher_recipients_for_class(class_id)
         parent_recipients = self._parent_recipients_for_student(student)
-        recipients = self._unique([str(user.pk) for user in [*teacher_recipients, *parent_recipients]])
+        recipients = self._unique(
+            [str(user.pk) for user in [*teacher_recipients, *parent_recipients]]
+        )
         if not recipients:
             return
 
@@ -320,7 +418,9 @@ class RiskAnalyticsService:
         message = f"Risk score {risk_score}/100. {reason_line}"
         window_start = timezone.now() - timedelta(hours=24)
 
-        user_by_id = {str(user.pk): user for user in [*teacher_recipients, *parent_recipients]}
+        user_by_id = {
+            str(user.pk): user for user in [*teacher_recipients, *parent_recipients]
+        }
         for recipient_id in recipients:
             recipient = user_by_id.get(recipient_id)
             if recipient is None:
@@ -341,7 +441,9 @@ class RiskAnalyticsService:
                 link="/teacher/students",
             )
 
-    def _student_risk_payload(self, *, student: Student, class_id: int, send_notifications: bool) -> dict[str, Any]:
+    def _student_risk_payload(
+        self, *, student: Student, class_id: int, send_notifications: bool
+    ) -> dict[str, Any]:
         attendance = self._attendance_signal(student)
         grades = self._grade_signal(student, class_id)
         assignments = self._missing_assignments_signal(student, class_id)
@@ -352,7 +454,10 @@ class RiskAnalyticsService:
                 0,
                 min(
                     100,
-                    attendance["score"] + grades["score"] + assignments["score"] + inactivity["score"],
+                    attendance["score"]
+                    + grades["score"]
+                    + assignments["score"]
+                    + inactivity["score"],
                 ),
             )
         )
@@ -403,7 +508,9 @@ class RiskAnalyticsService:
             },
         }
 
-    def get_at_risk_students(self, *, class_id: int, send_notifications: bool = True) -> list[dict[str, Any]]:
+    def get_at_risk_students(
+        self, *, class_id: int, send_notifications: bool = True
+    ) -> list[dict[str, Any]]:
         students = list(
             Student.objects.select_related("user")
             .filter(academic_class_id=class_id, user__tenant=self.tenant)

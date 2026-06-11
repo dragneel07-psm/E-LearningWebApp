@@ -51,7 +51,11 @@ class UserRoleAuditLoggingTests(FastTenantTestCase):
 
         audit_row = AuditLog.objects.filter(action="users.role_changed").first()
         self.assertIsNotNone(audit_row)
-        self.assertEqual(str(audit_row.details.get("actor_user_id")), str(self.admin_user.user_id))
-        self.assertEqual(str(audit_row.details.get("target_user_id")), str(self.target_user.user_id))
+        self.assertEqual(
+            str(audit_row.details.get("actor_user_id")), str(self.admin_user.user_id)
+        )
+        self.assertEqual(
+            str(audit_row.details.get("target_user_id")), str(self.target_user.user_id)
+        )
         self.assertEqual(audit_row.details.get("previous_role"), "teacher")
         self.assertEqual(audit_row.details.get("new_role"), "parent")

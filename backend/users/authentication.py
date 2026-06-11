@@ -4,7 +4,6 @@
 from rest_framework.exceptions import AuthenticationFailed
 from rest_framework_simplejwt.authentication import JWTAuthentication
 
-
 ACTIVE_TENANT_STATUSES = {"active", "trial"}
 
 
@@ -37,7 +36,9 @@ class TenantAwareJWTAuthentication(JWTAuthentication):
 
         user_tenant = getattr(user, "tenant", None)
         user_tenant_schema = (
-            str(getattr(user_tenant, "schema_name", "public") or "public").strip().lower()
+            str(getattr(user_tenant, "schema_name", "public") or "public")
+            .strip()
+            .lower()
             if user_tenant
             else "public"
         )
@@ -50,7 +51,9 @@ class TenantAwareJWTAuthentication(JWTAuthentication):
 
         request_tenant = getattr(request, "tenant", None)
         request_tenant_schema = (
-            str(getattr(request_tenant, "schema_name", "public") or "public").strip().lower()
+            str(getattr(request_tenant, "schema_name", "public") or "public")
+            .strip()
+            .lower()
             if request_tenant
             else "public"
         )
@@ -59,7 +62,11 @@ class TenantAwareJWTAuthentication(JWTAuthentication):
         is_saas_admin = role == "saas_admin"
 
         if is_saas_admin:
-            if user_tenant is not None or token_tenant != "public" or request_tenant_schema != "public":
+            if (
+                user_tenant is not None
+                or token_tenant != "public"
+                or request_tenant_schema != "public"
+            ):
                 raise AuthenticationFailed(
                     "SaaS admin token must be scoped to public schema only.",
                     code="saas_admin_scope_invalid",
@@ -83,8 +90,14 @@ class TenantAwareJWTAuthentication(JWTAuthentication):
             )
 
         if user_tenant:
-            tenant_status = str(getattr(user_tenant, "status", "active") or "active").strip().lower()
+            tenant_status = (
+                str(getattr(user_tenant, "status", "active") or "active")
+                .strip()
+                .lower()
+            )
             if tenant_status not in ACTIVE_TENANT_STATUSES:
-                raise AuthenticationFailed("Tenant is not active.", code="tenant_inactive")
+                raise AuthenticationFailed(
+                    "Tenant is not active.", code="tenant_inactive"
+                )
 
         return user, validated_token

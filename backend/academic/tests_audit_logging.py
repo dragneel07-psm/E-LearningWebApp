@@ -6,7 +6,14 @@ from django_tenants.test.cases import FastTenantTestCase
 from rest_framework import status
 from rest_framework.test import APIClient
 
-from academic.models import AcademicClass, AcademicYear, Assessment, Result, Student, Subject
+from academic.models import (
+    AcademicClass,
+    AcademicYear,
+    Assessment,
+    Result,
+    Student,
+    Subject,
+)
 from core.models import AuditLog
 
 User = get_user_model()
@@ -53,7 +60,9 @@ class AcademicAuditLoggingTests(FastTenantTestCase):
             self.year.save(update_fields=["is_current"])
 
         grade_8 = AcademicClass.objects.create(name="Grade 8", order=8)
-        self.student = Student.objects.create(user=self.student_user, academic_class=grade_8)
+        self.student = Student.objects.create(
+            user=self.student_user, academic_class=grade_8
+        )
         self.subject = Subject.objects.create(
             name="Mathematics",
             code="MATH-8",
@@ -100,11 +109,10 @@ class AcademicAuditLoggingTests(FastTenantTestCase):
         )
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
-        row = (
-            AuditLog.objects
-            .filter(action="academic.results_publish_state_changed", details__assessment_id=str(self.assessment.assessment_id))
-            .first()
-        )
+        row = AuditLog.objects.filter(
+            action="academic.results_publish_state_changed",
+            details__assessment_id=str(self.assessment.assessment_id),
+        ).first()
         self.assertIsNotNone(row)
         self.assertEqual(row.details.get("action"), "publish")
         self.assertTrue(row.details.get("is_published"))

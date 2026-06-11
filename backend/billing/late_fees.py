@@ -10,6 +10,7 @@ yet. The fee is added to amount_due, status flips to 'overdue', and we
 record the surcharge amount + timestamp on the row so the task is
 idempotent.
 """
+
 from __future__ import annotations
 
 from datetime import date as _date
@@ -37,14 +38,14 @@ def apply_late_fees(today: _date | None = None, *, tenant=None) -> dict:
 
     Returns a summary dict suitable for logging / Celery results.
     """
-    from .models_school import StudentFee
     from django.db.models import F
+
+    from .models_school import StudentFee
 
     today = today or timezone.now().date()
 
     qs = (
-        StudentFee.objects
-        .select_related("fee_structure", "tenant")
+        StudentFee.objects.select_related("fee_structure", "tenant")
         .exclude(status__in=["paid", "waived"])
         .filter(late_fee_applied=0)
         .filter(fee_structure__late_fee_type__in=["flat", "percent"])
@@ -66,6 +67,7 @@ def apply_late_fees(today: _date | None = None, *, tenant=None) -> dict:
         cutoff = fee.due_date
         # Add grace days
         from datetime import timedelta
+
         cutoff = cutoff + timedelta(days=grace)
         if today <= cutoff:
             skipped_count += 1
@@ -92,9 +94,15 @@ def apply_late_fees(today: _date | None = None, *, tenant=None) -> dict:
             locked.late_fee_applied_at = timezone.now()
             if locked.status not in ("paid", "waived"):
                 locked.status = "overdue"
-            locked.save(update_fields=[
-                "amount_due", "late_fee_applied", "late_fee_applied_at", "status", "updated_at",
-            ])
+            locked.save(
+                update_fields=[
+                    "amount_due",
+                    "late_fee_applied",
+                    "late_fee_applied_at",
+                    "status",
+                    "updated_at",
+                ]
+            )
 
         applied_count += 1
         total_added += late

@@ -13,6 +13,7 @@ Celery tasks for the projects app.
     within 24 hours, notifies all members and the mentor. Idempotent
     via 'project_due_soon_flagged' marker on ProjectUpdate.meta.
 """
+
 from __future__ import annotations
 
 import logging
@@ -82,7 +83,9 @@ def _scan_overdue_for_current_tenant(tenant) -> int:
         if assignee_user is not None:
             recipients.append(assignee_user)
         leader_user = (
-            getattr(task.project.leader, "user", None) if task.project.leader_id else None
+            getattr(task.project.leader, "user", None)
+            if task.project.leader_id
+            else None
         )
         if leader_user is not None and leader_user not in recipients:
             recipients.append(leader_user)

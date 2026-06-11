@@ -56,9 +56,9 @@ class CollaborativeFilterService:
             }
           ]
         """
-        from ai_engine.models import SkillMastery, SkillTag
+        from academic.models import Lesson, LessonProgress
         from academic.models.student import Student
-        from academic.models import LessonProgress, Lesson
+        from ai_engine.models import SkillMastery, SkillTag
 
         # 1. Build target student's mastery vector
         target_vector = self._mastery_vector(student, using=using)
@@ -70,11 +70,14 @@ class CollaborativeFilterService:
             Student.objects.using(using)
             .filter(academic_class=student.academic_class)
             .exclude(student_id=student.student_id)
-            .select_related("user")[:MAX_PEERS * 3]  # over-fetch; filter by similarity next
+            .select_related("user")[
+                : MAX_PEERS * 3
+            ]  # over-fetch; filter by similarity next
         )
 
         # 3. Bulk-fetch all peer masteries in one query, then compute similarity
         from ai_engine.models import SkillMastery
+
         peer_list = list(peers)
         peer_ids_all = [p.student_id for p in peer_list]
         peer_masteries_raw = (
@@ -85,7 +88,9 @@ class CollaborativeFilterService:
         peer_vectors: dict = {}
         for row in peer_masteries_raw:
             sid = row["student_id"]
-            peer_vectors.setdefault(sid, {})[str(row["skill_tag_id"])] = row["p_mastery"]
+            peer_vectors.setdefault(sid, {})[str(row["skill_tag_id"])] = row[
+                "p_mastery"
+            ]
 
         similar_peers = []
         for peer in peer_list:
@@ -145,11 +150,16 @@ class CollaborativeFilterService:
 
         # Build lesson → skill tags mapping for gap boost
         from ai_engine.models import SkillTag
+
         skill_tags_by_lesson: dict[int, set] = {}
-        for tag in SkillTag.objects.using(using).filter(
-            lessons__id__in=candidate_ids,
-            tenant=self.tenant,
-        ).prefetch_related("lessons"):
+        for tag in (
+            SkillTag.objects.using(using)
+            .filter(
+                lessons__id__in=candidate_ids,
+                tenant=self.tenant,
+            )
+            .prefetch_related("lessons")
+        ):
             for lesson in tag.lessons.filter(id__in=candidate_ids):
                 skill_tags_by_lesson.setdefault(lesson.id, set()).add(tag.id)
 
@@ -174,7 +184,11 @@ class CollaborativeFilterService:
             peer_pct = round((peer_count / len(similar_peers)) * 100)
             reason = (
                 f"{peer_pct}% of students with similar skill levels completed this lesson"
-                + (f" — it covers {gap_overlap} of your skill gap areas" if gap_overlap else "")
+                + (
+                    f" — it covers {gap_overlap} of your skill gap areas"
+                    if gap_overlap
+                    else ""
+                )
             )
 
             results.append(
@@ -197,6 +211,7 @@ class CollaborativeFilterService:
 
     def _mastery_vector(self, student, using="default") -> dict[str, float]:
         from ai_engine.models import SkillMastery
+
         return {
             str(m.skill_tag_id): m.p_mastery
             for m in SkillMastery.objects.using(using).filter(student=student)
@@ -208,8 +223,8 @@ class CollaborativeFilterService:
         if not keys:
             return 0.0
         dot = sum(a[k] * b[k] for k in keys)
-        norm_a = math.sqrt(sum(v ** 2 for v in a.values()))
-        norm_b = math.sqrt(sum(v ** 2 for v in b.values()))
+        norm_a = math.sqrt(sum(v**2 for v in a.values()))
+        norm_b = math.sqrt(sum(v**2 for v in b.values()))
         if norm_a == 0 or norm_b == 0:
             return 0.0
         return dot / (norm_a * norm_b)

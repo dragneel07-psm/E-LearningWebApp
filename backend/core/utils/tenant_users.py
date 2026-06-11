@@ -3,6 +3,7 @@
 # via any medium, is strictly prohibited. Proprietary and confidential.
 from users.models import UserAccount
 
+
 def create_tenant_admin(tenant, email, password, first_name, last_name):
     """
     Creates the first admin user for a tenant.
@@ -12,14 +13,14 @@ def create_tenant_admin(tenant, email, password, first_name, last_name):
     try:
         user = UserAccount.objects.create_user(
             email=email,
-            username=email, # Use email as username
+            username=email,  # Use email as username
             password=password,
             first_name=first_name,
             last_name=last_name,
-            role='admin',
+            role="admin",
             tenant=tenant,
-            is_staff=True,    # Tenant admins should have staff access within their tenant
-            is_active=True
+            is_staff=True,  # Tenant admins should have staff access within their tenant
+            is_active=True,
         )
         print(f"Created admin user: {user.email} (ID: {user.pk})")
         return user

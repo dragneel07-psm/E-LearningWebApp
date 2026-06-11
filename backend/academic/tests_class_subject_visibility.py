@@ -46,7 +46,9 @@ class ClassAndSubjectVisibilityTests(FastTenantTestCase):
         )
 
         self.teacher_profile = Teacher.objects.create(user=self.teacher_user)
-        self.other_teacher_profile = Teacher.objects.create(user=self.other_teacher_user)
+        self.other_teacher_profile = Teacher.objects.create(
+            user=self.other_teacher_user
+        )
 
         self.class_8 = AcademicClass.objects.create(name="Grade 8", order=8)
         self.class_9 = AcademicClass.objects.create(name="Grade 9", order=9)
@@ -117,5 +119,7 @@ class ClassAndSubjectVisibilityTests(FastTenantTestCase):
         self.assertIn(self.subject_additional.id, returned_ids)
         self.assertNotIn(self.subject_hidden.id, returned_ids)
 
-        hidden_detail = self.client.get(f"/api/academic/subjects/{self.subject_hidden.id}/")
+        hidden_detail = self.client.get(
+            f"/api/academic/subjects/{self.subject_hidden.id}/"
+        )
         self.assertEqual(hidden_detail.status_code, status.HTTP_404_NOT_FOUND)

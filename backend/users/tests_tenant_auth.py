@@ -1,17 +1,18 @@
 # Copyright (c) 2024-2026 Pramod Singh Manyal. All rights reserved.
 # Unauthorized copying, modification, or distribution of this file,
 # via any medium, is strictly prohibited. Proprietary and confidential.
+from uuid import uuid4
+
 from django.contrib.auth import get_user_model
 from django.db import connection
 from django.test import override_settings
 from django_tenants.test.cases import FastTenantTestCase
-from django_tenants.utils import tenant_context, schema_context
+from django_tenants.utils import schema_context, tenant_context
 from rest_framework import status
 from rest_framework.test import APIClient
 from rest_framework_simplejwt.tokens import AccessToken
-from uuid import uuid4
 
-from core.models.tenant import Tenant, Domain
+from core.models.tenant import Domain, Tenant
 
 User = get_user_model()
 
@@ -91,7 +92,9 @@ class TenantJwtIsolationTests(FastTenantTestCase):
 
     def test_missing_tenant_claim_is_rejected(self):
         token_without_tenant_claim = AccessToken.for_user(self.user)
-        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {str(token_without_tenant_claim)}")
+        self.client.credentials(
+            HTTP_AUTHORIZATION=f"Bearer {str(token_without_tenant_claim)}"
+        )
         response = self.client.get("/api/users/accounts/me/")
 
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
@@ -99,7 +102,9 @@ class TenantJwtIsolationTests(FastTenantTestCase):
 
     def test_token_from_tenant_a_is_rejected_on_tenant_b_domain(self):
         cross_tenant_client = APIClient(HTTP_HOST=self.other_domain.domain)
-        cross_tenant_client.credentials(HTTP_AUTHORIZATION=f"Bearer {self.access_token}")
+        cross_tenant_client.credentials(
+            HTTP_AUTHORIZATION=f"Bearer {self.access_token}"
+        )
         response = cross_tenant_client.get("/api/users/accounts/me/")
 
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)

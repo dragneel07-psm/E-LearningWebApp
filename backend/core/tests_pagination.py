@@ -29,4 +29,3 @@ class StandardPaginationPolicyTests(SimpleTestCase):
         page = paginator.paginate_queryset(list(range(500)), request)
 
         self.assertEqual(len(page), 15)
-

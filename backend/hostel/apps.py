@@ -3,7 +3,8 @@
 # via any medium, is strictly prohibited. Proprietary and confidential.
 from django.apps import AppConfig
 
+
 class HostelConfig(AppConfig):
-    default_auto_field = 'django.db.models.BigAutoField'
-    name = 'hostel'
-    verbose_name = 'Hostel'
+    default_auto_field = "django.db.models.BigAutoField"
+    name = "hostel"
+    verbose_name = "Hostel"

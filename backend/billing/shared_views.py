@@ -8,12 +8,9 @@ from rest_framework import status
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.response import Response
 
-from .idempotency import (
-    is_valid_idempotency_key,
-    json_safe as idempotency_json_safe,
-    payload_fingerprint,
-    request_idempotency_key,
-)
+from .idempotency import is_valid_idempotency_key
+from .idempotency import json_safe as idempotency_json_safe
+from .idempotency import payload_fingerprint, request_idempotency_key
 from .models import BillingIdempotencyKey
 
 
@@ -38,13 +35,17 @@ class BillingSchemaGuardMixin:
         request_tenant = self._request_tenant(request)
 
         if self.require_public_schema and schema_name != "public":
-            raise PermissionDenied("This endpoint is available only on the public schema.")
+            raise PermissionDenied(
+                "This endpoint is available only on the public schema."
+            )
 
         if self.require_tenant_schema:
             if schema_name == "public":
                 raise PermissionDenied("This endpoint requires a school tenant schema.")
             if not user_tenant:
-                raise PermissionDenied("Authenticated user is not associated with a tenant.")
+                raise PermissionDenied(
+                    "Authenticated user is not associated with a tenant."
+                )
             if request_tenant and user_tenant != request_tenant:
                 raise PermissionDenied("Cross-tenant access denied.")
 
@@ -61,7 +62,9 @@ class BillingIdempotencyMixin:
             status=http_status,
         )
 
-    def _load_or_create_idempotency_record(self, request, *, endpoint: str, idempotency_key: str, fingerprint: str):
+    def _load_or_create_idempotency_record(
+        self, request, *, endpoint: str, idempotency_key: str, fingerprint: str
+    ):
         tenant = getattr(request.user, "tenant", None)
         try:
             with transaction.atomic():
@@ -128,8 +131,13 @@ class BillingIdempotencyMixin:
                     http_status=status.HTTP_409_CONFLICT,
                 )
 
-            if record.response_status is not None and record.response_payload is not None:
-                replay_response = Response(record.response_payload, status=record.response_status)
+            if (
+                record.response_status is not None
+                and record.response_payload is not None
+            ):
+                replay_response = Response(
+                    record.response_payload, status=record.response_status
+                )
                 replay_response["X-Idempotent-Replay"] = "true"
                 replay_response["Idempotency-Key"] = idempotency_key
                 return replay_response

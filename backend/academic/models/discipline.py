@@ -47,26 +47,41 @@ class DisciplinaryIncident(models.Model):
         (STATUS_ESCALATED, "Escalated"),
     )
 
-    incident_id = models.UUIDField(primary_key=True, default=uuid_lib.uuid4, editable=False)
+    incident_id = models.UUIDField(
+        primary_key=True, default=uuid_lib.uuid4, editable=False
+    )
     tenant = models.ForeignKey(
-        "core.Tenant", on_delete=models.CASCADE,
-        related_name="disciplinary_incidents", db_constraint=False
+        "core.Tenant",
+        on_delete=models.CASCADE,
+        related_name="disciplinary_incidents",
+        db_constraint=False,
     )
     student = models.ForeignKey(
-        "academic.Student", on_delete=models.CASCADE,
-        related_name="disciplinary_incidents", db_constraint=False
+        "academic.Student",
+        on_delete=models.CASCADE,
+        related_name="disciplinary_incidents",
+        db_constraint=False,
     )
     reported_by = models.ForeignKey(
-        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
-        null=True, related_name="reported_incidents", db_constraint=False
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name="reported_incidents",
+        db_constraint=False,
     )
 
     incident_date = models.DateField()
-    incident_type = models.CharField(max_length=30, choices=INCIDENT_TYPE_CHOICES, default=TYPE_OTHER)
-    severity = models.CharField(max_length=10, choices=SEVERITY_CHOICES, default=SEVERITY_LOW)
+    incident_type = models.CharField(
+        max_length=30, choices=INCIDENT_TYPE_CHOICES, default=TYPE_OTHER
+    )
+    severity = models.CharField(
+        max_length=10, choices=SEVERITY_CHOICES, default=SEVERITY_LOW
+    )
     description = models.TextField()
     action_taken = models.TextField(blank=True)
-    status = models.CharField(max_length=15, choices=STATUS_CHOICES, default=STATUS_OPEN)
+    status = models.CharField(
+        max_length=15, choices=STATUS_CHOICES, default=STATUS_OPEN
+    )
 
     # Parent communication
     parent_notified = models.BooleanField(default=False)
@@ -83,8 +98,12 @@ class DisciplinaryIncident(models.Model):
     class Meta:
         ordering = ["-incident_date", "-created_at"]
         indexes = [
-            models.Index(fields=["tenant", "status"], name="sis_disc_tenant_status_idx"),
-            models.Index(fields=["tenant", "student"], name="sis_disc_tenant_student_idx"),
+            models.Index(
+                fields=["tenant", "status"], name="sis_disc_tenant_status_idx"
+            ),
+            models.Index(
+                fields=["tenant", "student"], name="sis_disc_tenant_student_idx"
+            ),
             models.Index(fields=["incident_date"], name="sis_disc_date_idx"),
         ]
 

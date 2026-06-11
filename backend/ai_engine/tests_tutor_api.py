@@ -24,9 +24,13 @@ class ResponseLike(Protocol):
 
 
 class APIClientLike(Protocol):
-    def force_authenticate(self, user: UserAccount | None = None, token: Any | None = None) -> None: ...
+    def force_authenticate(
+        self, user: UserAccount | None = None, token: Any | None = None
+    ) -> None: ...
 
-    def post(self, path: str, data: Any = None, format: str | None = None, **kwargs: Any) -> ResponseLike: ...
+    def post(
+        self, path: str, data: Any = None, format: str | None = None, **kwargs: Any
+    ) -> ResponseLike: ...
 
 
 def _payload(response: ResponseLike) -> dict[str, Any]:
@@ -49,11 +53,11 @@ class TutorChatApiTests(FastTenantTestCase):
             self.user = cast(
                 UserAccount,
                 UserAccount.objects.create_user(
-                username="rag_student",
-                email="rag_student@example.com",
-                password="RagStudent@123",
-                role="student",
-                tenant=tenant,
+                    username="rag_student",
+                    email="rag_student@example.com",
+                    password="RagStudent@123",
+                    role="student",
+                    tenant=tenant,
                 ),
             )
             ContentChunk.objects.create(
@@ -65,12 +69,16 @@ class TutorChatApiTests(FastTenantTestCase):
                 embedding=[0.01] * dimensions,
             )
 
-        self.client = cast(APIClientLike, APIClient(HTTP_HOST=str(self.get_test_tenant_domain())))
+        self.client = cast(
+            APIClientLike, APIClient(HTTP_HOST=str(self.get_test_tenant_domain()))
+        )
         self.client.force_authenticate(user=self.user)
 
     @override_settings(AI_TUTOR_MIN_SIMILARITY=-1.0)
     @patch("ai_engine.services.rag_tutor_service.RAGTutorService._call_chat_model")
-    def test_tutor_chat_returns_answer_sources_and_usage(self, mock_call_chat_model: MagicMock) -> None:
+    def test_tutor_chat_returns_answer_sources_and_usage(
+        self, mock_call_chat_model: MagicMock
+    ) -> None:
         mock_call_chat_model.return_value = (
             "Newton's first law means objects keep their current motion unless a force changes it.",
             {
@@ -109,7 +117,10 @@ class TutorChatApiTests(FastTenantTestCase):
         self.assertEqual(usage["prompt_tokens"], 42)
         self.assertEqual(usage["completion_tokens"], 18)
 
-    @patch("ai_engine.services.rag_tutor_service.RAGTutorService.retrieve_relevant_chunks", return_value=[])
+    @patch(
+        "ai_engine.services.rag_tutor_service.RAGTutorService.retrieve_relevant_chunks",
+        return_value=[],
+    )
     @patch("ai_engine.services.rag_tutor_service.RAGTutorService._call_chat_model")
     def test_tutor_chat_uses_general_answer_when_no_grounding_context_is_requested(
         self,
@@ -139,7 +150,9 @@ class TutorChatApiTests(FastTenantTestCase):
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertIn("answer", payload)
-        self.assertNotIn("I’m not sure from the available context.", cast(str, payload["answer"]))
+        self.assertNotIn(
+            "I’m not sure from the available context.", cast(str, payload["answer"])
+        )
         self.assertEqual(cast(dict[str, Any], payload["usage"])["model"], "gpt-4o-mini")
         self.assertEqual(cast(list[Any], payload["sources"]), [])
         self.assertFalse(cast(bool, payload["is_demo"]))

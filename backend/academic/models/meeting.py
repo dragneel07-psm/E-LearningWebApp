@@ -30,7 +30,9 @@ class ParentTeacherMeeting(models.Model):
         (SLOT_EVENING, "Evening (4pm – 7pm)"),
     )
 
-    meeting_id = models.UUIDField(primary_key=True, default=uuid_lib.uuid4, editable=False)
+    meeting_id = models.UUIDField(
+        primary_key=True, default=uuid_lib.uuid4, editable=False
+    )
     parent = models.ForeignKey(
         "academic.Parent",
         on_delete=models.CASCADE,
@@ -50,9 +52,13 @@ class ParentTeacherMeeting(models.Model):
         db_constraint=False,
     )
     requested_date = models.DateField()
-    preferred_slot = models.CharField(max_length=20, choices=SLOT_CHOICES, default=SLOT_MORNING)
+    preferred_slot = models.CharField(
+        max_length=20, choices=SLOT_CHOICES, default=SLOT_MORNING
+    )
     purpose = models.TextField()
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_PENDING)
+    status = models.CharField(
+        max_length=20, choices=STATUS_CHOICES, default=STATUS_PENDING
+    )
 
     # Set by teacher/admin on confirmation
     confirmed_datetime = models.DateTimeField(null=True, blank=True)
@@ -76,8 +82,12 @@ class ParentTeacherMeeting(models.Model):
     class Meta:
         ordering = ["-created_at"]
         indexes = [
-            models.Index(fields=["parent", "status"], name="acad_ptm_parent_status_idx"),
-            models.Index(fields=["teacher", "status"], name="acad_ptm_teacher_status_idx"),
+            models.Index(
+                fields=["parent", "status"], name="acad_ptm_parent_status_idx"
+            ),
+            models.Index(
+                fields=["teacher", "status"], name="acad_ptm_teacher_status_idx"
+            ),
             models.Index(fields=["requested_date"], name="acad_ptm_date_idx"),
         ]
 

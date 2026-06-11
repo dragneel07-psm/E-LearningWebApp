@@ -29,7 +29,10 @@ class TimetablePermissionTests(FastTenantTestCase):
         domain.is_primary = True
 
     def setUp(self):
-        self.client = APIClient(HTTP_HOST=self.get_test_tenant_domain(), HTTP_X_TENANT_ID=self.tenant.schema_name)
+        self.client = APIClient(
+            HTTP_HOST=self.get_test_tenant_domain(),
+            HTTP_X_TENANT_ID=self.tenant.schema_name,
+        )
 
         self.admin_user = User.objects.create_user(
             username="admin_user",
@@ -48,8 +51,12 @@ class TimetablePermissionTests(FastTenantTestCase):
             last_name="User",
         )
 
-        self.academic_class = AcademicClass.objects.create(name="E2E Grade 10", order=10)
-        self.teacher_profile = Teacher.objects.create(user=self.teacher_user, designation="subject_teacher")
+        self.academic_class = AcademicClass.objects.create(
+            name="E2E Grade 10", order=10
+        )
+        self.teacher_profile = Teacher.objects.create(
+            user=self.teacher_user, designation="subject_teacher"
+        )
         self.teacher_profile.assigned_classes.add(self.academic_class)
 
     def test_teacher_cannot_patch_admin_main_slot(self):
@@ -96,4 +103,6 @@ class TimetablePermissionTests(FastTenantTestCase):
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertEqual(response.data.get("entry_type"), "extra")
         self.assertEqual(response.data.get("status"), "pending")
-        self.assertEqual(str(response.data.get("created_by")), str(self.teacher_user.user_id))
+        self.assertEqual(
+            str(response.data.get("created_by")), str(self.teacher_user.user_id)
+        )

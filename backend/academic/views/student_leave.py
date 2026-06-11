@@ -3,12 +3,13 @@
 # via any medium, is strictly prohibited. Proprietary and confidential.
 import logging
 from datetime import date
+
 from django.utils import timezone
-from rest_framework import viewsets, status
+from rest_framework import serializers as drf_serializers
+from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
-from rest_framework import serializers as drf_serializers
 
 from academic.models.student_leave import StudentLeave
 
@@ -24,23 +25,40 @@ class StudentLeaveSerializer(drf_serializers.ModelSerializer):
     class Meta:
         model = StudentLeave
         fields = [
-            'leave_id', 'student', 'student_name', 'class_name',
-            'applied_by', 'leave_type', 'start_date', 'end_date', 'total_days',
-            'reason', 'supporting_document_url',
-            'status', 'reviewed_by', 'reviewed_by_name', 'reviewed_at', 'review_remarks',
-            'created_at',
+            "leave_id",
+            "student",
+            "student_name",
+            "class_name",
+            "applied_by",
+            "leave_type",
+            "start_date",
+            "end_date",
+            "total_days",
+            "reason",
+            "supporting_document_url",
+            "status",
+            "reviewed_by",
+            "reviewed_by_name",
+            "reviewed_at",
+            "review_remarks",
+            "created_at",
         ]
         read_only_fields = [
-            'leave_id', 'applied_by', 'status', 'reviewed_by',
-            'reviewed_at', 'created_at', 'total_days',
+            "leave_id",
+            "applied_by",
+            "status",
+            "reviewed_by",
+            "reviewed_at",
+            "created_at",
+            "total_days",
         ]
 
     def get_student_name(self, obj):
-        u = getattr(obj.student, 'user', None)
+        u = getattr(obj.student, "user", None)
         return f"{u.first_name} {u.last_name}".strip() if u else str(obj.student)
 
     def get_class_name(self, obj):
-        cls = getattr(obj.student, 'academic_class', None)
+        cls = getattr(obj.student, "academic_class", None)
         return str(cls) if cls else None
 
     def get_reviewed_by_name(self, obj):
@@ -55,15 +73,17 @@ class StudentLeaveViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
-        role = getattr(user, 'role', 'student')
+        role = getattr(user, "role", "student")
         qs = StudentLeave.objects.select_related(
-            'student__user', 'student__academic_class', 'applied_by', 'reviewed_by'
+            "student__user", "student__academic_class", "applied_by", "reviewed_by"
         )
-        if role in ('admin', 'staff', 'principal'):
+        if role in ("admin", "staff", "principal"):
             return qs.all()
-        if role == 'teacher':
+        if role == "teacher":
             # Teachers see leaves for students in their assigned classes
-            from academic.models import Student, Teacher as TeacherModel
+            from academic.models import Student
+            from academic.models import Teacher as TeacherModel
+
             teacher = TeacherModel.objects.filter(user=user).first()
             if not teacher:
                 return qs.none()
@@ -71,14 +91,14 @@ class StudentLeaveViewSet(viewsets.ModelViewSet):
                 academic_class__in=teacher.assigned_classes.all()
             )
             return qs.filter(student__in=students)
-        if role == 'parent':
+        if role == "parent":
             # Parents see their children's leaves
-            parent = getattr(user, 'parent_profile', None)
+            parent = getattr(user, "parent_profile", None)
             if parent:
                 return qs.filter(student__in=parent.students.all())
             return qs.none()
         # Student sees own leaves
-        student = getattr(user, 'student_profile', None)
+        student = getattr(user, "student_profile", None)
         if student:
             return qs.filter(student=student)
         return qs.none()
@@ -86,44 +106,50 @@ class StudentLeaveViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         serializer.save(applied_by=self.request.user)
 
-    @action(detail=True, methods=['post'])
+    @action(detail=True, methods=["post"])
     def approve(self, request, pk=None):
         leave = self.get_object()
-        if leave.status != 'pending':
-            return Response({'error': 'Only pending leaves can be approved.'}, status=400)
-        leave.status = 'approved'
+        if leave.status != "pending":
+            return Response(
+                {"error": "Only pending leaves can be approved."}, status=400
+            )
+        leave.status = "approved"
         leave.reviewed_by = request.user
         leave.reviewed_at = timezone.now()
-        leave.review_remarks = request.data.get('remarks', '')
+        leave.review_remarks = request.data.get("remarks", "")
         leave.save()
-        _notify_leave_decision(leave, 'approved')
+        _notify_leave_decision(leave, "approved")
         return Response(StudentLeaveSerializer(leave).data)
 
-    @action(detail=True, methods=['post'])
+    @action(detail=True, methods=["post"])
     def reject(self, request, pk=None):
         leave = self.get_object()
-        if leave.status != 'pending':
-            return Response({'error': 'Only pending leaves can be rejected.'}, status=400)
-        leave.status = 'rejected'
+        if leave.status != "pending":
+            return Response(
+                {"error": "Only pending leaves can be rejected."}, status=400
+            )
+        leave.status = "rejected"
         leave.reviewed_by = request.user
         leave.reviewed_at = timezone.now()
-        leave.review_remarks = request.data.get('remarks', 'Rejected by reviewer.')
+        leave.review_remarks = request.data.get("remarks", "Rejected by reviewer.")
         leave.save()
-        _notify_leave_decision(leave, 'rejected')
+        _notify_leave_decision(leave, "rejected")
         return Response(StudentLeaveSerializer(leave).data)
 
-    @action(detail=True, methods=['post'])
+    @action(detail=True, methods=["post"])
     def cancel(self, request, pk=None):
         leave = self.get_object()
-        if leave.status not in ('pending',):
-            return Response({'error': 'Only pending leaves can be cancelled.'}, status=400)
-        leave.status = 'cancelled'
+        if leave.status not in ("pending",):
+            return Response(
+                {"error": "Only pending leaves can be cancelled."}, status=400
+            )
+        leave.status = "cancelled"
         leave.save()
-        return Response({'status': 'cancelled'})
+        return Response({"status": "cancelled"})
 
-    @action(detail=False, methods=['get'])
+    @action(detail=False, methods=["get"])
     def pending(self, request):
-        qs = self.get_queryset().filter(status='pending').order_by('start_date')
+        qs = self.get_queryset().filter(status="pending").order_by("start_date")
         return Response(StudentLeaveSerializer(qs, many=True).data)
 
 
@@ -131,9 +157,10 @@ def _notify_leave_decision(leave, decision: str):
     """Send in-app notification to the student and their parents about leave decision."""
     try:
         from notifications.services import NotificationService
-        tenant = getattr(leave.student, 'tenant', None)
-        student_user = getattr(leave.student, 'user', None)
-        emoji = '✅' if decision == 'approved' else '❌'
+
+        tenant = getattr(leave.student, "tenant", None)
+        student_user = getattr(leave.student, "user", None)
+        emoji = "✅" if decision == "approved" else "❌"
         title = f"{emoji} Leave {decision.capitalize()}"
         message = (
             f"Your leave request ({leave.start_date} – {leave.end_date}) "
@@ -155,7 +182,7 @@ def _notify_leave_decision(leave, decision: str):
                 title=title,
                 message=message,
                 tenant=tenant,
-                link='/student/leaves',
+                link="/student/leaves",
             )
     except Exception as exc:
         logger.warning("Leave notification failed: %s", exc)

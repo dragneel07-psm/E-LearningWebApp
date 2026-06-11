@@ -57,10 +57,14 @@ class RiskAnalyticsApiTests(FastTenantTestCase):
             self.class_one = AcademicClass.objects.create(name="Grade 9")
             self.class_two = AcademicClass.objects.create(name="Grade 10")
 
-            teacher_profile = Teacher.objects.create(user=self.teacher_user, designation="class_teacher")
+            teacher_profile = Teacher.objects.create(
+                user=self.teacher_user, designation="class_teacher"
+            )
             teacher_profile.assigned_classes.add(self.class_one)
 
-            other_teacher_profile = Teacher.objects.create(user=self.other_teacher_user, designation="class_teacher")
+            other_teacher_profile = Teacher.objects.create(
+                user=self.other_teacher_user, designation="class_teacher"
+            )
             other_teacher_profile.assigned_classes.add(self.class_two)
 
     def _client_for(self, user):
@@ -81,24 +85,32 @@ class RiskAnalyticsApiTests(FastTenantTestCase):
         ]
         client = self._client_for(self.teacher_user)
 
-        response = client.get(f"/api/ai/analytics/at_risk_students/?class_id={self.class_one.id}&notify=0")
+        response = client.get(
+            f"/api/ai/analytics/at_risk_students/?class_id={self.class_one.id}&notify=0"
+        )
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(len(response.data), 1)
         self.assertEqual(int(response.data[0]["risk_score"]), 82)
-        mock_get_at_risk_students.assert_called_once_with(class_id=self.class_one.id, send_notifications=False)
+        mock_get_at_risk_students.assert_called_once_with(
+            class_id=self.class_one.id, send_notifications=False
+        )
 
     def test_teacher_cannot_access_unassigned_class(self):
         client = self._client_for(self.teacher_user)
 
-        response = client.get(f"/api/ai/analytics/at_risk_students/?class_id={self.class_two.id}")
+        response = client.get(
+            f"/api/ai/analytics/at_risk_students/?class_id={self.class_two.id}"
+        )
 
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_student_cannot_access_endpoint(self):
         client = self._client_for(self.student_user)
 
-        response = client.get(f"/api/ai/analytics/at_risk_students/?class_id={self.class_one.id}")
+        response = client.get(
+            f"/api/ai/analytics/at_risk_students/?class_id={self.class_one.id}"
+        )
 
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
@@ -115,7 +127,11 @@ class RiskAnalyticsApiTests(FastTenantTestCase):
         mock_get_at_risk_students.return_value = []
         client = self._client_for(self.admin_user)
 
-        response = client.get(f"/api/ai/analytics/at_risk_students/?class_id={self.class_two.id}")
+        response = client.get(
+            f"/api/ai/analytics/at_risk_students/?class_id={self.class_two.id}"
+        )
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        mock_get_at_risk_students.assert_called_once_with(class_id=self.class_two.id, send_notifications=True)
+        mock_get_at_risk_students.assert_called_once_with(
+            class_id=self.class_two.id, send_notifications=True
+        )

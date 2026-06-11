@@ -42,7 +42,9 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options):
-        from users.models import UserAccount  # local import avoids circular-import at module load
+        from users.models import (
+            UserAccount,  # local import avoids circular-import at module load
+        )
 
         self.stdout.write(self.style.WARNING("\n=== SaaS Admin Password Reset ===\n"))
 
@@ -64,7 +66,9 @@ class Command(BaseCommand):
                 continue
             confirm = getpass.getpass("Confirm new password: ")
             if password != confirm:
-                self.stderr.write(self.style.ERROR("Passwords do not match. Try again."))
+                self.stderr.write(
+                    self.style.ERROR("Passwords do not match. Try again.")
+                )
                 continue
             break
 
@@ -77,7 +81,9 @@ class Command(BaseCommand):
         if reset_2fa:
             new_secret = pyotp.random_base32()
             issuer = getattr(settings, "TOTP_ISSUER_NAME", "E-Learning Platform")
-            qr_uri = pyotp.TOTP(new_secret).provisioning_uri(name=user.email, issuer_name=issuer)
+            qr_uri = pyotp.TOTP(new_secret).provisioning_uri(
+                name=user.email, issuer_name=issuer
+            )
 
         with transaction.atomic():
             user.set_password(password)
@@ -100,13 +106,21 @@ class Command(BaseCommand):
                         "reset_2fa": bool(reset_2fa),
                     },
                 )
-            except Exception as exc:  # noqa: BLE001 — audit failure must not roll back reset
+            except (
+                Exception
+            ) as exc:  # noqa: BLE001 — audit failure must not roll back reset
                 self.stderr.write(self.style.WARNING(f"Audit log write failed: {exc}"))
 
-        self.stdout.write(self.style.SUCCESS(f"\n✓ Password reset for SaaS admin: {user.email}"))
+        self.stdout.write(
+            self.style.SUCCESS(f"\n✓ Password reset for SaaS admin: {user.email}")
+        )
 
         if reset_2fa:
-            self.stdout.write(self.style.WARNING("\n=== IMPORTANT: Save these 2FA credentials NOW ==="))
+            self.stdout.write(
+                self.style.WARNING(
+                    "\n=== IMPORTANT: Save these 2FA credentials NOW ==="
+                )
+            )
             self.stdout.write(f"\n  TOTP Secret : {new_secret}")
             self.stdout.write(f"\n  QR URI      : {qr_uri}")
             self.stdout.write(

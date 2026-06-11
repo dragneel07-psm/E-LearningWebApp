@@ -4,8 +4,8 @@
 import json
 from typing import Any
 
-from django.core.serializers.json import DjangoJSONEncoder
 from django.contrib.auth import get_user_model
+from django.core.serializers.json import DjangoJSONEncoder
 
 from core.models import AuditLog
 
@@ -26,7 +26,9 @@ def _json_safe(payload: dict[str, Any]) -> dict[str, Any]:
     return json.loads(json.dumps(payload, cls=DjangoJSONEncoder))
 
 
-def record_audit_event(*, action: str, user=None, request=None, details: dict[str, Any] | None = None) -> AuditLog | None:
+def record_audit_event(
+    *, action: str, user=None, request=None, details: dict[str, Any] | None = None
+) -> AuditLog | None:
     """
     Best-effort structured audit writer for sensitive domain actions.
     Never raises, so business flow is not blocked by logging failures.

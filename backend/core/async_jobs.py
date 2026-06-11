@@ -26,11 +26,15 @@ except Exception:
 
 
 def _async_backend() -> str:
-    return str(getattr(settings, "ASYNC_TASK_BACKEND", "sync") or "sync").strip().lower()
+    return (
+        str(getattr(settings, "ASYNC_TASK_BACKEND", "sync") or "sync").strip().lower()
+    )
 
 
 def _job_status_ttl() -> int:
-    return int(getattr(settings, "ASYNC_JOB_STATUS_TTL_SECONDS", 60 * 60 * 24) or 60 * 60 * 24)
+    return int(
+        getattr(settings, "ASYNC_JOB_STATUS_TTL_SECONDS", 60 * 60 * 24) or 60 * 60 * 24
+    )
 
 
 def _job_cache_key(job_id: str) -> str:
@@ -110,7 +114,14 @@ def _persist_job_payload(job_id: str, payload: dict[str, Any]) -> None:
         submitted_at = timezone.now()
 
     now = timezone.now()
-    status = str(payload.get("status") or _state_to_status(str(payload.get("state") or "PENDING"))).strip().lower()
+    status = (
+        str(
+            payload.get("status")
+            or _state_to_status(str(payload.get("state") or "PENDING"))
+        )
+        .strip()
+        .lower()
+    )
     state = str(payload.get("state") or "PENDING").strip().upper()
     ready = bool(payload.get("ready", False))
 
@@ -119,14 +130,18 @@ def _persist_job_payload(job_id: str, payload: dict[str, Any]) -> None:
             job_id=job_id,
             defaults={
                 "task_name": str(payload.get("task_name") or "task"),
-                "tenant_schema": str(payload.get("tenant_schema") or "public").strip().lower(),
+                "tenant_schema": str(payload.get("tenant_schema") or "public")
+                .strip()
+                .lower(),
                 "backend": str(payload.get("backend") or "sync").strip().lower(),
                 "status": status,
                 "state": state,
                 "submitted_at": submitted_at,
                 "result": payload.get("result"),
                 "error": str(payload.get("error") or ""),
-                "meta": payload.get("meta") if isinstance(payload.get("meta"), dict) else {},
+                "meta": (
+                    payload.get("meta") if isinstance(payload.get("meta"), dict) else {}
+                ),
             },
         )
     except Exception:
@@ -151,8 +166,15 @@ def _persist_job_payload(job_id: str, payload: dict[str, Any]) -> None:
             updated_fields.append(field)
 
     _set("task_name", str(payload.get("task_name") or job.task_name))
-    _set("tenant_schema", str(payload.get("tenant_schema") or job.tenant_schema or "public").strip().lower())
-    _set("backend", str(payload.get("backend") or job.backend or "sync").strip().lower())
+    _set(
+        "tenant_schema",
+        str(payload.get("tenant_schema") or job.tenant_schema or "public")
+        .strip()
+        .lower(),
+    )
+    _set(
+        "backend", str(payload.get("backend") or job.backend or "sync").strip().lower()
+    )
     _set("status", status)
     _set("state", state)
     _set("submitted_at", submitted_at)
@@ -211,7 +233,9 @@ def enqueue(task: Callable[..., Any], *args, **kwargs):
         return task.delay(*args, **kwargs)
 
     if backend == "celery" and not CELERY_AVAILABLE:
-        logger.warning("Celery backend requested but Celery is unavailable; executing task synchronously.")
+        logger.warning(
+            "Celery backend requested but Celery is unavailable; executing task synchronously."
+        )
 
     sync_callable = getattr(task, "__sync_callable__", None)
     if callable(sync_callable):
@@ -256,7 +280,9 @@ def enqueue_job(
         }
         if ready:
             if bool(getattr(async_result, "successful", lambda: False)()):
-                payload["result"] = _serialize_value(getattr(async_result, "result", None))
+                payload["result"] = _serialize_value(
+                    getattr(async_result, "result", None)
+                )
             elif bool(getattr(async_result, "failed", lambda: False)()):
                 payload["error"] = str(getattr(async_result, "result", "Job failed"))
 
@@ -271,12 +297,18 @@ def enqueue_job(
         }
 
     if backend == "celery" and not CELERY_AVAILABLE:
-        logger.warning("Celery backend requested but Celery is unavailable; executing task synchronously.")
+        logger.warning(
+            "Celery backend requested but Celery is unavailable; executing task synchronously."
+        )
 
     job_id = str(uuid4())
     try:
         sync_callable = getattr(task, "__sync_callable__", None)
-        result = sync_callable(*args, **kwargs) if callable(sync_callable) else task(*args, **kwargs)
+        result = (
+            sync_callable(*args, **kwargs)
+            if callable(sync_callable)
+            else task(*args, **kwargs)
+        )
         payload = {
             "job_id": job_id,
             "backend": "sync",
@@ -314,7 +346,9 @@ def get_job_status(job_id: str) -> dict[str, Any] | None:
     cache_key = _job_cache_key(job_id)
     cached = cache.get(cache_key) or {}
     db_payload = _job_payload_from_db(job_id) or {}
-    backend = str(cached.get("backend") or db_payload.get("backend") or _async_backend())
+    backend = str(
+        cached.get("backend") or db_payload.get("backend") or _async_backend()
+    )
 
     if backend == "celery" and CELERY_AVAILABLE and AsyncResult is not None:
         async_result = AsyncResult(job_id)
@@ -327,8 +361,10 @@ def get_job_status(job_id: str) -> dict[str, Any] | None:
             "job_id": job_id,
             "backend": "celery",
             "task_name": cached.get("task_name") or db_payload.get("task_name"),
-            "tenant_schema": cached.get("tenant_schema") or db_payload.get("tenant_schema"),
-            "submitted_at": cached.get("submitted_at") or db_payload.get("submitted_at"),
+            "tenant_schema": cached.get("tenant_schema")
+            or db_payload.get("tenant_schema"),
+            "submitted_at": cached.get("submitted_at")
+            or db_payload.get("submitted_at"),
             "state": state,
             "status": _state_to_status(state),
             "ready": bool(getattr(async_result, "ready", lambda: False)()),
@@ -336,7 +372,9 @@ def get_job_status(job_id: str) -> dict[str, Any] | None:
 
         if bool(getattr(async_result, "ready", lambda: False)()):
             if bool(getattr(async_result, "successful", lambda: False)()):
-                payload["result"] = _serialize_value(getattr(async_result, "result", None))
+                payload["result"] = _serialize_value(
+                    getattr(async_result, "result", None)
+                )
             elif bool(getattr(async_result, "failed", lambda: False)()):
                 payload["error"] = str(getattr(async_result, "result", "Job failed"))
             elif cached.get("result") is not None:
@@ -360,7 +398,9 @@ def get_job_status(job_id: str) -> dict[str, Any] | None:
             "tenant_schema": cached.get("tenant_schema"),
             "submitted_at": cached.get("submitted_at"),
             "state": cached.get("state", "PENDING"),
-            "status": cached.get("status", _state_to_status(cached.get("state", "PENDING"))),
+            "status": cached.get(
+                "status", _state_to_status(cached.get("state", "PENDING"))
+            ),
             "ready": bool(cached.get("ready", False)),
             "result": cached.get("result"),
             "error": cached.get("error"),

@@ -21,6 +21,7 @@ Combines four data sources to build an optimised weekly schedule:
 Each slot is time-boxed by student.daily_study_goal (minutes).
 Sunday is skipped (rest day) unless the student has exams coming up.
 """
+
 from __future__ import annotations
 
 import logging
@@ -31,8 +32,8 @@ from django.utils import timezone
 logger = logging.getLogger(__name__)
 
 # ── Tuneable constants ───────────────────────────────────────────────────────
-SKILL_GAP_THRESHOLD = 0.60          # BKT p_mastery below this = skill gap
-EXAM_PREP_DAYS = 3                  # Flag exams within this many days
+SKILL_GAP_THRESHOLD = 0.60  # BKT p_mastery below this = skill gap
+EXAM_PREP_DAYS = 3  # Flag exams within this many days
 DEFAULT_DAILY_GOAL_MINUTES = 60
 MAX_SESSIONS_PER_DAY = 3
 # ────────────────────────────────────────────────────────────────────────────
@@ -67,7 +68,10 @@ class StudyPlannerService:
 
         today = timezone.now().date()
         tenant = student.user.tenant
-        daily_goal = getattr(student, "daily_study_goal", DEFAULT_DAILY_GOAL_MINUTES) or DEFAULT_DAILY_GOAL_MINUTES
+        daily_goal = (
+            getattr(student, "daily_study_goal", DEFAULT_DAILY_GOAL_MINUTES)
+            or DEFAULT_DAILY_GOAL_MINUTES
+        )
 
         # Collect prioritised work items
         review_nodes = self._due_review_nodes(student)
@@ -88,13 +92,14 @@ class StudyPlannerService:
 
         for day_offset in range(days):
             day = today + timedelta(days=day_offset)
-            weekday = day.weekday()   # 0=Mon … 6=Sun
+            weekday = day.weekday()  # 0=Mon … 6=Sun
 
             # Skip Sundays unless exam within 1 day
             has_urgent_exam = any(
                 (e.scheduled_at.date() - day).days <= 1
                 for e in upcoming_exams
-                if hasattr(e.scheduled_at, "date") and (e.scheduled_at.date() - day).days >= 0
+                if hasattr(e.scheduled_at, "date")
+                and (e.scheduled_at.date() - day).days >= 0
             )
             if weekday == 6 and not has_urgent_exam:
                 continue
@@ -108,7 +113,8 @@ class StudyPlannerService:
 
                 # Priority 1: exam prep (within EXAM_PREP_DAYS)
                 exam_soon = [
-                    e for e in upcoming_exams
+                    e
+                    for e in upcoming_exams
                     if hasattr(e.scheduled_at, "date")
                     and 0 <= (e.scheduled_at.date() - day).days <= EXAM_PREP_DAYS
                 ]
@@ -148,7 +154,9 @@ class StudyPlannerService:
                         subject=subject,
                         start=slot_start,
                         end=slot_end,
-                        estimated_minutes=min(node.estimated_minutes or slot_minutes, slot_minutes),
+                        estimated_minutes=min(
+                            node.estimated_minutes or slot_minutes, slot_minutes
+                        ),
                         node_id=node.id,
                     )
                     day_created.append(event)
@@ -195,7 +203,9 @@ class StudyPlannerService:
                         subject=subject,
                         start=slot_start,
                         end=slot_end,
-                        estimated_minutes=min(node.estimated_minutes or slot_minutes, slot_minutes),
+                        estimated_minutes=min(
+                            node.estimated_minutes or slot_minutes, slot_minutes
+                        ),
                         node_id=node.id,
                     )
                     day_created.append(event)
@@ -238,7 +248,9 @@ class StudyPlannerService:
                 {
                     "skill": m.skill_tag.name,
                     "p_mastery": round(m.p_mastery, 3),
-                    "subject": m.skill_tag.subject.name if m.skill_tag.subject else None,
+                    "subject": (
+                        m.skill_tag.subject.name if m.skill_tag.subject else None
+                    ),
                 }
                 for m in skill_gaps[:5]
             ],
@@ -246,13 +258,16 @@ class StudyPlannerService:
                 {
                     "title": e.title,
                     "scheduled_at": e.scheduled_at.isoformat(),
-                    "subject": e.subject.name if hasattr(e, "subject") and e.subject else None,
+                    "subject": (
+                        e.subject.name if hasattr(e, "subject") and e.subject else None
+                    ),
                 }
                 for e in upcoming_exams[:5]
             ],
             "new_content_nodes": len(new_content),
             "daily_goal_minutes": (
-                getattr(student, "daily_study_goal", DEFAULT_DAILY_GOAL_MINUTES) or DEFAULT_DAILY_GOAL_MINUTES
+                getattr(student, "daily_study_goal", DEFAULT_DAILY_GOAL_MINUTES)
+                or DEFAULT_DAILY_GOAL_MINUTES
             ),
         }
 
@@ -263,6 +278,7 @@ class StudyPlannerService:
     def _due_review_nodes(self, student) -> list:
         """SM-2 nodes whose next_review_at is today or overdue."""
         from ai_engine.models import LearningNode
+
         today = timezone.now().date()
         return list(
             LearningNode.objects.using(self.db_alias)
@@ -278,6 +294,7 @@ class StudyPlannerService:
     def _skill_gaps(self, student) -> list:
         """BKT skills with p_mastery below threshold, ordered by lowest first."""
         from ai_engine.models import SkillMastery
+
         return list(
             SkillMastery.objects.using(self.db_alias)
             .filter(student=student, p_mastery__lt=SKILL_GAP_THRESHOLD)
@@ -288,6 +305,7 @@ class StudyPlannerService:
     def _upcoming_exams(self, student, days_ahead: int) -> list:
         """Assessments of type exam/quiz scheduled in the next days_ahead days."""
         from academic.models import Assessment
+
         now = timezone.now()
         end = now + timedelta(days=days_ahead)
         return list(
@@ -304,6 +322,7 @@ class StudyPlannerService:
     def _new_content_nodes(self, student) -> list:
         """Active learning-path nodes not yet completed, ordered by path order."""
         from ai_engine.models import LearningNode
+
         return list(
             LearningNode.objects.using(self.db_alias)
             .filter(
@@ -317,6 +336,7 @@ class StudyPlannerService:
 
     def _student_subjects(self, student) -> list:
         from academic.models import Subject
+
         if getattr(student, "academic_class", None):
             return list(
                 Subject.objects.using(self.db_alias)
@@ -336,6 +356,7 @@ class StudyPlannerService:
         Returns list of (start_datetime, end_datetime, duration_minutes).
         """
         import datetime
+
         from django.utils import timezone as tz
 
         per_slot = max(20, daily_goal_minutes // max_slots)
@@ -343,9 +364,7 @@ class StudyPlannerService:
         starts = [datetime.time(16, 0), datetime.time(18, 0), datetime.time(20, 0)]
         slots = []
         for t in starts[:max_slots]:
-            start_dt = tz.make_aware(
-                datetime.datetime.combine(day, t)
-            )
+            start_dt = tz.make_aware(datetime.datetime.combine(day, t))
             end_dt = start_dt + datetime.timedelta(minutes=per_slot)
             slots.append((start_dt, end_dt, per_slot))
         return slots
@@ -369,6 +388,7 @@ class StudyPlannerService:
         skill_tag_id=None,
     ):
         from ai_engine.models import StudyEvent
+
         return StudyEvent.objects.using(self.db_alias).create(
             tenant=tenant,
             student=student,

@@ -8,7 +8,9 @@ from core.utils.storage_paths import tenant_scoped_upload_path
 
 class TenantStoragePathTests(SimpleTestCase):
     def test_tenant_scoped_upload_path_contains_schema_and_folder(self):
-        path = tenant_scoped_upload_path("demo_school", "notices", "Monthly Circular.pdf")
+        path = tenant_scoped_upload_path(
+            "demo_school", "notices", "Monthly Circular.pdf"
+        )
         self.assertTrue(path.startswith("tenant/demo_school/notices/"))
         self.assertTrue(path.endswith("Monthly_Circular.pdf"))
 

@@ -9,7 +9,15 @@ from django_tenants.test.cases import FastTenantTestCase
 from rest_framework import status
 from rest_framework.test import APIClient
 
-from academic.models import AcademicClass, Chapter, Lesson, Section, Student, Subject, Teacher
+from academic.models import (
+    AcademicClass,
+    Chapter,
+    Lesson,
+    Section,
+    Student,
+    Subject,
+    Teacher,
+)
 from academic.models.assessment import Assessment, Result
 from academic.models.submission import Submission
 
@@ -26,7 +34,10 @@ class StudentProfileOverviewTests(FastTenantTestCase):
         domain.is_primary = True
 
     def setUp(self):
-        self.client = APIClient(HTTP_HOST=self.get_test_tenant_domain(), HTTP_X_TENANT_ID=self.tenant.schema_name)
+        self.client = APIClient(
+            HTTP_HOST=self.get_test_tenant_domain(),
+            HTTP_X_TENANT_ID=self.tenant.schema_name,
+        )
 
         self.admin_user = User.objects.create_user(
             username="student_profile_admin",
@@ -66,12 +77,18 @@ class StudentProfileOverviewTests(FastTenantTestCase):
         )
 
         self.academic_class = AcademicClass.objects.create(name="Grade 9", order=9)
-        self.section = Section.objects.create(name="A", academic_class=self.academic_class)
+        self.section = Section.objects.create(
+            name="A", academic_class=self.academic_class
+        )
         self.other_class = AcademicClass.objects.create(name="Grade 10", order=10)
 
-        self.teacher_profile = Teacher.objects.create(user=self.teacher_user, designation="class_teacher")
+        self.teacher_profile = Teacher.objects.create(
+            user=self.teacher_user, designation="class_teacher"
+        )
         self.teacher_profile.assigned_classes.add(self.academic_class)
-        self.unassigned_teacher_profile = Teacher.objects.create(user=self.unassigned_teacher_user, designation="subject_teacher")
+        self.unassigned_teacher_profile = Teacher.objects.create(
+            user=self.unassigned_teacher_user, designation="subject_teacher"
+        )
         self.unassigned_teacher_profile.assigned_classes.add(self.other_class)
 
         self.student = Student.objects.create(
@@ -151,7 +168,9 @@ class StudentProfileOverviewTests(FastTenantTestCase):
         submission.save(update_fields=["status"])
 
     def _create_lessons(self, subject, total, published):
-        chapter = Chapter.objects.create(subject=subject, title=f"{subject.name} Chapter", order=1, is_published=True)
+        chapter = Chapter.objects.create(
+            subject=subject, title=f"{subject.name} Chapter", order=1, is_published=True
+        )
         for index in range(total):
             Lesson.objects.create(
                 chapter=chapter,
@@ -163,7 +182,9 @@ class StudentProfileOverviewTests(FastTenantTestCase):
     def test_admin_can_view_enriched_student_profile_overview(self):
         self.client.force_authenticate(user=self.admin_user)
 
-        response = self.client.get(f"/api/academic/students/{self.student.student_id}/profile-overview/")
+        response = self.client.get(
+            f"/api/academic/students/{self.student.student_id}/profile-overview/"
+        )
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["student"]["first_name"], "Ravi")
@@ -174,8 +195,12 @@ class StudentProfileOverviewTests(FastTenantTestCase):
         self.assertEqual(response.data["overall"]["average_score_percentage"], 80.0)
 
         subject_rows = response.data["subject_progress"]
-        math_row = next(item for item in subject_rows if item["subject_name"] == "Mathematics")
-        science_row = next(item for item in subject_rows if item["subject_name"] == "Science")
+        math_row = next(
+            item for item in subject_rows if item["subject_name"] == "Mathematics"
+        )
+        science_row = next(
+            item for item in subject_rows if item["subject_name"] == "Science"
+        )
 
         self.assertEqual(math_row["assessments_total"], 1)
         self.assertEqual(math_row["average_score_percentage"], 80.0)
@@ -188,10 +213,14 @@ class StudentProfileOverviewTests(FastTenantTestCase):
 
     def test_assigned_teacher_can_view_student_profile_overview(self):
         self.client.force_authenticate(user=self.teacher_user)
-        response = self.client.get(f"/api/academic/students/{self.student.student_id}/profile-overview/")
+        response = self.client.get(
+            f"/api/academic/students/{self.student.student_id}/profile-overview/"
+        )
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
     def test_unassigned_teacher_cannot_view_student_profile_overview(self):
         self.client.force_authenticate(user=self.unassigned_teacher_user)
-        response = self.client.get(f"/api/academic/students/{self.student.student_id}/profile-overview/")
+        response = self.client.get(
+            f"/api/academic/students/{self.student.student_id}/profile-overview/"
+        )
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)

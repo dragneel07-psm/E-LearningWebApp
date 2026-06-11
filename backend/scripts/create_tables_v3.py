@@ -1,22 +1,25 @@
 # Copyright (c) 2024-2026 Pramod Singh Manyal. All rights reserved.
 # Unauthorized copying, modification, or distribution of this file,
 # via any medium, is strictly prohibited. Proprietary and confidential.
-import sqlite3
 import os
+import sqlite3
 
 # Target Databases
-DEFAULT_DB = '/Users/pramodsinghmanyal/Desktop/E-LearningWebApp/backend/config/db.sqlite3'
-TENANT_DB = '/Users/pramodsinghmanyal/Desktop/E-LearningWebApp/backend/config/school_pramod.sqlite3'
+DEFAULT_DB = (
+    "/Users/pramodsinghmanyal/Desktop/E-LearningWebApp/backend/config/db.sqlite3"
+)
+TENANT_DB = "/Users/pramodsinghmanyal/Desktop/E-LearningWebApp/backend/config/school_pramod.sqlite3"
+
 
 def create_billing_tables(db_path):
     print(f"Creating Billing tables in {db_path}...")
     if not os.path.exists(db_path):
         print(f"File {db_path} not found, skipping.")
         return
-    
+
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
-    
+
     # 1. FeeStructure
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS billing_feestructure (
@@ -85,15 +88,16 @@ def create_billing_tables(db_path):
     conn.commit()
     conn.close()
 
+
 def create_library_tables(db_path):
     print(f"Creating Library tables in {db_path}...")
     if not os.path.exists(db_path):
         print(f"File {db_path} not found, skipping.")
         return
-    
+
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
-    
+
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS library_book (
         book_id TEXT PRIMARY KEY,
@@ -131,20 +135,21 @@ def create_library_tables(db_path):
     conn.commit()
     conn.close()
 
+
 if __name__ == "__main__":
     # Create Billing in Default DB (because it's in SHARED_APPS)
     create_billing_tables(DEFAULT_DB)
-    
+
     # Create Library in Tenant DB (because it's in TENANT_APPS)
     create_library_tables(TENANT_DB)
-    
+
     # Also create Billing in Tenant DB just in case routing is mixed
     create_billing_tables(TENANT_DB)
-    
+
     # Also create Library in Default DB just in case? No, unlikely.
-    
+
     # check for school_pdramod too
-    ALT_TENANT_DB = '/Users/pramodsinghmanyal/Desktop/E-LearningWebApp/backend/config/school_pdramod.sqlite3'
+    ALT_TENANT_DB = "/Users/pramodsinghmanyal/Desktop/E-LearningWebApp/backend/config/school_pdramod.sqlite3"
     if os.path.exists(ALT_TENANT_DB):
         create_library_tables(ALT_TENANT_DB)
         create_billing_tables(ALT_TENANT_DB)

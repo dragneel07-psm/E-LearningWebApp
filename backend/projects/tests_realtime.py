@@ -9,6 +9,7 @@ Redis is required. The class-level override_settings does not propagate
 into async test methods when combined with FastTenantTestCase, so each
 async test wraps its body in an inline override_settings context.
 """
+
 from __future__ import annotations
 
 import json
@@ -27,7 +28,6 @@ from projects.consumers import (
 )
 from projects.models import Project, ProjectMember
 from users.models import UserAccount
-
 
 IN_MEMORY_CHANNEL_LAYERS = {
     "default": {"BACKEND": "channels.layers.InMemoryChannelLayer"},
@@ -108,7 +108,9 @@ class ProjectStreamConsumerVisibilityTests(FastTenantTestCase):
             tenant=self.tenant,
         )
         Student.objects.create(
-            user=self.outsider_user, academic_class=self.acad_class, section=self.section
+            user=self.outsider_user,
+            academic_class=self.acad_class,
+            section=self.section,
         )
         self.project = Project.objects.create(
             tenant=self.tenant,
@@ -151,7 +153,6 @@ class ProjectStreamConsumerVisibilityTests(FastTenantTestCase):
             connected, _ = await comm.connect()
             self.assertTrue(connected)
             await comm.disconnect()
-
 
 
 class ProjectStreamFeatureFlagTests(FastTenantTestCase):
@@ -302,7 +303,9 @@ class MentorDigestVisibilityTests(FastTenantTestCase):
 
     async def test_teacher_can_connect(self):
         with override_settings(CHANNEL_LAYERS=IN_MEMORY_CHANNEL_LAYERS):
-            comm = WebsocketCommunicator(MentorDigestStreamConsumer.as_asgi(), "/ws/projects/digest/")
+            comm = WebsocketCommunicator(
+                MentorDigestStreamConsumer.as_asgi(), "/ws/projects/digest/"
+            )
             comm.scope["user"] = self.mentor
             connected, _ = await comm.connect()
             self.assertTrue(connected)
@@ -310,7 +313,9 @@ class MentorDigestVisibilityTests(FastTenantTestCase):
 
     async def test_student_rejected(self):
         with override_settings(CHANNEL_LAYERS=IN_MEMORY_CHANNEL_LAYERS):
-            comm = WebsocketCommunicator(MentorDigestStreamConsumer.as_asgi(), "/ws/projects/digest/")
+            comm = WebsocketCommunicator(
+                MentorDigestStreamConsumer.as_asgi(), "/ws/projects/digest/"
+            )
             comm.scope["user"] = self.student
             connected, code = await comm.connect()
             self.assertFalse(connected)
@@ -343,7 +348,9 @@ class MentorDigestBroadcastTests(FastTenantTestCase):
         from channels.layers import get_channel_layer
 
         with override_settings(CHANNEL_LAYERS=IN_MEMORY_CHANNEL_LAYERS):
-            comm = WebsocketCommunicator(MentorDigestStreamConsumer.as_asgi(), "/ws/projects/digest/")
+            comm = WebsocketCommunicator(
+                MentorDigestStreamConsumer.as_asgi(), "/ws/projects/digest/"
+            )
             comm.scope["user"] = self.mentor
             connected, _ = await comm.connect()
             self.assertTrue(connected)

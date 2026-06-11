@@ -11,7 +11,15 @@ from rest_framework import status
 from rest_framework.test import APIClient, APIRequestFactory, force_authenticate
 
 from academic.models import AcademicClass, Student
-from billing.models import Expense, FeeStructure, Invoice, Payment, StudentFee, Subscription, SubscriptionPlan
+from billing.models import (
+    Expense,
+    FeeStructure,
+    Invoice,
+    Payment,
+    StudentFee,
+    Subscription,
+    SubscriptionPlan,
+)
 from billing.serializers import SubscriptionSerializer
 from billing.views import InvoiceViewSet, SubscriptionViewSet
 from core.models import AuditLog
@@ -43,7 +51,9 @@ class BillingBoundaryAndValidationTests(FastTenantTestCase):
                 public_tenant.auto_create_schema = False
                 public_tenant.save()
             public_domain = (
-                Domain.objects.filter(tenant=public_tenant).order_by("-is_primary").first()
+                Domain.objects.filter(tenant=public_tenant)
+                .order_by("-is_primary")
+                .first()
                 if public_tenant
                 else None
             )
@@ -98,13 +108,19 @@ class BillingBoundaryAndValidationTests(FastTenantTestCase):
         )
         with schema_context(self.tenant.schema_name):
             self.grade_8 = AcademicClass.objects.create(name="Grade 8", order=8)
-            self.student_1 = Student.objects.create(user=self.student_user_1, academic_class=self.grade_8)
-            self.student_2 = Student.objects.create(user=self.student_user_2, academic_class=self.grade_8)
+            self.student_1 = Student.objects.create(
+                user=self.student_user_1, academic_class=self.grade_8
+            )
+            self.student_2 = Student.objects.create(
+                user=self.student_user_2, academic_class=self.grade_8
+            )
 
     def test_tenant_finance_endpoints_reject_public_schema_requests(self):
         self.public_client.force_authenticate(user=self.tenant_admin)
         response = self.public_client.get("/api/billing/fee-structures/")
-        self.assertIn(response.status_code, {status.HTTP_403_FORBIDDEN, status.HTTP_404_NOT_FOUND})
+        self.assertIn(
+            response.status_code, {status.HTTP_403_FORBIDDEN, status.HTTP_404_NOT_FOUND}
+        )
 
     def test_public_billing_endpoints_reject_tenant_schema_requests(self):
         self.tenant_client.force_authenticate(user=self.saas_admin)
@@ -130,7 +146,10 @@ class BillingBoundaryAndValidationTests(FastTenantTestCase):
     def test_namespaced_school_endpoints_require_tenant_schema(self):
         self.public_client.force_authenticate(user=self.tenant_admin)
         forbidden = self.public_client.get("/api/billing/school/fee-structures/")
-        self.assertIn(forbidden.status_code, {status.HTTP_403_FORBIDDEN, status.HTTP_404_NOT_FOUND})
+        self.assertIn(
+            forbidden.status_code,
+            {status.HTTP_403_FORBIDDEN, status.HTTP_404_NOT_FOUND},
+        )
 
         self.tenant_client.force_authenticate(user=self.tenant_admin)
         allowed = self.tenant_client.get("/api/billing/school/fee-structures/")
@@ -249,8 +268,12 @@ class BillingBoundaryAndValidationTests(FastTenantTestCase):
 
         audit_row = AuditLog.objects.filter(action="billing.payment_created").first()
         self.assertIsNotNone(audit_row)
-        self.assertEqual(str(audit_row.details.get("student_id")), str(self.student_1.student_id))
-        self.assertEqual(str(audit_row.details.get("payment_id")), response.data.get("payment_id"))
+        self.assertEqual(
+            str(audit_row.details.get("student_id")), str(self.student_1.student_id)
+        )
+        self.assertEqual(
+            str(audit_row.details.get("payment_id")), response.data.get("payment_id")
+        )
 
     def test_payment_create_idempotency_replays_and_prevents_duplicate_charge(self):
         with schema_context(self.tenant.schema_name):
@@ -289,14 +312,24 @@ class BillingBoundaryAndValidationTests(FastTenantTestCase):
             HTTP_IDEMPOTENCY_KEY="idem-pay-001",
         )
 
-        self.assertEqual(first.status_code, status.HTTP_201_CREATED, msg=getattr(first, "data", first.content))
-        self.assertEqual(second.status_code, status.HTTP_201_CREATED, msg=getattr(second, "data", second.content))
+        self.assertEqual(
+            first.status_code,
+            status.HTTP_201_CREATED,
+            msg=getattr(first, "data", first.content),
+        )
+        self.assertEqual(
+            second.status_code,
+            status.HTTP_201_CREATED,
+            msg=getattr(second, "data", second.content),
+        )
         self.assertEqual(first.data.get("payment_id"), second.data.get("payment_id"))
         self.assertEqual(second.headers.get("X-Idempotent-Replay"), "true")
 
         with schema_context(self.tenant.schema_name):
             self.assertEqual(Payment.objects.count(), 1)
-        self.assertEqual(AuditLog.objects.filter(action="billing.payment_created").count(), 1)
+        self.assertEqual(
+            AuditLog.objects.filter(action="billing.payment_created").count(), 1
+        )
 
     def test_payment_create_idempotency_conflict_on_payload_change(self):
         with schema_context(self.tenant.schema_name):
@@ -373,12 +406,27 @@ class BillingBoundaryAndValidationTests(FastTenantTestCase):
             HTTP_IDEMPOTENCY_KEY="idem-student-fee-001",
         )
 
-        self.assertEqual(first.status_code, status.HTTP_201_CREATED, msg=getattr(first, "data", first.content))
-        self.assertEqual(second.status_code, status.HTTP_201_CREATED, msg=getattr(second, "data", second.content))
-        self.assertEqual(first.data.get("student_fee_id"), second.data.get("student_fee_id"))
+        self.assertEqual(
+            first.status_code,
+            status.HTTP_201_CREATED,
+            msg=getattr(first, "data", first.content),
+        )
+        self.assertEqual(
+            second.status_code,
+            status.HTTP_201_CREATED,
+            msg=getattr(second, "data", second.content),
+        )
+        self.assertEqual(
+            first.data.get("student_fee_id"), second.data.get("student_fee_id")
+        )
         self.assertEqual(second.headers.get("X-Idempotent-Replay"), "true")
         with schema_context(self.tenant.schema_name):
-            self.assertEqual(StudentFee.objects.filter(fee_structure=fee, student=self.student_1).count(), 1)
+            self.assertEqual(
+                StudentFee.objects.filter(
+                    fee_structure=fee, student=self.student_1
+                ).count(),
+                1,
+            )
 
     def test_student_fee_bulk_assign_idempotency_replays_and_conflict_protects(self):
         with schema_context(self.tenant.schema_name):
@@ -448,13 +496,23 @@ class BillingBoundaryAndValidationTests(FastTenantTestCase):
             HTTP_IDEMPOTENCY_KEY="idem-expense-001",
         )
 
-        self.assertEqual(first.status_code, status.HTTP_201_CREATED, msg=getattr(first, "data", first.content))
-        self.assertEqual(second.status_code, status.HTTP_201_CREATED, msg=getattr(second, "data", second.content))
+        self.assertEqual(
+            first.status_code,
+            status.HTTP_201_CREATED,
+            msg=getattr(first, "data", first.content),
+        )
+        self.assertEqual(
+            second.status_code,
+            status.HTTP_201_CREATED,
+            msg=getattr(second, "data", second.content),
+        )
         self.assertEqual(first.data.get("expense_id"), second.data.get("expense_id"))
         self.assertEqual(second.headers.get("X-Idempotent-Replay"), "true")
         with schema_context(self.tenant.schema_name):
             self.assertEqual(Expense.objects.count(), 1)
-        self.assertEqual(AuditLog.objects.filter(action="billing.expense_created").count(), 1)
+        self.assertEqual(
+            AuditLog.objects.filter(action="billing.expense_created").count(), 1
+        )
 
     def test_expense_create_idempotency_conflict_on_payload_change(self):
         self.tenant_client.force_authenticate(user=self.tenant_admin)
@@ -514,7 +572,9 @@ class BillingBoundaryAndValidationTests(FastTenantTestCase):
                 amount="500.00",
                 status="pending",
             )
-            request = self.factory.get(f"/api/billing/invoices/{invoice.invoice_id}/download/")
+            request = self.factory.get(
+                f"/api/billing/invoices/{invoice.invoice_id}/download/"
+            )
             force_authenticate(request, user=self.saas_admin)
             view = InvoiceViewSet.as_view({"get": "download"})
             response = view(request, pk=str(invoice.invoice_id))
@@ -550,7 +610,9 @@ class BillingBoundaryAndValidationTests(FastTenantTestCase):
                 },
             )
         with schema_context("public"):
-            request = self.factory.patch("/api/billing/subscriptions/mock/", {"status": "active"}, format="json")
+            request = self.factory.patch(
+                "/api/billing/subscriptions/mock/", {"status": "active"}, format="json"
+            )
             request.data = {"status": "active"}
             force_authenticate(request, user=self.saas_admin)
             serializer = SubscriptionSerializer(

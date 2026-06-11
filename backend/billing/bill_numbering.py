@@ -11,12 +11,12 @@ The IRD audit convention is one continuous sequence per tenant per Nepali
 fiscal year. The allocator runs inside a transaction and falls back to
 the unique-together database constraint if two cashiers somehow race.
 """
+
 from __future__ import annotations
 
 import re
 
 from django.db import transaction
-
 
 _BILL_RE = re.compile(r"-([0-9]+)$")
 
@@ -38,6 +38,7 @@ def _resolve_fy(tenant) -> str:
         return _fy_short(fy)
     # Fallback: compute from today.
     from billing_school.utils_bs_calendar import fiscal_year_bs
+
     return _fy_short(fiscal_year_bs())
 
 
@@ -56,8 +57,7 @@ def allocate_bill_number(tenant) -> str:
 
     with transaction.atomic():
         last = (
-            Payment.objects
-            .select_for_update()
+            Payment.objects.select_for_update()
             .filter(tenant=tenant, bill_number__startswith=series)
             .order_by("-bill_number")
             .values_list("bill_number", flat=True)

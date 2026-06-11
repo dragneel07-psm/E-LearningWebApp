@@ -6,25 +6,28 @@
 """
 Final script to create library tables in tenant database
 """
+
 import os
 import sys
+
 import django
 
 # Setup Django
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 django.setup()
 
-from django.db import connections
 from django.core.management import call_command
+from django.db import connections
+
 
 def main():
     print("=" * 70)
     print("CREATING LIBRARY TABLES")
     print("=" * 70)
-    
-    db_alias = 'tenant_pramod'
-    
+
+    db_alias = "tenant_pramod"
+
     # Check connection
     print(f"\n[1] Checking database connection to '{db_alias}'...")
     try:
@@ -34,7 +37,7 @@ def main():
     except Exception as e:
         print(f"    ✗ Connection failed: {e}")
         return False
-    
+
     # Check existing tables
     print(f"\n[2] Checking for existing library tables...")
     with connections[db_alias].cursor() as cursor:
@@ -47,16 +50,18 @@ def main():
             print(f"    Found: {existing}")
         else:
             print("    No library tables found")
-    
+
     # Create tables using Django migrations
     print(f"\n[3] Running Django migrations for library app...")
     try:
-        call_command('migrate', 'library', database=db_alias, verbosity=2, interactive=False)
+        call_command(
+            "migrate", "library", database=db_alias, verbosity=2, interactive=False
+        )
         print("    ✓ Migrations completed")
     except Exception as e:
         print(f"    ⚠ Migrations failed: {e}")
         print(f"\n[4] Creating tables manually...")
-        
+
         # Manual creation as fallback
         with connections[db_alias].cursor() as cursor:
             # Create library_book table
@@ -80,7 +85,7 @@ def main():
                 )
             """)
             print("    ✓ Created library_book table")
-            
+
             # Create library_bookissue table
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS library_bookissue (
@@ -98,7 +103,7 @@ def main():
                 )
             """)
             print("    ✓ Created library_bookissue table")
-    
+
     # Verify tables
     print(f"\n[5] Verifying library tables...")
     with connections[db_alias].cursor() as cursor:
@@ -107,10 +112,10 @@ def main():
             WHERE type='table' AND name LIKE 'library_%'
         """)
         tables = [row[0] for row in cursor.fetchall()]
-        
-        if 'library_book' in tables and 'library_bookissue' in tables:
+
+        if "library_book" in tables and "library_bookissue" in tables:
             print(f"    ✓ All tables exist: {tables}")
-            
+
             # Show table structure
             for table in tables:
                 cursor.execute(f"PRAGMA table_info({table})")
@@ -118,7 +123,7 @@ def main():
                 print(f"\n    {table}:")
                 for col in columns:
                     print(f"      - {col[1]} ({col[2]})")
-            
+
             print("\n" + "=" * 70)
             print("✓ SUCCESS - Library tables created!")
             print("=" * 70)
@@ -131,6 +136,7 @@ def main():
             print(f"    ✗ Missing tables. Found: {tables}")
             return False
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     success = main()
     sys.exit(0 if success else 1)

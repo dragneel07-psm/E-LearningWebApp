@@ -9,7 +9,19 @@ from django.utils import timezone
 from django_tenants.test.cases import FastTenantTestCase
 from django_tenants.utils import tenant_context
 
-from academic.models import AcademicClass, Assessment, Attendance, Chapter, Lesson, LessonProgress, Parent, Result, Student, Subject, Teacher
+from academic.models import (
+    AcademicClass,
+    Assessment,
+    Attendance,
+    Chapter,
+    Lesson,
+    LessonProgress,
+    Parent,
+    Result,
+    Student,
+    Subject,
+    Teacher,
+)
 from academic.models.submission import Submission
 from ai_engine.services.risk_analytics_service import RiskAnalyticsService
 from notifications.models import Notification
@@ -62,11 +74,17 @@ class RiskAnalyticsServiceTests(FastTenantTestCase):
             )
 
             self.academic_class = AcademicClass.objects.create(name="Grade 9")
-            self.teacher_profile = Teacher.objects.create(user=self.teacher_user, designation="class_teacher")
+            self.teacher_profile = Teacher.objects.create(
+                user=self.teacher_user, designation="class_teacher"
+            )
             self.teacher_profile.assigned_classes.add(self.academic_class)
 
-            self.risky_student = Student.objects.create(user=self.risky_user, academic_class=self.academic_class)
-            self.safe_student = Student.objects.create(user=self.safe_user, academic_class=self.academic_class)
+            self.risky_student = Student.objects.create(
+                user=self.risky_user, academic_class=self.academic_class
+            )
+            self.safe_student = Student.objects.create(
+                user=self.safe_user, academic_class=self.academic_class
+            )
 
             parent_profile = Parent.objects.create(user=self.parent_user)
             parent_profile.students.add(self.risky_student)
@@ -77,7 +95,9 @@ class RiskAnalyticsServiceTests(FastTenantTestCase):
                 is_active=True,
                 teacher=self.teacher_profile,
             )
-            chapter = Chapter.objects.create(subject=self.subject, title="Motion", order=1, is_published=True)
+            chapter = Chapter.objects.create(
+                subject=self.subject, title="Motion", order=1, is_published=True
+            )
             self.lessons = [
                 Lesson.objects.create(
                     chapter=chapter,
@@ -131,8 +151,12 @@ class RiskAnalyticsServiceTests(FastTenantTestCase):
                     score=safe_scores[idx],
                 )
                 submitted_at = timezone.now() - timedelta(days=30 - (idx * 3))
-                Result.objects.filter(result_id=risky_result.result_id).update(submitted_at=submitted_at)
-                Result.objects.filter(result_id=safe_result.result_id).update(submitted_at=submitted_at)
+                Result.objects.filter(result_id=risky_result.result_id).update(
+                    submitted_at=submitted_at
+                )
+                Result.objects.filter(result_id=safe_result.result_id).update(
+                    submitted_at=submitted_at
+                )
 
             # Missing assignments for risky student.
             assignment_one = Assessment.objects.create(
@@ -173,7 +197,9 @@ class RiskAnalyticsServiceTests(FastTenantTestCase):
                 completed=False,
                 progress_percent=10,
             )
-            LessonProgress.objects.filter(pk=risky_progress.pk).update(last_accessed=timezone.now() - timedelta(days=30))
+            LessonProgress.objects.filter(pk=risky_progress.pk).update(
+                last_accessed=timezone.now() - timedelta(days=30)
+            )
 
             for lesson in self.lessons:
                 LessonProgress.objects.create(
@@ -186,7 +212,9 @@ class RiskAnalyticsServiceTests(FastTenantTestCase):
     def test_computes_high_risk_for_declining_student(self):
         with tenant_context(self.tenant):
             service = RiskAnalyticsService(tenant=self.tenant, user=self.teacher_user)
-            payload = service.get_at_risk_students(class_id=self.academic_class.id, send_notifications=False)
+            payload = service.get_at_risk_students(
+                class_id=self.academic_class.id, send_notifications=False
+            )
 
         self.assertGreaterEqual(len(payload), 1)
         top_row = payload[0]
@@ -205,12 +233,18 @@ class RiskAnalyticsServiceTests(FastTenantTestCase):
     def test_creates_notifications_for_teacher_and_parent_when_threshold_crossed(self):
         with tenant_context(self.tenant):
             service = RiskAnalyticsService(tenant=self.tenant, user=self.teacher_user)
-            payload = service.get_at_risk_students(class_id=self.academic_class.id, send_notifications=True)
+            payload = service.get_at_risk_students(
+                class_id=self.academic_class.id, send_notifications=True
+            )
 
             self.assertTrue(payload)
             self.assertTrue(
-                Notification.objects.filter(recipient=self.teacher_user, tenant=self.tenant).exists()
+                Notification.objects.filter(
+                    recipient=self.teacher_user, tenant=self.tenant
+                ).exists()
             )
             self.assertTrue(
-                Notification.objects.filter(recipient=self.parent_user, tenant=self.tenant).exists()
+                Notification.objects.filter(
+                    recipient=self.parent_user, tenant=self.tenant
+                ).exists()
             )

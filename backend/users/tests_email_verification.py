@@ -27,7 +27,9 @@ class EmailVerificationFlowTests(TestCase):
         }
 
     def test_saas_signup_requires_email_verification_before_login(self):
-        register_response = self.client.post(self.register_url, self.payload, format="json")
+        register_response = self.client.post(
+            self.register_url, self.payload, format="json"
+        )
         self.assertEqual(register_response.status_code, status.HTTP_201_CREATED)
         self.assertTrue(register_response.data.get("verification_required"))
 

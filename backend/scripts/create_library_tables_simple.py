@@ -5,11 +5,11 @@
 
 """Direct SQLite table creation for library app"""
 
-import sqlite3
 import os
+import sqlite3
 
 # Database path
-db_path = 'config/school_pramod.sqlite3'
+db_path = "config/school_pramod.sqlite3"
 
 print(f"Working with database: {os.path.abspath(db_path)}")
 print(f"Database exists: {os.path.exists(db_path)}")
@@ -19,7 +19,9 @@ conn = sqlite3.connect(db_path)
 cursor = conn.cursor()
 
 print("\n=== Checking existing tables ===")
-cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'library_%'")
+cursor.execute(
+    "SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'library_%'"
+)
 existing = cursor.fetchall()
 print(f"Existing library tables: {[t[0] for t in existing]}")
 
@@ -66,7 +68,9 @@ print("✓ library_bookissue table created")
 conn.commit()
 
 print("\n=== Verification ===")
-cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'library_%'")
+cursor.execute(
+    "SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'library_%'"
+)
 tables = cursor.fetchall()
 print(f"Library tables now present: {[t[0] for t in tables]}")
 
@@ -81,9 +85,9 @@ for table in tables:
 
 conn.close()
 
-print("\n" + "="*50)
+print("\n" + "=" * 50)
 print("✓ SUCCESS - Library tables created!")
-print("="*50)
+print("=" * 50)
 print("\nNow restart your Django server:")
 print("1. Go to the terminal running 'python3 manage.py runserver'")
 print("2. Press Ctrl+C to stop it")

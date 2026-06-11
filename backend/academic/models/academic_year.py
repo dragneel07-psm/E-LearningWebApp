@@ -3,11 +3,14 @@
 # via any medium, is strictly prohibited. Proprietary and confidential.
 from django.db import models
 
+
 class AcademicYear(models.Model):
     name = models.CharField(max_length=20, unique=True, help_text="e.g. 2025-2026")
     start_date = models.DateField()
     end_date = models.DateField()
-    is_current = models.BooleanField(default=False, help_text="Set this as the active academic year")
+    is_current = models.BooleanField(
+        default=False, help_text="Set this as the active academic year"
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -22,4 +25,4 @@ class AcademicYear(models.Model):
         return self.name
 
     class Meta:
-        ordering = ['-start_date']
+        ordering = ["-start_date"]

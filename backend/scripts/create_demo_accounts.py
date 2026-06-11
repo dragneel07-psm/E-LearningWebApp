@@ -1,22 +1,22 @@
 # Copyright (c) 2024-2026 Pramod Singh Manyal. All rights reserved.
 # Unauthorized copying, modification, or distribution of this file,
 # via any medium, is strictly prohibited. Proprietary and confidential.
-from users.models import UserAccount
-from academic.models import Student, Teacher, AcademicClass
+from academic.models import AcademicClass, Student, Teacher
 from core.models import Tenant
+from users.models import UserAccount
 
 # Get first tenant
 tenant = Tenant.objects.first()
 
 # Create Teacher Account
 teacher_user = UserAccount.objects.create_user(
-    username='teacher_demo',
-    email='teacher@demo.com',
-    password='teacher123',
-    first_name='John',
-    last_name='Smith',
-    role='teacher',
-    tenant=tenant
+    username="teacher_demo",
+    email="teacher@demo.com",
+    password="teacher123",
+    first_name="John",
+    last_name="Smith",
+    role="teacher",
+    tenant=tenant,
 )
 
 teacher = Teacher.objects.create(user=teacher_user)
@@ -28,22 +28,19 @@ print(f"   Name: {teacher_user.first_name} {teacher_user.last_name}")
 
 # Create Student Account
 student_user = UserAccount.objects.create_user(
-    username='student_demo',
-    email='student@demo.com',
-    password='student123',
-    first_name='Emma',
-    last_name='Johnson',
-    role='student',
-    tenant=tenant
+    username="student_demo",
+    email="student@demo.com",
+    password="student123",
+    first_name="Emma",
+    last_name="Johnson",
+    role="student",
+    tenant=tenant,
 )
 
 # Get first class to assign student
 academic_class = AcademicClass.objects.first()
 
-student = Student.objects.create(
-    user=student_user,
-    academic_class=academic_class
-)
+student = Student.objects.create(user=student_user, academic_class=academic_class)
 
 print(f"\n✅ Created Student: {student_user.username}")
 print(f"   Email: {student_user.email}")

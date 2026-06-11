@@ -27,7 +27,9 @@ class Project(models.Model):
         "archived": set(),
     }
 
-    project_id = models.UUIDField(primary_key=True, default=uuid_lib.uuid4, editable=False)
+    project_id = models.UUIDField(
+        primary_key=True, default=uuid_lib.uuid4, editable=False
+    )
     tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE, db_constraint=False)
 
     title = models.CharField(max_length=200)
@@ -77,7 +79,9 @@ class Project(models.Model):
     due_date = models.DateTimeField(null=True, blank=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="draft")
 
-    final_grade = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
+    final_grade = models.DecimalField(
+        max_digits=5, decimal_places=2, null=True, blank=True
+    )
     rubric_json = models.JSONField(null=True, blank=True)
 
     created_by = models.ForeignKey(

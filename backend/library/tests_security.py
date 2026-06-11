@@ -62,8 +62,12 @@ class LibraryAccessControlTests(FastTenantTestCase):
         )
 
         academic_class = AcademicClass.objects.create(name="Grade 6", order=6)
-        self.student = Student.objects.create(user=self.student_user, academic_class=academic_class)
-        self.other_student = Student.objects.create(user=self.other_student_user, academic_class=academic_class)
+        self.student = Student.objects.create(
+            user=self.student_user, academic_class=academic_class
+        )
+        self.other_student = Student.objects.create(
+            user=self.other_student_user, academic_class=academic_class
+        )
         self.parent = Parent.objects.create(user=self.parent_user)
         self.parent.students.add(self.student)
 

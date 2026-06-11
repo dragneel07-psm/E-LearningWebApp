@@ -4,15 +4,19 @@
 """
 Mixin providing result publish/reopen actions for AssessmentViewSet.
 """
+
 import logging
+
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from django.utils import timezone
+
 from academic.models.assessment import Assessment, AssessmentResultPublicationAudit
 from academic.services.academic_year_service import promote_students_to_next_class
 from core.utils.audit import record_audit_event
-from ._assessment_helpers import _to_bool, _is_admin_manager, _is_content_manager
+
+from ._assessment_helpers import _is_admin_manager, _is_content_manager, _to_bool
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +31,7 @@ class AssessmentPublishingMixin:
         return bool(user and user.is_authenticated and _is_admin_manager(user))
 
     def _publication_reason_from_request(self, request) -> str:
-        return str(request.data.get('reason') or '').strip()
+        return str(request.data.get("reason") or "").strip()
 
     def _record_publication_audit(
         self,
@@ -66,21 +70,23 @@ class AssessmentPublishingMixin:
             },
         )
 
-    @action(detail=True, methods=['post'])
+    @action(detail=True, methods=["post"])
     def publish_results(self, request, pk=None):
         if not self._can_publish_results(request.user):
             return Response(
-                {'detail': 'You do not have permission to publish results.'},
+                {"detail": "You do not have permission to publish results."},
                 status=status.HTTP_403_FORBIDDEN,
             )
 
         assessment = self.get_object()
         if not self._can_manage_assessment(request.user, assessment):
             return Response(
-                {'detail': 'You do not have permission to publish results for this assessment.'},
+                {
+                    "detail": "You do not have permission to publish results for this assessment."
+                },
                 status=status.HTTP_403_FORBIDDEN,
             )
-        publish = _to_bool(request.data.get('publish'), True)
+        publish = _to_bool(request.data.get("publish"), True)
         was_published = bool(assessment.results_published)
         published_at_before = assessment.results_published_at
         publication_reason = self._publication_reason_from_request(request)
@@ -91,10 +97,10 @@ class AssessmentPublishingMixin:
         else:
             assessment.results_published = False
             assessment.results_published_at = None
-        assessment.save(update_fields=['results_published', 'results_published_at'])
+        assessment.save(update_fields=["results_published", "results_published_at"])
         self._record_publication_audit(
             assessment=assessment,
-            action='publish' if publish else 'unpublish',
+            action="publish" if publish else "unpublish",
             was_published=was_published,
             is_published=bool(assessment.results_published),
             published_at_before=published_at_before,
@@ -108,53 +114,55 @@ class AssessmentPublishingMixin:
             publish
             and not was_published
             and assessment.is_final_assessment
-            and _to_bool(request.data.get('auto_upgrade_students'), True)
+            and _to_bool(request.data.get("auto_upgrade_students"), True)
         ):
             promotion_summary = promote_students_to_next_class(
                 academic_year=assessment.academic_year,
                 rules=self._promotion_rules_from_request(request, assessment),
-                **self._promotion_scope_for_assessment(assessment)
+                **self._promotion_scope_for_assessment(assessment),
             )
 
         return Response(
             {
-                'assessment_id': str(assessment.assessment_id),
-                'results_published': assessment.results_published,
-                'results_published_at': assessment.results_published_at,
-                'is_final_assessment': assessment.is_final_assessment,
-                'student_promotion': promotion_summary,
+                "assessment_id": str(assessment.assessment_id),
+                "results_published": assessment.results_published,
+                "results_published_at": assessment.results_published_at,
+                "is_final_assessment": assessment.is_final_assessment,
+                "student_promotion": promotion_summary,
             }
         )
 
-    @action(detail=True, methods=['post'])
+    @action(detail=True, methods=["post"])
     def reopen_results(self, request, pk=None):
         if not self._can_reopen_results(request.user):
             return Response(
-                {'detail': 'You do not have permission to reopen results.'},
+                {"detail": "You do not have permission to reopen results."},
                 status=status.HTTP_403_FORBIDDEN,
             )
 
         assessment = self.get_object()
         if not self._can_manage_assessment(request.user, assessment):
             return Response(
-                {'detail': 'You do not have permission to reopen results for this assessment.'},
+                {
+                    "detail": "You do not have permission to reopen results for this assessment."
+                },
                 status=status.HTTP_403_FORBIDDEN,
             )
         if not assessment.is_final_assessment:
             return Response(
-                {'detail': 'Reopen is only available for final assessments.'},
+                {"detail": "Reopen is only available for final assessments."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
         if not assessment.results_published:
             return Response(
-                {'detail': 'Results are already open for edits.'},
+                {"detail": "Results are already open for edits."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
         reason = self._publication_reason_from_request(request)
         if not reason:
             return Response(
-                {'detail': 'reason is required to reopen results.'},
+                {"detail": "reason is required to reopen results."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -162,11 +170,11 @@ class AssessmentPublishingMixin:
         published_at_before = assessment.results_published_at
         assessment.results_published = False
         assessment.results_published_at = None
-        assessment.save(update_fields=['results_published', 'results_published_at'])
+        assessment.save(update_fields=["results_published", "results_published_at"])
 
         self._record_publication_audit(
             assessment=assessment,
-            action='reopen',
+            action="reopen",
             was_published=was_published,
             is_published=False,
             published_at_before=published_at_before,
@@ -177,9 +185,9 @@ class AssessmentPublishingMixin:
 
         return Response(
             {
-                'assessment_id': str(assessment.assessment_id),
-                'results_published': assessment.results_published,
-                'results_published_at': assessment.results_published_at,
-                'reopened': True,
+                "assessment_id": str(assessment.assessment_id),
+                "results_published": assessment.results_published,
+                "results_published_at": assessment.results_published_at,
+                "reopened": True,
             }
         )

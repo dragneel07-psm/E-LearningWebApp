@@ -31,17 +31,23 @@ logger = logging.getLogger(__name__)
 
 class RAGTutorService:
     # Adaptive similarity bounds — low-mastery students get broader retrieval
-    _SIMILARITY_LOW_MASTERY = 0.45   # avg BKT mastery < 0.4
+    _SIMILARITY_LOW_MASTERY = 0.45  # avg BKT mastery < 0.4
     _SIMILARITY_HIGH_MASTERY = 0.70  # avg BKT mastery >= 0.75
 
     def __init__(self, *, tenant):
         self.tenant = tenant
         self.config = get_ai_provider_config()
-        self.model = str(self.config.get("model") or getattr(settings, "OPENAI_MODEL", "gpt-4o-mini"))
-        self.embedding_model = str(getattr(settings, "AI_EMBEDDING_MODEL", "text-embedding-3-small"))
+        self.model = str(
+            self.config.get("model") or getattr(settings, "OPENAI_MODEL", "gpt-4o-mini")
+        )
+        self.embedding_model = str(
+            getattr(settings, "AI_EMBEDDING_MODEL", "text-embedding-3-small")
+        )
         self.top_k = int(getattr(settings, "AI_TUTOR_TOP_K", 5))
         self.min_similarity = float(getattr(settings, "AI_TUTOR_MIN_SIMILARITY", 0.58))
-        self.embedding_dimensions = int(getattr(settings, "AI_EMBEDDING_DIMENSIONS", 1536))
+        self.embedding_dimensions = int(
+            getattr(settings, "AI_EMBEDDING_DIMENSIONS", 1536)
+        )
 
     def get_adaptive_min_similarity(self, student=None, using="default") -> float:
         """
@@ -61,6 +67,7 @@ class RAGTutorService:
             return self.min_similarity
         try:
             from ai_engine.models import SkillMastery
+
             masteries = list(
                 SkillMastery.objects.using(using)
                 .filter(student=student)
@@ -107,17 +114,23 @@ class RAGTutorService:
     def _stub_embedding(self, text: str) -> list[float]:
         seed = int(hashlib.sha256(text.encode("utf-8")).hexdigest()[:16], 16)
         rng = random.Random(seed)
-        return [round(rng.uniform(-1.0, 1.0), 6) for _ in range(self.embedding_dimensions)]
+        return [
+            round(rng.uniform(-1.0, 1.0), 6) for _ in range(self.embedding_dimensions)
+        ]
 
     def _embed_query(self, message: str) -> list[float]:
         client = self._openai_client()
         if client:
             try:
-                response = client.embeddings.create(model=self.embedding_model, input=message)
+                response = client.embeddings.create(
+                    model=self.embedding_model, input=message
+                )
                 embedding = list(response.data[0].embedding)
                 return self._normalize_vector(embedding)
             except Exception as exc:
-                logger.warning("Embedding generation failed; using stub embedding. Error: %s", exc)
+                logger.warning(
+                    "Embedding generation failed; using stub embedding. Error: %s", exc
+                )
         return self._stub_embedding(message)
 
     @staticmethod
@@ -134,7 +147,9 @@ class RAGTutorService:
             return -1.0
         return dot / (norm_a * norm_b)
 
-    def _base_queryset(self, context: dict[str, Any] | None = None) -> QuerySet[ContentChunk]:
+    def _base_queryset(
+        self, context: dict[str, Any] | None = None
+    ) -> QuerySet[ContentChunk]:
         queryset = ContentChunk.objects.filter(tenant=self.tenant)
         payload = context or {}
 
@@ -159,7 +174,9 @@ class RAGTutorService:
             queryset = queryset.filter(source_id=str(source_id))
         return queryset
 
-    def _retrieve_python(self, queryset: QuerySet[ContentChunk], query_vector: list[float]) -> list[tuple[ContentChunk, float]]:
+    def _retrieve_python(
+        self, queryset: QuerySet[ContentChunk], query_vector: list[float]
+    ) -> list[tuple[ContentChunk, float]]:
         scored: list[tuple[ContentChunk, float]] = []
         for chunk in queryset[:500]:
             embedding = chunk.embedding
@@ -203,23 +220,30 @@ class RAGTutorService:
             logger.warning("Query expansion failed; using original only: %s", exc)
             return [message]
 
-    def _retrieve_for_query(self, queryset, query_vector: list[float]) -> list[tuple[ContentChunk, float]]:
+    def _retrieve_for_query(
+        self, queryset, query_vector: list[float]
+    ) -> list[tuple[ContentChunk, float]]:
         """Run vector retrieval for a single query vector."""
         if PGVECTOR_AVAILABLE and CosineDistance is not None:
             try:
                 candidates = list(
-                    queryset.annotate(distance=CosineDistance("embedding", query_vector))
-                    .order_by("distance")[: max(self.top_k * 4, self.top_k)]
+                    queryset.annotate(
+                        distance=CosineDistance("embedding", query_vector)
+                    ).order_by("distance")[: max(self.top_k * 4, self.top_k)]
                 )
                 return [
                     (row, 1.0 - float(getattr(row, "distance", 1.0) or 1.0))
                     for row in candidates
                 ]
             except Exception as exc:
-                logger.warning("pgvector lookup failed; falling back to Python: %s", exc)
+                logger.warning(
+                    "pgvector lookup failed; falling back to Python: %s", exc
+                )
         return self._retrieve_python(queryset, query_vector)
 
-    def _merge_and_rerank(self, scored_lists: list[list[tuple[ContentChunk, float]]]) -> list[dict[str, Any]]:
+    def _merge_and_rerank(
+        self, scored_lists: list[list[tuple[ContentChunk, float]]]
+    ) -> list[dict[str, Any]]:
         """
         Merge results from multiple queries (Reciprocal Rank Fusion) and deduplicate.
         RRF score: sum(1 / (rank + 60)) across all query result lists.
@@ -242,7 +266,9 @@ class RAGTutorService:
             for cid, score in ranked[: self.top_k]
         ]
 
-    def retrieve_relevant_chunks(self, message: str, context: dict[str, Any] | None = None) -> list[dict[str, Any]]:
+    def retrieve_relevant_chunks(
+        self, message: str, context: dict[str, Any] | None = None
+    ) -> list[dict[str, Any]]:
         try:
             queries = self._expand_query(message)
             queryset = self._base_queryset(context)
@@ -274,13 +300,15 @@ class RAGTutorService:
             )
             return []
 
-    def _build_messages(self, message: str, snippets: list[dict[str, Any]]) -> list[dict[str, str]]:
+    def _build_messages(
+        self, message: str, snippets: list[dict[str, Any]]
+    ) -> list[dict[str, str]]:
         tenant_name = getattr(self.tenant, "name", "the school")
         rules = (
             "You are a careful school tutor assistant.\n"
             "Rules:\n"
             "1) Use only the provided snippets as factual grounding.\n"
-            "2) If snippets are insufficient, explicitly say \"I’m not sure\".\n"
+            '2) If snippets are insufficient, explicitly say "I’m not sure".\n'
             "3) Be concise, clear, and teacher-friendly.\n"
             "4) Do not invent sources, facts, or citations.\n"
             f"5) Keep tone appropriate for {tenant_name} classroom culture."
@@ -297,7 +325,7 @@ class RAGTutorService:
         user_prompt = (
             f"Question:\n{message}\n\n"
             f"Grounding snippets:\n{context_block}\n\n"
-            "Answer using only the snippets. If uncertain, say \"I’m not sure\" and suggest what to ask next."
+            'Answer using only the snippets. If uncertain, say "I’m not sure" and suggest what to ask next.'
         )
         return [
             {"role": "system", "content": rules},
@@ -305,7 +333,9 @@ class RAGTutorService:
         ]
 
     @staticmethod
-    def _sanitize_history(conversation_history: list[dict[str, Any]] | None = None) -> list[dict[str, str]]:
+    def _sanitize_history(
+        conversation_history: list[dict[str, Any]] | None = None,
+    ) -> list[dict[str, str]]:
         cleaned: list[dict[str, str]] = []
         for item in conversation_history or []:
             if not isinstance(item, dict):
@@ -394,7 +424,7 @@ class RAGTutorService:
                 "You are a careful school tutor assistant.\n"
                 "Rules:\n"
                 "1) Use only the provided snippets as factual grounding.\n"
-                "2) If snippets are insufficient, explicitly say \"I’m not sure\".\n"
+                '2) If snippets are insufficient, explicitly say "I’m not sure".\n'
                 f"3) Be concise, clear, and {audience}.\n"
                 "4) Do not invent sources, facts, or citations.\n"
                 f"5) Keep tone appropriate for {tenant_name} classroom culture."
@@ -402,7 +432,7 @@ class RAGTutorService:
             user_prompt = (
                 f"Question:\n{message}\n\n"
                 f"Grounding snippets:\n{context_block}\n\n"
-                "Answer using only the snippets. If uncertain, say \"I’m not sure\" and suggest what to ask next."
+                'Answer using only the snippets. If uncertain, say "I’m not sure" and suggest what to ask next.'
             )
 
         if lang_instruction:
@@ -457,7 +487,9 @@ class RAGTutorService:
         )
 
     @staticmethod
-    def _demo_general_response(message: str, context: dict[str, Any] | None = None) -> str:
+    def _demo_general_response(
+        message: str, context: dict[str, Any] | None = None
+    ) -> str:
         prompt = str(message or "").strip()
         lowered = prompt.lower()
         user_role = str((context or {}).get("user_role") or "").strip().lower()
@@ -477,20 +509,23 @@ class RAGTutorService:
                 "I can summarize it once you share the lesson title or text. "
                 "A good class summary usually covers the key idea, 2 to 3 supporting points, and one example."
             )
-        if user_role == "teacher" and ("weak" in lowered or "support" in lowered or "struggling" in lowered):
+        if user_role == "teacher" and (
+            "weak" in lowered or "support" in lowered or "struggling" in lowered
+        ):
             return (
                 "A practical next step is to group struggling students by the specific skill gap, reteach one concept briefly, "
                 "use one worked example, then check understanding with a short exit question."
             )
-        return (
-            "I can help with that. Share the subject, grade, topic, or lesson text, and I can give a more targeted answer."
-        )
+        return "I can help with that. Share the subject, grade, topic, or lesson text, and I can give a more targeted answer."
 
     def _general_fallback_metadata(self) -> tuple[str | None, str | None]:
         if not self.config.get("enabled"):
             return "disabled", "AI features are disabled in SaaS settings."
         if not self.config.get("configured"):
-            return "not_configured", "AI provider is not configured. Please add a valid API key in SaaS settings."
+            return (
+                "not_configured",
+                "AI provider is not configured. Please add a valid API key in SaaS settings.",
+            )
         return "provider_error", "AI provider is unavailable right now."
 
     def answer_without_grounding(
@@ -529,7 +564,9 @@ class RAGTutorService:
             "error": error,
         }
 
-    def _call_chat_model(self, messages: list[dict[str, str]]) -> tuple[str, dict[str, Any]]:
+    def _call_chat_model(
+        self, messages: list[dict[str, str]]
+    ) -> tuple[str, dict[str, Any]]:
         client = self._openai_client()
         if not client:
             return (
@@ -554,7 +591,9 @@ class RAGTutorService:
                 {
                     "model": self.model,
                     "prompt_tokens": int(getattr(usage, "prompt_tokens", 0) or 0),
-                    "completion_tokens": int(getattr(usage, "completion_tokens", 0) or 0),
+                    "completion_tokens": int(
+                        getattr(usage, "completion_tokens", 0) or 0
+                    ),
                 },
             )
         except Exception as exc:
@@ -577,7 +616,9 @@ class RAGTutorService:
         if payload.get("chapter_id"):
             suggestions.append("Ask about chapter definitions or worked examples")
         if not suggestions:
-            suggestions.append("Ask with lesson or chapter context, e.g. key concept, summary, or example question")
+            suggestions.append(
+                "Ask with lesson or chapter context, e.g. key concept, summary, or example question"
+            )
         return f"I’m not sure from the available context. {suggestions[0]}."
 
     def stream_answer(
@@ -602,20 +643,31 @@ class RAGTutorService:
         Falls back to non-streaming if the OpenAI client is unavailable.
         Pass `student` to enable adaptive similarity threshold based on BKT mastery.
         """
-        effective_min_similarity = self.get_adaptive_min_similarity(student=student, using=using)
+        effective_min_similarity = self.get_adaptive_min_similarity(
+            student=student, using=using
+        )
         retrieved = self.retrieve_relevant_chunks(message, context=context)
-        grounded = [item for item in retrieved if float(item["similarity"]) >= effective_min_similarity]
+        grounded = [
+            item
+            for item in retrieved
+            if float(item["similarity"]) >= effective_min_similarity
+        ]
 
         if not grounded:
             if not self._requires_grounding(context):
                 # General LLM — stream if possible, else demo
-                yield from self._stream_general(message, context=context, conversation_history=conversation_history)
+                yield from self._stream_general(
+                    message, context=context, conversation_history=conversation_history
+                )
                 return
             yield {"type": "no_context", "detail": self._no_context_response(context)}
             return
 
         messages = self._build_grounded_messages(
-            message, grounded, conversation_history=conversation_history, context=context
+            message,
+            grounded,
+            conversation_history=conversation_history,
+            context=context,
         )
         client = self._openai_client()
         confidence = self._compute_confidence(grounded)
@@ -633,7 +685,11 @@ class RAGTutorService:
                 "confidence": confidence,
                 "confidence_label": self._confidence_label(confidence),
                 "mode": mode,
-                "usage": {"model": "fallback", "prompt_tokens": 0, "completion_tokens": 0},
+                "usage": {
+                    "model": "fallback",
+                    "prompt_tokens": 0,
+                    "completion_tokens": 0,
+                },
                 "is_demo": True,
             }
             return
@@ -655,7 +711,9 @@ class RAGTutorService:
                 # Capture usage from final chunk (OpenAI sends it on last chunk)
                 if hasattr(chunk, "usage") and chunk.usage:
                     prompt_tokens = int(getattr(chunk.usage, "prompt_tokens", 0) or 0)
-                    completion_tokens = int(getattr(chunk.usage, "completion_tokens", 0) or 0)
+                    completion_tokens = int(
+                        getattr(chunk.usage, "completion_tokens", 0) or 0
+                    )
 
             yield {
                 "type": "done",
@@ -689,10 +747,20 @@ class RAGTutorService:
         if not client:
             demo = self._demo_general_response(message, context=context)
             yield {"type": "token", "content": demo}
-            yield {"type": "done", "answer": demo, "sources": [], "confidence": 0.0,
-                   "confidence_label": "low", "mode": "direct",
-                   "usage": {"model": "fallback-demo", "prompt_tokens": 0, "completion_tokens": 0},
-                   "is_demo": True}
+            yield {
+                "type": "done",
+                "answer": demo,
+                "sources": [],
+                "confidence": 0.0,
+                "confidence_label": "low",
+                "mode": "direct",
+                "usage": {
+                    "model": "fallback-demo",
+                    "prompt_tokens": 0,
+                    "completion_tokens": 0,
+                },
+                "is_demo": True,
+            }
             return
         try:
             stream = stream_with_fallback(
@@ -706,10 +774,21 @@ class RAGTutorService:
                 if delta and delta.content:
                     full_answer += delta.content
                     yield {"type": "token", "content": delta.content}
-            yield {"type": "done", "answer": full_answer, "sources": [], "confidence": 0.0,
-                   "confidence_label": "low", "mode": "direct",
-                   "usage": {"model": self.model, "prompt_tokens": 0, "completion_tokens": 0},
-                   "is_demo": False, "fallback_reason": "general_llm"}
+            yield {
+                "type": "done",
+                "answer": full_answer,
+                "sources": [],
+                "confidence": 0.0,
+                "confidence_label": "low",
+                "mode": "direct",
+                "usage": {
+                    "model": self.model,
+                    "prompt_tokens": 0,
+                    "completion_tokens": 0,
+                },
+                "is_demo": False,
+                "fallback_reason": "general_llm",
+            }
         except Exception as exc:
             logger.warning("Streaming general chat failed: %s", exc)
             yield {"type": "error", "detail": "AI provider error. Please try again."}
@@ -734,7 +813,11 @@ class RAGTutorService:
                 "text_span": item["chunk"].text,
                 "snippet": item["chunk"].text[:220],
                 "similarity": round(float(item.get("similarity", 0.0)), 4),
-                "metadata": item["chunk"].metadata if isinstance(item["chunk"].metadata, dict) else {},
+                "metadata": (
+                    item["chunk"].metadata
+                    if isinstance(item["chunk"].metadata, dict)
+                    else {}
+                ),
             }
             for item in grounded
         ]
@@ -747,9 +830,15 @@ class RAGTutorService:
         student=None,
         using: str = "default",
     ) -> dict[str, Any]:
-        effective_min_similarity = self.get_adaptive_min_similarity(student=student, using=using)
+        effective_min_similarity = self.get_adaptive_min_similarity(
+            student=student, using=using
+        )
         retrieved = self.retrieve_relevant_chunks(message, context=context)
-        grounded = [item for item in retrieved if float(item["similarity"]) >= effective_min_similarity]
+        grounded = [
+            item
+            for item in retrieved
+            if float(item["similarity"]) >= effective_min_similarity
+        ]
 
         if not grounded:
             if not self._requires_grounding(context):

@@ -54,8 +54,12 @@ class Command(BaseCommand):
     )
 
     def add_arguments(self, parser):
-        parser.add_argument("--schema", default="demo", help="Demo tenant schema/subdomain.")
-        parser.add_argument("--name", default="Demo School", help="Demo tenant display name.")
+        parser.add_argument(
+            "--schema", default="demo", help="Demo tenant schema/subdomain."
+        )
+        parser.add_argument(
+            "--name", default="Demo School", help="Demo tenant display name."
+        )
         parser.add_argument("--students", type=int, default=200)
         parser.add_argument("--teachers", type=int, default=30)
         parser.add_argument("--staff", type=int, default=5)
@@ -80,7 +84,9 @@ class Command(BaseCommand):
             raise CommandError("Destructive command blocked. Re-run with --confirm.")
 
         if connection.vendor != "postgresql":
-            raise CommandError("This command requires PostgreSQL (django-tenants schemas).")
+            raise CommandError(
+                "This command requires PostgreSQL (django-tenants schemas)."
+            )
 
         config = SeedConfig(
             schema_name=str(options["schema"]).strip().lower(),
@@ -103,7 +109,9 @@ class Command(BaseCommand):
 
         self.stdout.write(self.style.WARNING("Resetting all non-public tenants..."))
         removed = self._delete_non_public_tenants()
-        self.stdout.write(self.style.SUCCESS(f"Removed {removed} non-public tenant(s)."))
+        self.stdout.write(
+            self.style.SUCCESS(f"Removed {removed} non-public tenant(s).")
+        )
 
         demo_tenant = self._create_or_update_demo_tenant(config)
         self._seed_demo_users(demo_tenant, config)
@@ -115,12 +123,20 @@ class Command(BaseCommand):
         )
         self.stdout.write("Credentials:")
         self.stdout.write(f"  Admin:   {config.admin_email} / {config.admin_password}")
-        self.stdout.write(f"  Teachers: teacher1@demo.school .. teacher{config.teachers}@demo.school / {config.teacher_password}")
-        self.stdout.write(f"  Staff:   staff1@demo.school .. staff{config.staff}@demo.school / {config.staff_password}")
-        self.stdout.write(f"  Students: student1@demo.school .. student{config.students}@demo.school / {config.student_password}")
+        self.stdout.write(
+            f"  Teachers: teacher1@demo.school .. teacher{config.teachers}@demo.school / {config.teacher_password}"
+        )
+        self.stdout.write(
+            f"  Staff:   staff1@demo.school .. staff{config.staff}@demo.school / {config.staff_password}"
+        )
+        self.stdout.write(
+            f"  Students: student1@demo.school .. student{config.students}@demo.school / {config.student_password}"
+        )
 
     def _delete_non_public_tenants(self) -> int:
-        tenants = list(Tenant.objects.exclude(schema_name="public").order_by("schema_name"))
+        tenants = list(
+            Tenant.objects.exclude(schema_name="public").order_by("schema_name")
+        )
         removed = 0
         connection.set_schema_to_public()
 
@@ -157,9 +173,15 @@ class Command(BaseCommand):
         )
 
         if created:
-            self.stdout.write(self.style.SUCCESS(f"Created tenant {tenant.schema_name}."))
+            self.stdout.write(
+                self.style.SUCCESS(f"Created tenant {tenant.schema_name}.")
+            )
         else:
-            self.stdout.write(self.style.WARNING(f"Tenant {tenant.schema_name} already existed; updated metadata."))
+            self.stdout.write(
+                self.style.WARNING(
+                    f"Tenant {tenant.schema_name} already existed; updated metadata."
+                )
+            )
             # Ensure schema exists in case of metadata-only row restore.
             tenant.create_schema(check_if_exists=True, verbosity=0)
 
@@ -281,9 +303,17 @@ class Command(BaseCommand):
         return user
 
     def _ensure_trial_subscription(self, tenant: Tenant) -> None:
-        plan = SubscriptionPlan.objects.filter(is_active=True).order_by("price_monthly", "name").first()
+        plan = (
+            SubscriptionPlan.objects.filter(is_active=True)
+            .order_by("price_monthly", "name")
+            .first()
+        )
         if not plan:
-            self.stdout.write(self.style.WARNING("No active subscription plan found; skipping subscription seed."))
+            self.stdout.write(
+                self.style.WARNING(
+                    "No active subscription plan found; skipping subscription seed."
+                )
+            )
             return
 
         Subscription.objects.update_or_create(
@@ -297,4 +327,6 @@ class Command(BaseCommand):
                 "ai_token_limit": plan.ai_token_limit,
             },
         )
-        self.stdout.write(self.style.SUCCESS(f"Assigned trial subscription plan: {plan.name}"))
+        self.stdout.write(
+            self.style.SUCCESS(f"Assigned trial subscription plan: {plan.name}")
+        )

@@ -9,12 +9,14 @@ from __future__ import annotations
 
 import re
 
-
 _VARIABLE_PATTERN = re.compile(r"\{([^{}]+)\}")
 
 
 def variables(template: str) -> list[str]:
-    return [match.group(1).strip() for match in _VARIABLE_PATTERN.finditer(str(template or ""))]
+    return [
+        match.group(1).strip()
+        for match in _VARIABLE_PATTERN.finditer(str(template or ""))
+    ]
 
 
 def expand(template: str, values: dict | None = None) -> str:
@@ -26,4 +28,3 @@ def expand(template: str, values: dict | None = None) -> str:
         return str(values.get(key, match.group(0)))
 
     return _VARIABLE_PATTERN.sub(_replace, str(template or ""))
-

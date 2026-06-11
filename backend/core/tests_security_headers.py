@@ -28,8 +28,13 @@ class SecurityHeadersAndCorsTests(FastTenantTestCase):
         CORS_ALLOWED_ORIGIN_REGEXES=[],
     )
     def test_cors_allows_only_explicit_origin(self):
-        allowed_response = self.client.get(self.url, HTTP_ORIGIN="https://school.example")
-        self.assertEqual(allowed_response.get("Access-Control-Allow-Origin"), "https://school.example")
+        allowed_response = self.client.get(
+            self.url, HTTP_ORIGIN="https://school.example"
+        )
+        self.assertEqual(
+            allowed_response.get("Access-Control-Allow-Origin"),
+            "https://school.example",
+        )
 
         blocked_response = self.client.get(self.url, HTTP_ORIGIN="https://evil.example")
         self.assertIsNone(blocked_response.get("Access-Control-Allow-Origin"))
