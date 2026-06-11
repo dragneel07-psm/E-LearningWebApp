@@ -22,7 +22,6 @@ const PUBLIC_PATHS = [
     '/public',
     '/forgot-password',
     '/reset-password',
-    '/debug-auth',
     '/school',
     '/manifest.json',
     '/sw.js',

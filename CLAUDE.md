@@ -41,7 +41,9 @@ black . && flake8 . && isort .
 
 ```bash
 npm install
-NEXT_PUBLIC_API_URL=http://127.0.0.1:8000 npm run dev -- --hostname 127.0.0.1 --port 3000
+# Same-origin proxy mode is required: auth tokens live in httpOnly cookies and
+# the /api/[...path] proxy attaches them to backend requests server-side.
+BACKEND_API_ORIGIN=http://127.0.0.1:8000 NEXT_PUBLIC_API_URL=/api npm run dev -- --hostname 127.0.0.1 --port 3000
 
 npm run lint          # ESLint
 npm run type-check    # tsc --noEmit

@@ -2,7 +2,7 @@
 // Unauthorized copying, modification, or distribution of this file,
 // via any medium, is strictly prohibited. Proprietary and confidential.
 import axios from 'axios';
-import { getAccessToken } from '@/lib/auth';
+import type { AxiosError, InternalAxiosRequestConfig } from 'axios';
 import { getTenantFromSubdomain } from '@/lib/tenant';
 
 function normalizeApiBaseUrl(rawUrl: string): string {
@@ -66,16 +66,12 @@ function readTenantHeader(config: { headers?: unknown }): string | null {
     return null;
 }
 
-// Add interceptor to include token and tenant context
+// Add interceptor to include tenant context. Auth is handled by httpOnly
+// cookies which the /api proxy converts into Authorization headers
+// server-side — the browser never sees the tokens.
 api.interceptors.request.use((config) => {
     if (typeof window !== 'undefined') {
-        // 1. Auth Token
-        const token = getAccessToken();
-        if (token) {
-            config.headers.Authorization = `Bearer ${token}`;
-        }
-
-        // 2. Tenant Context — never overwrite an explicit request tenant
+        // Tenant Context — never overwrite an explicit request tenant
         const explicitTenant = (readTenantHeader(config) || '').trim().toLowerCase();
         if (!explicitTenant) {
             // Prefer the tenant cached at login time, fall back to subdomain detection
@@ -91,11 +87,40 @@ api.interceptors.request.use((config) => {
     return config;
 });
 
-// Add response interceptor for 401 (Refresh Token Flow could be added here later)
+// Share one in-flight refresh across concurrent 401s so a burst of expired
+// requests triggers a single /api/auth/refresh round trip.
+let refreshPromise: Promise<boolean> | null = null;
+
+async function refreshSession(): Promise<boolean> {
+    if (!refreshPromise) {
+        refreshPromise = fetch('/api/auth/refresh', { method: 'POST' })
+            .then((res) => res.ok)
+            .catch(() => false)
+            .finally(() => {
+                refreshPromise = null;
+            });
+    }
+    return refreshPromise;
+}
+
+type RetriableConfig = InternalAxiosRequestConfig & { _authRetried?: boolean };
+
+// On 401, refresh the httpOnly session cookie once and replay the request.
 api.interceptors.response.use(
     (response) => response,
-    async (error) => {
-        // If 401 and we have a refresh token (TODO: Implement refresh logic)
+    async (error: AxiosError) => {
+        const config = error.config as RetriableConfig | undefined;
+        const status = error.response?.status;
+        const url = config?.url || '';
+        const isAuthEndpoint = url.includes('/api/auth/') || url.includes('/api/users/login');
+
+        if (typeof window !== 'undefined' && status === 401 && config && !config._authRetried && !isAuthEndpoint) {
+            config._authRetried = true;
+            const refreshed = await refreshSession();
+            if (refreshed) {
+                return api(config);
+            }
+        }
         return Promise.reject(error);
     }
 );

@@ -20,6 +20,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { fetchWsTicket } from '@/lib/ws-ticket';
 
 export type WsStatus = 'connecting' | 'open' | 'closed' | 'error';
 
@@ -89,9 +90,10 @@ export function useTutorWebSocket() {
   // reconnect without referencing `connect` before its declaration.
   const connectRef = useRef<() => void>(() => {});
 
-  const connect = useCallback(() => {
+  const connect = useCallback(async () => {
     if (typeof window === 'undefined') return;
-    const token = localStorage.getItem('access_token');
+    // Exchange the httpOnly cookie session for a short-lived WS ticket.
+    const token = await fetchWsTicket();
     if (!token) return;
 
     // Close existing connection if any

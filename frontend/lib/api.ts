@@ -1588,14 +1588,9 @@ export interface ProgressReportHistoryItem {
     report: ProgressReport['report'];
 }
 
-// Helper function to get auth token
-function getAuthToken(): string | null {
-    if (typeof window !== 'undefined') {
-        return localStorage.getItem('access_token');
-    }
-    return null;
-}
-
+// Auth note: tokens live in httpOnly cookies which the same-origin /api
+// proxy converts into Authorization headers server-side. Client code never
+// reads or attaches tokens.
 function getResolvedTenantId(): string {
     if (typeof window === 'undefined') return 'public';
 
@@ -1657,7 +1652,6 @@ export async function apiRequest<T>(
 ): Promise<T> {
     const { skipAuthRedirectOn401 = false, ...fetchOptions } = options;
     const method = getRequestMethod(fetchOptions);
-    const token = getAuthToken();
 
     const headers: Record<string, string> = {
         'Content-Type': 'application/json',
@@ -1666,10 +1660,6 @@ export async function apiRequest<T>(
 
     if (fetchOptions.body instanceof FormData) {
         delete headers['Content-Type'];
-    }
-
-    if (token) {
-        headers['Authorization'] = `Bearer ${token}`;
     }
 
     // Add tenant context header — dynamically read from localStorage so SaaS users
@@ -1777,14 +1767,10 @@ async function apiRequestBlob(
     endpoint: string,
     options: RequestInit = {}
 ): Promise<Blob> {
-    const token = getAuthToken();
     const headers: Record<string, string> = {
         ...options.headers as Record<string, string>,
     };
 
-    if (token) {
-        headers['Authorization'] = `Bearer ${token}`;
-    }
     const explicitTenantHeader = headers['x-tenant-id'] || headers['X-Tenant-Id'];
     if (!explicitTenantHeader) {
         headers['x-tenant-id'] = getResolvedTenantId();
@@ -3236,11 +3222,9 @@ export const helpers = {
     },
 
     downloadFile: async (url: string, filename: string) => {
-        const token = getAuthToken();
         const downloadTenantId = getResolvedTenantId();
         const response = await fetch(url, {
             headers: {
-                'Authorization': `Bearer ${token}`,
                 'x-tenant-id': downloadTenantId
             }
         });
@@ -3952,7 +3936,7 @@ export const hrAPI = {
         apiRequest<HRSalarySlip>(`/hr/salary-slips/${id}/mark-paid/`, { method: 'POST', body: JSON.stringify(data) }),
     downloadPayslip: async (slipId: string, filename?: string) => {
         const res = await fetch(`/api/hr/salary-slips/${slipId}/payslip-pdf/`, {
-            headers: { 'Authorization': `Bearer ${typeof window !== 'undefined' ? localStorage.getItem('access_token') || '' : ''}` }
+            headers: { 'x-tenant-id': getResolvedTenantId() }
         });
         if (!res.ok) throw new Error('Failed to download payslip');
         const blob = await res.blob();

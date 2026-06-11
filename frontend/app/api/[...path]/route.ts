@@ -97,12 +97,32 @@ function buildTargetUrl(request: NextRequest, pathParts: string[]): URL | null {
     return targetUrl;
 }
 
+function normalizeCookieToken(rawValue: string): string {
+    const raw = (rawValue || "").trim();
+    if (!raw) return "";
+    try {
+        return decodeURIComponent(raw).trim();
+    } catch {
+        return raw;
+    }
+}
+
 function buildForwardHeaders(request: NextRequest): Headers {
     const headers = new Headers(request.headers);
     for (const header of HOP_BY_HOP_HEADERS) {
         headers.delete(header);
     }
     headers.delete("host");
+
+    // Tokens live in httpOnly cookies the browser cannot read, so the proxy
+    // attaches them to backend requests. Explicit Authorization headers
+    // (e.g. from the mobile app or tests) always win.
+    if (!headers.get("authorization")) {
+        const accessToken = normalizeCookieToken(request.cookies.get("access_token")?.value || "");
+        if (accessToken) {
+            headers.set("authorization", `Bearer ${accessToken}`);
+        }
+    }
 
     const originalHost = request.headers.get("host");
     if (originalHost) {

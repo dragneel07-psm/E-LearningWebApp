@@ -39,16 +39,18 @@ export interface RegisterResponse {
 }
 
 export interface LoginResponse {
-    access: string;
-    refresh: string;
+    // True when the session was established (httpOnly cookies set by the
+    // /api/auth/login route handler). Tokens never reach browser JavaScript.
+    ok?: boolean;
     user?: {
         user_id: string;
         email: string;
         first_name: string;
         last_name: string;
         role: string;
+        exp?: number;
     };
-    // SaaS admin 2FA pre-flight fields (no tokens returned in these cases)
+    // SaaS admin 2FA pre-flight fields (no session established in these cases)
     two_factor_required?: boolean;
     action?: 'setup_2fa' | 'enter_totp';
     message?: string;

@@ -56,22 +56,17 @@ export default function BackupsPage() {
     };
 
     const handleDownload = async (filename: string) => {
-        const token = localStorage.getItem('access_token');
-        if (!token) {
-            toast.error('You are not logged in');
-            return;
-        }
-
         setDownloadingFile(filename);
         try {
             const tenantId = localStorage.getItem('tenant_id') || 'demo';
             const baseUrl = getApiBaseUrl();
+            // Auth rides on the httpOnly session cookie; the same-origin /api
+            // proxy attaches the Authorization header server-side.
             const response = await fetch(
                 `${baseUrl}/core/backups/download/${encodeURIComponent(filename)}/`,
                 {
                     method: 'GET',
                     headers: {
-                        Authorization: `Bearer ${token}`,
                         'x-tenant-id': tenantId,
                     },
                 }

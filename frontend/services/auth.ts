@@ -11,7 +11,7 @@ import {
     UpdateProfileData,
     ChangePasswordData
 } from '@/types/auth';
-import { setTokens, removeTokens, isAuthenticated, getAccessToken } from '@/lib/auth';
+import { setSessionUser, removeTokens, isAuthenticated, getUser } from '@/lib/auth';
 import { getTenantFromSubdomain } from '@/lib/tenant';
 
 function setTenantCookie(tenantId: string) {
@@ -63,14 +63,20 @@ export const authService = {
             localStorage.setItem('tenant_id', tenantId);
         }
 
-        const response = await api.post<LoginResponse>('/api/users/login/', normalizedBody, {
+        // Always same-origin (baseURL: '') — the Next.js route handler stores
+        // the token pair in httpOnly cookies and strips it from the response.
+        const response = await api.post<LoginResponse>('/api/auth/login', normalizedBody, {
+            baseURL: '',
             headers: { 'x-tenant-id': tenantId },
         });
 
-        if (response.data.access && response.data.refresh) {
-            setTokens(response.data.access, response.data.refresh, { tenantId });
-            // Cache school_code so subsequent requests use the right tenant
+        if (response.data.ok) {
+            // Cache the non-secret identity payload + school_code so layouts
+            // and subsequent requests resolve role/tenant synchronously.
             if (typeof window !== 'undefined') {
+                if (response.data.user) {
+                    setSessionUser(response.data.user);
+                }
                 localStorage.setItem('tenant_id', tenantId);
                 setTenantCookie(tenantId);
                 if (response.data.user?.role) {
@@ -114,11 +120,11 @@ export const authService = {
     },
 
     logout() {
+        // removeTokens clears the client cache and expires the httpOnly
+        // cookies via POST /api/auth/logout.
         removeTokens();
-        // Optional: Call logout endpoint logic
-        // api.post('/api/users/logout/');
     },
 
     isAuthenticated,
-    getToken: getAccessToken
+    getUser,
 };

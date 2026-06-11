@@ -33,8 +33,9 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Loader2, Lock, Mail, ShieldCheck, KeyRound, ArrowLeft, Copy, CheckCheck } from 'lucide-react';
 import { authService } from '@/services/auth';
-import { setTokens } from '@/lib/auth';
+import { setSessionUser } from '@/lib/auth';
 import api from '@/services/api';
+import type { LoginResponse } from '@/types/auth';
 
 // ── Schemas ──────────────────────────────────────────────────────────────────
 
@@ -83,9 +84,13 @@ export function SaasLoginForm() {
 
     // ── Login success handler ─────────────────────────────────────────────
 
-    function handleLoginSuccess(data: { access: string; refresh: string }) {
-        setTokens(data.access, data.refresh, { tenantId: 'public' });
+    function handleLoginSuccess(data: Pick<LoginResponse, 'user'>) {
+        // Session cookies (httpOnly) were already set by the /api/auth route
+        // handler — only the non-secret identity cache is written here.
         if (typeof window !== 'undefined') {
+            if (data.user) {
+                setSessionUser(data.user);
+            }
             localStorage.setItem('tenant_id', 'public');
             document.cookie = `tenant_id=public; path=/; samesite=lax`;
             // Full page navigation ensures the newly-set cookie is included in
@@ -110,8 +115,8 @@ export function SaasLoginForm() {
                 school_code: 'public',
             });
 
-            // Full token response → login success
-            if (result.access && result.refresh) {
+            // Session established → login success
+            if (result.ok) {
                 handleLoginSuccess(result);
                 return;
             }
@@ -159,11 +164,17 @@ export function SaasLoginForm() {
     async function onActivate(data: TotpInput) {
         setIsLoading(true);
         try {
-            const res = await api.post<{ access: string; refresh: string }>(
-                '/api/users/2fa/activate/',
+            // Same-origin route handler: stores the issued token pair in
+            // httpOnly cookies instead of returning it to the browser.
+            const res = await api.post<LoginResponse>(
+                '/api/auth/2fa-activate',
                 { email: creds.email, password: creds.password, totp_code: data.totp_code },
-                { headers: { 'x-tenant-id': 'public' } }
+                { baseURL: '', headers: { 'x-tenant-id': 'public' } }
             );
+            if (!res.data.ok) {
+                toast.error('Unexpected response. Please try again.');
+                return;
+            }
             handleLoginSuccess(res.data);
         } catch (err) {
             toast.error(extractApiError(err, 'Invalid code. Check your authenticator app and try again.'));
@@ -184,7 +195,7 @@ export function SaasLoginForm() {
                 totp_code: data.totp_code,
             } as Parameters<typeof authService.login>[0] & { totp_code?: string });
 
-            if (result.access && result.refresh) {
+            if (result.ok) {
                 handleLoginSuccess(result);
             } else {
                 toast.error('Unexpected response. Please try again.');

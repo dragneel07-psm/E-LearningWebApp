@@ -18,6 +18,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 
 import { projectKeys } from '@/services/projects';
+import { fetchWsTicket } from '@/lib/ws-ticket';
 
 export type ProjectWsStatus = 'connecting' | 'open' | 'closed' | 'error';
 
@@ -60,9 +61,10 @@ export function useProjectSocket(
     const [status, setStatus] = useState<ProjectWsStatus>('closed');
     const qc = useQueryClient();
 
-    const connect = useCallback(() => {
+    const connect = useCallback(async () => {
         if (typeof window === 'undefined' || !projectId) return;
-        const token = localStorage.getItem('access_token');
+        // Exchange the httpOnly cookie session for a short-lived WS ticket.
+        const token = await fetchWsTicket();
         if (!token) return;
 
         if (wsRef.current && wsRef.current.readyState < WebSocket.CLOSING) {
