@@ -179,8 +179,9 @@ class RAGTutorService:
         Falls back to [message] alone if LLM is unavailable.
         This increases recall by covering different vocabulary the student might use.
         """
-        client = self._openai_client()
-        if not client:
+        from ai_engine.services.ai_client import provider_ready
+
+        if not provider_ready():
             return [message]
         prompt = (
             "You are a search query optimizer for a school learning platform.\n"
@@ -190,9 +191,8 @@ class RAGTutorService:
             f"Original: {message}"
         )
         try:
-            response = client.chat.completions.create(
-                model=self.model,
-                messages=[{"role": "user", "content": prompt}],
+            response = chat_with_fallback(
+                [{"role": "user", "content": prompt}],
                 temperature=0.4,
                 max_tokens=120,
             )

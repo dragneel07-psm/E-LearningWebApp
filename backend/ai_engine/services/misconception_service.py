@@ -27,7 +27,6 @@ import logging
 from typing import Any
 
 from django.utils import timezone
-from openai import OpenAI
 
 from ai_engine.models import AiGeneratedArtifact, AIInteractionLog
 from ai_engine.services.provider_config import get_ai_provider_config
@@ -47,19 +46,6 @@ class MisconceptionDetectionService:
         self.tenant = tenant
         self.user = user
         self.config = get_ai_provider_config()
-
-    def _openai_client(self):
-        if not (self.config.get("enabled") and self.config.get("configured")):
-            return None
-        try:
-            return OpenAI(
-                api_key=self.config.get("api_key"),
-                base_url=self.config.get("base_url"),
-                default_headers=self.config.get("request_headers") or None,
-            )
-        except Exception as exc:
-            logger.warning("MisconceptionService: failed to init OpenAI client: %s", exc)
-            return None
 
     # ------------------------------------------------------------------ #
     #  Public API
@@ -186,11 +172,11 @@ class MisconceptionDetectionService:
         if not wrong_answers:
             return []
 
-        client = self._openai_client()
-        if client is None:
+        from ai_engine.services.ai_client import parse_json_content, provider_ready, structured_chat
+
+        if not provider_ready():
             return self._rule_based_fallback(wrong_answers)
 
-        model = str(self.config.get("model") or "gpt-4o-mini")
         formatted = "\n".join(
             f"{i+1}. Q: {w['question']}\n   Student: {w['student_answer']}\n   Correct: {w['correct_answer']}"
             for i, w in enumerate(wrong_answers)
@@ -199,10 +185,10 @@ class MisconceptionDetectionService:
         system_prompt = (
             "You are an expert educational psychologist specialising in identifying "
             "student misconceptions from wrong answers. Analyse the wrong answers and "
-            "identify distinct recurring misconceptions. For each misconception return "
-            "a JSON object with keys: label, description, example_question, "
-            "wrong_answer_given, correct_answer, severity (high/medium/low). "
-            "Return ONLY a JSON array of misconception objects, no extra text."
+            "identify distinct recurring misconceptions. "
+            'Respond with JSON: {"misconceptions": [{"label": ..., "description": ..., '
+            '"example_question": ..., "wrong_answer_given": ..., "correct_answer": ..., '
+            '"severity": "high"|"medium"|"low"}]}.'
         )
         user_prompt = (
             f"Subject: {subject_name}\n\n"
@@ -211,17 +197,48 @@ class MisconceptionDetectionService:
             "Group similar errors under one misconception."
         )
 
+        misconception_schema = {
+            "type": "object",
+            "properties": {
+                "misconceptions": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "label": {"type": "string"},
+                            "description": {"type": "string"},
+                            "example_question": {"type": "string"},
+                            "wrong_answer_given": {"type": "string"},
+                            "correct_answer": {"type": "string"},
+                            "severity": {"type": "string", "enum": ["high", "medium", "low"]},
+                        },
+                        "required": [
+                            "label",
+                            "description",
+                            "example_question",
+                            "wrong_answer_given",
+                            "correct_answer",
+                            "severity",
+                        ],
+                        "additionalProperties": False,
+                    },
+                }
+            },
+            "required": ["misconceptions"],
+            "additionalProperties": False,
+        }
+
         try:
-            response = client.chat.completions.create(
-                model=model,
-                messages=[
+            response = structured_chat(
+                [
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_prompt},
                 ],
+                schema=misconception_schema,
+                schema_name="misconceptions",
                 temperature=0.3,
                 max_tokens=800,
             )
-            raw = response.choices[0].message.content or ""
             pt = getattr(response.usage, "prompt_tokens", 0)
             ct = getattr(response.usage, "completion_tokens", 0)
 
@@ -234,7 +251,9 @@ class MisconceptionDetectionService:
                 total_tokens=pt + ct,
             )
 
-            parsed = json.loads(raw.strip().strip("```json").strip("```").strip())
+            parsed = parse_json_content(response)
+            if isinstance(parsed, dict):
+                parsed = parsed.get("misconceptions", [])
             if isinstance(parsed, list):
                 return [m for m in parsed if isinstance(m, dict)]
         except Exception as exc:

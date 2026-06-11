@@ -383,21 +383,11 @@ Return valid JSON only with these keys:
 
     def _call_llm(self, prompt: str, lang: str = "en") -> str:
         try:
-            from ai_engine.services.provider_config import get_ai_provider_config
-            from openai import OpenAI
-            from django.conf import settings
+            from ai_engine.services.ai_client import chat_with_fallback, provider_ready
 
-            config = get_ai_provider_config()
-            if not (config.get("enabled") and config.get("configured")):
+            if not provider_ready():
                 return ""
 
-            client = OpenAI(
-                api_key=config.get("api_key"),
-                base_url=config.get("base_url"),
-                default_headers=config.get("request_headers") or None,
-                timeout=float(getattr(settings, "OPENAI_TIMEOUT_SECONDS", 30)),
-            )
-            model = str(config.get("model") or getattr(settings, "OPENAI_MODEL", "gpt-4o-mini"))
             lang_instruction = get_lang_instruction(lang)
             system_content = (
                 "You are a professional school academic advisor. "
@@ -405,13 +395,13 @@ Return valid JSON only with these keys:
             )
             if lang_instruction:
                 system_content = f"{system_content}\n{lang_instruction}"
-            resp = client.chat.completions.create(
-                model=model,
-                messages=[
+            resp = chat_with_fallback(
+                [
                     {"role": "system", "content": system_content},
                     {"role": "user", "content": prompt},
                 ],
                 temperature=0.4,
+                response_format={"type": "json_object"},
                 max_tokens=600,
             )
             return resp.choices[0].message.content or ""

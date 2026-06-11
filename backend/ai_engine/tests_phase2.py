@@ -31,14 +31,13 @@ class MultiQueryExpansionTest(TestCase):
     def test_expand_query_with_mock_client(self):
         """When LLM returns two variants, we get a list of 3 (original + 2)."""
         svc = self._make_service()
-        mock_client = MagicMock()
         mock_response = MagicMock()
         mock_response.choices[0].message.content = (
             "How does photosynthesis work?\nExplain the process of photosynthesis"
         )
-        mock_client.chat.completions.create.return_value = mock_response
 
-        with patch.object(svc, "_openai_client", return_value=mock_client):
+        with patch("ai_engine.services.ai_client.provider_ready", return_value=True), \
+             patch("ai_engine.services.rag_tutor_service.chat_with_fallback", return_value=mock_response):
             result = svc._expand_query("What is photosynthesis?")
 
         self.assertEqual(len(result), 3)
@@ -48,14 +47,13 @@ class MultiQueryExpansionTest(TestCase):
     def test_expand_query_limits_to_2_variants(self):
         """Even if LLM returns more lines, only 2 variants are taken."""
         svc = self._make_service()
-        mock_client = MagicMock()
         mock_response = MagicMock()
         mock_response.choices[0].message.content = (
             "Variant A\nVariant B\nVariant C\nVariant D"
         )
-        mock_client.chat.completions.create.return_value = mock_response
 
-        with patch.object(svc, "_openai_client", return_value=mock_client):
+        with patch("ai_engine.services.ai_client.provider_ready", return_value=True), \
+             patch("ai_engine.services.rag_tutor_service.chat_with_fallback", return_value=mock_response):
             result = svc._expand_query("original")
 
         self.assertEqual(len(result), 3)  # original + 2
@@ -63,10 +61,9 @@ class MultiQueryExpansionTest(TestCase):
     def test_expand_query_fallback_on_error(self):
         """If the LLM call raises an exception, returns only original."""
         svc = self._make_service()
-        mock_client = MagicMock()
-        mock_client.chat.completions.create.side_effect = Exception("timeout")
 
-        with patch.object(svc, "_openai_client", return_value=mock_client):
+        with patch("ai_engine.services.ai_client.provider_ready", return_value=True), \
+             patch("ai_engine.services.rag_tutor_service.chat_with_fallback", side_effect=Exception("timeout")):
             result = svc._expand_query("What is gravity?")
 
         self.assertEqual(result, ["What is gravity?"])

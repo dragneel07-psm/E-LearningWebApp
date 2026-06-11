@@ -127,9 +127,12 @@ class AITutorService:
         messages.append({"role": "user", "content": message})
 
         def _do_call():
-            return self.client.chat.completions.create(
-                model=self.model,
-                messages=messages,
+            # Central client adds model-fallback on rate limits; the breaker
+            # around it still guards against sustained provider outages.
+            from ai_engine.services.ai_client import chat_with_fallback
+
+            return chat_with_fallback(
+                messages,
                 max_tokens=500,
                 temperature=0.7,
             )
@@ -305,14 +308,15 @@ Let's work through this together!"""
             - Return the insights as a bulleted list.
             """
 
-            response = self.client.chat.completions.create(
-                model=self.model,
-                messages=[
+            from ai_engine.services.ai_client import chat_with_fallback
+
+            response = chat_with_fallback(
+                [
                     {"role": "system", "content": "You are a helpful pedagogical assistant for teachers."},
                     {"role": "user", "content": prompt}
                 ],
                 max_tokens=300,
-                temperature=0.7
+                temperature=0.7,
             )
 
             content = response.choices[0].message.content

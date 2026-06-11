@@ -1,102 +1,96 @@
 # Copyright (c) 2024-2026 Pramod Singh Manyal. All rights reserved.
 # Unauthorized copying, modification, or distribution of this file,
 # via any medium, is strictly prohibited. Proprietary and confidential.
-import os
-import json
-from openai import OpenAI
-from .provider_config import get_ai_provider_config
+import logging
+
+from ai_engine.services.ai_client import (
+    parse_json_content,
+    provider_ready,
+    structured_chat,
+)
+
+logger = logging.getLogger(__name__)
+
+GRADE_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "score": {
+            "type": "number",
+            "description": "Numeric score awarded, between 0 and the total points available.",
+        },
+        "feedback": {
+            "type": "string",
+            "description": "Constructive feedback for the student.",
+        },
+    },
+    "required": ["score", "feedback"],
+    "additionalProperties": False,
+}
+
 
 class GradingService:
-    def __init__(self):
-        self.client = None
-        self.model = os.getenv('OPENAI_MODEL', 'gpt-3.5-turbo')
-        self._client_signature = None
-        self._client_init_error = None
-        self._refresh_client(force=True)
-
-    def _refresh_client(self, force: bool = False):
-        config = get_ai_provider_config()
-        signature = (
-            config.get('api_key', ''),
-            config.get('base_url', ''),
-            config.get('model', ''),
-            bool(config.get('enabled')),
-        )
-
-        if not force and signature == self._client_signature:
-            return
-
-        self._client_signature = signature
-        self.model = config.get('model') or self.model
-        self._client_init_error = None
-
-        if config.get('configured') and config.get('enabled'):
-            try:
-                self.client = OpenAI(
-                    api_key=config.get('api_key'),
-                    base_url=config.get('base_url'),
-                    default_headers=config.get('request_headers') or None,
-                    timeout=float(os.getenv('OPENAI_TIMEOUT_SECONDS', '30')),
-                )
-            except Exception as exc:
-                self.client = None
-                self._client_init_error = str(exc)
-        else:
-            self.client = None
-
-    def grade_submission(self, question_text, student_answer, correct_answer=None, total_points=10):
+    def grade_submission(
+        self, question_text, student_answer, correct_answer=None, total_points=10
+    ):
         """
         Grade a student submission using AI.
         Returns dict: { 'score': float, 'feedback': str }
         """
-        self._refresh_client()
+        if not provider_ready():
+            return self._get_demo_grade(student_answer, total_points)
 
-        if not self.client:
-            return self._get_demo_grade(student_answer, total_points, error=self._client_init_error)
+        prompt = f"""
+        You are an expert teacher grading a student's answer.
+
+        Question: {question_text}
+        Correct Answer/Rubric: {correct_answer if correct_answer else "Evaluate based on general knowledge and correctness."}
+        Student Answer: {student_answer}
+        Total Points Available: {total_points}
+
+        Evaluate the answer constraints:
+        1. Accuracy of facts.
+        2. Clarity of explanation.
+        3. Completeness.
+
+        Respond with JSON: {{"score": <numeric_score_out_of_total>, "feedback": "<constructive_feedback_string>"}}
+        """
 
         try:
-            prompt = f"""
-            You are an expert teacher grading a student's answer.
-            
-            Question: {question_text}
-            Correct Answer/Rubric: {correct_answer if correct_answer else "Evaluate based on general knowledge and correctness."}
-            Student Answer: {student_answer}
-            Total Points Available: {total_points}
-
-            Evaluate the answer constraints:
-            1. Accuracy of facts.
-            2. Clarity of explanation.
-            3. Completeness.
-
-            Provide your response in JSON format:
-            {{
-                "score": <numeric_score_out_of_total>,
-                "feedback": "<constructive_feedback_string>"
-            }}
-            """
-
-            response = self.client.chat.completions.create(
-                model=self.model,
-                messages=[
-                    {"role": "system", "content": "You are a fair and constructive precision grader."},
-                    {"role": "user", "content": prompt}
+            response = structured_chat(
+                [
+                    {
+                        "role": "system",
+                        "content": "You are a fair and constructive precision grader.",
+                    },
+                    {"role": "user", "content": prompt},
                 ],
+                schema=GRADE_SCHEMA,
+                schema_name="grade",
                 temperature=0.3,
-                response_format={"type": "json_object"}
             )
-            
-            content = response.choices[0].message.content
-            result = json.loads(content)
-            return result
+            result = parse_json_content(response)
+            return self._normalize_grade(result, total_points)
+        except Exception as exc:
+            logger.warning("Grading failed; using heuristic fallback: %s", exc)
+            return self._get_demo_grade(student_answer, total_points, error=str(exc))
 
-        except Exception as e:
-            print(f"Grading Error: {e}")
-            return self._get_demo_grade(student_answer, total_points, error=str(e))
+    @staticmethod
+    def _normalize_grade(result, total_points):
+        """Clamp the model output into the promised contract."""
+        try:
+            score = float(result.get("score", 0))
+        except (TypeError, ValueError):
+            score = 0.0
+        score = max(0.0, min(score, float(total_points)))
+        feedback = result.get("feedback")
+        if not isinstance(feedback, str) or not feedback.strip():
+            feedback = "Reviewed by AI grader."
+        return {"score": round(score, 1), "feedback": feedback.strip()}
 
     def _get_demo_grade(self, answer, total_points, error=None):
         """Fallback heuristic grading when AI provider is unavailable."""
         words = len(answer.split())
-        
+
         # Heuristic scoring fallback
         if words < 5:
             score = total_points * 0.2
@@ -110,10 +104,8 @@ class GradingService:
 
         if error:
             feedback += f" (AI provider temporarily unavailable; fallback rubric used. Error: {error})"
-            
-        return {
-            "score": round(score, 1),
-            "feedback": feedback
-        }
+
+        return {"score": round(score, 1), "feedback": feedback}
+
 
 grading_service = GradingService()

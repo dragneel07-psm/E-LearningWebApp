@@ -2,6 +2,8 @@
 # Unauthorized copying, modification, or distribution of this file,
 # via any medium, is strictly prohibited. Proprietary and confidential.
 # Forced reload - V2
+import logging
+
 from rest_framework import viewsets, status, permissions
 from rest_framework.decorators import action, api_view, permission_classes, throttle_classes
 from rest_framework.response import Response
@@ -43,6 +45,8 @@ from .services.exam_generator_service import ExamPaperGenerationError, ExamPaper
 from .services.lesson_summary_service import LessonSummaryService
 from .services.quiz_generator_service import QuizGeneratorService, QuizGenerationError
 from .services.risk_analytics_service import RiskAnalyticsService
+
+logger = logging.getLogger(__name__)
 from .services.personalization_service import PersonalizationService
 from .services.learning_path_service import LearningPathService
 from .services.sm2_service import SM2Service

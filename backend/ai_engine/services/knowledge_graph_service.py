@@ -23,7 +23,6 @@ import json
 import logging
 from typing import Any
 
-from openai import OpenAI
 
 from ai_engine.models import SkillTag, SkillMastery, AIInteractionLog
 from ai_engine.models import SkillPrerequisite
@@ -42,19 +41,6 @@ class KnowledgeGraphService:
         self.tenant = tenant
         self.user = user
         self.config = get_ai_provider_config()
-
-    def _openai_client(self):
-        if not (self.config.get("enabled") and self.config.get("configured")):
-            return None
-        try:
-            return OpenAI(
-                api_key=self.config.get("api_key"),
-                base_url=self.config.get("base_url"),
-                default_headers=self.config.get("request_headers") or None,
-            )
-        except Exception as exc:
-            logger.warning("KnowledgeGraphService: failed to init OpenAI client: %s", exc)
-            return None
 
     # ------------------------------------------------------------------ #
     #  Prerequisite management
@@ -211,19 +197,19 @@ class KnowledgeGraphService:
         if len(skills) < 2:
             return []
 
-        client = self._openai_client()
-        if client is None:
+        from ai_engine.services.ai_client import parse_json_content, provider_ready, structured_chat
+
+        if not provider_ready():
             return []
 
-        model = str(self.config.get("model") or "gpt-4o-mini")
         skill_names = [s["name"] for s in skills]
         skill_name_to_id = {s["name"]: str(s["id"]) for s in skills}
 
         system_prompt = (
             "You are a curriculum expert. Given a list of academic skills/concepts, "
             "identify prerequisite relationships (skill A must be learned before skill B). "
-            "Return ONLY a JSON array of objects with keys: skill (the advanced concept) "
-            "and prerequisite (the foundational concept). Only include relationships where "
+            'Respond with JSON: {"pairs": [{"skill": <advanced concept>, '
+            '"prerequisite": <foundational concept>}]}. Only include relationships where '
             "both names appear exactly in the input list."
         )
         user_prompt = (
@@ -231,17 +217,37 @@ class KnowledgeGraphService:
             "List prerequisite pairs (max 20). Only use skill names from the list above exactly as given."
         )
 
+        pairs_schema = {
+            "type": "object",
+            "properties": {
+                "pairs": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "skill": {"type": "string"},
+                            "prerequisite": {"type": "string"},
+                        },
+                        "required": ["skill", "prerequisite"],
+                        "additionalProperties": False,
+                    },
+                }
+            },
+            "required": ["pairs"],
+            "additionalProperties": False,
+        }
+
         try:
-            response = client.chat.completions.create(
-                model=model,
-                messages=[
+            response = structured_chat(
+                [
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_prompt},
                 ],
+                schema=pairs_schema,
+                schema_name="prerequisite_pairs",
                 temperature=0.2,
                 max_tokens=600,
             )
-            raw = response.choices[0].message.content or ""
             pt = getattr(response.usage, "prompt_tokens", 0)
             ct = getattr(response.usage, "completion_tokens", 0)
             AIInteractionLog.objects.using(using).create(
@@ -252,7 +258,8 @@ class KnowledgeGraphService:
                 completion_tokens=ct,
                 total_tokens=pt + ct,
             )
-            pairs = json.loads(raw.strip().strip("```json").strip("```").strip())
+            parsed = parse_json_content(response)
+            pairs = parsed.get("pairs", []) if isinstance(parsed, dict) else parsed
         except Exception as exc:
             logger.warning("KnowledgeGraphService: LLM call failed: %s", exc)
             return []

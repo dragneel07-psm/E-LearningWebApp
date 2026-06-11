@@ -23,6 +23,7 @@ Usage:
 """
 from __future__ import annotations
 
+import json
 import logging
 from typing import Any
 
@@ -34,12 +35,84 @@ logger = logging.getLogger(__name__)
 _RETRYABLE_STATUS_CODES = {429, 503, 529}
 
 
+def provider_ready() -> bool:
+    """True when an AI provider is configured and enabled in SaaS settings."""
+    from ai_engine.services.provider_config import get_ai_provider_config
+
+    config = get_ai_provider_config()
+    return bool(config.get("enabled") and config.get("configured"))
+
+
+def parse_json_content(response: Any) -> Any:
+    """
+    Extract and parse the JSON payload from a chat completion, tolerating
+    markdown code fences some models wrap around JSON output.
+    """
+    raw = (response.choices[0].message.content or "").strip()
+    if raw.startswith("```"):
+        raw = raw.strip("`")
+        if raw.lower().startswith("json"):
+            raw = raw[4:]
+        raw = raw.strip()
+    return json.loads(raw)
+
+
+def structured_chat(
+    messages: list[dict[str, Any]],
+    *,
+    schema: dict[str, Any],
+    schema_name: str = "response",
+    temperature: float = 0.2,
+    max_tokens: int | None = None,
+    model: str | None = None,
+    timeout: float | None = None,
+) -> Any:
+    """
+    Chat completion constrained to a JSON schema.
+
+    Tries OpenAI strict structured outputs first; OpenAI-compatible
+    providers that reject json_schema (HTTP 400) are retried with the
+    widely supported json_object mode. Either way the model is told the
+    expected shape via the prompt, and callers parse with
+    parse_json_content().
+    """
+    from openai import APIStatusError, BadRequestError
+
+    json_schema_format = {
+        "type": "json_schema",
+        "json_schema": {"name": schema_name, "strict": True, "schema": schema},
+    }
+    try:
+        return chat_with_fallback(
+            messages,
+            temperature=temperature,
+            response_format=json_schema_format,
+            max_tokens=max_tokens,
+            model=model,
+            timeout=timeout,
+        )
+    except (BadRequestError, APIStatusError) as exc:
+        status_code = getattr(exc, "status_code", None)
+        if status_code != 400:
+            raise
+        logger.info("structured_chat: provider rejected json_schema, retrying with json_object")
+        return chat_with_fallback(
+            messages,
+            temperature=temperature,
+            response_format={"type": "json_object"},
+            max_tokens=max_tokens,
+            model=model,
+            timeout=timeout,
+        )
+
+
 def chat_with_fallback(
     messages: list[dict[str, Any]],
     *,
     temperature: float = 0.7,
     response_format: dict | None = None,
     max_tokens: int | None = None,
+    model: str | None = None,
     timeout: float | None = None,
 ) -> Any:
     """
@@ -56,7 +129,9 @@ def chat_with_fallback(
     from ai_engine.services.provider_config import get_ai_provider_config
 
     config = get_ai_provider_config()
-    primary_model = str(config.get("model") or getattr(settings, "OPENAI_MODEL", "gpt-4o-mini"))
+    primary_model = str(
+        model or config.get("model") or getattr(settings, "OPENAI_MODEL", "gpt-4o-mini")
+    )
     fallback_model = str(getattr(settings, "AI_FALLBACK_MODEL", "gpt-4o-mini"))
 
     client = OpenAI(
@@ -104,6 +179,7 @@ def stream_with_fallback(
     *,
     temperature: float = 0.2,
     max_tokens: int | None = None,
+    model: str | None = None,
     timeout: float | None = None,
 ) -> Any:
     """
@@ -119,7 +195,9 @@ def stream_with_fallback(
     from ai_engine.services.provider_config import get_ai_provider_config
 
     config = get_ai_provider_config()
-    primary_model = str(config.get("model") or getattr(settings, "OPENAI_MODEL", "gpt-4o-mini"))
+    primary_model = str(
+        model or config.get("model") or getattr(settings, "OPENAI_MODEL", "gpt-4o-mini")
+    )
     fallback_model = str(getattr(settings, "AI_FALLBACK_MODEL", "gpt-4o-mini"))
 
     client = OpenAI(

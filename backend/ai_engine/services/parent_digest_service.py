@@ -134,23 +134,12 @@ class ParentDigestService:
         return " ".join(sentences)
 
     def _llm_digest(self, student, parts: dict, using: str) -> str:
-        from ai_engine.services.provider_config import get_ai_provider_config
-        from openai import OpenAI
-        from django.conf import settings
+        from ai_engine.services.ai_client import chat_with_fallback, provider_ready
 
-        config = get_ai_provider_config()
-        if not (config.get("enabled") and config.get("configured")):
+        if not provider_ready():
             return ""
 
         try:
-            client = OpenAI(
-                api_key=config.get("api_key"),
-                base_url=config.get("base_url"),
-                default_headers=config.get("request_headers") or None,
-                timeout=float(getattr(settings, "OPENAI_TIMEOUT_SECONDS", 30)),
-            )
-            model = str(config.get("model") or "gpt-4o-mini")
-
             data_summary = (
                 f"Student: {parts['name']}\n"
                 f"Current streak: {parts['streak']} days\n"
@@ -159,9 +148,8 @@ class ParentDigestService:
                 f"Lessons completed (approximate): {parts['lessons_today']}"
             )
 
-            resp = client.chat.completions.create(
-                model=model,
-                messages=[
+            resp = chat_with_fallback(
+                [
                     {
                         "role": "system",
                         "content": (
