@@ -10,6 +10,7 @@ import { Toaster } from "@/components/ui/sonner";
 import { ThemeProvider } from "@/components/providers/theme-provider";
 import { ServiceWorkerRegistrar } from "@/components/service-worker-registrar";
 import { OfflineBanner } from "@/components/offline-banner";
+import { CommandPalette } from "@/components/command-palette";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -96,6 +97,9 @@ export default function RootLayout({
 
               {/* Offline / Slow Connection Banner */}
               <OfflineBanner />
+
+              {/* Global ⌘K / Ctrl+K navigation (signed-in portals only) */}
+              <CommandPalette />
 
               {children}
               <Toaster />
