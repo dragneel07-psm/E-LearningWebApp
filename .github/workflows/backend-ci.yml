@@ -25,7 +25,7 @@ jobs:
         python-version: '3.13'
         
     - name: Cache Python dependencies
-      uses: actions/cache@v3
+      uses: actions/cache@v4
       with:
         path: ~/.cache/pip
         key: ${{ runner.os }}-pip-${{ hashFiles('backend/requirements/*.txt', 'backend/requirements.txt') }}
@@ -85,7 +85,7 @@ jobs:
         python-version: '3.13'
         
     - name: Cache Python dependencies
-      uses: actions/cache@v3
+      uses: actions/cache@v4
       with:
         path: ~/.cache/pip
         key: ${{ runner.os }}-pip-${{ hashFiles('backend/requirements/*.txt', 'backend/requirements.txt') }}
@@ -133,7 +133,7 @@ jobs:
         coverage xml
         
     - name: Upload coverage to Codecov
-      uses: codecov/codecov-action@v3
+      uses: codecov/codecov-action@v4
       with:
         file: ./backend/coverage.xml
         flags: backend
