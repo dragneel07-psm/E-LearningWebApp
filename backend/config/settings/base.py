@@ -338,6 +338,11 @@ UPLOAD_MAX_SIZE_MB = int(os.environ.get("UPLOAD_MAX_SIZE_MB", "25"))
 # Cap multipart parts Django will parse per request (defense in depth).
 DATA_UPLOAD_MAX_NUMBER_FILES = int(os.environ.get("DATA_UPLOAD_MAX_NUMBER_FILES", "20"))
 
+# Bearer token guarding /api/metrics (Prometheus scrape). When unset in a
+# non-debug deployment the endpoint fails closed (404). Configure the scraper
+# with `authorization: Bearer <token>`.
+METRICS_TOKEN = (os.environ.get("METRICS_TOKEN", "") or "").strip()
+
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.1/ref/settings/#default-auto-field
 

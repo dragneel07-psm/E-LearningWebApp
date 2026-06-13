@@ -135,10 +135,31 @@ class ReadyzView(APIView):
 
 
 class MetricsView(APIView):
+    # No JWT — scrapers authenticate with a static bearer token (METRICS_TOKEN),
+    # not a user session. The token is checked manually in get().
     permission_classes = [permissions.AllowAny]
     authentication_classes = []
 
     def get(self, request):
+        import hmac
+
+        from django.conf import settings
+
+        token = (getattr(settings, "METRICS_TOKEN", "") or "").strip()
+
+        if token:
+            # Token configured: require "Authorization: Bearer <token>".
+            header = request.META.get("HTTP_AUTHORIZATION", "")
+            presented = (
+                header[7:].strip() if header.lower().startswith("bearer ") else ""
+            )
+            if not presented or not hmac.compare_digest(presented, token):
+                return HttpResponse("Unauthorized", status=401)
+        elif not getattr(settings, "DEBUG", False):
+            # No token configured in a non-debug deployment: fail closed and
+            # do not advertise the endpoint. Set METRICS_TOKEN to enable scraping.
+            return HttpResponse("Not found", status=404)
+
         return HttpResponse(
             prometheus_metrics_payload(), content_type=CONTENT_TYPE_LATEST
         )
