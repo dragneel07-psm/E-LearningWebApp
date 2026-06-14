@@ -109,6 +109,20 @@ def structured_chat(
         )
 
 
+def _maybe_redact(messages: list[dict[str, Any]], redact: bool | None) -> list[dict[str, Any]]:
+    """Mask PII in outbound messages unless explicitly disabled.
+
+    Default follows settings.AI_PII_REDACTION (default True). The platform
+    serves minors, so identifiers must not leave our infra inside prompts.
+    """
+    enabled = getattr(settings, "AI_PII_REDACTION", True) if redact is None else redact
+    if not enabled:
+        return messages
+    from ai_engine.services.pii_redaction import redact_messages
+
+    return redact_messages(messages)
+
+
 def chat_with_fallback(
     messages: list[dict[str, Any]],
     *,
@@ -117,12 +131,14 @@ def chat_with_fallback(
     max_tokens: int | None = None,
     model: str | None = None,
     timeout: float | None = None,
+    redact: bool | None = None,
 ) -> Any:
     """
     Call the configured AI provider for a chat completion.
 
     Automatically retries with the fallback model if the primary model
-    returns a rate-limit or service-unavailable error.
+    returns a rate-limit or service-unavailable error. Outbound message
+    content is PII-redacted unless redact=False (see settings.AI_PII_REDACTION).
 
     Returns an OpenAI ChatCompletion response object.
     Raises the last exception if all models fail.
@@ -131,6 +147,7 @@ def chat_with_fallback(
 
     from ai_engine.services.provider_config import get_ai_provider_config
 
+    messages = _maybe_redact(messages, redact)
     config = get_ai_provider_config()
     primary_model = str(
         model or config.get("model") or getattr(settings, "OPENAI_MODEL", "gpt-4o-mini")
