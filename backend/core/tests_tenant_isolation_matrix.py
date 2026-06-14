@@ -29,30 +29,9 @@ from core.tenant_isolation_base import TwoTenantAPITestCase
 _TODO = "scaffold: implement cross-tenant isolation assertions"
 
 
-class AcademicBreadthIsolationTests(TwoTenantAPITestCase):
-    """Repeat read+write isolation across the high-value academic resources."""
-
-    @skip(_TODO)
-    def test_students_list_scoped(self):
-        # GET /api/academic/students/ as A must not surface B's students.
-        ...
-
-    @skip(_TODO)
-    def test_results_detail_cross_tenant_404(self):
-        # GET /api/academic/results/<B-result-id>/ as A → 404.
-        ...
-
-    @skip(_TODO)
-    def test_attendance_write_cross_tenant_404(self):
-        # PATCH /api/academic/attendance/<B-id>/ as A → 404, B row untouched.
-        ...
-
-    @skip(_TODO)
-    def test_submission_cross_tenant_404(self):
-        # GET/PATCH /api/academic/submissions/<B-id>/ as A → 404.
-        ...
-
-
+# Academic breadth isolation — IMPLEMENTED in academic/tests_tenant_isolation.py
+#   (students list scoping; results/submission cross-tenant detail 404;
+#    attendance cross-tenant write 404).
 # Billing isolation — IMPLEMENTED in billing_school/tests_tenant_isolation.py
 #   (FeeStructure list scoping + cross-tenant detail 404).
 # Conversations isolation — IMPLEMENTED in conversations/tests_tenant_isolation.py
