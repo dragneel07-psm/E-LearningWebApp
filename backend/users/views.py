@@ -471,17 +471,21 @@ class PasswordResetView(views.APIView):
         if serializer.is_valid():
             email = serializer.validated_data["email"]
             targets = self._tenant_targets_for_email(email, request)
-            if not targets:
-                return Response(
-                    {"email": ["User with this email does not exist."]},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
 
+            # Send only when an account exists, but always return the same
+            # response. Distinguishing "does not exist" here would let an
+            # anonymous caller enumerate registered emails platform-wide
+            # (the lookup probes every tenant schema).
             for user, tenant in targets:
                 send_password_reset_email(user, tenant=tenant, reason="forgot_password")
 
             return Response(
-                {"message": "Password reset link sent to email."},
+                {
+                    "message": (
+                        "If an account exists for that email, a password reset "
+                        "link has been sent."
+                    )
+                },
                 status=status.HTTP_200_OK,
             )
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)

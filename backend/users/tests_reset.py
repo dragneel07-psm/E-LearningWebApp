@@ -26,10 +26,14 @@ class PasswordResetTests(TestCase):
         response = self.client.post(self.reset_url, {"email": "reset@test.com"})
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
-    def test_request_reset_invalid_email(self):
-        """Test that requesting reset for non-existent email returns error"""
-        response = self.client.post(self.reset_url, {"email": "wrong@test.com"})
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+    def test_request_reset_unknown_email_does_not_enumerate(self):
+        """An unknown email returns the same 200 + generic message as a known
+        one, so an anonymous caller cannot enumerate registered accounts."""
+        known = self.client.post(self.reset_url, {"email": "reset@test.com"})
+        unknown = self.client.post(self.reset_url, {"email": "wrong@test.com"})
+        self.assertEqual(known.status_code, status.HTTP_200_OK)
+        self.assertEqual(unknown.status_code, status.HTTP_200_OK)
+        self.assertEqual(known.data, unknown.data)
 
     def test_confirm_reset_success(self):
         """Test successful password reset confirmation"""

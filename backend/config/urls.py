@@ -1,19 +1,25 @@
 # Copyright (c) 2024-2026 Pramod Singh Manyal. All rights reserved.
 # Unauthorized copying, modification, or distribution of this file,
 # via any medium, is strictly prohibited. Proprietary and confidential.
+from django.conf import settings
 from django.contrib import admin
 from django.urls import include, path
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import AllowAny, IsAdminUser
 from rest_framework.schemas import get_schema_view
 
 from core.views import HealthzView, MetricsView, ReadyzView
 from users.views import CustomTokenObtainPairView, CustomTokenRefreshView
 
+# The OpenAPI schema enumerates every endpoint/param — useful for local type
+# generation (npm run api:types) but a recon aid if public in production. Keep
+# it open only under DEBUG; require staff otherwise.
+_SCHEMA_PERMISSIONS = [AllowAny] if settings.DEBUG else [IsAdminUser]
+
 schema_view = get_schema_view(
     title="E-Learning WebApp API",
     description="Tenant-aware LMS + school ERP APIs",
     version="v1",
-    permission_classes=[AllowAny],
+    permission_classes=_SCHEMA_PERMISSIONS,
 )
 
 urlpatterns = [

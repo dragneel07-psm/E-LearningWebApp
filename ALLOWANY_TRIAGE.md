@@ -6,7 +6,7 @@
 
 16 endpoints carry `AllowAny`. **All are public by design and justified** — there is no unauthenticated endpoint that should require auth. **No S1/S2 findings.** The plan's S1 concern ("payment callbacks may lack signature verification") is **resolved**: all three gateway callbacks verify server-side before recording payment.
 
-5 hardening findings remain (S3–S4): info disclosure + missing throttles + one amount-tampering risk.
+5 hardening findings raised. **Fixed: F1 (public schema), F2 (ConnectIPS amount), F4 (reset enumeration).** Remaining: F3 (unthrottled tenant-check) and F5 (unthrottled email verification) — both S4.
 
 ## Justified — public by design (no action)
 
@@ -31,9 +31,9 @@
 
 ## Findings (hardening)
 
-### F1 — OpenAPI schema publicly exposed (S3, OWASP API9: Improper Inventory)
-`config/urls.py:16` serves the full API schema at `/api/schema/` with `AllowAny`. This enumerates every endpoint, parameter, and serializer to anonymous users — a recon aid.
-**Fix:** gate behind auth (or admin) in production, or disable the public schema route and ship types via the build-time `npm run api:types` step only. If kept public, ensure no internal-only endpoints leak.
+### F1 — OpenAPI schema publicly exposed (S3, OWASP API9: Improper Inventory) — FIXED
+`config/urls.py` served the full API schema at `/api/schema/` with `AllowAny`, enumerating every endpoint/param/serializer to anonymous users.
+**Fix applied:** schema permission is now `AllowAny` only under `DEBUG` (so local `npm run api:types` still works) and `IsAdminUser` otherwise. `core/tests_openapi.py` updated to authenticate as staff and to assert anonymous access is denied (401/403).
 
 ### F2 — ConnectIPS callback trusted client-supplied amount (S3) — FIXED
 `billing_school/views_nas.py` recorded the payment amount from the `txnAmt` **query param** rather than an authoritative source. A caller could verify a real low-value txn and report a higher amount, marking a fee "paid" without real payment.
@@ -43,9 +43,9 @@
 `core/views.py:47` explicitly sets `throttle_classes=[]`. An attacker can brute-force subdomains/school codes to map every tenant (existence + display name).
 **Fix:** apply a default throttle (e.g. an anon-scoped rate) and consider returning a uniform response shape.
 
-### F4 — User enumeration on password reset (S4)
-`PasswordResetView` returns `{"email": ["User with this email does not exist."]}` (HTTP 400) when no account matches, distinguishing registered vs unregistered emails — and it probes across all tenant schemas, so it leaks existence platform-wide.
-**Fix:** always return the generic success message ("If an account exists, a reset link was sent") regardless of match.
+### F4 — User enumeration on password reset (S4) — FIXED
+`PasswordResetView` returned `{"email": ["User with this email does not exist."]}` (HTTP 400) when no account matched, distinguishing registered vs unregistered emails — and it probes across all tenant schemas, leaking existence platform-wide.
+**Fix applied:** the view now always returns HTTP 200 with a generic message ("If an account exists for that email, a password reset link has been sent.") whether or not a match was found; emails are still sent only to real accounts. `users/tests_reset.py` updated to assert known/unknown emails get identical responses.
 
 ### F5 — Unthrottled email verification (S4)
 `EmailVerificationView` (`users/views.py:522`) has no throttle, allowing brute-force of verification tokens.
