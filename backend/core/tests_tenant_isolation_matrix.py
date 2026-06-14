@@ -58,27 +58,11 @@ class ProjectsIsolationTests(TwoTenantAPITestCase):
         ...
 
 
-class AsyncTenantContextIsolationTests(TwoTenantAPITestCase):
-    """Celery tasks must carry/restore the originating tenant's schema."""
-
-    @skip(_TODO)
-    def test_task_enqueued_in_a_writes_only_to_a(self):
-        # Run an ai_engine task (eager mode) with tenant A context; assert it
-        # writes to A's schema and nothing appears in B. Cover the
-        # core.async_jobs sync-fallback path too.
-        ...
-
-
-class WebSocketTenantIsolationTests(TwoTenantAPITestCase):
-    """A tenant-A socket must not receive tenant-B events; ws-ticket binds
-    tenant + user (see users/tests_ws_ticket.py for the ticket pattern)."""
-
-    @skip(_TODO)
-    def test_ws_ticket_bound_to_tenant(self):
-        # A ticket minted in A must be rejected when connecting on B's host.
-        ...
-
-    @skip(_TODO)
-    def test_socket_does_not_receive_foreign_tenant_events(self):
-        # Broadcast an event in B; an A-scoped consumer must not receive it.
-        ...
+# Async (Celery) tenant context — IMPLEMENTED in
+#   notifications/tests_tenant_isolation.py::CeleryTenantContextIsolationTests
+#   (task dispatched for B writes to B, not the ambient schema).
+# WebSocket isolation — IMPLEMENTED in:
+#   notifications/tests_tenant_isolation.py::WebSocketNotificationIsolationTests
+#     (UUID-pk notification groups never deliver cross-user/cross-tenant);
+#   users/tests_tenant_isolation.py::WsTicketTenantBindingTests
+#     (ws-ticket carries the minting tenant's schema, not another's).
