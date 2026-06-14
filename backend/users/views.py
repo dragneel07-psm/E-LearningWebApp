@@ -30,6 +30,7 @@ from .serializers import (
     UserManagementSerializer,
 )
 from .throttling import (
+    EmailVerificationRateThrottle,
     LoginRateThrottle,
     PasswordResetConfirmRateThrottle,
     PasswordResetRateThrottle,
@@ -524,6 +525,7 @@ class PasswordResetConfirmView(views.APIView):
 
 class EmailVerificationView(views.APIView):
     permission_classes = [permissions.AllowAny]
+    throttle_classes = [EmailVerificationRateThrottle]
 
     def post(self, request):
         serializer = EmailVerificationSerializer(data=request.data)

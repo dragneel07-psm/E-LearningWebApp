@@ -6,7 +6,7 @@
 
 16 endpoints carry `AllowAny`. **All are public by design and justified** — there is no unauthenticated endpoint that should require auth. **No S1/S2 findings.** The plan's S1 concern ("payment callbacks may lack signature verification") is **resolved**: all three gateway callbacks verify server-side before recording payment.
 
-5 hardening findings raised. **Fixed: F1 (public schema), F2 (ConnectIPS amount), F4 (reset enumeration).** Remaining: F3 (unthrottled tenant-check) and F5 (unthrottled email verification) — both S4.
+5 hardening findings raised — **all now fixed** (F1 public schema, F2 ConnectIPS amount, F3 tenant-check throttle, F4 reset enumeration, F5 email-verify throttle). No open `AllowAny` findings remain.
 
 ## Justified — public by design (no action)
 
@@ -39,17 +39,17 @@
 `billing_school/views_nas.py` recorded the payment amount from the `txnAmt` **query param** rather than an authoritative source. A caller could verify a real low-value txn and report a higher amount, marking a fee "paid" without real payment.
 **Fix applied:** the claimed amount is now parsed as `Decimal` and validated against the fee's outstanding balance (`amount_due − amount_paid`). Since initiation always charges the full balance, a claimed amount `<= 0` or `> outstanding` is rejected with HTTP 400; equal/partial amounts remain allowed. (`ConnectIPSGateway.verify()` returns the raw gateway JSON whose amount key isn't documented here, so the fee balance — already authoritative in our DB — is used as the trust anchor.)
 
-### F3 — School-code enumeration via unthrottled TenantCheckView (S4)
-`core/views.py:47` explicitly sets `throttle_classes=[]`. An attacker can brute-force subdomains/school codes to map every tenant (existence + display name).
-**Fix:** apply a default throttle (e.g. an anon-scoped rate) and consider returning a uniform response shape.
+### F3 — School-code enumeration via unthrottled TenantCheckView (S4) — FIXED
+`core/views.py` explicitly set `throttle_classes=[]`, so subdomains/school codes could be brute-forced to map every tenant.
+**Fix applied:** added `TenantCheckRateThrottle` (scope `tenant_check`, default `60/min`, env `THROTTLE_TENANT_CHECK`). Generous enough for shared-NAT login bursts but caps enumeration sweeps; ops can tune via env.
 
 ### F4 — User enumeration on password reset (S4) — FIXED
 `PasswordResetView` returned `{"email": ["User with this email does not exist."]}` (HTTP 400) when no account matched, distinguishing registered vs unregistered emails — and it probes across all tenant schemas, leaking existence platform-wide.
 **Fix applied:** the view now always returns HTTP 200 with a generic message ("If an account exists for that email, a password reset link has been sent.") whether or not a match was found; emails are still sent only to real accounts. `users/tests_reset.py` updated to assert known/unknown emails get identical responses.
 
-### F5 — Unthrottled email verification (S4)
-`EmailVerificationView` (`users/views.py:522`) has no throttle, allowing brute-force of verification tokens.
-**Fix:** add a rate throttle consistent with the other public auth endpoints.
+### F5 — Unthrottled email verification (S4) — FIXED
+`EmailVerificationView` had no throttle, allowing brute-force of verification tokens.
+**Fix applied:** added `EmailVerificationRateThrottle` (scope `auth_email_verify`, default `10/hour`, env `THROTTLE_AUTH_EMAIL_VERIFY`), consistent with the other public auth endpoints.
 
 ## CI guard (recommended)
 Add a check that fails when a new `AllowAny` appears outside this approved list (grep gate or a small test asserting the inventory), per the QA plan §7.1.

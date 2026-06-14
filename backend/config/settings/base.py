@@ -422,6 +422,10 @@ REST_FRAMEWORK = {
         "auth_password_reset_confirm": os.environ.get(
             "THROTTLE_AUTH_PASSWORD_RESET_CONFIRM", "10/hour"
         ),
+        "auth_email_verify": os.environ.get("THROTTLE_AUTH_EMAIL_VERIFY", "10/hour"),
+        # Pre-login school lookup: generous for shared-NAT login bursts but
+        # capped so the endpoint cannot be swept to enumerate tenants.
+        "tenant_check": os.environ.get("THROTTLE_TENANT_CHECK", "60/min"),
         "ai_tutor_chat": os.environ.get("THROTTLE_AI_TUTOR_CHAT", "30/min"),
     },
     "DEFAULT_PAGINATION_CLASS": "core.pagination.StandardResultsSetPagination",

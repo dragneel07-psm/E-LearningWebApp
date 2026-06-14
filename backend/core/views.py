@@ -14,7 +14,16 @@ from django.http import FileResponse, Http404, HttpResponse
 from rest_framework import permissions, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
+from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
+
+
+class TenantCheckRateThrottle(ScopedRateThrottle):
+    # Public, pre-login endpoint — cap per-IP requests so the school-code /
+    # subdomain lookup cannot be swept to enumerate every tenant. Rate is
+    # env-tunable (THROTTLE_TENANT_CHECK) since schools behind shared NAT can
+    # burst during morning login.
+    scope = "tenant_check"
 
 from .models import AuditLog, GlobalSettings, Tenant
 from .serializers import (
@@ -44,7 +53,7 @@ from core.utils.plan_enforcement import (
 
 class TenantCheckView(APIView):
     permission_classes = [permissions.AllowAny]
-    throttle_classes = []
+    throttle_classes = [TenantCheckRateThrottle]
 
     def get(self, request):
         # We only consider it a "School Code" match if it resolved to a non-public tenant
