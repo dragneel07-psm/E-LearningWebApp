@@ -571,6 +571,12 @@ AI_TUTOR_MIN_SIMILARITY = float(os.environ.get("AI_TUTOR_MIN_SIMILARITY", "0.58"
 AI_WHISPER_MODEL = os.environ.get("AI_WHISPER_MODEL", "whisper-1")
 AI_FALLBACK_MODEL = os.environ.get("AI_FALLBACK_MODEL", "gpt-4o-mini")
 
+# Mask PII (emails, phone numbers, long ID runs) in chat messages before they
+# leave our infra for any third-party LLM provider. The platform serves minors,
+# so this defaults ON; set AI_PII_REDACTION=false only for trusted/self-hosted
+# providers. Applied centrally in ai_client.chat_with_fallback.
+AI_PII_REDACTION = os.environ.get("AI_PII_REDACTION", "true").lower() == "true"
+
 # AI Risk Analytics
 AI_RISK_LOOKBACK_DAYS = int(os.environ.get("AI_RISK_LOOKBACK_DAYS", "30"))
 AI_RISK_INACTIVITY_DAYS = int(os.environ.get("AI_RISK_INACTIVITY_DAYS", "14"))
