@@ -2,67 +2,45 @@
 # Unauthorized copying, modification, or distribution of this file,
 # via any medium, is strictly prohibited. Proprietary and confidential.
 """
-Cross-tenant isolation coverage matrix — SCAFFOLD.
+Cross-tenant isolation coverage map — INDEX (all surfaces implemented).
 
-Each stub below is a known isolation surface that is not yet covered. They are
-skipped (not deleted) so the suite documents the remaining matrix and fails
-loudly in coverage review until implemented. Implement by subclassing
-``TwoTenantAPITestCase`` and following the read pattern in
-``core/tests_tenant_isolation.py`` and the write pattern in
-``core/tests_tenant_isolation_writes.py``.
+The platform is one PostgreSQL schema per school; cross-tenant data access is
+the defining security risk. Every isolation surface below has a dedicated test
+module subclassing ``core.tenant_isolation_base.TwoTenantAPITestCase`` (or, for
+the real-time path, the Channels in-memory harness). This file is the map; it
+holds no tests of its own.
 
-Priority order (highest data-sensitivity first):
-  1. billing / fees        — financial records, payment refs
-  2. conversations         — private messages between users
-  3. academic breadth      — students, results, attendance, submissions
-  4. library / gamification— lower sensitivity but same contract
-  5. async (Celery)        — tasks must not write across schemas
-  6. websockets            — sockets must not receive foreign events
+Run the whole suite under Postgres (django-tenants needs it):
+    python manage.py test \
+      core.tests_tenant_isolation \
+      core.tests_tenant_isolation_writes \
+      ai_engine.tests_tenant_isolation \
+      academic.tests_tenant_isolation \
+      billing_school.tests_tenant_isolation \
+      conversations.tests_tenant_isolation \
+      library.tests_tenant_isolation \
+      gamification.tests_tenant_isolation \
+      projects.tests_tenant_isolation \
+      notifications.tests_tenant_isolation \
+      users.tests_tenant_isolation
+
+Surface → module:
+  Token/tenant binding + reads ...... core/tests_tenant_isolation.py (pre-existing)
+  Cross-tenant writes ............... core/tests_tenant_isolation_writes.py
+  AI / pgvector RAG retrieval ....... ai_engine/tests_tenant_isolation.py
+  Academic (students/results/
+    submissions/attendance) ......... academic/tests_tenant_isolation.py
+  Billing finance (FeeStructure) .... billing_school/tests_tenant_isolation.py
+  Private conversations ............. conversations/tests_tenant_isolation.py
+  Library catalog ................... library/tests_tenant_isolation.py
+  Gamification badges ............... gamification/tests_tenant_isolation.py
+  Projects (+ feature gate) ......... projects/tests_tenant_isolation.py
+  Celery tenant context ............. notifications/tests_tenant_isolation.py
+                                        ::CeleryTenantContextIsolationTests
+  WebSocket notification groups ..... notifications/tests_tenant_isolation.py
+                                        ::WebSocketNotificationIsolationTests
+  WebSocket ticket tenant binding ... users/tests_tenant_isolation.py
+
+Note: WebSocket notification groups are keyed by UserAccount.user_id (a UUID),
+so groups are globally unique across schemas — verified, not a leak.
 """
-
-from __future__ import annotations
-
-from unittest import skip
-
-from core.tenant_isolation_base import TwoTenantAPITestCase
-
-_TODO = "scaffold: implement cross-tenant isolation assertions"
-
-
-# Academic breadth isolation — IMPLEMENTED in academic/tests_tenant_isolation.py
-#   (students list scoping; results/submission cross-tenant detail 404;
-#    attendance cross-tenant write 404).
-# Billing isolation — IMPLEMENTED in billing_school/tests_tenant_isolation.py
-#   (FeeStructure list scoping + cross-tenant detail 404).
-# Conversations isolation — IMPLEMENTED in conversations/tests_tenant_isolation.py
-#   (thread list scoping + messages not readable cross-tenant).
-
-
-class LibraryGamificationIsolationTests(TwoTenantAPITestCase):
-    @skip(_TODO)
-    def test_library_catalog_scoped(self):
-        # GET /api/library/... as A excludes B's catalog/checkouts.
-        ...
-
-    @skip(_TODO)
-    def test_gamification_leaderboard_scoped(self):
-        # GET /api/gamification/... as A excludes B's students/points.
-        ...
-
-
-class ProjectsIsolationTests(TwoTenantAPITestCase):
-    @skip(_TODO)
-    def test_projects_scoped_and_feature_gated(self):
-        # /api/projects/ gated by tenant.features['projects']; when enabled for
-        # both A and B, A must not see B's projects.
-        ...
-
-
-# Async (Celery) tenant context — IMPLEMENTED in
-#   notifications/tests_tenant_isolation.py::CeleryTenantContextIsolationTests
-#   (task dispatched for B writes to B, not the ambient schema).
-# WebSocket isolation — IMPLEMENTED in:
-#   notifications/tests_tenant_isolation.py::WebSocketNotificationIsolationTests
-#     (UUID-pk notification groups never deliver cross-user/cross-tenant);
-#   users/tests_tenant_isolation.py::WsTicketTenantBindingTests
-#     (ws-ticket carries the minting tenant's schema, not another's).
