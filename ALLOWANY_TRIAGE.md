@@ -51,5 +51,5 @@
 `EmailVerificationView` had no throttle, allowing brute-force of verification tokens.
 **Fix applied:** added `EmailVerificationRateThrottle` (scope `auth_email_verify`, default `10/hour`, env `THROTTLE_AUTH_EMAIL_VERIFY`), consistent with the other public auth endpoints.
 
-## CI guard (recommended)
-Add a check that fails when a new `AllowAny` appears outside this approved list (grep gate or a small test asserting the inventory), per the QA plan §7.1.
+## CI guard — IMPLEMENTED
+`backend/core/tests_allowany_gate.py` (`AllowAnyGateTests`, a DB-free `SimpleTestCase`) scans backend app code for `AllowAny` permission usages and asserts the per-file count matches an approved manifest (the 16 endpoints above). A new `AllowAny` fails the gate until it is triaged here and added to `APPROVED_ALLOWANY`. Runs automatically in `backend-ci.yml` via `python manage.py test`.
