@@ -521,7 +521,11 @@ class JournalEntryViewSet(viewsets.ViewSet):
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-class FundAccountViewSet(viewsets.ModelViewSet):
+class FundAccountViewSet(viewsets.ViewSet):
+    # Custom list/create only (like the sibling NAS viewsets) — not a generic
+    # ModelViewSet. As a ModelViewSet it had no serializer_class, which both
+    # left phantom retrieve/update/destroy routes broken and crashed OpenAPI
+    # schema generation (get_serializer_class assertion).
     permission_classes = [IsSchoolFinanceManager]
 
     def get_queryset(self):

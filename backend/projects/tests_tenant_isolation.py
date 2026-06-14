@@ -13,19 +13,26 @@ tenant.features['projects'] (IsProjectsEnabled). This suite proves two things:
 
 from __future__ import annotations
 
-from django_tenants.utils import tenant_context
+from django_tenants.utils import schema_context, tenant_context
 
 from core.tenant_isolation_base import TwoTenantAPITestCase
 
 
+def _set_projects_feature(tenant, enabled):
+    # Tenant rows live in the public schema; django-tenants forbids updating a
+    # tenant from inside another tenant's schema (the test connection sits on
+    # tenant A). Persist the feature flag from public.
+    tenant.features = {**(tenant.features or {}), "projects": enabled}
+    with schema_context("public"):
+        tenant.save(update_fields=["features"])
+
+
 def _enable_projects(tenant):
-    tenant.features = {**(tenant.features or {}), "projects": True}
-    tenant.save(update_fields=["features"])
+    _set_projects_feature(tenant, True)
 
 
 def _disable_projects(tenant):
-    tenant.features = {**(tenant.features or {}), "projects": False}
-    tenant.save(update_fields=["features"])
+    _set_projects_feature(tenant, False)
 
 
 class ProjectsTenantIsolationTests(TwoTenantAPITestCase):

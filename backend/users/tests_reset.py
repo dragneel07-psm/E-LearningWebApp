@@ -3,21 +3,38 @@
 # via any medium, is strictly prohibited. Proprietary and confidential.
 from django.contrib.auth import get_user_model
 from django.contrib.auth.tokens import default_token_generator
-from django.test import TestCase
 from django.utils.encoding import force_bytes
 from django.utils.http import urlsafe_base64_encode
+from django_tenants.test.cases import FastTenantTestCase
+from django_tenants.utils import tenant_context
 from rest_framework import status
 from rest_framework.test import APIClient
 
 User = get_user_model()
 
 
-class PasswordResetTests(TestCase):
+class PasswordResetTests(FastTenantTestCase):
+    # Tenant resolution is strict under DEBUG=False (test settings): requests
+    # must carry a tenant host or they 400 with tenant_domain_required before
+    # reaching the view. Run on a real tenant domain.
+
+    @classmethod
+    def setup_tenant(cls, tenant):
+        tenant.name = "Password Reset School"
+
+    @classmethod
+    def setup_domain(cls, domain):
+        domain.is_primary = True
+
     def setUp(self):
-        self.client = APIClient()
-        self.user = User.objects.create_user(
-            username="resetuser", email="reset@test.com", password="OldPassword123!"
-        )
+        self.client = APIClient(HTTP_HOST=self.get_test_tenant_domain())
+        with tenant_context(self.tenant):
+            self.user = User.objects.create_user(
+                username="resetuser",
+                email="reset@test.com",
+                password="OldPassword123!",
+                tenant=self.tenant,
+            )
         self.reset_url = "/api/users/password-reset/"
         self.confirm_url = "/api/users/password-reset-confirm/"
 
