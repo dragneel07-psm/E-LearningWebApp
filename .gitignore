@@ -192,3 +192,6 @@ tests/test-results/
 
 # Local stray virtualenv backup
 backend/.venv_py311_backup/
+
+# Graphify knowledge graph output (generated locally)
+graphify-out/
