@@ -1382,7 +1382,25 @@ class ConnectIPSCallbackView(APIView):
         except StudentFee.DoesNotExist:
             return Response({"error": "Fee not found."}, status=404)
 
-        amount_npr = float(txn_amt or 0) / 100
+        # The amount is taken from a client-controlled query param, so it must
+        # be validated against the authoritative fee balance before crediting.
+        # Initiation always charges the full outstanding balance, so a claimed
+        # amount exceeding it signals tampering (an inflated amount could mark a
+        # fee "paid" without real payment). Equal/partial amounts stay allowed.
+        amount_npr = Decimal(str(txn_amt or 0)) / Decimal("100")
+        outstanding = Decimal(str(fee.amount_due)) - Decimal(str(fee.amount_paid or 0))
+        if amount_npr <= 0 or amount_npr > outstanding:
+            logger.warning(
+                "ConnectIPS amount rejected: claimed=%s outstanding=%s ref=%s",
+                amount_npr,
+                outstanding,
+                ref_id,
+            )
+            return Response(
+                {"error": "Reported amount does not match the outstanding balance."},
+                status=400,
+            )
+
         from billing_school.views_payment_gateway import _record_payment
 
         payment = _record_payment(fee, amount_npr, "connectips", txn_id, request)
