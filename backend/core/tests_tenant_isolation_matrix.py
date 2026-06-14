@@ -53,32 +53,10 @@ class AcademicBreadthIsolationTests(TwoTenantAPITestCase):
         ...
 
 
-class BillingIsolationTests(TwoTenantAPITestCase):
-    """Financial isolation — invoices/fees/payment references per school."""
-
-    @skip(_TODO)
-    def test_invoices_list_scoped(self):
-        # GET school-billing invoices as A must exclude B's invoices.
-        ...
-
-    @skip(_TODO)
-    def test_payment_reference_not_resolvable_cross_tenant(self):
-        # A cannot read/act on a payment ref created under B.
-        ...
-
-
-class ConversationsIsolationTests(TwoTenantAPITestCase):
-    """Private messaging must never cross schemas."""
-
-    @skip(_TODO)
-    def test_thread_list_scoped(self):
-        # GET /api/conversations/... as A excludes B's threads.
-        ...
-
-    @skip(_TODO)
-    def test_message_detail_cross_tenant_404(self):
-        # GET a B message id as A → 404.
-        ...
+# Billing isolation — IMPLEMENTED in billing_school/tests_tenant_isolation.py
+#   (FeeStructure list scoping + cross-tenant detail 404).
+# Conversations isolation — IMPLEMENTED in conversations/tests_tenant_isolation.py
+#   (thread list scoping + messages not readable cross-tenant).
 
 
 class LibraryGamificationIsolationTests(TwoTenantAPITestCase):
