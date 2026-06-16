@@ -195,3 +195,6 @@ backend/.venv_py311_backup/
 
 # Graphify knowledge graph output (generated locally)
 graphify-out/
+
+# Microsoft Office lock/owner temp files
+~$*
