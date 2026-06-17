@@ -41,7 +41,9 @@ export function LocalizationProvider({ children }: { children: React.ReactNode }
   const [locale, setLocaleState] = useState<Locale>('en');
 
   useEffect(() => {
-    const saved = (readCookie(COOKIE) || localStorage.getItem('app-locale')) as Locale | null;
+    // Cookie is the single source of truth for the language preference
+    // (server-readable; no dual-store sync to keep consistent).
+    const saved = readCookie(COOKIE) as Locale | null;
     if (saved === 'en' || saved === 'ne') setLocaleState(saved);
   }, []);
 
@@ -51,8 +53,8 @@ export function LocalizationProvider({ children }: { children: React.ReactNode }
 
   const setLocale = (newLocale: Locale) => {
     setLocaleState(newLocale);
+    // 1-year persistence; SameSite=Lax so it rides normal navigations.
     document.cookie = `${COOKIE}=${newLocale}; path=/; max-age=31536000; samesite=lax`;
-    localStorage.setItem('app-locale', newLocale);
   };
 
   const t = (key: string, vars?: Record<string, string | number>): string => {
