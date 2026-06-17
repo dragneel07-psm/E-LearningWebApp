@@ -16,13 +16,16 @@ export function formatNumber(n: number, locale: Locale): string {
 export function formatDate(date: Date, locale: Locale): string {
   if (locale === 'ne') {
     const bs = adToBs(date);
-    if (bs) return toDevanagari(formatBs(bs));
+    if (bs) return toDevanagari(formatBs(bs)); // numeric BS in Devanagari, e.g. २०८३-०३-०३
     if (process.env.NODE_ENV !== 'production') console.warn('[i18n] BS out of range, using AD');
   }
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, '0');
-  const d = String(date.getDate()).padStart(2, '0');
-  return `${y}-${m}-${d}`;
+  // English (and ne out-of-range fallback): friendly long form, e.g. "Tuesday, June 17, 2026".
+  return date.toLocaleDateString('en-US', {
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  });
 }
 
 export function formatCurrency(amount: number, locale: Locale): string {

@@ -21,11 +21,11 @@ describe('formatNumber', () => {
 });
 
 describe('formatDate', () => {
-  // Use 2024-01-01 — inside bs.ts table range.
-  const adDate = new Date('2024-01-01');
+  // Local-component date (TZ-safe) inside bs.ts table range. Jan 1 2024 = Monday.
+  const adDate = new Date(2024, 0, 1);
 
-  it('en: returns AD date as YYYY-MM-DD', () => {
-    expect(formatDate(adDate, 'en')).toBe('2024-01-01');
+  it('en: returns a friendly long-form date', () => {
+    expect(formatDate(adDate, 'en')).toBe('Monday, January 1, 2024');
   });
 
   it('ne: returns Devanagari BS string derived from real converter', () => {
