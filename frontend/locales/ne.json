@@ -1,0 +1,12 @@
+{
+  "common": {
+    "appName": "विद्यालय एलएमएस",
+    "save": "सुरक्षित गर्नुहोस्",
+    "cancel": "रद्द गर्नुहोस्",
+    "viewAll": "सबै हेर्नुहोस्",
+    "loading": "लोड हुँदैछ...",
+    "greeting": "स्वागत छ, {name}"
+  },
+  "student": { "dashboard": { "title": "ड्यासबोर्ड", "feeCollection": "शुल्क संकलन", "recentActivity": "हालैका गतिविधि" } },
+  "parent": { "dashboard": { "title": "ड्यासबोर्ड" } }
+}

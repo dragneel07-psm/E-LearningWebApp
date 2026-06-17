@@ -1,24 +1,12 @@
 {
-    "common": {
-        "welcome": "Welcome",
-        "logout": "Logout",
-        "settings": "Settings",
-        "dashboard": "Dashboard",
-        "loading": "Loading...",
-        "save": "Save",
-        "cancel": "Cancel"
-    },
-    "student": {
-        "my_courses": "My Courses",
-        "next_lesson": "Next Recommended Lesson",
-        "learning_streak": "Learning Streak",
-        "badges": "Badges Unlocked",
-        "leaderboard": "Class Leaderboard"
-    },
-    "teacher": {
-        "analytics": "Analytics",
-        "reports": "AI Reports",
-        "classes": "My Classes",
-        "at_risk": "Students at Risk"
-    }
+  "common": {
+    "appName": "School LMS",
+    "save": "Save",
+    "cancel": "Cancel",
+    "viewAll": "View All",
+    "loading": "Loading...",
+    "greeting": "Welcome, {name}"
+  },
+  "student": { "dashboard": { "title": "Dashboard", "feeCollection": "Fee Collection", "recentActivity": "Recent Activity" } },
+  "parent": { "dashboard": { "title": "Dashboard" } }
 }
