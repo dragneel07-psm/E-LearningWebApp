@@ -20,6 +20,8 @@ import { AITutorChat } from '@/components/ai-tutor-chat';
 import { GamificationWidget } from '@/components/student/GamificationWidget';
 import { SmartPathWidget } from '@/components/student/SmartPathWidget';
 import { UpcomingExamsWidget } from '@/components/student/UpcomingExamsWidget';
+import { useTranslation } from '@/lib/localization';
+import { formatNumber, formatDate } from '@/lib/i18n/format';
 
 type TimetableSlot = {
     time: string;
@@ -39,6 +41,7 @@ const COURSE_COLORS = [
 
 export default function StudentDashboard() {
     const router = useRouter();
+    const { t, locale } = useTranslation();
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [studentId, setStudentId] = useState<string>('');
@@ -118,8 +121,8 @@ export default function StudentDashboard() {
             try { const nd = await academicAPI.getNotices(); setNotices((Array.isArray(nd) ? nd : []).slice(0, 3)); } catch { /* optional */ }
         } catch (e: any) {
             if (e.status === 404 || e.message?.includes('404') || e.message?.includes('No Student')) {
-                setError('Student profile not found. Are you logged in as a student?');
-            } else { setError('Failed to load dashboard data.'); }
+                setError(t('student.dashboard.errorProfileNotFound'));
+            } else { setError(t('student.dashboard.errorLoadFailed')); }
         } finally { setLoading(false); }
     };
 
@@ -130,7 +133,7 @@ export default function StudentDashboard() {
                     <GraduationCap className="h-8 w-8 text-white" />
                 </div>
             </div>
-            <p className="text-slate-500 font-medium animate-pulse">Loading your dashboard…</p>
+            <p className="text-slate-500 font-medium animate-pulse">{t('student.dashboard.loadingDashboard')}</p>
         </div>
     );
 
@@ -140,10 +143,10 @@ export default function StudentDashboard() {
                 <AlertCircle className="h-8 w-8" />
             </div>
             <div className="text-center">
-                <h3 className="text-xl font-bold text-slate-900">Dashboard Error</h3>
+                <h3 className="text-xl font-bold text-slate-900">{t('student.dashboard.errorTitle')}</h3>
                 <p className="text-slate-500 mt-1 max-w-sm">{error}</p>
             </div>
-            <Button onClick={() => window.location.href = '/login'} variant="outline" className="rounded-xl">Back to Login</Button>
+            <Button onClick={() => window.location.href = '/login'} variant="outline" className="rounded-xl">{t('student.dashboard.backToLogin')}</Button>
         </div>
     );
 
@@ -161,27 +164,29 @@ export default function StudentDashboard() {
                 <div className="relative flex flex-col md:flex-row md:items-center justify-between gap-4">
                     <div>
                         <Badge className="bg-white/20 text-white border-0 text-[10px] font-bold uppercase tracking-widest backdrop-blur-sm mb-2">
-                            <Star className="h-2.5 w-2.5 mr-1" /> Student Dashboard
+                            <Star className="h-2.5 w-2.5 mr-1" /> {t('student.dashboard.badge')}
                         </Badge>
                         <h1 className="text-2xl md:text-3xl font-black leading-tight">
-                            {user?.first_name ? `Hey, ${user.first_name}! 👋` : 'Welcome Back! 👋'}
+                            {user?.first_name
+                                ? t('student.dashboard.greetingNamed', { name: user.first_name })
+                                : t('student.dashboard.greetingGeneric')}
                         </h1>
                         <p className="text-indigo-200 mt-0.5 text-sm">
-                            {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
+                            {formatDate(new Date(), locale)}
                         </p>
                         <div className="flex flex-wrap items-center gap-3 mt-3">
                             <div className="flex items-center gap-1.5 text-xs text-indigo-100 bg-white/10 rounded-lg px-2.5 py-1">
                                 <CheckCircle2 className="h-3.5 w-3.5 text-emerald-300" />
-                                <span>{completedCourses}/{courses.length} Courses</span>
+                                <span>{t('student.dashboard.statCoursesProgress', { completed: formatNumber(completedCourses, locale), total: formatNumber(courses.length, locale) })}</span>
                             </div>
                             <div className="flex items-center gap-1.5 text-xs text-indigo-100 bg-white/10 rounded-lg px-2.5 py-1">
                                 <Target className="h-3.5 w-3.5 text-amber-300" />
-                                <span>{attendanceRate}% Attendance</span>
+                                <span>{t('student.dashboard.statAttendance', { rate: formatNumber(attendanceRate, locale) })}</span>
                             </div>
                             {pendingAssignmentsCount > 0 && (
                                 <div className="flex items-center gap-1.5 text-xs text-indigo-100 bg-white/10 rounded-lg px-2.5 py-1">
                                     <Bell className="h-3.5 w-3.5 text-rose-300" />
-                                    <span>{pendingAssignmentsCount} Pending</span>
+                                    <span>{t('student.dashboard.statPending', { count: formatNumber(pendingAssignmentsCount, locale) })}</span>
                                 </div>
                             )}
                         </div>
@@ -191,7 +196,7 @@ export default function StudentDashboard() {
                             onClick={() => setShowAITutor(true)}
                             className="shrink-0 bg-white text-indigo-700 hover:bg-indigo-50 font-bold shadow-lg px-5 rounded-xl gap-2 text-sm"
                         >
-                            <BrainCircuit className="h-4 w-4" /> Ask AI Tutor
+                            <BrainCircuit className="h-4 w-4" /> {t('student.dashboard.askAiTutor')}
                         </Button>
                     )}
                 </div>
@@ -214,8 +219,8 @@ export default function StudentDashboard() {
                                 {attendanceTrend >= 0 ? '+' : ''}{attendanceTrend}%
                             </span>
                         </div>
-                        <p className="text-3xl font-black text-white">{attendanceRate}%</p>
-                        <p className="text-xs font-medium text-white/70 mt-1">Attendance Rate</p>
+                        <p className="text-3xl font-black text-white">{formatNumber(attendanceRate, locale)}%</p>
+                        <p className="text-xs font-medium text-white/70 mt-1">{t('student.dashboard.attendanceRate')}</p>
                         <div className="h-1 mt-3 bg-white/20 rounded-full">
                             <div className="h-1 bg-white rounded-full transition-all" style={{ width: `${attendanceRate}%` }} />
                         </div>
@@ -238,10 +243,10 @@ export default function StudentDashboard() {
                                 </span>
                             )}
                         </div>
-                        <p className="text-3xl font-black text-white">{pendingAssignmentsCount}</p>
-                        <p className="text-xs font-medium text-white/70 mt-1">Pending Tasks</p>
+                        <p className="text-3xl font-black text-white">{formatNumber(pendingAssignmentsCount, locale)}</p>
+                        <p className="text-xs font-medium text-white/70 mt-1">{t('student.dashboard.pendingTasks')}</p>
                         <p className="text-[10px] text-white/80 font-bold mt-3 uppercase tracking-wider">
-                            {pendingAssignmentsCount === 0 ? '✓ All done!' : 'Action needed'}
+                            {pendingAssignmentsCount === 0 ? t('student.dashboard.allDone') : t('student.dashboard.actionNeeded')}
                         </p>
                     </CardContent>
                 </Card>
@@ -262,9 +267,9 @@ export default function StudentDashboard() {
                                 </span>
                             )}
                         </div>
-                        <p className="text-3xl font-black text-white">{upcomingExamsCount}</p>
-                        <p className="text-xs font-medium text-white/70 mt-1">Upcoming Exams</p>
-                        <p className="text-[10px] text-white/80 font-bold mt-3 uppercase tracking-wider">Quizzes & Tests</p>
+                        <p className="text-3xl font-black text-white">{formatNumber(upcomingExamsCount, locale)}</p>
+                        <p className="text-xs font-medium text-white/70 mt-1">{t('student.dashboard.upcomingExams')}</p>
+                        <p className="text-[10px] text-white/80 font-bold mt-3 uppercase tracking-wider">{t('student.dashboard.quizzesAndTests')}</p>
                     </CardContent>
                 </Card>
 
@@ -278,11 +283,11 @@ export default function StudentDashboard() {
                             <div className="h-10 w-10 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center">
                                 <Zap className="h-5 w-5 text-white" />
                             </div>
-                            <span className="text-xs font-bold text-white/70">{completedCourses} done</span>
+                            <span className="text-xs font-bold text-white/70">{t('student.dashboard.doneCount', { count: formatNumber(completedCourses, locale) })}</span>
                         </div>
-                        <p className="text-3xl font-black text-white">{courses.length}</p>
-                        <p className="text-xs font-medium text-white/70 mt-1">Enrolled Courses</p>
-                        <p className="text-[10px] text-white/80 font-bold mt-3 uppercase tracking-wider">{completedCourses} completed</p>
+                        <p className="text-3xl font-black text-white">{formatNumber(courses.length, locale)}</p>
+                        <p className="text-xs font-medium text-white/70 mt-1">{t('student.dashboard.enrolledCourses')}</p>
+                        <p className="text-[10px] text-white/80 font-bold mt-3 uppercase tracking-wider">{t('student.dashboard.completedCount', { count: formatNumber(completedCourses, locale) })}</p>
                     </CardContent>
                 </Card>
             </div>
@@ -302,8 +307,8 @@ export default function StudentDashboard() {
                     <Card className="border-0 shadow-md overflow-hidden rounded-2xl bg-white">
                         <CardHeader className="flex flex-row items-center justify-between pb-2 px-6 pt-5 border-b border-slate-50">
                             <div>
-                                <CardTitle className="text-base font-bold text-slate-900">My Courses</CardTitle>
-                                <p className="text-xs text-slate-400 mt-0.5">{courses.length} subjects enrolled this term</p>
+                                <CardTitle className="text-base font-bold text-slate-900">{t('student.dashboard.myCourses')}</CardTitle>
+                                <p className="text-xs text-slate-400 mt-0.5">{t('student.dashboard.subjectsEnrolled', { count: formatNumber(courses.length, locale) })}</p>
                             </div>
                             <Button
                                 variant="ghost"
@@ -311,7 +316,7 @@ export default function StudentDashboard() {
                                 className="text-indigo-600 hover:bg-indigo-50 rounded-lg gap-1 text-xs font-bold"
                                 onClick={() => router.push('/student/courses')}
                             >
-                                See All <ArrowRight className="h-3.5 w-3.5" />
+                                {t('student.dashboard.seeAll')} <ArrowRight className="h-3.5 w-3.5" />
                             </Button>
                         </CardHeader>
                         <CardContent className="px-6 pb-6 space-y-3">
@@ -334,7 +339,7 @@ export default function StudentDashboard() {
                                             </div>
                                             <Progress value={progress} className="h-1.5 bg-slate-100" />
                                             <p className="text-[10px] text-slate-400 mt-1.5 font-medium">
-                                                {course.completed_lessons ?? 0}/{course.total_lessons ?? 0} lessons
+                                                {formatNumber(course.completed_lessons ?? 0, locale)}/{formatNumber(course.total_lessons ?? 0, locale)} lessons
                                                 {course.teacher_name && ` · ${course.teacher_name}`}
                                             </p>
                                         </div>
@@ -345,7 +350,7 @@ export default function StudentDashboard() {
                             {courses.length === 0 && (
                                 <div className="py-12 text-center border-2 border-dashed border-slate-200 rounded-xl">
                                     <BookOpen className="h-10 w-10 text-slate-200 mx-auto mb-3" />
-                                    <p className="text-slate-400 font-medium text-sm">No courses assigned yet.</p>
+                                    <p className="text-slate-400 font-medium text-sm">{t('student.dashboard.noCoursesAssigned')}</p>
                                 </div>
                             )}
                         </CardContent>
@@ -355,18 +360,18 @@ export default function StudentDashboard() {
                     <Card className="border-0 shadow-md overflow-hidden rounded-2xl bg-white">
                         <CardHeader className="px-6 pt-5 pb-2 border-b border-slate-50 flex flex-row items-center justify-between">
                             <div>
-                                <CardTitle className="text-base font-bold text-slate-900">Today&apos;s Schedule</CardTitle>
-                                <p className="text-xs text-slate-400 mt-0.5">{new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}</p>
+                                <CardTitle className="text-base font-bold text-slate-900">{t('student.dashboard.todaysSchedule')}</CardTitle>
+                                <p className="text-xs text-slate-400 mt-0.5">{formatDate(new Date(), locale)}</p>
                             </div>
                             <Button variant="ghost" size="sm" className="text-indigo-600 hover:bg-indigo-50 rounded-lg gap-1 text-xs font-bold" onClick={() => router.push('/student/timetable')}>
-                                Full Schedule <ArrowRight className="h-3.5 w-3.5" />
+                                {t('student.dashboard.fullSchedule')} <ArrowRight className="h-3.5 w-3.5" />
                             </Button>
                         </CardHeader>
                         <CardContent className="px-6 pb-6">
                             {todayTimetable.length === 0 ? (
                                 <div className="py-10 text-center border-2 border-dashed border-slate-200 rounded-xl">
                                     <Clock className="h-8 w-8 text-slate-200 mx-auto mb-2" />
-                                    <p className="text-slate-400 text-sm">No classes scheduled for today.</p>
+                                    <p className="text-slate-400 text-sm">{t('student.dashboard.noClassesToday')}</p>
                                 </div>
                             ) : (
                                 <div className="space-y-3">
@@ -422,7 +427,7 @@ export default function StudentDashboard() {
                                     <div className="h-8 w-8 rounded-lg bg-indigo-100 flex items-center justify-center">
                                         <Sparkles className="h-4 w-4 text-indigo-600" />
                                     </div>
-                                    <CardTitle className="text-base font-bold text-slate-900">AI Study Picks</CardTitle>
+                                    <CardTitle className="text-base font-bold text-slate-900">{t('student.dashboard.aiStudyPicks')}</CardTitle>
                                 </div>
                                 {recommendations?.learning_style_advice && (
                                     <div className="mt-3 p-3 bg-indigo-50 rounded-xl border border-indigo-100 flex gap-2">
@@ -463,11 +468,11 @@ export default function StudentDashboard() {
                                     <BrainCircuit className="h-6 w-6 text-white" />
                                 </div>
                                 <div>
-                                    <h3 className="font-bold text-base">Need Help?</h3>
-                                    <p className="text-indigo-200 text-xs mt-1">Your AI Tutor explains complex topics instantly.</p>
+                                    <h3 className="font-bold text-base">{t('student.dashboard.needHelp')}</h3>
+                                    <p className="text-indigo-200 text-xs mt-1">{t('student.dashboard.aiTutorTagline')}</p>
                                 </div>
                                 <Button className="w-full bg-white text-indigo-700 hover:bg-white/95 font-bold rounded-xl gap-2 shadow-md">
-                                    <PlayCircle className="h-4 w-4" /> Start Chat
+                                    <PlayCircle className="h-4 w-4" /> {t('student.dashboard.startChat')}
                                 </Button>
                             </div>
                         </div>
@@ -480,10 +485,10 @@ export default function StudentDashboard() {
                                 <div className="h-8 w-8 rounded-lg bg-amber-100 flex items-center justify-center">
                                     <Megaphone className="h-4 w-4 text-amber-600" />
                                 </div>
-                                <CardTitle className="text-base font-bold text-slate-900">Notice Board</CardTitle>
+                                <CardTitle className="text-base font-bold text-slate-900">{t('student.dashboard.noticeBoard')}</CardTitle>
                             </div>
                             <Button variant="ghost" size="sm" className="text-xs text-slate-400 hover:text-indigo-600 h-auto py-1 px-2" onClick={() => router.push('/student/notices')}>
-                                All <ArrowRight className="h-3 w-3 ml-1" />
+                                {t('student.dashboard.allNotices')} <ArrowRight className="h-3 w-3 ml-1" />
                             </Button>
                         </CardHeader>
                         <CardContent className="px-5 pb-5 space-y-3">
@@ -499,7 +504,7 @@ export default function StudentDashboard() {
                                     </div>
                                 );
                             }) : (
-                                <div className="py-6 text-center text-xs text-slate-400">No active notices.</div>
+                                <div className="py-6 text-center text-xs text-slate-400">{t('student.dashboard.noActiveNotices')}</div>
                             )}
                         </CardContent>
                     </Card>
