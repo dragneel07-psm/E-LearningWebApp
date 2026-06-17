@@ -5,7 +5,7 @@
 import { cleanup } from '@testing-library/react';
 import { afterEach, beforeEach } from 'vitest';
 afterEach(cleanup);
-beforeEach(() => localStorage.clear());
+beforeEach(() => { if (typeof localStorage !== 'undefined') localStorage.clear(); });
 
 if (typeof window !== 'undefined') {
     if (!window.ResizeObserver) {

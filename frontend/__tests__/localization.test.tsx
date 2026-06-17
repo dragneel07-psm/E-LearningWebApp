@@ -10,6 +10,7 @@ function Probe() {
       <span data-testid="title">{t('student.dashboard.title')}</span>
       <span data-testid="greet">{t('common.greeting', { name: 'Sita' })}</span>
       <span data-testid="missing">{t('student.dashboard.nope')}</span>
+      <span data-testid="enonly">{t('common.enOnly')}</span>
       <button onClick={() => setLocale('ne')}>ne</button>
     </div>
   );
@@ -36,5 +37,11 @@ describe('localization', () => {
     render(<LocalizationProvider><Probe /></LocalizationProvider>);
     act(() => { screen.getByText('ne').click(); });
     expect(screen.getByTestId('missing').textContent).toBe('student.dashboard.nope');
+  });
+
+  it('returns English value for en-only key when locale is ne', () => {
+    render(<LocalizationProvider><Probe /></LocalizationProvider>);
+    act(() => { screen.getByText('ne').click(); });
+    expect(screen.getByTestId('enonly').textContent).toBe('English Only');
   });
 });

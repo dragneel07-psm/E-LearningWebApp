@@ -5,7 +5,8 @@
     "cancel": "Cancel",
     "viewAll": "View All",
     "loading": "Loading...",
-    "greeting": "Welcome, {name}"
+    "greeting": "Welcome, {name}",
+    "enOnly": "English Only"
   },
   "student": { "dashboard": { "title": "Dashboard", "feeCollection": "Fee Collection", "recentActivity": "Recent Activity" } },
   "parent": { "dashboard": { "title": "Dashboard" } }
