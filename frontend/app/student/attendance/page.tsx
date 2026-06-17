@@ -10,11 +10,14 @@ import { Calendar } from '@/components/ui/calendar';
 import { CheckCircle2, XCircle, Clock, Loader2, TrendingUp, CalendarDays } from 'lucide-react';
 import { academicAPI, Attendance } from '@/lib/api';
 import { toast } from 'sonner';
+import { useTranslation } from '@/lib/localization';
+import { formatNumber, formatDate } from '@/lib/i18n/format';
 
 export default function AttendancePage() {
     const [date, setDate] = useState<Date | undefined>(new Date());
     const [attendanceData, setAttendanceData] = useState<Attendance[]>([]);
     const [loading, setLoading] = useState(true);
+    const { t, locale } = useTranslation();
 
     useEffect(() => {
         (async () => {
@@ -23,12 +26,12 @@ export default function AttendancePage() {
                 const data = await academicAPI.getMyAttendance();
                 setAttendanceData(data);
             } catch {
-                toast.error('Failed to load attendance records.');
+                toast.error(t('student.attendance.errorLoad'));
             } finally {
                 setLoading(false);
             }
         })();
-    }, []);
+    }, [t]);
 
     const total = attendanceData.length;
     const present = attendanceData.filter((a) => a.status === 'present').length;
@@ -48,7 +51,7 @@ export default function AttendancePage() {
     if (loading) return (
         <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
             <Loader2 className="h-10 w-10 animate-spin text-indigo-500" />
-            <p className="text-slate-400 text-sm">Loading attendance…</p>
+            <p className="text-slate-400 text-sm">{t('student.attendance.loading')}</p>
         </div>
     );
 
@@ -59,10 +62,10 @@ export default function AttendancePage() {
             <div>
                 <div className="flex items-center gap-2 text-indigo-600 font-bold mb-1">
                     <CalendarDays className="h-4 w-4" />
-                    <span className="text-[10px] uppercase tracking-[0.2em]">Attendance Record</span>
+                    <span className="text-[10px] uppercase tracking-[0.2em]">{t('student.attendance.record')}</span>
                 </div>
-                <h1 className="text-3xl font-black text-slate-900 tracking-tight">Attendance</h1>
-                <p className="text-slate-500 mt-1 text-sm">Track your class attendance and punctuality.</p>
+                <h1 className="text-3xl font-black text-slate-900 tracking-tight">{t('student.attendance.pageTitle')}</h1>
+                <p className="text-slate-500 mt-1 text-sm">{t('student.attendance.subtitle')}</p>
             </div>
 
             {/* Stats Row */}
@@ -85,13 +88,13 @@ export default function AttendancePage() {
                                 />
                             </svg>
                             <div className="absolute inset-0 flex flex-col items-center justify-center">
-                                <span className="text-2xl font-black text-slate-900">{percentage}%</span>
-                                <span className="text-[10px] text-slate-400 font-bold">Overall</span>
+                                <span className="text-2xl font-black text-slate-900">{formatNumber(percentage, locale)}%</span>
+                                <span className="text-[10px] text-slate-400 font-bold">{t('student.attendance.overall')}</span>
                             </div>
                         </div>
-                        <p className="text-sm font-bold text-slate-700">Attendance Rate</p>
+                        <p className="text-sm font-bold text-slate-700">{t('student.attendance.attendanceRate')}</p>
                         <Badge className={`${percentage >= 75 ? 'bg-emerald-100 text-emerald-700' : percentage >= 50 ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700'} border-0 font-bold`}>
-                            {percentage >= 75 ? 'Good Standing' : percentage >= 50 ? 'Needs Improvement' : 'Critical'}
+                            {percentage >= 75 ? t('student.attendance.goodStanding') : percentage >= 50 ? t('student.attendance.needsImprovement') : t('student.attendance.critical')}
                         </Badge>
                     </CardContent>
                 </Card>
@@ -99,12 +102,12 @@ export default function AttendancePage() {
                 {/* Stat Cards */}
                 <div className="md:col-span-3 grid grid-cols-2 md:grid-cols-4 gap-4">
                     {[
-                        { label: 'Present', value: present, icon: CheckCircle2, bg: 'from-emerald-50 to-teal-50', icon_bg: 'bg-emerald-100', icon_color: 'text-emerald-600', text: 'text-emerald-700' },
-                        { label: 'Absent', value: absent, icon: XCircle, bg: 'from-red-50 to-rose-50', icon_bg: 'bg-red-100', icon_color: 'text-red-600', text: 'text-red-700' },
-                        { label: 'Late', value: late, icon: Clock, bg: 'from-orange-50 to-amber-50', icon_bg: 'bg-orange-100', icon_color: 'text-orange-600', text: 'text-orange-700' },
-                        { label: 'Excused', value: excused, icon: TrendingUp, bg: 'from-blue-50 to-indigo-50', icon_bg: 'bg-blue-100', icon_color: 'text-blue-600', text: 'text-blue-700' },
+                        { labelKey: 'student.attendance.statPresent' as const, value: present, icon: CheckCircle2, bg: 'from-emerald-50 to-teal-50', icon_bg: 'bg-emerald-100', icon_color: 'text-emerald-600', text: 'text-emerald-700' },
+                        { labelKey: 'student.attendance.statAbsent' as const, value: absent, icon: XCircle, bg: 'from-red-50 to-rose-50', icon_bg: 'bg-red-100', icon_color: 'text-red-600', text: 'text-red-700' },
+                        { labelKey: 'student.attendance.statLate' as const, value: late, icon: Clock, bg: 'from-orange-50 to-amber-50', icon_bg: 'bg-orange-100', icon_color: 'text-orange-600', text: 'text-orange-700' },
+                        { labelKey: 'student.attendance.statExcused' as const, value: excused, icon: TrendingUp, bg: 'from-blue-50 to-indigo-50', icon_bg: 'bg-blue-100', icon_color: 'text-blue-600', text: 'text-blue-700' },
                     ].map((s) => (
-                        <Card key={s.label} className="border-0 shadow-md rounded-2xl overflow-hidden">
+                        <Card key={s.labelKey} className="border-0 shadow-md rounded-2xl overflow-hidden">
                             <CardContent className="p-5 relative">
                                 <div className={`absolute inset-0 bg-gradient-to-br ${s.bg}`} />
                                 <div className="relative flex flex-col gap-3">
@@ -112,8 +115,8 @@ export default function AttendancePage() {
                                         <s.icon className={`h-5 w-5 ${s.icon_color}`} />
                                     </div>
                                     <div>
-                                        <p className={`text-3xl font-black ${s.text}`}>{s.value}</p>
-                                        <p className={`text-xs font-bold ${s.text} opacity-70 uppercase tracking-wider mt-0.5`}>{s.label}</p>
+                                        <p className={`text-3xl font-black ${s.text}`}>{formatNumber(s.value, locale)}</p>
+                                        <p className={`text-xs font-bold ${s.text} opacity-70 uppercase tracking-wider mt-0.5`}>{t(s.labelKey)}</p>
                                     </div>
                                 </div>
                             </CardContent>
@@ -127,16 +130,16 @@ export default function AttendancePage() {
                 {/* Calendar */}
                 <Card className="border-0 shadow-md rounded-2xl overflow-hidden lg:col-span-1">
                     <CardHeader className="px-6 pt-6 pb-4 border-b border-slate-50">
-                        <CardTitle className="text-base font-bold text-slate-900">Calendar View</CardTitle>
+                        <CardTitle className="text-base font-bold text-slate-900">{t('student.attendance.calendarView')}</CardTitle>
                         <div className="flex items-center gap-4 mt-2">
                             <span className="flex items-center gap-1.5 text-xs text-slate-500">
-                                <span className="h-2.5 w-2.5 rounded-full bg-emerald-500 inline-block" /> Present
+                                <span className="h-2.5 w-2.5 rounded-full bg-emerald-500 inline-block" /> {t('student.attendance.legendPresent')}
                             </span>
                             <span className="flex items-center gap-1.5 text-xs text-slate-500">
-                                <span className="h-2.5 w-2.5 rounded-full bg-red-500 inline-block" /> Absent
+                                <span className="h-2.5 w-2.5 rounded-full bg-red-500 inline-block" /> {t('student.attendance.legendAbsent')}
                             </span>
                             <span className="flex items-center gap-1.5 text-xs text-slate-500">
-                                <span className="h-2.5 w-2.5 rounded-full bg-orange-400 inline-block" /> Late
+                                <span className="h-2.5 w-2.5 rounded-full bg-orange-400 inline-block" /> {t('student.attendance.legendLate')}
                             </span>
                         </div>
                     </CardHeader>
@@ -164,10 +167,14 @@ export default function AttendancePage() {
                 <Card className="border-0 shadow-md rounded-2xl overflow-hidden lg:col-span-2">
                     <CardHeader className="px-6 pt-6 pb-4 border-b border-slate-50">
                         <CardTitle className="text-base font-bold text-slate-900">
-                            {date?.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+                            {date ? formatDate(date, locale) : ''}
                         </CardTitle>
                         <p className="text-xs text-slate-400 mt-1">
-                            {selectedRecords.length > 0 ? `${selectedRecords.length} record${selectedRecords.length > 1 ? 's' : ''}` : 'Click any date to view records'}
+                            {selectedRecords.length > 0
+                                ? (selectedRecords.length > 1
+                                    ? t('student.attendance.recordCountPlural', { count: formatNumber(selectedRecords.length, locale) })
+                                    : t('student.attendance.recordCount', { count: formatNumber(selectedRecords.length, locale) }))
+                                : t('student.attendance.clickToView')}
                         </p>
                     </CardHeader>
                     <CardContent className="p-6">
@@ -183,9 +190,9 @@ export default function AttendancePage() {
                                                 {record.subject_name ? record.subject_name.charAt(0).toUpperCase() : 'S'}
                                             </div>
                                             <div>
-                                                <h4 className="font-bold text-slate-900 text-sm">{record.subject_name || 'Subject'}</h4>
+                                                <h4 className="font-bold text-slate-900 text-sm">{record.subject_name || t('student.attendance.subject')}</h4>
                                                 {record.remarks && (
-                                                    <p className="text-xs text-slate-400 mt-0.5">Note: {record.remarks}</p>
+                                                    <p className="text-xs text-slate-400 mt-0.5">{t('student.attendance.note', { remarks: record.remarks })}</p>
                                                 )}
                                             </div>
                                         </div>
@@ -198,8 +205,8 @@ export default function AttendancePage() {
                                 <div className="h-16 w-16 bg-slate-100 rounded-2xl flex items-center justify-center mb-4">
                                     <CalendarDays className="h-8 w-8 text-slate-300" />
                                 </div>
-                                <p className="font-medium text-slate-500">No records for this date</p>
-                                <p className="text-xs text-slate-400 mt-1 max-w-xs">Select a highlighted date on the calendar to view attendance details.</p>
+                                <p className="font-medium text-slate-500">{t('student.attendance.noRecordsTitle')}</p>
+                                <p className="text-xs text-slate-400 mt-1 max-w-xs">{t('student.attendance.noRecordsHint')}</p>
                             </div>
                         )}
                     </CardContent>
