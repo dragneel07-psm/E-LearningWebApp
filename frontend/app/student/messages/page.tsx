@@ -33,6 +33,7 @@ import {
 } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
+import { useTranslation } from '@/lib/localization';
 
 export default function MessagingPage() {
     const [loading, setLoading] = useState(true);
@@ -50,6 +51,7 @@ export default function MessagingPage() {
     const [groupTitle, setGroupTitle] = useState('');
     const [selectedParticipants, setSelectedParticipants] = useState<string[]>([]);
     const [creatingGroup, setCreatingGroup] = useState(false);
+    const { t } = useTranslation();
 
     // For mobile responsiveness
     const [showSidebar, setShowSidebar] = useState(true);
@@ -195,7 +197,7 @@ export default function MessagingPage() {
 
     if (loading) return (
         <div className="flex items-center justify-center h-screen text-slate-400">
-            <Loader2 className="h-8 w-8 animate-spin mr-2" /> Loading Conversations...
+            <Loader2 className="h-8 w-8 animate-spin mr-2" /> {t('student.messages.loading')}
         </div>
     );
 
@@ -207,7 +209,7 @@ export default function MessagingPage() {
                 <div className="p-6 border-b border-slate-100">
                     <div className="flex items-center justify-between mb-4">
                         <h2 className="text-xl font-bold text-slate-900 flex items-center gap-2">
-                            <MessageSquare className="h-5 w-5 text-indigo-600" /> Messages
+                            <MessageSquare className="h-5 w-5 text-indigo-600" /> {t('student.messages.pageTitle')}
                         </h2>
 
                         <Dialog open={showGroupDialog} onOpenChange={setShowGroupDialog}>
@@ -218,23 +220,23 @@ export default function MessagingPage() {
                             </DialogTrigger>
                             <DialogContent className="sm:max-w-[425px]">
                                 <DialogHeader>
-                                    <DialogTitle>Create Group Chat</DialogTitle>
+                                    <DialogTitle>{t('student.messages.createGroup')}</DialogTitle>
                                     <DialogDescription>
-                                        Select participants and give your group a name.
+                                        {t('student.messages.createGroupDesc')}
                                     </DialogDescription>
                                 </DialogHeader>
                                 <div className="grid gap-4 py-4">
                                     <div className="grid gap-2">
-                                        <Label htmlFor="title">Group Name</Label>
+                                        <Label htmlFor="title">{t('student.messages.groupNameLabel')}</Label>
                                         <Input
                                             id="title"
-                                            placeholder="e.g. Science Project"
+                                            placeholder={t('student.messages.groupNamePlaceholder')}
                                             value={groupTitle}
                                             onChange={(e) => setGroupTitle(e.target.value)}
                                         />
                                     </div>
                                     <div className="grid gap-2">
-                                        <Label>Select Participants</Label>
+                                        <Label>{t('student.messages.selectParticipants')}</Label>
                                         <div className="max-h-[200px] overflow-y-auto border rounded-md p-2 space-y-2 bg-slate-50">
                                             {allUsers.map(user => (
                                                 <div key={user.user_id} className="flex items-center space-x-2 p-2 hover:bg-white rounded transition-colors">
@@ -262,7 +264,7 @@ export default function MessagingPage() {
                                         className="bg-indigo-600 hover:bg-indigo-700"
                                     >
                                         {creatingGroup ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <UsersIcon className="h-4 w-4 mr-2" />}
-                                        Create Group
+                                        {t('student.messages.createGroupButton')}
                                     </Button>
                                 </DialogFooter>
                             </DialogContent>
@@ -272,7 +274,7 @@ export default function MessagingPage() {
                     <div className="relative">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                         <Input
-                            placeholder="Search chats..."
+                            placeholder={t('student.messages.searchPlaceholder')}
                             className="pl-10 h-10 bg-white border-slate-200"
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
@@ -282,11 +284,11 @@ export default function MessagingPage() {
 
                 <div className="flex-1 overflow-y-auto">
                     {filteredConversations.length === 0 ? (
-                        <div className="p-8 text-center text-slate-400 text-sm">No conversations found.</div>
+                        <div className="p-8 text-center text-slate-400 text-sm">{t('student.messages.noConversations')}</div>
                     ) : (
                         filteredConversations.map(conv => {
                             const otherParticipant = conv.participants.find(p => p.user_details.id !== currentUser?.user_id);
-                            const name = conv.title || otherParticipant?.user_details.full_name || "Direct Message";
+                            const name = conv.title || otherParticipant?.user_details.full_name || t('student.messages.directMessage');
                             const isActive = activeConversation?.conversation_id === conv.conversation_id;
 
                             return (
@@ -318,7 +320,7 @@ export default function MessagingPage() {
                                                     {conv.type === 'group' && <span className="font-semibold">{conv.last_message.sender_details.full_name.split(' ')[0]}:</span>}
                                                     {conv.last_message.content}
                                                 </>
-                                            ) : "No messages yet"}
+                                            ) : t('student.messages.noMessagesYet')}
                                         </p>
                                     </div>
                                     {conv.unread_count > 0 && (
@@ -357,7 +359,7 @@ export default function MessagingPage() {
                                     <h3 className="font-bold text-slate-900">{activeConversation.title || "Chat"}</h3>
                                     <p className="text-[10px] text-emerald-500 font-bold flex items-center gap-1">
                                         <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                                        Online
+                                        {t('student.messages.online')}
                                     </p>
                                 </div>
                             </div>
@@ -402,7 +404,7 @@ export default function MessagingPage() {
                         <form onSubmit={handleSendMessage} className="p-6 border-t border-slate-100 space-y-4">
                             <div className="flex gap-4">
                                 <Input
-                                    placeholder={activeConversation.type === 'group' ? "Type message... (use @ai for bot)" : "Type your message..."}
+                                    placeholder={activeConversation.type === 'group' ? t('student.messages.typeMessageGroup') : t('student.messages.typeMessageDirect')}
                                     className="flex-1 h-12 bg-slate-50 border-none focus-visible:ring-indigo-500"
                                     value={newMessage}
                                     onChange={(e) => setNewMessage(e.target.value)}
@@ -426,7 +428,7 @@ export default function MessagingPage() {
                                         onClick={() => setNewMessage('@ai ' + newMessage)}
                                     >
                                         <BrainCircuit className="h-3 w-3" />
-                                        Ask AI about this
+                                        {t('student.messages.askAi')}
                                     </Button>
                                 </div>
                             )}
@@ -437,8 +439,8 @@ export default function MessagingPage() {
                         <div className="h-20 w-20 bg-indigo-50 rounded-full flex items-center justify-center mb-4">
                             <MessageSquare className="h-10 w-10 text-indigo-200" />
                         </div>
-                        <h3 className="text-xl font-bold text-slate-600 mb-2">Select a Conversation</h3>
-                        <p className="max-w-xs text-sm">Choose a chat from the sidebar to start messaging your teachers or parents.</p>
+                        <h3 className="text-xl font-bold text-slate-600 mb-2">{t('student.messages.selectConversationTitle')}</h3>
+                        <p className="max-w-xs text-sm">{t('student.messages.selectConversationDesc')}</p>
                     </div>
                 )}
             </div>

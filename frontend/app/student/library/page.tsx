@@ -16,6 +16,8 @@ import {
 import { libraryAPI, academicAPI, Book as BookType, BookIssue } from '@/lib/api';
 import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { useTranslation } from '@/lib/localization';
+import { formatDate } from '@/lib/i18n/format';
 
 export default function StudentLibraryPage() {
     const [loading, setLoading] = useState(true);
@@ -25,6 +27,7 @@ export default function StudentLibraryPage() {
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
     const [issuing, setIssuing] = useState<string | null>(null);
+    const { t, locale } = useTranslation();
 
     useEffect(() => {
         async function loadLibrary() {
@@ -83,23 +86,23 @@ export default function StudentLibraryPage() {
 
     const categories = Array.from(new Set(books.map(b => b.category)));
 
-    if (loading) return <div className="p-8 text-center text-slate-400">Loading library...</div>;
+    if (loading) return <div className="p-8 text-center text-slate-400">{t('student.library.loading')}</div>;
 
     return (
         <div className="space-y-8 animate-in fade-in duration-500">
             {/* Header */}
             <div>
                 <h1 className="text-3xl font-bold text-slate-900 flex items-center gap-3">
-                    <BookOpen className="h-8 w-8 text-indigo-600" /> Library
+                    <BookOpen className="h-8 w-8 text-indigo-600" /> {t('student.library.pageTitle')}
                 </h1>
-                <p className="text-slate-500">Browse, borrow, and read books from the school collection</p>
+                <p className="text-slate-500">{t('student.library.subtitle')}</p>
             </div>
 
             {/* My Books Section */}
             {myIssues.length > 0 && (
                 <div className="space-y-4">
                     <h2 className="text-lg font-semibold text-slate-800 flex items-center gap-2">
-                        <Book className="h-5 w-5 text-indigo-500" /> My Current Books
+                        <Book className="h-5 w-5 text-indigo-500" /> {t('student.library.myCurrentBooks')}
                     </h2>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                         {myIssues.map(issue => (
@@ -120,12 +123,12 @@ export default function StudentLibraryPage() {
                                     <div className="mt-4 flex items-center gap-4 text-xs text-slate-600">
                                         <div className="flex items-center gap-1">
                                             <Calendar className="h-3 w-3" />
-                                            Due: {new Date(issue.due_date).toLocaleDateString()}
+                                            {t('student.library.due', { date: formatDate(new Date(issue.due_date), locale) })}
                                         </div>
                                         {issue.status === 'overdue' && (
                                             <div className="flex items-center gap-1 text-red-600 font-bold">
                                                 <AlertCircle className="h-3 w-3" />
-                                                Late
+                                                {t('student.library.late')}
                                             </div>
                                         )}
                                     </div>
@@ -142,7 +145,7 @@ export default function StudentLibraryPage() {
                     <div className="relative flex-1 max-w-md">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                         <Input
-                            placeholder="Search by title, author..."
+                            placeholder={t('student.library.searchPlaceholder')}
                             className="pl-10"
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
@@ -154,7 +157,7 @@ export default function StudentLibraryPage() {
                             className="cursor-pointer whitespace-nowrap"
                             onClick={() => setSelectedCategory(null)}
                         >
-                            All Categories
+                            {t('student.library.allCategories')}
                         </Badge>
                         {categories.map(cat => (
                             <Badge
@@ -172,7 +175,7 @@ export default function StudentLibraryPage() {
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                     {filteredBooks.length === 0 ? (
                         <div className="col-span-full py-12 text-center text-slate-400">
-                            No books found matching your criteria.
+                            {t('student.library.noBooksFound')}
                         </div>
                     ) : (
                         filteredBooks.map(book => (
@@ -184,7 +187,7 @@ export default function StudentLibraryPage() {
                                     </div>
                                     {book.available_copies === 0 && (
                                         <div className="absolute inset-0 bg-black/50 flex items-center justify-center backdrop-blur-sm">
-                                            <Badge variant="destructive" className="text-xs">Out of Stock</Badge>
+                                            <Badge variant="destructive" className="text-xs">{t('student.library.outOfStock')}</Badge>
                                         </div>
                                     )}
                                     <div className="absolute top-2 right-2">
@@ -200,12 +203,12 @@ export default function StudentLibraryPage() {
                                 </CardContent>
                                 <CardFooter className="p-4 border-t border-slate-50 flex items-center justify-between">
                                     <div className="text-xs font-medium text-slate-500">
-                                        {book.available_copies} / {book.total_copies} available
+                                        {t('student.library.available', { available: String(book.available_copies), total: String(book.total_copies) })}
                                     </div>
 
                                     <Dialog>
                                         <DialogTrigger asChild>
-                                            <Button size="sm" variant="outline">Details</Button>
+                                            <Button size="sm" variant="outline">{t('student.library.detailsButton')}</Button>
                                         </DialogTrigger>
                                         <DialogContent>
                                             <DialogHeader>
@@ -213,24 +216,24 @@ export default function StudentLibraryPage() {
                                                 <DialogDescription>{book.author} • {book.published_year}</DialogDescription>
                                             </DialogHeader>
                                             <div className="space-y-4 py-4">
-                                                <p className="text-sm text-slate-600">{book.description || 'No description available.'}</p>
+                                                <p className="text-sm text-slate-600">{book.description || t('student.library.noDescription')}</p>
                                                 <div className="grid grid-cols-2 gap-4 text-sm">
                                                     <div>
-                                                        <span className="text-slate-500">Publisher:</span>
+                                                        <span className="text-slate-500">{t('student.library.labelPublisher')}</span>
                                                         <p className="font-medium">{book.publisher}</p>
                                                     </div>
                                                     <div>
-                                                        <span className="text-slate-500">ISBN:</span>
+                                                        <span className="text-slate-500">{t('student.library.labelIsbn')}</span>
                                                         <p className="font-medium font-mono text-xs">{book.isbn}</p>
                                                     </div>
                                                     <div>
-                                                        <span className="text-slate-500">Category:</span>
+                                                        <span className="text-slate-500">{t('student.library.labelCategory')}</span>
                                                         <p className="font-medium capitalize">{book.category}</p>
                                                     </div>
                                                     <div>
-                                                        <span className="text-slate-500">Availability:</span>
+                                                        <span className="text-slate-500">{t('student.library.labelAvailability')}</span>
                                                         <p className={`font-medium ${book.available_copies > 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                                            {book.available_copies} copies
+                                                            {t('student.library.copies', { count: String(book.available_copies) })}
                                                         </p>
                                                     </div>
                                                 </div>
@@ -241,7 +244,7 @@ export default function StudentLibraryPage() {
                                                     disabled={book.available_copies === 0 || issuing === book.book_id}
                                                     onClick={() => handleIssueBook(book.book_id)}
                                                 >
-                                                    {issuing === book.book_id ? 'Processing...' : book.available_copies === 0 ? 'Not Available' : 'Issue Book'}
+                                                    {issuing === book.book_id ? t('student.library.processing') : book.available_copies === 0 ? t('student.library.notAvailable') : t('student.library.issueBook')}
                                                 </Button>
                                             </DialogFooter>
                                         </DialogContent>

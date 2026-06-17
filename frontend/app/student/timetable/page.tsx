@@ -12,11 +12,13 @@ import { Download, Clock, MapPin, Loader2 } from 'lucide-react';
 import { academicAPI, Timetable } from '@/lib/api';
 import { jsPDF } from "jspdf";
 import autoTable from 'jspdf-autotable';
+import { useTranslation } from '@/lib/localization';
 
 export default function TimetablePage() {
     const weekDays = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
     const [timetable, setTimetable] = useState<Timetable[]>([]);
     const [loading, setLoading] = useState(true);
+    const { t } = useTranslation();
 
     useEffect(() => {
         loadTimetable();
@@ -42,19 +44,19 @@ export default function TimetablePage() {
 
     const handleDownloadPDF = () => {
         const doc = new jsPDF();
-        doc.text("Class Timetable", 14, 20);
+        doc.text(t('student.timetable.pdfTitle'), 14, 20);
 
-        const tableData = timetable.map(t => [
-            t.day_of_week,
-            `${t.start_time} - ${t.end_time}`,
-            t.subject_name,
-            t.entry_type === 'extra' ? 'Extra' : 'Main',
-            t.room_number || '-',
-            t.teacher_name || '-'
+        const tableData = timetable.map(slot => [
+            slot.day_of_week,
+            `${slot.start_time} - ${slot.end_time}`,
+            slot.subject_name,
+            slot.entry_type === 'extra' ? t('student.timetable.typeExtraPdf') : t('student.timetable.typeMain'),
+            slot.room_number || '-',
+            slot.teacher_name || '-'
         ]);
 
         autoTable(doc, {
-            head: [['Day', 'Time', 'Subject', 'Type', 'Room', 'Teacher']],
+            head: [[t('student.timetable.colDay'), t('student.timetable.colTime'), t('student.timetable.colSubject'), t('student.timetable.colType'), t('student.timetable.colRoom'), t('student.timetable.colTeacher')]],
             body: tableData,
             startY: 30,
         });
@@ -68,11 +70,11 @@ export default function TimetablePage() {
         <div className="p-6 max-w-7xl mx-auto space-y-6">
             <div className="flex justify-between items-center">
                 <div>
-                    <h1 className="text-3xl font-bold text-slate-800">Class Timetable</h1>
-                    <p className="text-slate-600">Weekly class schedule</p>
+                    <h1 className="text-3xl font-bold text-slate-800">{t('student.timetable.pageTitle')}</h1>
+                    <p className="text-slate-600">{t('student.timetable.subtitle')}</p>
                 </div>
                 <Button className="gap-2 bg-indigo-600 hover:bg-indigo-700" onClick={handleDownloadPDF} disabled={timetable.length === 0}>
-                    <Download className="h-4 w-4" /> Download PDF
+                    <Download className="h-4 w-4" /> {t('student.timetable.downloadPdf')}
                 </Button>
             </div>
 
@@ -107,7 +109,7 @@ export default function TimetablePage() {
                                                             <div className="flex items-center gap-2">
                                                                 <h3 className="font-bold text-lg text-indigo-900 group-hover:text-indigo-600 transition-colors">{slot.subject_name}</h3>
                                                                 <Badge variant={slot.entry_type === 'extra' ? 'secondary' : 'outline'}>
-                                                                    {slot.entry_type === 'extra' ? 'Extra Class' : 'Main'}
+                                                                    {slot.entry_type === 'extra' ? t('student.timetable.typeExtra') : t('student.timetable.typeMain')}
                                                                 </Badge>
                                                             </div>
                                                             <div className="flex items-center gap-4 mt-2 text-sm text-slate-600">
@@ -118,7 +120,7 @@ export default function TimetablePage() {
                                                                 {slot.room_number && (
                                                                     <div className="flex items-center gap-1">
                                                                         <MapPin className="h-4 w-4 text-indigo-400" />
-                                                                        Room {slot.room_number}
+                                                                        {t('student.timetable.room', { number: slot.room_number })}
                                                                     </div>
                                                                 )}
                                                             </div>
@@ -138,7 +140,7 @@ export default function TimetablePage() {
                                     </div>
                                 ) : (
                                     <div className="text-center py-12 text-slate-400 italic">
-                                        No classes scheduled for {day}.
+                                        {t('student.timetable.noClasses', { day })}
                                     </div>
                                 )}
                             </TabsContent>
