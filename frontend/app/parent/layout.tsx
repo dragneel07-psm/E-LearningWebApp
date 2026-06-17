@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { removeTokens } from '@/lib/auth';
 import { usersAPI, User as UserType } from '@/lib/api';
+import { LanguageSelector } from '@/components/LanguageSelector';
 
 const NAV = [
     { href: '/parent', label: 'Overview', icon: LayoutDashboard, exact: true },
@@ -103,7 +104,8 @@ export default function ParentLayout({ children }: { children: ReactNode }) {
                     </div>
                     <span className="font-black text-slate-900 text-sm">Parent Portal</span>
                 </div>
-                <div className="flex gap-1 overflow-x-auto">
+                <div className="flex items-center gap-1 overflow-x-auto">
+                    <LanguageSelector />
                     {NAV.slice(0, 5).map(({ href, icon: Icon, exact }) => {
                         const active = exact ? pathname === href : pathname.startsWith(href);
                         return (
@@ -115,8 +117,13 @@ export default function ParentLayout({ children }: { children: ReactNode }) {
                 </div>
             </div>
 
+            {/* Desktop header */}
+            <header className="hidden md:flex fixed top-0 left-60 right-0 z-20 h-14 bg-white border-b border-slate-100 items-center justify-end px-6 gap-2">
+                <LanguageSelector />
+            </header>
+
             {/* Main content */}
-            <main className="flex-1 md:ml-60 pt-16 md:pt-0 min-h-screen">
+            <main className="flex-1 md:ml-60 pt-16 md:pt-14 min-h-screen">
                 {children}
             </main>
         </div>
