@@ -390,6 +390,42 @@
       "emptySubmitted": "Nothing submitted yet. Start with your pending work!",
       "emptyGraded": "No graded assignments yet. Submit work and check back soon."
     },
+    "classes": {
+      "pageTitle": "My Classes",
+      "subtitle": "View all your enrolled courses and track your progress",
+      "statTotalCourses": "Total Courses",
+      "statAvgProgress": "Average Progress",
+      "statActiveThisWeek": "Active This Week",
+      "loading": "Loading classes…",
+      "noClassesTitle": "No Classes Found",
+      "noClassesHint": "You don't seem to be enrolled in any classes yet.",
+      "badgeActive": "Active",
+      "labelInstructor": "Instructor",
+      "labelAssignedTeacher": "Assigned Teacher",
+      "labelCourseProgress": "Course Progress",
+      "labelScheduleUnavailable": "Schedule unavailable",
+      "labelNoSchedule": "No schedule assigned yet",
+      "btnViewMaterials": "View Materials",
+      "btnAssignments": "Assignments",
+      "errorLoad": "Failed to load classes."
+    },
+    "resources": {
+      "back": "Back",
+      "govtPortalTitle": "Govt. Learning Portal",
+      "gradeResources": "Grade {grade} Resources",
+      "subtitle": "Official open-source learning materials from the Center for Education and Human Resource Development (CEHRD). Select a subject to access video lessons and textbooks.",
+      "cehrdModule": "CEHRD Module",
+      "openMaterial": "Open Official Material",
+      "fullCurriculumLabel": "Full Grade {grade} Curriculum",
+      "whyGovtTitle": "Why use the Government Portal?",
+      "whyGovtDesc": "These materials are aligned with the national curriculum and include official video lectures, digital textbooks, and interactive exercises directly from the Ministry of Education.",
+      "visitMainSite": "Visit Main Website",
+      "loading": "Loading resources…"
+    },
+    "profile": {
+      "pageTitle": "Your Profile",
+      "subtitle": "Manage your account settings and academic data"
+    },
     "quizzes": {
       "errorLoad": "Failed to load quizzes",
       "pageTitle": "Quizzes",
