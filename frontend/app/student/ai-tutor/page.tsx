@@ -17,6 +17,7 @@ import ReactMarkdown from 'react-markdown';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { useTutorWebSocket, TutorDonePayload } from '@/hooks/useTutorWebSocket';
+import { useTranslation } from '@/lib/localization';
 
 interface Message {
     role: 'user' | 'assistant';
@@ -29,6 +30,7 @@ interface Message {
 }
 
 export default function AITutorPage() {
+    const { t } = useTranslation();
     const [messages, setMessages] = useState<Message[]>([]);
     const [input, setInput] = useState('');
     const [conversationId, setConversationId] = useState<string | null>(null);
@@ -110,14 +112,14 @@ export default function AITutorPage() {
                     }
                     if (payload.budget && payload.budget.daily_limit > 0) {
                         const pct = Math.round((payload.budget.used_today / payload.budget.daily_limit) * 100);
-                        if (pct >= 90) toast.warning(`AI budget at ${pct}% — resets at midnight UTC.`);
+                        if (pct >= 90) toast.warning(t('student.aiTutor.budgetWarning', { pct: String(pct) }));
                     }
                 },
                 onError: (detail: string) => {
-                    toast.error(detail || 'Failed to get AI response');
+                    toast.error(detail || t('student.aiTutor.errorResponse'));
                     const failureReply: Message = {
                         role: 'assistant',
-                        content: 'I could not process that right now. Please try again in a moment.',
+                        content: t('student.aiTutor.failureReply'),
                     };
                     const updated = [...newMessages, failureReply];
                     setMessages(updated);
@@ -128,11 +130,11 @@ export default function AITutorPage() {
     };
 
     const handleClearConversation = () => {
-        if (confirm('Are you sure you want to clear the conversation?')) {
+        if (confirm(t('student.aiTutor.clearConfirm'))) {
             setMessages([]);
             setConversationId(null);
             localStorage.removeItem('ai-tutor-conversation');
-            toast.success('Conversation cleared');
+            toast.success(t('student.aiTutor.clearedSuccess'));
         }
     };
 
@@ -157,19 +159,19 @@ export default function AITutorPage() {
                     <div>
                         <h1 className="text-3xl font-bold tracking-tight flex items-center gap-2">
                             <Sparkles className="h-8 w-8 text-indigo-600" />
-                            AI Tutor
+                            {t('student.aiTutor.pageTitle')}
                         </h1>
-                        <p className="text-muted-foreground">Your personal learning assistant</p>
+                        <p className="text-muted-foreground">{t('student.aiTutor.tagline')}</p>
                     </div>
                     <div className="flex items-center gap-2">
                         {/* WebSocket status indicator */}
                         <div className="flex items-center gap-1 text-xs text-muted-foreground">
                             {status === 'open' ? (
-                                <><Wifi className="h-3 w-3 text-green-500" /><span className="hidden sm:inline">Live</span></>
+                                <><Wifi className="h-3 w-3 text-green-500" /><span className="hidden sm:inline">{t('student.aiTutor.statusLive')}</span></>
                             ) : status === 'connecting' ? (
-                                <><Loader2 className="h-3 w-3 animate-spin text-yellow-500" /><span className="hidden sm:inline">Connecting</span></>
+                                <><Loader2 className="h-3 w-3 animate-spin text-yellow-500" /><span className="hidden sm:inline">{t('student.aiTutor.statusConnecting')}</span></>
                             ) : (
-                                <><WifiOff className="h-3 w-3 text-slate-400" /><span className="hidden sm:inline">Offline</span></>
+                                <><WifiOff className="h-3 w-3 text-slate-400" /><span className="hidden sm:inline">{t('student.aiTutor.statusOffline')}</span></>
                             )}
                         </div>
                         {messages.length > 0 && (
@@ -180,7 +182,7 @@ export default function AITutorPage() {
                                 className="gap-2"
                             >
                                 <Trash2 className="h-4 w-4" />
-                                Clear Chat
+                                {t('student.aiTutor.clearChat')}
                             </Button>
                         )}
                     </div>
@@ -192,8 +194,8 @@ export default function AITutorPage() {
                 <div className="mb-3 flex items-start gap-2 rounded-lg border border-orange-200 bg-orange-50 px-4 py-3 text-sm text-orange-800">
                     <AlertTriangle className="h-4 w-4 mt-0.5 flex-shrink-0" />
                     <div>
-                        <span className="font-medium">Daily AI limit reached.</span>{' '}
-                        {budgetError.detail} Resets at {new Date(budgetError.resets_at).toLocaleTimeString()}.
+                        <span className="font-medium">{t('student.aiTutor.budgetTitle')}</span>{' '}
+                        {budgetError.detail} {t('student.aiTutor.budgetResetsAt', { time: new Date(budgetError.resets_at).toLocaleTimeString() })}
                     </div>
                 </div>
             )}
@@ -204,9 +206,9 @@ export default function AITutorPage() {
                     {messages.length === 0 && !isStreaming ? (
                         <div className="flex flex-col items-center justify-center h-full text-center">
                             <Sparkles className="h-16 w-16 text-indigo-600 mb-4 opacity-20" />
-                            <h3 className="text-lg font-semibold mb-2">Start a conversation</h3>
+                            <h3 className="text-lg font-semibold mb-2">{t('student.aiTutor.emptyTitle')}</h3>
                             <p className="text-muted-foreground mb-6 max-w-md">
-                                Ask me anything about your studies. I&apos;m here to help you learn!
+                                {t('student.aiTutor.emptyHint')}
                             </p>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-2 max-w-2xl">
                                 {exampleQuestions.map((question, index) => (
@@ -264,7 +266,7 @@ export default function AITutorPage() {
                                                 {message.confidence_label && (
                                                     <div className="mt-2 flex items-center gap-2">
                                                         <Badge variant={confidenceBadgeVariant(message.confidence_label)} className="text-[10px]">
-                                                            {message.confidence_label} confidence
+                                                            {message.confidence_label} {t('student.aiTutor.confidenceSuffix')}
                                                             {message.confidence !== undefined && ` (${Math.round(message.confidence * 100)}%)`}
                                                         </Badge>
                                                     </div>
@@ -273,7 +275,7 @@ export default function AITutorPage() {
                                                 {/* Sources */}
                                                 {Array.isArray(message.sources) && message.sources.length > 0 && (
                                                     <div className="mt-3 border-t border-slate-200 pt-2">
-                                                        <p className="text-[11px] font-semibold text-slate-600 mb-2">Sources</p>
+                                                        <p className="text-[11px] font-semibold text-slate-600 mb-2">{t('student.aiTutor.sourcesLabel')}</p>
                                                         <div className="space-y-2">
                                                             {message.sources.map((source, sourceIndex) => (
                                                                 <div key={`${source.source_type}-${source.source_id}-${sourceIndex}`} className="rounded border border-slate-200 bg-white px-2 py-1">
@@ -319,7 +321,7 @@ export default function AITutorPage() {
                                 <div className="flex justify-start">
                                     <div className="bg-slate-100 rounded-lg p-4 flex items-center gap-2">
                                         <Loader2 className="h-4 w-4 animate-spin" />
-                                        <span className="text-sm text-muted-foreground">Thinking...</span>
+                                        <span className="text-sm text-muted-foreground">{t('student.aiTutor.thinking')}</span>
                                     </div>
                                 </div>
                             )}
@@ -331,7 +333,7 @@ export default function AITutorPage() {
                 <div className="border-t p-4">
                     <div className="flex gap-2">
                         <Input
-                            placeholder="Ask me anything..."
+                            placeholder={t('student.aiTutor.inputPlaceholder')}
                             value={input}
                             onChange={(e) => setInput(e.target.value)}
                             onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && handleSend()}
