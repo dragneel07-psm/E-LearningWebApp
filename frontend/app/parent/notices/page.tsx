@@ -8,6 +8,8 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { academicAPI, Notice } from '@/lib/api';
 import { BookOpen, Loader2 } from 'lucide-react';
+import { useTranslation } from '@/lib/localization';
+import { formatDate } from '@/lib/i18n/format';
 
 const PRIORITY_COLOR: Record<string, string> = {
     high: 'bg-red-100 text-red-700 border-red-200',
@@ -19,6 +21,7 @@ const PRIORITY_COLOR: Record<string, string> = {
 export default function ParentNoticesPage() {
     const [notices, setNotices] = useState<Notice[]>([]);
     const [loading, setLoading] = useState(true);
+    const { t, locale } = useTranslation();
 
     useEffect(() => {
         academicAPI.getNotices()
@@ -43,8 +46,8 @@ export default function ParentNoticesPage() {
     return (
         <div className="p-6 md:p-8 space-y-6 max-w-3xl">
             <div>
-                <h1 className="text-2xl font-black text-slate-900">School Notices</h1>
-                <p className="text-slate-500 text-sm">Announcements and important updates from school.</p>
+                <h1 className="text-2xl font-black text-slate-900">{t('parent.notices.pageTitle')}</h1>
+                <p className="text-slate-500 text-sm">{t('parent.notices.subtitle')}</p>
             </div>
 
             {loading ? (
@@ -53,7 +56,7 @@ export default function ParentNoticesPage() {
                 <Card className="border-dashed border-2 border-slate-200">
                     <CardContent className="py-16 text-center">
                         <BookOpen className="h-8 w-8 text-slate-200 mx-auto mb-3" />
-                        <p className="text-slate-400 font-medium">No notices yet.</p>
+                        <p className="text-slate-400 font-medium">{t('parent.notices.empty')}</p>
                     </CardContent>
                 </Card>
             ) : (
@@ -70,7 +73,7 @@ export default function ParentNoticesPage() {
                                         <div className="flex items-center gap-2 flex-wrap mb-1">
                                             <h3 className="font-bold text-slate-900 text-sm">{notice.title}</h3>
                                             {!notice.is_read && (
-                                                <Badge className="bg-violet-500 text-white border-0 text-[9px] font-bold px-1.5 py-0">UNREAD</Badge>
+                                                <Badge className="bg-violet-500 text-white border-0 text-[9px] font-bold px-1.5 py-0">{t('parent.notices.badgeUnread')}</Badge>
                                             )}
                                             {notice.priority && (
                                                 <Badge className={`text-[10px] font-bold px-2 py-0.5 ${PRIORITY_COLOR[notice.priority] ?? PRIORITY_COLOR.normal}`}>
@@ -81,7 +84,7 @@ export default function ParentNoticesPage() {
                                         <p className="text-xs text-slate-500 leading-relaxed">{notice.content}</p>
                                     </div>
                                     <p className="text-[10px] text-slate-400 whitespace-nowrap flex-shrink-0">
-                                        {notice.published_date ? new Date(notice.published_date).toLocaleDateString() : ''}
+                                        {notice.published_date ? formatDate(new Date(notice.published_date), locale) : ''}
                                     </p>
                                 </div>
                             </CardContent>

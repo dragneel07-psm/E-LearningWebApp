@@ -843,6 +843,38 @@
     },
     "messages": {
       "emptyState": "शिक्षक वा विद्यालय कर्मचारीलाई सन्देश गर्न कुराकानी छान्नुहोस्।"
+    },
+    "notices": {
+      "pageTitle": "विद्यालय सूचनाहरू",
+      "subtitle": "विद्यालयका घोषणाहरू र महत्त्वपूर्ण अपडेटहरू।",
+      "empty": "अहिलेसम्म कुनै सूचना छैन।",
+      "badgeUnread": "नपढिएको"
+    },
+    "projects": {
+      "pageTitle": "बालबालिकाका परियोजनाहरू",
+      "subtitle": "तपाईंका बालबालिका भएका समूह र व्यक्तिगत परियोजनाहरूको पठन-मात्र दृश्य।",
+      "empty": "अहिले कुनै सक्रिय परियोजना छैन।",
+      "errorLoad": "परियोजनाहरू लोड गर्न असफल भयो।",
+      "mentor": "मार्गदर्शक",
+      "taskCount": "{count} कार्य",
+      "taskCountPlural": "{count} कार्यहरू",
+      "due": "म्याद",
+      "finalGrade": "अन्तिम ग्रेड",
+      "status_draft": "मस्यौदा",
+      "status_active": "सक्रिय",
+      "status_submitted": "पेश भयो",
+      "status_graded": "ग्रेड भयो",
+      "status_archived": "अभिलेखित"
+    },
+    "projectDetail": {
+      "notFound": "परियोजना फेला परेन।",
+      "goBack": "पछाडि जानुहोस्",
+      "progress": "प्रगति",
+      "tasks": "कार्यहरू",
+      "loadingTasks": "कार्यहरू लोड हुँदैछ…",
+      "activity": "गतिविधि",
+      "loadingActivity": "गतिविधि लोड हुँदैछ…",
+      "description": "विवरण"
     }
   }
 }

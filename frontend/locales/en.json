@@ -844,6 +844,38 @@
     },
     "messages": {
       "emptyState": "Choose a conversation to message teachers or school staff."
+    },
+    "notices": {
+      "pageTitle": "School Notices",
+      "subtitle": "Announcements and important updates from school.",
+      "empty": "No notices yet.",
+      "badgeUnread": "UNREAD"
+    },
+    "projects": {
+      "pageTitle": "Children's Projects",
+      "subtitle": "Read-only view of group + individual projects your children are part of.",
+      "empty": "No active projects right now.",
+      "errorLoad": "Failed to load projects.",
+      "mentor": "Mentor",
+      "taskCount": "{count} task",
+      "taskCountPlural": "{count} tasks",
+      "due": "Due",
+      "finalGrade": "Final grade",
+      "status_draft": "Draft",
+      "status_active": "Active",
+      "status_submitted": "Submitted",
+      "status_graded": "Graded",
+      "status_archived": "Archived"
+    },
+    "projectDetail": {
+      "notFound": "Project not found.",
+      "goBack": "Go back",
+      "progress": "Progress",
+      "tasks": "Tasks",
+      "loadingTasks": "Loading tasks…",
+      "activity": "Activity",
+      "loadingActivity": "Loading activity…",
+      "description": "Description"
     }
   }
 }
