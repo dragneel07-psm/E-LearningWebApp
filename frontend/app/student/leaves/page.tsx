@@ -25,6 +25,8 @@ import {
 } from 'lucide-react';
 import { studentLeaveAPI, academicAPI, StudentLeave } from '@/lib/api';
 import { toast } from 'sonner';
+import { useTranslation } from '@/lib/localization';
+import { formatDate, formatNumber } from '@/lib/i18n/format';
 
 type LeaveType = StudentLeave['leave_type'];
 
@@ -81,6 +83,7 @@ const EMPTY_FORM: ApplyForm = {
 };
 
 export default function StudentLeavesPage() {
+    const { t, locale } = useTranslation();
     const [leaves, setLeaves] = useState<StudentLeave[]>([]);
     const [loading, setLoading] = useState(true);
     const [studentId, setStudentId] = useState<string>('');
@@ -102,7 +105,7 @@ export default function StudentLeavesPage() {
             const data = await studentLeaveAPI.getLeaves();
             setLeaves(Array.isArray(data) ? data : []);
         } catch {
-            toast.error('Failed to load leave data');
+            toast.error(t('student.leaves.errorLoad'));
             setLeaves([]);
         } finally {
             setLoading(false);
@@ -111,15 +114,15 @@ export default function StudentLeavesPage() {
 
     const handleApply = async () => {
         if (!form.start_date || !form.end_date || !form.reason.trim()) {
-            toast.error('Please fill in all required fields');
+            toast.error(t('student.leaves.errorRequiredFields'));
             return;
         }
         if (new Date(form.end_date) < new Date(form.start_date)) {
-            toast.error('End date must be on or after start date');
+            toast.error(t('student.leaves.errorEndDate'));
             return;
         }
         if (!studentId) {
-            toast.error('Student profile not loaded');
+            toast.error(t('student.leaves.errorProfileNotLoaded'));
             return;
         }
         setSubmitting(true);
@@ -134,12 +137,12 @@ export default function StudentLeavesPage() {
                     ? { supporting_document_url: form.supporting_document_url.trim() }
                     : {}),
             });
-            toast.success('Leave application submitted successfully');
+            toast.success(t('student.leaves.successSubmitted'));
             setApplyDialogOpen(false);
             setForm(EMPTY_FORM);
             loadData();
         } catch {
-            toast.error('Failed to submit leave application');
+            toast.error(t('student.leaves.errorSubmit'));
         } finally {
             setSubmitting(false);
         }
@@ -149,10 +152,10 @@ export default function StudentLeavesPage() {
         setCancellingId(leaveId);
         try {
             await studentLeaveAPI.cancelLeave(leaveId);
-            toast.success('Leave request cancelled');
+            toast.success(t('student.leaves.successCancelled'));
             loadData();
         } catch {
-            toast.error('Failed to cancel leave request');
+            toast.error(t('student.leaves.errorCancel'));
         } finally {
             setCancellingId(null);
         }
@@ -179,16 +182,16 @@ export default function StudentLeavesPage() {
                 <div>
                     <h1 className="text-3xl font-bold tracking-tight flex items-center gap-2">
                         <CalendarClock className="h-8 w-8 text-teal-600" />
-                        My Leaves
+                        {t('student.leaves.pageTitle')}
                     </h1>
-                    <p className="text-muted-foreground mt-1">Apply for leave and track your applications</p>
+                    <p className="text-muted-foreground mt-1">{t('student.leaves.subtitle')}</p>
                 </div>
                 <Button
                     onClick={() => { setForm(EMPTY_FORM); setApplyDialogOpen(true); }}
                     className="bg-teal-600 hover:bg-teal-700 text-white gap-2 shadow-md"
                 >
                     <PlusCircle className="h-4 w-4" />
-                    Apply for Leave
+                    {t('student.leaves.applyButton')}
                 </Button>
             </div>
 
@@ -196,9 +199,9 @@ export default function StudentLeavesPage() {
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <Card className="border-0 shadow-sm bg-teal-600 text-white">
                     <CardContent className="p-5">
-                        <p className="text-teal-100 text-sm font-medium">Total Applied</p>
+                        <p className="text-teal-100 text-sm font-medium">{t('student.leaves.statTotal')}</p>
                         <div className="flex items-center justify-between mt-2">
-                            <span className="text-3xl font-bold">{totalLeaves}</span>
+                            <span className="text-3xl font-bold">{formatNumber(totalLeaves, locale)}</span>
                             <CalendarDays className="h-7 w-7 opacity-40" />
                         </div>
                     </CardContent>
@@ -206,9 +209,9 @@ export default function StudentLeavesPage() {
 
                 <Card className="border-0 shadow-sm bg-amber-500 text-white">
                     <CardContent className="p-5">
-                        <p className="text-amber-50 text-sm font-medium">Pending</p>
+                        <p className="text-amber-50 text-sm font-medium">{t('student.leaves.statPending')}</p>
                         <div className="flex items-center justify-between mt-2">
-                            <span className="text-3xl font-bold">{pendingLeaves}</span>
+                            <span className="text-3xl font-bold">{formatNumber(pendingLeaves, locale)}</span>
                             <Clock className="h-7 w-7 opacity-40" />
                         </div>
                     </CardContent>
@@ -216,9 +219,9 @@ export default function StudentLeavesPage() {
 
                 <Card className="border-0 shadow-sm bg-green-600 text-white">
                     <CardContent className="p-5">
-                        <p className="text-green-50 text-sm font-medium">Approved</p>
+                        <p className="text-green-50 text-sm font-medium">{t('student.leaves.statApproved')}</p>
                         <div className="flex items-center justify-between mt-2">
-                            <span className="text-3xl font-bold">{approvedLeaves}</span>
+                            <span className="text-3xl font-bold">{formatNumber(approvedLeaves, locale)}</span>
                             <CheckCircle2 className="h-7 w-7 opacity-40" />
                         </div>
                     </CardContent>
@@ -226,9 +229,9 @@ export default function StudentLeavesPage() {
 
                 <Card className="border-0 shadow-sm bg-red-500 text-white">
                     <CardContent className="p-5">
-                        <p className="text-red-50 text-sm font-medium">Rejected</p>
+                        <p className="text-red-50 text-sm font-medium">{t('student.leaves.statRejected')}</p>
                         <div className="flex items-center justify-between mt-2">
-                            <span className="text-3xl font-bold">{rejectedLeaves}</span>
+                            <span className="text-3xl font-bold">{formatNumber(rejectedLeaves, locale)}</span>
                             <XCircle className="h-7 w-7 opacity-40" />
                         </div>
                     </CardContent>
@@ -238,21 +241,21 @@ export default function StudentLeavesPage() {
             {/* Leave History */}
             <Card className="border-0 shadow-sm overflow-hidden">
                 <CardHeader className="bg-slate-50 border-b">
-                    <CardTitle className="text-lg">Leave History</CardTitle>
+                    <CardTitle className="text-lg">{t('student.leaves.leaveHistory')}</CardTitle>
                 </CardHeader>
                 <CardContent className="p-0">
                     <div className="overflow-x-auto">
                         <table className="w-full text-left">
                             <thead className="bg-slate-50 text-slate-500 text-xs font-semibold uppercase tracking-wider border-b">
                                 <tr>
-                                    <th className="px-6 py-4">Type</th>
-                                    <th className="px-6 py-4">Date Range</th>
-                                    <th className="px-6 py-4">Days</th>
-                                    <th className="px-6 py-4">Reason</th>
-                                    <th className="px-6 py-4">Status</th>
-                                    <th className="px-6 py-4">Reviewed By</th>
-                                    <th className="px-6 py-4">Remarks</th>
-                                    <th className="px-6 py-4">Action</th>
+                                    <th className="px-6 py-4">{t('student.leaves.colType')}</th>
+                                    <th className="px-6 py-4">{t('student.leaves.colDateRange')}</th>
+                                    <th className="px-6 py-4">{t('student.leaves.colDays')}</th>
+                                    <th className="px-6 py-4">{t('student.leaves.colReason')}</th>
+                                    <th className="px-6 py-4">{t('student.leaves.colStatus')}</th>
+                                    <th className="px-6 py-4">{t('student.leaves.colReviewedBy')}</th>
+                                    <th className="px-6 py-4">{t('student.leaves.colRemarks')}</th>
+                                    <th className="px-6 py-4">{t('student.leaves.colAction')}</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-100 bg-white">
@@ -264,7 +267,7 @@ export default function StudentLeavesPage() {
                                             </span>
                                         </td>
                                         <td className="px-6 py-4 text-sm text-slate-600 whitespace-nowrap">
-                                            {new Date(leave.start_date).toLocaleDateString()} &rarr; {new Date(leave.end_date).toLocaleDateString()}
+                                            {formatDate(new Date(leave.start_date), locale)} &rarr; {formatDate(new Date(leave.end_date), locale)}
                                         </td>
                                         <td className="px-6 py-4 text-sm font-semibold text-slate-800">
                                             {leave.total_days}
@@ -312,7 +315,7 @@ export default function StudentLeavesPage() {
                                                     {cancellingId === leave.leave_id
                                                         ? <Loader2 className="h-3 w-3 animate-spin" />
                                                         : <Ban className="h-3 w-3" />}
-                                                    Cancel
+                                                    {t('student.leaves.cancelButton')}
                                                 </Button>
                                             )}
                                         </td>
@@ -323,8 +326,8 @@ export default function StudentLeavesPage() {
                                         <td colSpan={8} className="px-6 py-16 text-center">
                                             <div className="flex flex-col items-center gap-3 text-slate-400">
                                                 <CalendarClock className="h-10 w-10 opacity-40" />
-                                                <p className="font-medium">No leave applications yet</p>
-                                                <p className="text-sm">Click &quot;Apply for Leave&quot; to submit your first request.</p>
+                                                <p className="font-medium">{t('student.leaves.noLeaves')}</p>
+                                                <p className="text-sm">{t('student.leaves.noLeavesHint')}</p>
                                             </div>
                                         </td>
                                     </tr>
@@ -341,10 +344,10 @@ export default function StudentLeavesPage() {
                     <DialogHeader>
                         <DialogTitle className="text-2xl font-black text-slate-900 flex items-center gap-2">
                             <CalendarClock className="h-6 w-6 text-teal-600" />
-                            Apply for Leave
+                            {t('student.leaves.applyButton')}
                         </DialogTitle>
                         <DialogDescription>
-                            Fill in the details below to submit your leave application.
+                            {t('student.leaves.dialogDesc')}
                         </DialogDescription>
                     </DialogHeader>
 
@@ -352,7 +355,7 @@ export default function StudentLeavesPage() {
                         {/* Leave Type */}
                         <div className="space-y-2">
                             <Label className="font-semibold text-slate-700">
-                                Leave Type <span className="text-red-500">*</span>
+                                {t('student.leaves.labelLeaveType')} <span className="text-red-500">*</span>
                             </Label>
                             <select
                                 value={form.leave_type}
@@ -369,7 +372,7 @@ export default function StudentLeavesPage() {
                         <div className="grid grid-cols-2 gap-3">
                             <div className="space-y-2">
                                 <Label className="font-semibold text-slate-700">
-                                    Start Date <span className="text-red-500">*</span>
+                                    {t('student.leaves.labelStartDate')} <span className="text-red-500">*</span>
                                 </Label>
                                 <Input
                                     type="date"
@@ -380,7 +383,7 @@ export default function StudentLeavesPage() {
                             </div>
                             <div className="space-y-2">
                                 <Label className="font-semibold text-slate-700">
-                                    End Date <span className="text-red-500">*</span>
+                                    {t('student.leaves.labelEndDate')} <span className="text-red-500">*</span>
                                 </Label>
                                 <Input
                                     type="date"
@@ -394,10 +397,10 @@ export default function StudentLeavesPage() {
                         {/* Reason */}
                         <div className="space-y-2">
                             <Label className="font-semibold text-slate-700">
-                                Reason <span className="text-red-500">*</span>
+                                {t('student.leaves.labelReason')} <span className="text-red-500">*</span>
                             </Label>
                             <Textarea
-                                placeholder="Briefly describe the reason for your leave..."
+                                placeholder={t('student.leaves.placeholderReason')}
                                 value={form.reason}
                                 onChange={e => setForm(f => ({ ...f, reason: e.target.value }))}
                                 rows={3}
@@ -407,7 +410,7 @@ export default function StudentLeavesPage() {
 
                         {/* Document URL */}
                         <div className="space-y-2">
-                            <Label className="font-semibold text-slate-700">Document URL (optional)</Label>
+                            <Label className="font-semibold text-slate-700">{t('student.leaves.labelDocUrl')}</Label>
                             <Input
                                 type="url"
                                 placeholder="https://..."
@@ -415,12 +418,12 @@ export default function StudentLeavesPage() {
                                 onChange={e => setForm(f => ({ ...f, supporting_document_url: e.target.value }))}
                                 className="text-sm"
                             />
-                            <p className="text-xs text-slate-400">Link to a supporting document (medical certificate, etc.)</p>
+                            <p className="text-xs text-slate-400">{t('student.leaves.docUrlHint')}</p>
                         </div>
                     </div>
 
                     <DialogFooter>
-                        <Button variant="ghost" onClick={() => setApplyDialogOpen(false)}>Cancel</Button>
+                        <Button variant="ghost" onClick={() => setApplyDialogOpen(false)}>{t('common.cancel')}</Button>
                         <Button
                             onClick={handleApply}
                             disabled={submitting}
@@ -429,7 +432,7 @@ export default function StudentLeavesPage() {
                             {submitting
                                 ? <Loader2 className="h-4 w-4 animate-spin" />
                                 : <PlusCircle className="h-4 w-4" />}
-                            {submitting ? 'Submitting...' : 'Submit Application'}
+                            {submitting ? t('student.leaves.submitting') : t('student.leaves.submitApplication')}
                         </Button>
                     </DialogFooter>
                 </DialogContent>

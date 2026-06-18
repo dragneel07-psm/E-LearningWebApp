@@ -9,8 +9,11 @@ import { api } from '@/lib/api';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Loader2, Trophy } from 'lucide-react';
+import { useTranslation } from '@/lib/localization';
+import { formatNumber } from '@/lib/i18n/format';
 
 export default function AchievementsPage() {
+    const { t, locale } = useTranslation();
     const [allBadges, setAllBadges] = useState<BadgeType[]>([]);
     const [myBadges, setMyBadges] = useState<any[]>([]);
     const [leaderboard, setLeaderboard] = useState<any[]>([]);
@@ -57,14 +60,14 @@ export default function AchievementsPage() {
     return (
         <div className="p-6 max-w-6xl mx-auto space-y-8">
             <header>
-                <h1 className="text-3xl font-bold text-slate-900">Your Achievements</h1>
-                <p className="text-slate-500">Track your progress and earn rewards!</p>
+                <h1 className="text-3xl font-bold text-slate-900">{t('student.achievements.pageTitle')}</h1>
+                <p className="text-slate-500">{t('student.achievements.subtitle')}</p>
             </header>
 
             <Tabs defaultValue="badges">
                 <TabsList>
-                    <TabsTrigger value="badges">Badges</TabsTrigger>
-                    <TabsTrigger value="leaderboard">Leaderboard</TabsTrigger>
+                    <TabsTrigger value="badges">{t('student.achievements.tabBadges')}</TabsTrigger>
+                    <TabsTrigger value="leaderboard">{t('student.achievements.tabLeaderboard')}</TabsTrigger>
                 </TabsList>
 
                 <TabsContent value="badges" className="mt-6">
@@ -79,7 +82,7 @@ export default function AchievementsPage() {
                     <Card>
                         <CardHeader>
                             <CardTitle className="flex items-center gap-2">
-                                <Trophy className="text-yellow-500" /> Class Leaderboard
+                                <Trophy className="text-yellow-500" /> {t('student.achievements.classLeaderboard')}
                             </CardTitle>
                         </CardHeader>
                         <CardContent>
@@ -95,11 +98,11 @@ export default function AchievementsPage() {
                                             </div>
                                             <div>
                                                 <p className="font-semibold">{entry.student_name}</p>
-                                                <p className="text-xs text-slate-500">{entry.badges_count} Badges</p>
+                                                <p className="text-xs text-slate-500">{t('student.achievements.badgesCount', { count: formatNumber(entry.badges_count, locale) })}</p>
                                             </div>
                                         </div>
                                         <div className="font-mono font-bold text-indigo-600">
-                                            {entry.total_points} XP
+                                            {t('student.achievements.xpPoints', { points: formatNumber(entry.total_points, locale) })}
                                         </div>
                                     </div>
                                 ))}
