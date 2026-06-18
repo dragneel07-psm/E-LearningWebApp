@@ -12,6 +12,8 @@ import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Trophy, Medal, Crown, Users, School, Flame, Star } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useTranslation } from "@/lib/localization";
+import { formatNumber } from "@/lib/i18n/format";
 
 interface LeaderboardEntry {
     student_id: string;
@@ -32,6 +34,7 @@ interface LeaderboardData {
 }
 
 export default function LeaderboardPage() {
+    const { t, locale } = useTranslation();
     const [scope, setScope] = useState<"class" | "school">("class");
     const [data, setData] = useState<LeaderboardData | null>(null);
     const [loading, setLoading] = useState(true);
@@ -65,21 +68,23 @@ export default function LeaderboardPage() {
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                 <div>
                     <h1 className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-indigo-600 to-violet-600">
-                        Leaderboard
+                        {t('student.leaderboard.pageTitle')}
                     </h1>
                     <p className="text-slate-500 text-sm">
                         {data
-                            ? `${data.total_participants} participants${data.my_rank ? ` · Your rank: #${data.my_rank}` : ''}`
-                            : "See who's leading the learning journey!"}
+                            ? (data.my_rank
+                                ? t('student.leaderboard.subtitleRank', { total: formatNumber(data.total_participants, locale), rank: formatNumber(data.my_rank, locale) })
+                                : t('student.leaderboard.subtitleData', { total: formatNumber(data.total_participants, locale) }))
+                            : t('student.leaderboard.subtitleDefault')}
                     </p>
                 </div>
                 <Tabs value={scope} onValueChange={(v) => setScope(v as "class" | "school")}>
                     <TabsList>
                         <TabsTrigger value="class" className="gap-2">
-                            <Users className="w-4 h-4" /> Class
+                            <Users className="w-4 h-4" /> {t('student.leaderboard.tabClass')}
                         </TabsTrigger>
                         <TabsTrigger value="school" className="gap-2">
-                            <School className="w-4 h-4" /> School
+                            <School className="w-4 h-4" /> {t('student.leaderboard.tabSchool')}
                         </TabsTrigger>
                     </TabsList>
                 </Tabs>
@@ -90,7 +95,7 @@ export default function LeaderboardPage() {
                 <div className="bg-indigo-600 text-white rounded-xl px-5 py-3 flex items-center justify-between shadow-md">
                     <div className="flex items-center gap-3">
                         <Trophy className="h-5 w-5 text-yellow-300" />
-                        <span className="font-semibold">Your Rank</span>
+                        <span className="font-semibold">{t('student.leaderboard.myRankLabel')}</span>
                     </div>
                     <span className="text-2xl font-bold">#{data.my_rank}</span>
                 </div>
@@ -99,10 +104,10 @@ export default function LeaderboardPage() {
             <Card className="border-slate-200 shadow-sm">
                 <CardContent className="p-4">
                     {loading ? (
-                        <div className="py-16 text-center text-slate-400">Loading rankings...</div>
+                        <div className="py-16 text-center text-slate-400">{t('student.leaderboard.loading')}</div>
                     ) : !data || data.entries.length === 0 ? (
                         <div className="py-16 text-center text-slate-400">
-                            No active students found yet. Be the first to earn XP!
+                            {t('student.leaderboard.noEntries')}
                         </div>
                     ) : (
                         <div className="space-y-2">
@@ -131,31 +136,31 @@ export default function LeaderboardPage() {
                                         <div className="flex items-center gap-2">
                                             <h3 className="font-bold text-slate-800 truncate">{entry.student_name}</h3>
                                             {entry.is_me && (
-                                                <Badge variant="secondary" className="text-[10px] bg-indigo-100 text-indigo-700 shrink-0">You</Badge>
+                                                <Badge variant="secondary" className="text-[10px] bg-indigo-100 text-indigo-700 shrink-0">{t('student.leaderboard.badgeYou')}</Badge>
                                             )}
                                         </div>
                                         <div className="flex items-center gap-3 text-xs text-slate-500 mt-0.5">
                                             <span className="flex items-center gap-1">
                                                 <Star className="h-3 w-3 text-yellow-500" />
-                                                Lvl {entry.current_level}
+                                                {t('student.leaderboard.levelPrefix', { level: formatNumber(entry.current_level, locale) })}
                                             </span>
                                             {entry.current_streak > 0 && (
                                                 <span className="flex items-center gap-1">
                                                     <Flame className="h-3 w-3 text-orange-500" />
-                                                    {entry.current_streak}d streak
+                                                    {t('student.leaderboard.streakSuffix', { days: formatNumber(entry.current_streak, locale) })}
                                                 </span>
                                             )}
                                             {entry.badges_count > 0 && (
-                                                <span>{entry.badges_count} badges</span>
+                                                <span>{t('student.leaderboard.badgesCount', { count: formatNumber(entry.badges_count, locale) })}</span>
                                             )}
                                         </div>
                                     </div>
 
                                     <div className="text-right flex-shrink-0">
                                         <span className="block font-bold text-indigo-600 text-lg leading-tight">
-                                            {entry.total_xp.toLocaleString()}
+                                            {formatNumber(entry.total_xp, locale)}
                                         </span>
-                                        <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">XP</span>
+                                        <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">{t('student.leaderboard.xpLabel')}</span>
                                     </div>
                                 </motion.div>
                             ))}

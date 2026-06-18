@@ -4,11 +4,13 @@
 'use client';
 
 import { NotificationList } from '@/components/notifications/NotificationList';
+import { useTranslation } from '@/lib/localization';
 
 export default function StudentNotificationsPage() {
+    const { t } = useTranslation();
     return (
         <div className="container mx-auto py-8">
-            <h1 className="text-2xl font-bold text-slate-900 mb-6">Notifications History</h1>
+            <h1 className="text-2xl font-bold text-slate-900 mb-6">{t('student.notifications.pageTitle')}</h1>
             <NotificationList />
         </div>
     );
