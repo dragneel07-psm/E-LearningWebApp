@@ -613,5 +613,69 @@
       "successCancelled": "बिदा अनुरोध रद्द गरियो"
     }
   },
-  "parent": { "dashboard": { "title": "ड्यासबोर्ड" } }
+  "parent": {
+    "nav": {
+      "portal": "अभिभावक पोर्टल",
+      "familyDashboard": "पारिवारिक ड्यासबोर्ड",
+      "overview": "सिंहावलोकन",
+      "myChildren": "मेरा बालबालिका",
+      "attendance": "उपस्थिति",
+      "grades": "ग्रेडहरू",
+      "projects": "परियोजनाहरू",
+      "fees": "शुल्क",
+      "leaveRequests": "बिदा अनुरोध",
+      "meetings": "बैठकहरू",
+      "notices": "सूचनाहरू",
+      "messages": "सन्देशहरू",
+      "logout": "बाहिर निस्कनुहोस्"
+    },
+    "dashboard": {
+      "title": "ड्यासबोर्ड",
+      "sectionLabel": "अभिभावक पोर्टल",
+      "noProfileTitle": "प्रोफाइल फेला परेन",
+      "noProfileDesc": "तपाईंको खातामा कुनै अभिभावक प्रोफाइल जोडिएको छैन।",
+      "childrenLinked": "{count} बालबालिका तपाईंको खातामा जोडिएका छन्",
+      "childLinked": "{count} बालबालिका तपाईंको खातामा जोडिएको छ",
+      "requestMeeting": "बैठक अनुरोध गर्नुहोस्",
+      "quickAttendance": "उपस्थिति",
+      "quickGrades": "ग्रेडहरू",
+      "quickFees": "शुल्क",
+      "quickMeetings": "बैठकहरू",
+      "noStudentsLinked": "अहिलेसम्म कुनै विद्यार्थी जोडिएको छैन।",
+      "noClass": "कक्षा छैन",
+      "statFocus": "फोकस",
+      "statStreak": "लगातार",
+      "statAttendance": "उपस्थिति",
+      "attendanceLast30": "उपस्थिति (पछिल्लो ३० दिन)",
+      "recentResults": "भर्खरका नतिजाहरू",
+      "upcoming": "आगामी",
+      "btnDetails": "विवरण",
+      "btnAiReport": "एआई रिपोर्ट",
+      "btnGenerating": "तयार गर्दैछ...",
+      "reportAnalysing": "विद्यार्थी डेटा विश्लेषण गर्दैछ...",
+      "reportTitle": "एआई प्रगति रिपोर्ट",
+      "reportDesc": "{name} का लागि एआई-उत्पन्न विश्लेषण",
+      "reportSummary": "कार्यकारी सारांश",
+      "reportStrengths": "बलियो पक्षहरू",
+      "reportAreasForGrowth": "सुधार गर्नुपर्ने क्षेत्रहरू",
+      "reportRecommendations": "सिफारिसहरू",
+      "errorLoad": "ड्यासबोर्ड लोड गर्न असफल भयो।",
+      "errorReport": "एआई रिपोर्ट तयार गर्न असफल भयो।"
+    },
+    "children": {
+      "sectionLabel": "अभिभावक पोर्टल",
+      "pageTitle": "मेरा बालबालिका",
+      "childrenLinked": "{count} बालबालिका तपाईंको खातामा जोडिएका छन्।",
+      "childLinked": "{count} बालबालिका तपाईंको खातामा जोडिएको छ।",
+      "noStudentsLinked": "अहिलेसम्म कुनै विद्यार्थी जोडिएको छैन। विद्यालय प्रशासनसँग सम्पर्क गर्नुहोस्।",
+      "noClass": "कक्षा छैन",
+      "statFocus": "फोकस",
+      "statStreak": "लगातार",
+      "statAttend": "उपस्थि.",
+      "attendance": "उपस्थिति",
+      "btnProfile": "प्रोफाइल",
+      "btnLeave": "बिदा",
+      "errorLoad": "बालबालिकाको डेटा लोड गर्न असफल भयो।"
+    }
+  }
 }

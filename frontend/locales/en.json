@@ -614,5 +614,69 @@
       "successCancelled": "Leave request cancelled"
     }
   },
-  "parent": { "dashboard": { "title": "Dashboard" } }
+  "parent": {
+    "nav": {
+      "portal": "Parent Portal",
+      "familyDashboard": "Family Dashboard",
+      "overview": "Overview",
+      "myChildren": "My Children",
+      "attendance": "Attendance",
+      "grades": "Grades",
+      "projects": "Projects",
+      "fees": "Fees",
+      "leaveRequests": "Leave Requests",
+      "meetings": "Meetings",
+      "notices": "Notices",
+      "messages": "Messages",
+      "logout": "Logout"
+    },
+    "dashboard": {
+      "title": "Dashboard",
+      "sectionLabel": "Parent Portal",
+      "noProfileTitle": "No profile found",
+      "noProfileDesc": "No parent profile is linked to your account.",
+      "childrenLinked": "{count} children linked to your account",
+      "childLinked": "{count} child linked to your account",
+      "requestMeeting": "Request Meeting",
+      "quickAttendance": "Attendance",
+      "quickGrades": "Grades",
+      "quickFees": "Fees",
+      "quickMeetings": "Meetings",
+      "noStudentsLinked": "No students linked yet.",
+      "noClass": "No Class",
+      "statFocus": "Focus",
+      "statStreak": "Streak",
+      "statAttendance": "Attendance",
+      "attendanceLast30": "Attendance (Last 30 days)",
+      "recentResults": "Recent Results",
+      "upcoming": "Upcoming",
+      "btnDetails": "Details",
+      "btnAiReport": "AI Report",
+      "btnGenerating": "Generating...",
+      "reportAnalysing": "Analysing student data...",
+      "reportTitle": "AI Progress Report",
+      "reportDesc": "AI-generated analysis for {name}",
+      "reportSummary": "Executive Summary",
+      "reportStrengths": "Strengths",
+      "reportAreasForGrowth": "Areas for Growth",
+      "reportRecommendations": "Recommendations",
+      "errorLoad": "Failed to load dashboard.",
+      "errorReport": "Failed to generate AI report."
+    },
+    "children": {
+      "sectionLabel": "Parent Portal",
+      "pageTitle": "My Children",
+      "childrenLinked": "{count} children linked to your account.",
+      "childLinked": "{count} child linked to your account.",
+      "noStudentsLinked": "No students linked yet. Contact the school administration.",
+      "noClass": "No Class",
+      "statFocus": "Focus",
+      "statStreak": "Streak",
+      "statAttend": "Attend.",
+      "attendance": "Attendance",
+      "btnProfile": "Profile",
+      "btnLeave": "Leave",
+      "errorLoad": "Failed to load children."
+    }
+  }
 }
