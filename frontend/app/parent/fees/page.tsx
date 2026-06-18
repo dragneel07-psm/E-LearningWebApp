@@ -18,20 +18,19 @@ import {
 import {
     Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
-
-const FEE_STATUS: Record<string, { label: string; cls: string; icon: React.ReactNode }> = {
-    paid:    { label: 'Paid',    cls: 'bg-emerald-100 text-emerald-700 border-emerald-200', icon: <CheckCircle2 className="h-3.5 w-3.5" /> },
-    partial: { label: 'Partial', cls: 'bg-amber-100 text-amber-700 border-amber-200',       icon: <Clock className="h-3.5 w-3.5" /> },
-    pending: { label: 'Pending', cls: 'bg-slate-100 text-slate-600 border-slate-200',       icon: <Clock className="h-3.5 w-3.5" /> },
-    overdue: { label: 'Overdue', cls: 'bg-red-100 text-red-700 border-red-200',             icon: <XCircle className="h-3.5 w-3.5" /> },
-};
-
-function fmt(amount: number) {
-    return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2 }).format(amount);
-}
+import { useTranslation } from '@/lib/localization';
+import { formatCurrency, formatDate } from '@/lib/i18n/format';
 
 export default function ParentFeesPage() {
     const { toast } = useToast();
+    const { t, locale } = useTranslation();
+
+    const FEE_STATUS: Record<string, { label: string; cls: string; icon: React.ReactNode }> = {
+        paid:    { label: t('parent.fees.statusPaid'),    cls: 'bg-emerald-100 text-emerald-700 border-emerald-200', icon: <CheckCircle2 className="h-3.5 w-3.5" /> },
+        partial: { label: t('parent.fees.statusPartial'), cls: 'bg-amber-100 text-amber-700 border-amber-200',       icon: <Clock className="h-3.5 w-3.5" /> },
+        pending: { label: t('parent.fees.statusPending'), cls: 'bg-slate-100 text-slate-600 border-slate-200',       icon: <Clock className="h-3.5 w-3.5" /> },
+        overdue: { label: t('parent.fees.statusOverdue'), cls: 'bg-red-100 text-red-700 border-red-200',             icon: <XCircle className="h-3.5 w-3.5" /> },
+    };
     const [parent, setParent] = useState<Parent | null>(null);
     const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
     const [feesData, setFeesData] = useState<{ fees: any[]; payments: any[]; summary: any } | null>(null);
@@ -48,18 +47,18 @@ export default function ParentFeesPage() {
                 setParent(p);
                 if (p.students.length > 0) setSelectedStudent(p.students[0]);
             })
-            .catch(() => toast({ title: 'Error', description: 'Failed to load parent profile.', variant: 'destructive' }))
+            .catch(() => toast({ title: 'Error', description: t('parent.fees.errorLoadProfile'), variant: 'destructive' }))
             .finally(() => setLoading(false));
-    }, [toast]);
+    }, [toast, t]);
 
     useEffect(() => {
         if (!selectedStudent) return;
         setFeesLoading(true);
         academicAPI.getChildFees(selectedStudent.student_id)
             .then(setFeesData)
-            .catch(() => toast({ title: 'Error', description: 'Failed to load fees.', variant: 'destructive' }))
+            .catch(() => toast({ title: 'Error', description: t('parent.fees.errorLoad'), variant: 'destructive' }))
             .finally(() => setFeesLoading(false));
-    }, [selectedStudent, toast]);
+    }, [selectedStudent, toast, t]);
 
     const openPayDialog = (fee: any) => {
         setPayingFee(fee);
@@ -88,7 +87,7 @@ export default function ParentFeesPage() {
                 window.location.href = res.payment_url;
             }
         } catch {
-            toastSonner.error('Payment initiation failed. Please try again.');
+            toastSonner.error(t('parent.fees.errorPayment'));
             setPayLoading(false);
         }
     };
@@ -102,7 +101,7 @@ export default function ParentFeesPage() {
     if (!parent || parent.students.length === 0) return (
         <div className="p-8 text-center">
             <AlertCircle className="h-10 w-10 text-slate-300 mx-auto mb-3" />
-            <p className="text-slate-500">No children linked to your account.</p>
+            <p className="text-slate-500">{t('parent.fees.noChildren')}</p>
         </div>
     );
 
@@ -123,10 +122,10 @@ export default function ParentFeesPage() {
             <div>
                 <div className="flex items-center gap-2 text-violet-600 font-bold mb-1">
                     <Wallet className="h-4 w-4" />
-                    <span className="text-[10px] uppercase tracking-[0.2em]">Parent Portal</span>
+                    <span className="text-[10px] uppercase tracking-[0.2em]">{t('parent.fees.sectionLabel')}</span>
                 </div>
-                <h1 className="text-3xl font-black text-slate-900 tracking-tight">Fees & Payments</h1>
-                <p className="text-slate-500 font-medium">Fee structure and payment history.</p>
+                <h1 className="text-3xl font-black text-slate-900 tracking-tight">{t('parent.fees.pageTitle')}</h1>
+                <p className="text-slate-500 font-medium">{t('parent.fees.subtitle')}</p>
             </div>
 
             {/* Child selector */}
@@ -157,7 +156,7 @@ export default function ParentFeesPage() {
                         <div className="flex items-center gap-3 p-4 bg-red-50 border border-red-200 rounded-xl">
                             <XCircle className="h-5 w-5 text-red-500 shrink-0" />
                             <p className="text-sm font-bold text-red-700">
-                                {overdueCount} overdue fee{overdueCount !== 1 ? 's' : ''} — please clear your dues to avoid service interruption.
+                                {overdueCount !== 1 ? t('parent.fees.overdueAlert_plural', { count: overdueCount }) : t('parent.fees.overdueAlert', { count: overdueCount })}
                             </p>
                         </div>
                     )}
@@ -165,9 +164,9 @@ export default function ParentFeesPage() {
                     {/* Summary cards */}
                     <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                         {[
-                            { label: 'Total Fee', value: fmt(totalFee), icon: <DollarSign className="h-5 w-5 text-slate-500" />, bg: 'bg-slate-50' },
-                            { label: 'Amount Paid', value: fmt(totalPaid), icon: <CheckCircle2 className="h-5 w-5 text-emerald-500" />, bg: 'bg-emerald-50' },
-                            { label: 'Balance Due', value: fmt(totalDue), icon: <TrendingDown className="h-5 w-5 text-red-500" />, bg: 'bg-red-50' },
+                            { label: t('parent.fees.totalFee'),    value: formatCurrency(totalFee, locale),   icon: <DollarSign className="h-5 w-5 text-slate-500" />,   bg: 'bg-slate-50' },
+                            { label: t('parent.fees.amountPaid'),  value: formatCurrency(totalPaid, locale),  icon: <CheckCircle2 className="h-5 w-5 text-emerald-500" />, bg: 'bg-emerald-50' },
+                            { label: t('parent.fees.balanceDue'),  value: formatCurrency(totalDue, locale),   icon: <TrendingDown className="h-5 w-5 text-red-500" />,     bg: 'bg-red-50' },
                         ].map(({ label, value, icon, bg }) => (
                             <Card key={label} className="border-slate-200">
                                 <CardContent className={`p-4 ${bg} rounded-xl`}>
@@ -182,9 +181,9 @@ export default function ParentFeesPage() {
                     <Card className="border-slate-200">
                         <CardContent className="p-4 space-y-2">
                             <div className="flex justify-between text-sm font-bold text-slate-700">
-                                <span>Payment Progress</span>
+                                <span>{t('parent.fees.paymentProgress')}</span>
                                 <span className={paidPct >= 100 ? 'text-emerald-600' : paidPct >= 50 ? 'text-amber-600' : 'text-red-500'}>
-                                    {paidPct}% paid
+                                    {t('parent.fees.paidPct', { pct: paidPct })}
                                 </span>
                             </div>
                             <Progress value={paidPct} className="h-3" />
@@ -196,9 +195,9 @@ export default function ParentFeesPage() {
                         <Card className="border-slate-200">
                             <CardHeader>
                                 <CardTitle className="text-base font-black flex items-center gap-2">
-                                    <Receipt className="h-4 w-4 text-violet-600" /> Fee Structure
+                                    <Receipt className="h-4 w-4 text-violet-600" /> {t('parent.fees.feeStructureTitle')}
                                 </CardTitle>
-                                <CardDescription>Breakdown of fees for {selectedStudent?.first_name}</CardDescription>
+                                <CardDescription>{t('parent.fees.feeStructureDesc', { name: selectedStudent?.first_name ?? '' })}</CardDescription>
                             </CardHeader>
                             <CardContent>
                                 <div className="space-y-2">
@@ -211,12 +210,12 @@ export default function ParentFeesPage() {
                                                     <p className="text-sm font-bold text-slate-800">{fee.fee_type || fee.description || 'Fee'}</p>
                                                     {fee.due_date && (
                                                         <p className="text-xs text-slate-400">
-                                                            Due: {new Date(fee.due_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+                                                            {t('parent.fees.due')}: {formatDate(fee.due_date, locale)}
                                                         </p>
                                                     )}
                                                 </div>
                                                 <div className="flex items-center gap-3">
-                                                    <p className="text-sm font-black text-slate-800">{fmt(fee.amount ?? 0)}</p>
+                                                    <p className="text-sm font-black text-slate-800">{formatCurrency(fee.amount ?? 0, locale)}</p>
                                                     <Badge className={`flex items-center gap-1 text-xs ${cfg.cls}`}>
                                                         {cfg.icon} {cfg.label}
                                                     </Badge>
@@ -226,7 +225,7 @@ export default function ParentFeesPage() {
                                                             className="h-7 text-xs font-bold bg-violet-600 hover:bg-violet-700 gap-1"
                                                             onClick={() => openPayDialog(fee)}
                                                         >
-                                                            <CreditCard className="h-3 w-3" /> Pay
+                                                            <CreditCard className="h-3 w-3" /> {t('parent.fees.pay')}
                                                         </Button>
                                                     )}
                                                 </div>
@@ -243,7 +242,7 @@ export default function ParentFeesPage() {
                         <Card className="border-slate-200">
                             <CardHeader>
                                 <CardTitle className="text-base font-black flex items-center gap-2">
-                                    <CheckCircle2 className="h-4 w-4 text-emerald-600" /> Payment History
+                                    <CheckCircle2 className="h-4 w-4 text-emerald-600" /> {t('parent.fees.paymentHistory')}
                                 </CardTitle>
                             </CardHeader>
                             <CardContent>
@@ -251,15 +250,15 @@ export default function ParentFeesPage() {
                                     {payments.slice().reverse().map((p: any, i: number) => (
                                         <div key={i} className="flex items-center justify-between p-3 rounded-xl bg-emerald-50 border border-emerald-100">
                                             <div>
-                                                <p className="text-sm font-bold text-slate-800">{p.payment_method || p.method || 'Payment'}</p>
+                                                <p className="text-sm font-bold text-slate-800">{p.payment_method || p.method || t('parent.fees.paymentFallback')}</p>
                                                 {p.payment_date || p.date ? (
                                                     <p className="text-xs text-slate-400">
-                                                        {new Date(p.payment_date || p.date).toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' })}
+                                                        {formatDate(p.payment_date || p.date, locale)}
                                                     </p>
                                                 ) : null}
-                                                {p.receipt_number && <p className="text-xs text-slate-400 font-mono">Receipt: {p.receipt_number}</p>}
+                                                {p.receipt_number && <p className="text-xs text-slate-400 font-mono">{t('parent.fees.receipt')}: {p.receipt_number}</p>}
                                             </div>
-                                            <p className="text-sm font-black text-emerald-700">{fmt(p.amount_paid ?? p.amount ?? 0)}</p>
+                                            <p className="text-sm font-black text-emerald-700">{formatCurrency(p.amount_paid ?? p.amount ?? 0, locale)}</p>
                                         </div>
                                     ))}
                                 </div>
@@ -271,7 +270,7 @@ export default function ParentFeesPage() {
                         <Card className="border-dashed border-2 border-slate-200">
                             <CardContent className="py-16 text-center">
                                 <Wallet className="h-10 w-10 text-slate-200 mx-auto mb-3" />
-                                <p className="text-slate-400 font-medium">No fee records available yet.</p>
+                                <p className="text-slate-400 font-medium">{t('parent.fees.noFeeRecords')}</p>
                             </CardContent>
                         </Card>
                     )}
@@ -282,12 +281,12 @@ export default function ParentFeesPage() {
                 <DialogContent className="sm:max-w-sm">
                     <DialogHeader>
                         <DialogTitle className="flex items-center gap-2 font-black">
-                            <CreditCard className="h-5 w-5 text-violet-600" /> Pay Online
+                            <CreditCard className="h-5 w-5 text-violet-600" /> {t('parent.fees.payOnlineTitle')}
                         </DialogTitle>
                     </DialogHeader>
                     <div className="py-4 space-y-4">
                         <p className="text-sm text-slate-600">
-                            Select a payment method to pay <span className="font-black text-slate-900">{fmt(payingFee?.amount ?? 0)}</span>.
+                            {t('parent.fees.selectMethod')} <span className="font-black text-slate-900">{formatCurrency(payingFee?.amount ?? 0, locale)}</span>.
                         </p>
                         <div className="grid grid-cols-2 gap-3">
                             {(['esewa', 'khalti'] as const).map(m => (
@@ -303,17 +302,17 @@ export default function ParentFeesPage() {
                                 </button>
                             ))}
                         </div>
-                        <p className="text-xs text-slate-400">You will be redirected to complete payment.</p>
+                        <p className="text-xs text-slate-400">{t('parent.fees.redirectNotice')}</p>
                     </div>
                     <DialogFooter>
-                        <Button variant="ghost" onClick={() => setPayDialog(false)}>Cancel</Button>
+                        <Button variant="ghost" onClick={() => setPayDialog(false)}>{t('common.cancel')}</Button>
                         <Button
                             className="bg-violet-600 hover:bg-violet-700 gap-2 font-bold"
                             onClick={confirmPay}
                             disabled={payLoading}
                         >
                             {payLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <CreditCard className="h-4 w-4" />}
-                            {payLoading ? 'Redirecting...' : 'Continue'}
+                            {payLoading ? t('parent.fees.redirecting') : t('parent.fees.continue')}
                         </Button>
                     </DialogFooter>
                 </DialogContent>
