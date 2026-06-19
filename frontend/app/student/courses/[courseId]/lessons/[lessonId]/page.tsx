@@ -17,6 +17,8 @@ import { InteractiveRenderer, LessonInteractiveRenderer, Interaction } from "@/c
 import { SafeHTML } from "@/components/ui/safe-html";
 import { toast } from "sonner";
 import { academicAPI, aiAPI, Chapter, Lesson, LessonAiArtifact, LessonProgress } from "@/lib/api";
+import { useTranslation } from "@/lib/localization";
+import { formatNumber } from "@/lib/i18n/format";
 
 function normalizeChapters(payload: unknown): Chapter[] {
     if (Array.isArray(payload)) return payload as Chapter[];
@@ -37,6 +39,7 @@ function toLessonProgressPercent(lesson: Lesson): number {
 type LessonInteraction = Interaction & { position?: string };
 
 export default function LessonPlayerPage() {
+    const { t, locale } = useTranslation();
     const params = useParams();
     const router = useRouter();
     const { awardXP } = useGamification();
@@ -85,7 +88,7 @@ export default function LessonPlayerPage() {
             const nextLesson = allLessons[currentIndex + 1];
             router.push(`/student/courses/${courseId}/lessons/${nextLesson.id}`);
         } else {
-            toast.success("Congratulations! You've reached the end of the available content.");
+            toast.success(t('student.courses.lessonView.toastCourseEnd'));
             router.push(`/student/courses/${courseId}`);
         }
     };
@@ -163,7 +166,7 @@ export default function LessonPlayerPage() {
                 applyLessonProgressToState(lesson.id, payload.completed, payload.user_progress);
                 if (payload.completed && !wasCompleted) {
                     awardXP(50, "Lesson Completed");
-                    toast.success("Lesson marked complete!");
+                    toast.success(t('student.courses.lessonView.toastMarkedComplete'));
                 }
             } catch {
                 // Silent fail during streaming updates; user still gets lesson content.
@@ -171,7 +174,7 @@ export default function LessonPlayerPage() {
                 syncingProgressRef.current = false;
             }
         },
-        [lesson, videoDurationSeconds, applyLessonProgressToState, awardXP]
+        [lesson, videoDurationSeconds, applyLessonProgressToState, awardXP, t]
     );
 
     // -- DATA FETCHING --
@@ -202,7 +205,7 @@ export default function LessonPlayerPage() {
                 };
             } catch (error) {
                 console.error("Failed to load lesson context", error);
-                toast.error("Failed to load lesson content");
+                toast.error(t('student.courses.lessonView.toastLoadFail'));
             } finally {
                 setLoading(false);
             }
@@ -219,14 +222,14 @@ export default function LessonPlayerPage() {
             applyLessonProgressToState(lesson.id, result.completed, result.user_progress);
 
             if (result.completed) {
-                toast.success("Lesson marked complete!");
+                toast.success(t('student.courses.lessonView.toastMarkedComplete'));
                 awardXP(50, "Lesson Completed");
             } else {
-                toast.success("Marked as incomplete");
+                toast.success(t('student.courses.lessonView.toastMarkedIncomplete'));
             }
 
         } catch {
-            toast.error("Failed to update progress");
+            toast.error(t('student.courses.lessonView.toastUpdateFail'));
         } finally {
             setCompleting(false);
         }
@@ -248,7 +251,7 @@ export default function LessonPlayerPage() {
             setArtifact(payload);
         } catch (error) {
             console.error('Failed to generate lesson artifact', error);
-            toast.error('Failed to generate AI notes.');
+            toast.error(t('student.courses.lessonView.toastGenerateAIFail'));
         } finally {
             setArtifactLoading(false);
         }
@@ -279,7 +282,7 @@ export default function LessonPlayerPage() {
         );
     }
 
-    if (!lesson) return <div>Lesson not found</div>;
+    if (!lesson) return <div>{t('student.courses.lessonView.notFound')}</div>;
 
     // Sidebar Content Logic
     const SidebarContent = () => (
@@ -287,7 +290,7 @@ export default function LessonPlayerPage() {
             {chapters.map((chapter, i) => (
                 <div key={chapter.id} className="mb-6">
                     <h3 className="mb-2 text-xs font-black uppercase tracking-widest text-slate-400">
-                        Chapter {i + 1}: {chapter.title}
+                        {t('student.courses.lessonView.chapterLabel', { num: formatNumber(i + 1, locale), title: chapter.title })}
                     </h3>
                     <div className="space-y-1">
                         {chapter.lessons?.filter(l => l.is_published).map((l) => {
@@ -321,7 +324,7 @@ export default function LessonPlayerPage() {
                                         {l.title}
                                         {isInProgress && (
                                             <span className="ml-2 text-[10px] font-bold uppercase tracking-wide text-amber-600">
-                                                {Math.round(lessonProgress)}%
+                                                {formatNumber(Math.round(lessonProgress), locale)}%
                                             </span>
                                         )}
                                     </span>
@@ -354,12 +357,12 @@ export default function LessonPlayerPage() {
                             <h1 className="text-sm font-bold text-slate-900 lg:text-lg line-clamp-1">{lesson.title}</h1>
                             <div className="hidden lg:flex items-center gap-2 px-2 py-0.5 rounded-full bg-slate-100 border border-slate-200">
                                 <span className="text-[10px] font-black text-slate-500 uppercase">
-                                    {Math.round(overallProgressPercent)}% Complete
+                                    {t('student.courses.lessonView.progressComplete', { pct: formatNumber(Math.round(overallProgressPercent), locale) })}
                                 </span>
                             </div>
                         </div>
                         <p className="hidden text-xs text-slate-500 lg:block">
-                            {chapters.find(c => c.id === lesson.chapter)?.title || 'Course Content'}
+                            {chapters.find(c => c.id === lesson.chapter)?.title || t('student.courses.lessonView.fallbackChapterTitle')}
                         </p>
                     </div>
                 </div>
@@ -383,10 +386,10 @@ export default function LessonPlayerPage() {
                     >
                         {isCurrentLessonCompleted ? (
                             <>
-                                <CheckCircle className="mr-2 h-4 w-4" /> Completed
+                                <CheckCircle className="mr-2 h-4 w-4" /> {t('student.courses.lessonView.btnCompleted')}
                             </>
                         ) : (
-                            "Mark Complete"
+                            t('student.courses.lessonView.btnMarkComplete')
                         )}
                     </Button>
 
@@ -399,7 +402,7 @@ export default function LessonPlayerPage() {
                         </SheetTrigger>
                         <SheetContent side="right">
                             <SheetHeader className="mb-4 text-left">
-                                <SheetTitle>Course Content</SheetTitle>
+                                <SheetTitle>{t('student.courses.lessonView.courseContentTitle')}</SheetTitle>
                             </SheetHeader>
                             <SidebarContent />
                         </SheetContent>
@@ -501,7 +504,7 @@ export default function LessonPlayerPage() {
                                 <div className="space-y-8">
                                     <div className="space-y-2">
                                         <h2 className="text-3xl font-black text-slate-900">{lesson.title}</h2>
-                                        <p className="text-slate-500 font-medium">Interactive Learning Session</p>
+                                        <p className="text-slate-500 font-medium">{t('student.courses.lessonView.interactiveSubtitle')}</p>
                                     </div>
                                         <InteractiveRenderer
                                             type={lesson.content_type}
@@ -536,7 +539,7 @@ export default function LessonPlayerPage() {
                                             {lesson.content ? (
                                                 <SafeHTML html={lesson.content} />
                                             ) : (
-                                                <p className="text-slate-500 italic">No text content available for this lesson.</p>
+                                                <p className="text-slate-500 italic">{t('student.courses.lessonView.noTextContent')}</p>
                                             )}
                                         </div>
 
@@ -568,7 +571,7 @@ export default function LessonPlayerPage() {
                             {lesson.materials && lesson.materials.length > 0 && (
                                 <div className="space-y-4 pt-4 border-t">
                                     <h3 className="text-lg font-bold flex items-center gap-2">
-                                        <FileText className="h-5 w-5 text-indigo-600" /> Lesson Materials
+                                        <FileText className="h-5 w-5 text-indigo-600" /> {t('student.courses.lessonView.materialsTitle')}
                                     </h3>
                                     <div className="grid gap-3 sm:grid-cols-2">
                                         {lesson.materials.map((material) => (
@@ -584,7 +587,7 @@ export default function LessonPlayerPage() {
                                                 </div>
                                                 <div className="min-w-0">
                                                     <p className="truncate text-sm font-bold text-slate-800">{material.title}</p>
-                                                    <p className="text-xs text-slate-500">Download Resource</p>
+                                                    <p className="text-xs text-slate-500">{t('student.courses.lessonView.materialDownload')}</p>
                                                 </div>
                                             </a>
                                         ))}
@@ -596,7 +599,7 @@ export default function LessonPlayerPage() {
                                 <div className="flex flex-wrap items-center justify-between gap-3">
                                     <div className="flex items-center gap-2">
                                         <Sparkles className="h-4 w-4 text-indigo-600" />
-                                        <h3 className="text-sm font-bold text-indigo-900">AI Summary & Exam Notes</h3>
+                                        <h3 className="text-sm font-bold text-indigo-900">{t('student.courses.lessonView.aiSectionTitle')}</h3>
                                     </div>
                                     <label className="flex items-center gap-2 text-xs font-semibold text-slate-600">
                                         <Languages className="h-3.5 w-3.5" />
@@ -605,8 +608,8 @@ export default function LessonPlayerPage() {
                                             onChange={(e) => setArtifactLang(e.target.value as 'en' | 'ne')}
                                             className="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs"
                                         >
-                                            <option value="en">English</option>
-                                            <option value="ne">Nepali</option>
+                                            <option value="en">{t('student.courses.lessonView.langEnglish')}</option>
+                                            <option value="ne">{t('student.courses.lessonView.langNepali')}</option>
                                         </select>
                                     </label>
                                 </div>
@@ -618,7 +621,7 @@ export default function LessonPlayerPage() {
                                         disabled={artifactLoading}
                                         onClick={() => handleGenerateArtifact('summary')}
                                     >
-                                        {artifactLoading && artifactType === 'summary' ? 'Generating...' : 'Generate Summary'}
+                                        {artifactLoading && artifactType === 'summary' ? t('student.courses.lessonView.btnGenerating') : t('student.courses.lessonView.btnGenerateSummary')}
                                     </Button>
                                     <Button
                                         variant="outline"
@@ -626,7 +629,7 @@ export default function LessonPlayerPage() {
                                         disabled={artifactLoading}
                                         onClick={() => handleGenerateArtifact('exam_notes')}
                                     >
-                                        {artifactLoading && artifactType === 'exam_notes' ? 'Generating...' : 'Generate Exam Notes'}
+                                        {artifactLoading && artifactType === 'exam_notes' ? t('student.courses.lessonView.btnGenerating') : t('student.courses.lessonView.btnGenerateExamNotes')}
                                     </Button>
                                 </div>
 
@@ -635,7 +638,7 @@ export default function LessonPlayerPage() {
                                         <p className="text-sm font-semibold text-slate-900">{artifact.summary}</p>
                                         {artifact.bullets.length > 0 && (
                                             <div>
-                                                <p className="mb-1 text-xs font-bold uppercase tracking-wide text-slate-500">Bullets</p>
+                                                <p className="mb-1 text-xs font-bold uppercase tracking-wide text-slate-500">{t('student.courses.lessonView.artifactBullets')}</p>
                                                 <ul className="list-disc space-y-1 pl-5 text-sm text-slate-700">
                                                     {artifact.bullets.map((item, idx) => <li key={`bullet-${idx}`}>{item}</li>)}
                                                 </ul>
@@ -643,7 +646,7 @@ export default function LessonPlayerPage() {
                                         )}
                                         {artifact.key_terms.length > 0 && (
                                             <div>
-                                                <p className="mb-1 text-xs font-bold uppercase tracking-wide text-slate-500">Key Terms</p>
+                                                <p className="mb-1 text-xs font-bold uppercase tracking-wide text-slate-500">{t('student.courses.lessonView.artifactKeyTerms')}</p>
                                                 <div className="flex flex-wrap gap-2">
                                                     {artifact.key_terms.map((term, idx) => (
                                                         <span key={`term-${idx}`} className="rounded-full border border-indigo-200 bg-indigo-50 px-2 py-0.5 text-xs font-semibold text-indigo-700">
@@ -655,7 +658,7 @@ export default function LessonPlayerPage() {
                                         )}
                                         {artifact.practice_questions.length > 0 && (
                                             <div>
-                                                <p className="mb-1 text-xs font-bold uppercase tracking-wide text-slate-500">Practice Questions</p>
+                                                <p className="mb-1 text-xs font-bold uppercase tracking-wide text-slate-500">{t('student.courses.lessonView.artifactPracticeQuestions')}</p>
                                                 <ol className="list-decimal space-y-1 pl-5 text-sm text-slate-700">
                                                     {artifact.practice_questions.map((item, idx) => <li key={`question-${idx}`}>{item}</li>)}
                                                 </ol>
@@ -677,7 +680,7 @@ export default function LessonPlayerPage() {
                                     }}
                                     disabled={currentLessonIndex <= 0}
                                 >
-                                    <ArrowLeft className="mr-2 h-4 w-4" /> Previous
+                                    <ArrowLeft className="mr-2 h-4 w-4" /> {t('student.courses.lessonView.btnPrevious')}
                                 </Button>
 
                                 <Button
@@ -685,8 +688,8 @@ export default function LessonPlayerPage() {
                                     onClick={navigateToNextLesson}
                                 >
                                     {currentLessonIndex === publishedLessons.length - 1
-                                        ? "Finish Course"
-                                        : "Next Lesson"}
+                                        ? t('student.courses.lessonView.btnFinishCourse')
+                                        : t('student.courses.lessonView.btnNextLesson')}
                                     <ChevronRight className="ml-2 h-4 w-4" />
                                 </Button>
                             </div>

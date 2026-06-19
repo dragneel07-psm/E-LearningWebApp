@@ -17,6 +17,8 @@ import {
 import { academicAPI, Lesson, Subject, Chapter } from '@/lib/api';
 import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
+import { useTranslation } from '@/lib/localization';
+import { formatNumber } from '@/lib/i18n/format';
 import {
     isLessonDownloaded,
     downloadLessonForOffline,
@@ -33,6 +35,7 @@ function normalizeChapters(payload: unknown): Chapter[] {
 }
 
 export default function StudentCourseLessonsPage() {
+    const { t, locale } = useTranslation();
     const params = useParams();
     const router = useRouter();
     const courseId = params.courseId as string;
@@ -77,7 +80,7 @@ export default function StudentCourseLessonsPage() {
             setDownloadedIds(downloaded);
         } catch (error) {
             console.error('Failed to load curriculum data:', error);
-            toast.error('Failed to load course content');
+            toast.error(t('student.courses.courseLessons.toastLoadFail'));
         } finally {
             setLoading(false);
         }
@@ -100,7 +103,7 @@ export default function StudentCourseLessonsPage() {
     const handleDownloadLesson = async (e: React.MouseEvent, lesson: Lesson) => {
         e.stopPropagation();
         if (!isOnline) {
-            toast.error('Connect to internet to download this lesson.');
+            toast.error(t('student.courses.courseLessons.toastOffline'));
             return;
         }
         setDownloadingIds(prev => new Set(prev).add(lesson.id));
@@ -118,9 +121,9 @@ export default function StudentCourseLessonsPage() {
                 lesson.video_url ? [lesson.video_url] : [],
             );
             setDownloadedIds(prev => new Set(prev).add(lesson.id));
-            toast.success(`"${lesson.title}" saved for offline study!`);
+            toast.success(t('student.courses.courseLessons.toastSaved', { title: lesson.title }));
         } catch {
-            toast.error('Download failed. Please try again.');
+            toast.error(t('student.courses.courseLessons.toastDownloadFail'));
         } finally {
             setDownloadingIds(prev => {
                 const next = new Set(prev);
@@ -138,7 +141,7 @@ export default function StudentCourseLessonsPage() {
             next.delete(lesson.id);
             return next;
         });
-        toast.info(`"${lesson.title}" removed from offline storage.`);
+        toast.info(t('student.courses.courseLessons.toastRemoved', { title: lesson.title }));
     };
 
     if (loading) {
@@ -163,7 +166,7 @@ export default function StudentCourseLessonsPage() {
                 </Button>
                 <div className="flex-1">
                     <h1 className="text-4xl font-bold tracking-tight text-slate-900">{subject?.name}</h1>
-                    <p className="text-slate-500 font-medium">Course Curriculum</p>
+                    <p className="text-slate-500 font-medium">{t('student.courses.courseLessons.curriculum')}</p>
                 </div>
             </div>
 
@@ -172,13 +175,13 @@ export default function StudentCourseLessonsPage() {
                 <div className="relative z-10">
                     <div className="flex items-center justify-between mb-6">
                         <div>
-                            <h3 className="font-bold text-2xl mb-1">Your Learning Journey</h3>
+                            <h3 className="font-bold text-2xl mb-1">{t('student.courses.courseLessons.journeyTitle')}</h3>
                             <p className="text-indigo-100 opacity-90">
-                                {completedLessons.size} of {totalLessons} lessons completed
+                                {t('student.courses.courseLessons.journeySubtitle', { completed: formatNumber(completedLessons.size, locale), total: formatNumber(totalLessons, locale) })}
                             </p>
                         </div>
                         <div className="text-4xl font-black bg-white/20 backdrop-blur-md rounded-2xl p-4 min-w-[100px] text-center">
-                            {Math.round(progressPercentage)}%
+                            {formatNumber(Math.round(progressPercentage), locale)}%
                         </div>
                     </div>
                     <Progress value={progressPercentage} className="h-3 bg-white/20" />
@@ -192,9 +195,9 @@ export default function StudentCourseLessonsPage() {
             {chapters.length === 0 ? (
                 <Card className="p-12 text-center border-dashed">
                     <BookOpen className="h-16 w-16 mx-auto mb-4 text-slate-200" />
-                    <h3 className="text-xl font-bold text-slate-800 mb-2">No content yet</h3>
+                    <h3 className="text-xl font-bold text-slate-800 mb-2">{t('student.courses.courseLessons.noContentTitle')}</h3>
                     <p className="text-slate-500">
-                        Stay tuned! Your teacher will upload lessons soon.
+                        {t('student.courses.courseLessons.noContentHint')}
                     </p>
                 </Card>
             ) : (
@@ -246,11 +249,11 @@ export default function StudentCourseLessonsPage() {
                                                         <div className="flex-1">
                                                             <div className="flex items-center gap-2 mb-1">
                                                                 <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">
-                                                                    Lesson {chapterIndex + 1}.{lessonIndex + 1}
+                                                                    {t('student.courses.courseLessons.lessonLabel', { chapter: formatNumber(chapterIndex + 1, locale), lesson: formatNumber(lessonIndex + 1, locale) })}
                                                                 </span>
                                                                 <span className="flex items-center gap-1 text-[10px] text-slate-400">
                                                                     <Clock className="h-3 w-3" />
-                                                                    {lesson.duration_minutes}m
+                                                                    {formatNumber(lesson.duration_minutes ?? 0, locale)}m
                                                                 </span>
                                                             </div>
                                                             <h3 className={`text-lg font-bold ${isCompleted ? 'text-slate-600' : 'text-slate-800'}`}>
@@ -266,12 +269,12 @@ export default function StudentCourseLessonsPage() {
                                                         <div className="flex items-center gap-2">
                                                             {isCompleted && (
                                                                 <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100 border-none px-3 font-bold">
-                                                                    COMPLETED
+                                                                    {t('student.courses.courseLessons.badgeCompleted')}
                                                                 </Badge>
                                                             )}
                                                             {isInProgress && (
                                                                 <Badge className="bg-amber-100 text-amber-700 hover:bg-amber-100 border-none px-3 font-bold">
-                                                                    IN PROGRESS {Math.round(lessonProgress)}%
+                                                                    {t('student.courses.courseLessons.badgeInProgress', { pct: formatNumber(Math.round(lessonProgress), locale) })}
                                                                 </Badge>
                                                             )}
                                                             {/* Download for offline button */}
@@ -281,10 +284,10 @@ export default function StudentCourseLessonsPage() {
                                                                     size="sm"
                                                                     className="h-8 text-xs text-emerald-600 hover:text-red-600 hover:bg-red-50 gap-1.5 px-3"
                                                                     onClick={(e) => handleRemoveLesson(e, lesson)}
-                                                                    title="Remove offline copy"
+                                                                    title={t('student.courses.courseLessons.titleRemoveOffline')}
                                                                 >
                                                                     <HardDrive className="h-3.5 w-3.5" />
-                                                                    <span className="hidden md:inline">Saved</span>
+                                                                    <span className="hidden md:inline">{t('student.courses.courseLessons.btnSaved')}</span>
                                                                 </Button>
                                                             ) : downloadingIds.has(lesson.id) ? (
                                                                 <Button
@@ -301,10 +304,10 @@ export default function StudentCourseLessonsPage() {
                                                                     size="sm"
                                                                     className="h-8 text-xs text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 gap-1.5 px-3"
                                                                     onClick={(e) => handleDownloadLesson(e, lesson)}
-                                                                    title="Download for offline study"
+                                                                    title={t('student.courses.courseLessons.titleDownloadOffline')}
                                                                 >
                                                                     <Download className="h-3.5 w-3.5" />
-                                                                    <span className="hidden md:inline">Save</span>
+                                                                    <span className="hidden md:inline">{t('student.courses.courseLessons.btnSave')}</span>
                                                                 </Button>
                                                             )}
                                                             <Button
@@ -312,7 +315,7 @@ export default function StudentCourseLessonsPage() {
                                                                 className={`rounded-xl h-10 px-6 font-bold transition-all ${isCompleted ? 'border-emerald-200 text-emerald-600' : 'border-slate-200 text-indigo-600 group-hover:bg-indigo-600 group-hover:text-white group-hover:border-indigo-600'
                                                                     }`}
                                                             >
-                                                                {isCompleted ? 'Review' : 'Start Lesson'}
+                                                                {isCompleted ? t('student.courses.courseLessons.btnReview') : t('student.courses.courseLessons.btnStartLesson')}
                                                                 <ChevronRight className="ml-2 h-4 w-4" />
                                                             </Button>
                                                         </div>
@@ -324,7 +327,7 @@ export default function StudentCourseLessonsPage() {
                                 })}
                                 {(!chapter.lessons || chapter.lessons.filter(l => l.is_published).length === 0) && (
                                     <div className="text-center py-6 text-slate-400 italic text-sm">
-                                        No lessons published in this chapter yet.
+                                        {t('student.courses.courseLessons.noLessonsInChapter')}
                                     </div>
                                 )}
                             </div>
