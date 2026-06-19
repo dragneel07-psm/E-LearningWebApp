@@ -14,13 +14,8 @@ import {
     MinusCircle, Loader2, ChevronLeft, ChevronRight,
     AlertCircle,
 } from 'lucide-react';
-
-const STATUS_CONFIG: Record<string, { icon: React.ReactNode; label: string; color: string; bg: string }> = {
-    present: { icon: <CheckCircle2 className="h-4 w-4" />, label: 'Present', color: 'text-emerald-600', bg: 'bg-emerald-50 border-emerald-200' },
-    absent: { icon: <XCircle className="h-4 w-4" />, label: 'Absent', color: 'text-red-500', bg: 'bg-red-50 border-red-200' },
-    late: { icon: <Clock className="h-4 w-4" />, label: 'Late', color: 'text-amber-500', bg: 'bg-amber-50 border-amber-200' },
-    excused: { icon: <MinusCircle className="h-4 w-4" />, label: 'Excused', color: 'text-slate-400', bg: 'bg-slate-50 border-slate-200' },
-};
+import { useTranslation } from '@/lib/localization';
+import { formatNumber, formatDate } from '@/lib/i18n/format';
 
 function getMonthDays(year: number, month: number) {
     return new Date(year, month + 1, 0).getDate();
@@ -28,6 +23,7 @@ function getMonthDays(year: number, month: number) {
 
 export default function ParentAttendancePage() {
     const { toast } = useToast();
+    const { t, locale } = useTranslation();
     const [parent, setParent] = useState<Parent | null>(null);
     const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
     const [attendance, setAttendance] = useState<{ records: any[]; summary: any } | null>(null);
@@ -38,24 +34,31 @@ export default function ParentAttendancePage() {
     const [year, setYear] = useState(now.getFullYear());
     const [month, setMonth] = useState(now.getMonth() + 1); // 1-based
 
+    const STATUS_CONFIG: Record<string, { icon: React.ReactNode; label: string; color: string; bg: string }> = {
+        present: { icon: <CheckCircle2 className="h-4 w-4" />, label: t('parent.attendance.statusPresent'), color: 'text-emerald-600', bg: 'bg-emerald-50 border-emerald-200' },
+        absent:  { icon: <XCircle className="h-4 w-4" />,      label: t('parent.attendance.statusAbsent'),  color: 'text-red-500',     bg: 'bg-red-50 border-red-200' },
+        late:    { icon: <Clock className="h-4 w-4" />,         label: t('parent.attendance.statusLate'),    color: 'text-amber-500',   bg: 'bg-amber-50 border-amber-200' },
+        excused: { icon: <MinusCircle className="h-4 w-4" />,   label: t('parent.attendance.statusExcused'), color: 'text-slate-400',   bg: 'bg-slate-50 border-slate-200' },
+    };
+
     useEffect(() => {
         academicAPI.getMyParent()
             .then((p) => {
                 setParent(p);
                 if (p.students.length > 0) setSelectedStudent(p.students[0]);
             })
-            .catch(() => toast({ title: 'Error', description: 'Failed to load parent profile.', variant: 'destructive' }))
+            .catch(() => toast({ title: 'Error', description: t('parent.attendance.errorLoadProfile'), variant: 'destructive' }))
             .finally(() => setLoading(false));
-    }, [toast]);
+    }, [toast, t]);
 
     useEffect(() => {
         if (!selectedStudent) return;
         setAttLoading(true);
         academicAPI.getChildAttendance(selectedStudent.student_id, month, year)
             .then(setAttendance)
-            .catch(() => toast({ title: 'Error', description: 'Failed to load attendance.', variant: 'destructive' }))
+            .catch(() => toast({ title: 'Error', description: t('parent.attendance.errorLoad'), variant: 'destructive' }))
             .finally(() => setAttLoading(false));
-    }, [selectedStudent, month, year, toast]);
+    }, [selectedStudent, month, year, toast, t]);
 
     const prevMonth = () => {
         if (month === 1) { setMonth(12); setYear(y => y - 1); }
@@ -77,7 +80,7 @@ export default function ParentAttendancePage() {
     if (!parent || parent.students.length === 0) return (
         <div className="p-8 text-center">
             <AlertCircle className="h-10 w-10 text-slate-300 mx-auto mb-3" />
-            <p className="text-slate-500">No children linked to your account.</p>
+            <p className="text-slate-500">{t('parent.attendance.noChildren')}</p>
         </div>
     );
 
@@ -98,10 +101,10 @@ export default function ParentAttendancePage() {
             <div>
                 <div className="flex items-center gap-2 text-violet-600 font-bold mb-1">
                     <CalendarDays className="h-4 w-4" />
-                    <span className="text-[10px] uppercase tracking-[0.2em]">Parent Portal</span>
+                    <span className="text-[10px] uppercase tracking-[0.2em]">{t('parent.attendance.sectionLabel')}</span>
                 </div>
-                <h1 className="text-3xl font-black text-slate-900 tracking-tight">Attendance</h1>
-                <p className="text-slate-500 font-medium">Monthly attendance records for your children.</p>
+                <h1 className="text-3xl font-black text-slate-900 tracking-tight">{t('parent.attendance.pageTitle')}</h1>
+                <p className="text-slate-500 font-medium">{t('parent.attendance.subtitle')}</p>
             </div>
 
             {/* Child selector */}
@@ -125,10 +128,10 @@ export default function ParentAttendancePage() {
             {attendance && (
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                     {[
-                        { label: 'Present', value: summary.present ?? 0, color: 'text-emerald-600', bg: 'bg-emerald-50' },
-                        { label: 'Absent', value: summary.absent ?? 0, color: 'text-red-500', bg: 'bg-red-50' },
-                        { label: 'Late', value: summary.late ?? 0, color: 'text-amber-500', bg: 'bg-amber-50' },
-                        { label: 'Attendance %', value: `${summary.percentage ?? 0}%`, color: 'text-violet-600', bg: 'bg-violet-50' },
+                        { label: t('parent.attendance.statusPresent'), value: formatNumber(summary.present ?? 0, locale), color: 'text-emerald-600', bg: 'bg-emerald-50' },
+                        { label: t('parent.attendance.statusAbsent'),  value: formatNumber(summary.absent ?? 0, locale),  color: 'text-red-500',     bg: 'bg-red-50' },
+                        { label: t('parent.attendance.statusLate'),    value: formatNumber(summary.late ?? 0, locale),    color: 'text-amber-500',   bg: 'bg-amber-50' },
+                        { label: t('parent.attendance.statPct'),       value: `${formatNumber(summary.percentage ?? 0, locale)}%`, color: 'text-violet-600', bg: 'bg-violet-50' },
                     ].map(({ label, value, color, bg }) => (
                         <Card key={label} className="border-slate-200">
                             <CardContent className={`p-4 ${bg} rounded-xl`}>
@@ -145,15 +148,15 @@ export default function ParentAttendancePage() {
                 <Card className="border-slate-200">
                     <CardContent className="p-4 space-y-2">
                         <div className="flex justify-between text-sm font-bold text-slate-700">
-                            <span>Monthly Attendance Rate</span>
+                            <span>{t('parent.attendance.monthlyRate')}</span>
                             <span className={summary.percentage >= 75 ? 'text-emerald-600' : 'text-red-500'}>
-                                {summary.percentage ?? 0}%
+                                {formatNumber(summary.percentage ?? 0, locale)}%
                             </span>
                         </div>
                         <Progress value={summary.percentage ?? 0} className="h-3" />
                         {(summary.percentage ?? 0) < 75 && (
                             <p className="text-xs text-red-500 font-medium flex items-center gap-1">
-                                <AlertCircle className="h-3.5 w-3.5" /> Below 75% threshold — please contact the school.
+                                <AlertCircle className="h-3.5 w-3.5" /> {t('parent.attendance.belowThreshold')}
                             </p>
                         )}
                     </CardContent>
@@ -185,7 +188,7 @@ export default function ParentAttendancePage() {
                         <>
                             {/* Day headers */}
                             <div className="grid grid-cols-7 mb-2">
-                                {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((d) => (
+                                {[t('parent.attendance.daySun'), t('parent.attendance.dayMon'), t('parent.attendance.dayTue'), t('parent.attendance.dayWed'), t('parent.attendance.dayThu'), t('parent.attendance.dayFri'), t('parent.attendance.daySat')].map((d) => (
                                     <div key={d} className="text-center text-[10px] font-bold text-slate-400 uppercase py-1">{d}</div>
                                 ))}
                             </div>

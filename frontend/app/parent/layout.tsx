@@ -13,28 +13,31 @@ import {
 } from 'lucide-react';
 import { removeTokens } from '@/lib/auth';
 import { usersAPI, User as UserType } from '@/lib/api';
-
-const NAV = [
-    { href: '/parent', label: 'Overview', icon: LayoutDashboard, exact: true },
-    { href: '/parent/children', label: 'My Children', icon: Users },
-    { href: '/parent/attendance', label: 'Attendance', icon: CalendarDays },
-    { href: '/parent/grades', label: 'Grades', icon: GraduationCap },
-    { href: '/parent/projects', label: 'Projects', icon: FolderKanban },
-    { href: '/parent/fees', label: 'Fees', icon: Wallet },
-    { href: '/parent/leaves', label: 'Leave Requests', icon: CalendarClock },
-    { href: '/parent/meetings', label: 'Meetings', icon: CalendarClock },
-    { href: '/parent/notices', label: 'Notices', icon: BookOpen },
-    { href: '/parent/messages', label: 'Messages', icon: MessageSquare },
-];
+import { LanguageSelector } from '@/components/LanguageSelector';
+import { useTranslation } from '@/lib/localization';
 
 export default function ParentLayout({ children }: { children: ReactNode }) {
     const pathname = usePathname();
     const router = useRouter();
     const [user, setUser] = useState<UserType | null>(null);
+    const { t } = useTranslation();
 
     useEffect(() => {
         usersAPI.getMe().then(setUser).catch(console.error);
     }, []);
+
+    const NAV = [
+        { href: '/parent', label: t('parent.nav.overview'), icon: LayoutDashboard, exact: true },
+        { href: '/parent/children', label: t('parent.nav.myChildren'), icon: Users },
+        { href: '/parent/attendance', label: t('parent.nav.attendance'), icon: CalendarDays },
+        { href: '/parent/grades', label: t('parent.nav.grades'), icon: GraduationCap },
+        { href: '/parent/projects', label: t('parent.nav.projects'), icon: FolderKanban },
+        { href: '/parent/fees', label: t('parent.nav.fees'), icon: Wallet },
+        { href: '/parent/leaves', label: t('parent.nav.leaveRequests'), icon: CalendarClock },
+        { href: '/parent/meetings', label: t('parent.nav.meetings'), icon: CalendarClock },
+        { href: '/parent/notices', label: t('parent.nav.notices'), icon: BookOpen },
+        { href: '/parent/messages', label: t('parent.nav.messages'), icon: MessageSquare },
+    ];
 
     const visibleNav = NAV.filter((item) => {
         if (item.href === '/parent/projects' && user?.tenant_features?.projects === false) {
@@ -58,8 +61,8 @@ export default function ParentLayout({ children }: { children: ReactNode }) {
                             <Users className="h-4 w-4 text-white" />
                         </div>
                         <div>
-                            <p className="text-xs font-black text-slate-900 leading-tight">Parent Portal</p>
-                            <p className="text-[10px] text-slate-400">Family Dashboard</p>
+                            <p className="text-xs font-black text-slate-900 leading-tight">{t('parent.nav.portal')}</p>
+                            <p className="text-[10px] text-slate-400">{t('parent.nav.familyDashboard')}</p>
                         </div>
                     </div>
                 </div>
@@ -90,7 +93,7 @@ export default function ParentLayout({ children }: { children: ReactNode }) {
                         className="flex items-center gap-2 w-full px-3 py-2.5 rounded-xl text-sm font-bold text-slate-500 hover:bg-red-50 hover:text-red-600 transition-colors"
                     >
                         <LogOut className="h-4 w-4" />
-                        Logout
+                        {t('parent.nav.logout')}
                     </button>
                 </div>
             </aside>
@@ -101,9 +104,10 @@ export default function ParentLayout({ children }: { children: ReactNode }) {
                     <div className="h-7 w-7 rounded-lg bg-violet-600 flex items-center justify-center">
                         <Users className="h-3.5 w-3.5 text-white" />
                     </div>
-                    <span className="font-black text-slate-900 text-sm">Parent Portal</span>
+                    <span className="font-black text-slate-900 text-sm">{t('parent.nav.portal')}</span>
                 </div>
-                <div className="flex gap-1 overflow-x-auto">
+                <div className="flex items-center gap-1 overflow-x-auto">
+                    <LanguageSelector />
                     {NAV.slice(0, 5).map(({ href, icon: Icon, exact }) => {
                         const active = exact ? pathname === href : pathname.startsWith(href);
                         return (
@@ -115,8 +119,13 @@ export default function ParentLayout({ children }: { children: ReactNode }) {
                 </div>
             </div>
 
+            {/* Desktop header */}
+            <header className="hidden md:flex fixed top-0 left-60 right-0 z-20 h-14 bg-white border-b border-slate-100 items-center justify-end px-6 gap-2">
+                <LanguageSelector />
+            </header>
+
             {/* Main content */}
-            <main className="flex-1 md:ml-60 pt-16 md:pt-0 min-h-screen">
+            <main className="flex-1 md:ml-60 pt-16 md:pt-14 min-h-screen">
                 {children}
             </main>
         </div>

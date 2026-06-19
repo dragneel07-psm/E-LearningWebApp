@@ -2,6 +2,10 @@
 // Unauthorized copying, modification, or distribution of this file,
 // via any medium, is strictly prohibited. Proprietary and confidential.
 // jsdom polyfills for browser APIs that Radix/cmdk components rely on.
+import { cleanup } from '@testing-library/react';
+import { afterEach, beforeEach } from 'vitest';
+afterEach(cleanup);
+beforeEach(() => { if (typeof localStorage !== 'undefined') localStorage.clear(); });
 
 if (typeof window !== 'undefined') {
     if (!window.ResizeObserver) {

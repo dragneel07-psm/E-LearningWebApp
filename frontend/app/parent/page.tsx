@@ -19,6 +19,8 @@ import { useToast } from '@/hooks/use-toast';
 import {
     Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
+import { useTranslation } from '@/lib/localization';
+import { formatNumber, formatDate } from '@/lib/i18n/format';
 
 export default function ParentDashboard() {
     const [parentData, setParentData] = useState<Parent | null>(null);
@@ -27,13 +29,14 @@ export default function ParentDashboard() {
     const [selectedReport, setSelectedReport] = useState<any>(null);
     const [reportOpen, setReportOpen] = useState(false);
     const { toast } = useToast();
+    const { t, locale } = useTranslation();
 
     useEffect(() => {
         academicAPI.getMyParent()
             .then(setParentData)
-            .catch(() => toast({ title: 'Error', description: 'Failed to load dashboard.', variant: 'destructive' }))
+            .catch(() => toast({ title: 'Error', description: t('parent.dashboard.errorLoad'), variant: 'destructive' }))
             .finally(() => setLoading(false));
-    }, [toast]);
+    }, [toast, t]);
 
     const fetchReport = async (studentId: string) => {
         setReportLoading(studentId);
@@ -43,7 +46,7 @@ export default function ParentDashboard() {
             const report = await aiAPI.getStudentReport(studentId);
             setSelectedReport(report);
         } catch {
-            toast({ title: 'Error', description: 'Failed to generate AI report.', variant: 'destructive' });
+            toast({ title: 'Error', description: t('parent.dashboard.errorReport'), variant: 'destructive' });
             setReportOpen(false);
         } finally {
             setReportLoading(null);
@@ -62,8 +65,8 @@ export default function ParentDashboard() {
         return (
             <div className="p-8 text-center">
                 <AlertCircle className="h-12 w-12 text-slate-300 mx-auto mb-4" />
-                <h2 className="text-xl font-bold text-slate-700">No profile found</h2>
-                <p className="text-slate-400 mt-1">No parent profile is linked to your account.</p>
+                <h2 className="text-xl font-bold text-slate-700">{t('parent.dashboard.noProfileTitle')}</h2>
+                <p className="text-slate-400 mt-1">{t('parent.dashboard.noProfileDesc')}</p>
             </div>
         );
     }
@@ -74,19 +77,21 @@ export default function ParentDashboard() {
             <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
                 <div>
                     <div className="flex items-center gap-2 text-violet-600 font-bold mb-1">
-                        <span className="text-[10px] uppercase tracking-[0.2em]">Parent Portal</span>
+                        <span className="text-[10px] uppercase tracking-[0.2em]">{t('parent.dashboard.sectionLabel')}</span>
                     </div>
                     <h1 className="text-3xl font-black text-slate-900 tracking-tight">
-                        Welcome, {parentData.user.first_name}
+                        {t('common.greeting', { name: parentData.user.first_name })}
                     </h1>
                     <p className="text-slate-500 font-medium">
-                        {parentData.students.length} child{parentData.students.length !== 1 ? 'ren' : ''} linked to your account
+                        {parentData.students.length !== 1
+                            ? t('parent.dashboard.childrenLinked', { count: formatNumber(parentData.students.length, locale) })
+                            : t('parent.dashboard.childLinked', { count: formatNumber(parentData.students.length, locale) })}
                     </p>
                 </div>
                 <div className="flex items-center gap-3">
                     <Link href="/parent/meetings">
                         <Button variant="outline" className="gap-2 rounded-xl border-violet-200 text-violet-700 hover:bg-violet-50 text-xs font-bold h-9">
-                            <CalendarClock className="h-4 w-4" /> Request Meeting
+                            <CalendarClock className="h-4 w-4" /> {t('parent.dashboard.requestMeeting')}
                         </Button>
                     </Link>
                 </div>
@@ -95,10 +100,10 @@ export default function ParentDashboard() {
             {/* Quick links */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                 {[
-                    { href: '/parent/attendance', icon: CalendarDays, label: 'Attendance', color: 'bg-blue-50 text-blue-600' },
-                    { href: '/parent/grades', icon: GraduationCap, label: 'Grades', color: 'bg-emerald-50 text-emerald-600' },
-                    { href: '/parent/fees', icon: Wallet, label: 'Fees', color: 'bg-amber-50 text-amber-600' },
-                    { href: '/parent/meetings', icon: CalendarClock, label: 'Meetings', color: 'bg-violet-50 text-violet-600' },
+                    { href: '/parent/attendance', icon: CalendarDays, label: t('parent.dashboard.quickAttendance'), color: 'bg-blue-50 text-blue-600' },
+                    { href: '/parent/grades', icon: GraduationCap, label: t('parent.dashboard.quickGrades'), color: 'bg-emerald-50 text-emerald-600' },
+                    { href: '/parent/fees', icon: Wallet, label: t('parent.dashboard.quickFees'), color: 'bg-amber-50 text-amber-600' },
+                    { href: '/parent/meetings', icon: CalendarClock, label: t('parent.dashboard.quickMeetings'), color: 'bg-violet-50 text-violet-600' },
                 ].map(({ href, icon: Icon, label, color }) => (
                     <Link key={href} href={href}>
                         <Card className="border-slate-200 hover:shadow-md transition-all cursor-pointer">
@@ -119,7 +124,7 @@ export default function ParentDashboard() {
                 <Card className="border-dashed border-2 border-slate-200">
                     <CardContent className="py-16 text-center">
                         <AlertCircle className="h-10 w-10 text-slate-200 mx-auto mb-3" />
-                        <p className="text-slate-400 font-medium">No students linked yet.</p>
+                        <p className="text-slate-400 font-medium">{t('parent.dashboard.noStudentsLinked')}</p>
                     </CardContent>
                 </Card>
             ) : (
@@ -138,7 +143,7 @@ export default function ParentDashboard() {
                                         </div>
                                     </div>
                                     <Badge className="bg-violet-50 text-violet-700 border-violet-200 text-xs font-bold">
-                                        {(child as any).class_name || 'No Class'}
+                                        {(child as any).class_name || t('parent.dashboard.noClass')}
                                     </Badge>
                                 </CardTitle>
                             </CardHeader>
@@ -146,9 +151,9 @@ export default function ParentDashboard() {
                                 {/* Stats */}
                                 <div className="grid grid-cols-3 gap-2">
                                     {[
-                                        { icon: <Activity className="h-4 w-4 text-indigo-500" />, label: 'Focus', value: `${child.focus_score || 0}%`, color: 'bg-indigo-50' },
-                                        { icon: <TrendingUp className="h-4 w-4 text-orange-500" />, label: 'Streak', value: `${child.current_streak || 0}d`, color: 'bg-orange-50' },
-                                        { icon: <CalendarDays className="h-4 w-4 text-emerald-500" />, label: 'Attendance', value: `${(child as any).attendance_percentage || 0}%`, color: 'bg-emerald-50' },
+                                        { icon: <Activity className="h-4 w-4 text-indigo-500" />, label: t('parent.dashboard.statFocus'), value: `${formatNumber(child.focus_score || 0, locale)}%`, color: 'bg-indigo-50' },
+                                        { icon: <TrendingUp className="h-4 w-4 text-orange-500" />, label: t('parent.dashboard.statStreak'), value: `${formatNumber(child.current_streak || 0, locale)}d`, color: 'bg-orange-50' },
+                                        { icon: <CalendarDays className="h-4 w-4 text-emerald-500" />, label: t('parent.dashboard.statAttendance'), value: `${formatNumber((child as any).attendance_percentage || 0, locale)}%`, color: 'bg-emerald-50' },
                                     ].map((s, i) => (
                                         <div key={i} className={`${s.color} rounded-xl p-2.5 text-center`}>
                                             <div className="flex justify-center mb-1">{s.icon}</div>
@@ -162,8 +167,8 @@ export default function ParentDashboard() {
                                 {(parentData.user as any).tenant_features?.parent_attendance !== false && (
                                     <div className="space-y-1.5">
                                         <div className="flex justify-between text-xs font-bold">
-                                            <span className="text-slate-500">Attendance (Last 30 days)</span>
-                                            <span className="text-slate-700">{(child as any).attendance_percentage || 0}%</span>
+                                            <span className="text-slate-500">{t('parent.dashboard.attendanceLast30')}</span>
+                                            <span className="text-slate-700">{formatNumber((child as any).attendance_percentage || 0, locale)}%</span>
                                         </div>
                                         <Progress value={(child as any).attendance_percentage || 0} className="h-2" />
                                     </div>
@@ -173,7 +178,7 @@ export default function ParentDashboard() {
                                 {((child as any).recent_grades || []).length > 0 && (
                                     <div className="space-y-2">
                                         <p className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
-                                            <FileText className="h-3.5 w-3.5" /> Recent Results
+                                            <FileText className="h-3.5 w-3.5" /> {t('parent.dashboard.recentResults')}
                                         </p>
                                         {((child as any).recent_grades as any[]).slice(0, 3).map((g, i) => (
                                             <div key={i} className="flex justify-between items-center bg-slate-50 px-3 py-2 rounded-lg border border-slate-100">
@@ -194,7 +199,7 @@ export default function ParentDashboard() {
                                 {((child as any).upcoming_assessments || []).length > 0 && (
                                     <div className="space-y-2">
                                         <p className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
-                                            <Target className="h-3.5 w-3.5" /> Upcoming
+                                            <Target className="h-3.5 w-3.5" /> {t('parent.dashboard.upcoming')}
                                         </p>
                                         {((child as any).upcoming_assessments as any[]).slice(0, 2).map((a, i) => (
                                             <div key={i} className="flex justify-between items-center bg-amber-50/60 px-3 py-2 rounded-lg border border-amber-100">
@@ -204,7 +209,7 @@ export default function ParentDashboard() {
                                                 </div>
                                                 <div className="text-right">
                                                     <p className="text-xs font-bold text-amber-700">
-                                                        {new Date(a.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                                                        {formatDate(new Date(a.date), locale)}
                                                     </p>
                                                     <Badge variant="outline" className="text-[9px] px-1.5 h-4 uppercase">{a.type}</Badge>
                                                 </div>
@@ -217,7 +222,7 @@ export default function ParentDashboard() {
                                 <div className="grid grid-cols-2 gap-2 pt-1 border-t border-slate-50">
                                     <Link href={`/parent/children/${child.student_id}`}>
                                         <Button variant="outline" className="w-full h-9 text-xs font-bold rounded-xl border-violet-200 text-violet-700 hover:bg-violet-50 gap-1.5">
-                                            <GraduationCap className="h-3.5 w-3.5" /> Details
+                                            <GraduationCap className="h-3.5 w-3.5" /> {t('parent.dashboard.btnDetails')}
                                         </Button>
                                     </Link>
                                     <Button
@@ -227,8 +232,8 @@ export default function ParentDashboard() {
                                         disabled={reportLoading === child.student_id}
                                     >
                                         {reportLoading === child.student_id
-                                            ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Generating...</>
-                                            : <><Brain className="h-3.5 w-3.5" /> AI Report</>
+                                            ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> {t('parent.dashboard.btnGenerating')}</>
+                                            : <><Brain className="h-3.5 w-3.5" /> {t('parent.dashboard.btnAiReport')}</>
                                         }
                                     </Button>
                                 </div>
@@ -244,22 +249,22 @@ export default function ParentDashboard() {
                     {!selectedReport ? (
                         <div className="py-20 flex flex-col items-center gap-4">
                             <Loader2 className="h-10 w-10 animate-spin text-violet-500" />
-                            <p className="text-slate-500 font-medium">Analysing student data...</p>
+                            <p className="text-slate-500 font-medium">{t('parent.dashboard.reportAnalysing')}</p>
                         </div>
                     ) : (
                         <div className="space-y-6">
                             <DialogHeader>
                                 <DialogTitle className="flex items-center gap-2 text-xl font-black">
-                                    <Brain className="h-5 w-5 text-violet-600" /> AI Progress Report
+                                    <Brain className="h-5 w-5 text-violet-600" /> {t('parent.dashboard.reportTitle')}
                                 </DialogTitle>
                                 <DialogDescription>
-                                    AI-generated analysis for {selectedReport.student_name}
+                                    {t('parent.dashboard.reportDesc', { name: selectedReport.student_name })}
                                 </DialogDescription>
                             </DialogHeader>
 
                             <div className="bg-violet-50 p-4 rounded-xl border border-violet-100">
                                 <h4 className="font-bold text-violet-700 flex items-center gap-2 mb-2 text-sm">
-                                    <CheckCircle className="h-4 w-4" /> Executive Summary
+                                    <CheckCircle className="h-4 w-4" /> {t('parent.dashboard.reportSummary')}
                                 </h4>
                                 <p className="text-sm leading-relaxed text-slate-700">{selectedReport.ai_report.summary}</p>
                             </div>
@@ -267,7 +272,7 @@ export default function ParentDashboard() {
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="space-y-2">
                                     <h4 className="text-xs font-bold text-emerald-600 uppercase tracking-wider flex items-center gap-1">
-                                        <Target className="h-3.5 w-3.5" /> Strengths
+                                        <Target className="h-3.5 w-3.5" /> {t('parent.dashboard.reportStrengths')}
                                     </h4>
                                     <ul className="space-y-1">
                                         {(selectedReport.ai_report.strengths || []).map((s: string, i: number) => (
@@ -279,7 +284,7 @@ export default function ParentDashboard() {
                                 </div>
                                 <div className="space-y-2">
                                     <h4 className="text-xs font-bold text-orange-600 uppercase tracking-wider flex items-center gap-1">
-                                        <HelpCircle className="h-3.5 w-3.5" /> Areas for Growth
+                                        <HelpCircle className="h-3.5 w-3.5" /> {t('parent.dashboard.reportAreasForGrowth')}
                                     </h4>
                                     <ul className="space-y-1">
                                         {(selectedReport.ai_report.weaknesses || []).map((w: string, i: number) => (
@@ -292,7 +297,7 @@ export default function ParentDashboard() {
                             </div>
 
                             <div className="border-t pt-4 space-y-2">
-                                <h4 className="text-sm font-bold text-slate-700">Recommendations</h4>
+                                <h4 className="text-sm font-bold text-slate-700">{t('parent.dashboard.reportRecommendations')}</h4>
                                 {(selectedReport.ai_report.recommendations || []).map((r: string, i: number) => (
                                     <div key={i} className="p-3 bg-slate-50 rounded-xl text-xs text-slate-600 border border-slate-100 italic">
                                         &ldquo;{r}&rdquo;

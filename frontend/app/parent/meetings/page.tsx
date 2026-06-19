@@ -18,21 +18,25 @@ import {
     CalendarClock, Plus, CheckCircle2, XCircle, Clock,
     CheckCheck, Loader2, Video, User
 } from 'lucide-react';
-
-const STATUS_CONFIG: Record<string, { label: string; color: string; icon: React.ReactNode }> = {
-    pending: { label: 'Pending', color: 'bg-amber-100 text-amber-700', icon: <Clock className="h-3.5 w-3.5" /> },
-    confirmed: { label: 'Confirmed', color: 'bg-blue-100 text-blue-700', icon: <CheckCircle2 className="h-3.5 w-3.5" /> },
-    cancelled: { label: 'Cancelled', color: 'bg-red-100 text-red-600', icon: <XCircle className="h-3.5 w-3.5" /> },
-    completed: { label: 'Completed', color: 'bg-emerald-100 text-emerald-700', icon: <CheckCheck className="h-3.5 w-3.5" /> },
-};
-
-const SLOTS = [
-    { value: 'morning', label: 'Morning (8am – 12pm)' },
-    { value: 'afternoon', label: 'Afternoon (12pm – 4pm)' },
-    { value: 'evening', label: 'Evening (4pm – 7pm)' },
-];
+import { useTranslation } from '@/lib/localization';
+import { formatDate } from '@/lib/i18n/format';
 
 export default function MeetingsPage() {
+    const { t, locale } = useTranslation();
+
+    const STATUS_CONFIG: Record<string, { label: string; color: string; icon: React.ReactNode }> = {
+        pending: { label: t('parent.meetings.statusPending'), color: 'bg-amber-100 text-amber-700', icon: <Clock className="h-3.5 w-3.5" /> },
+        confirmed: { label: t('parent.meetings.statusConfirmed'), color: 'bg-blue-100 text-blue-700', icon: <CheckCircle2 className="h-3.5 w-3.5" /> },
+        cancelled: { label: t('parent.meetings.statusCancelled'), color: 'bg-red-100 text-red-600', icon: <XCircle className="h-3.5 w-3.5" /> },
+        completed: { label: t('parent.meetings.statusCompleted'), color: 'bg-emerald-100 text-emerald-700', icon: <CheckCheck className="h-3.5 w-3.5" /> },
+    };
+
+    const SLOTS = [
+        { value: 'morning', label: t('parent.meetings.slotMorning'), time: t('parent.meetings.slotMorningTime') },
+        { value: 'afternoon', label: t('parent.meetings.slotAfternoon'), time: t('parent.meetings.slotAfternoonTime') },
+        { value: 'evening', label: t('parent.meetings.slotEvening'), time: t('parent.meetings.slotEveningTime') },
+    ];
+
     const [meetings, setMeetings] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [parentData, setParentData] = useState<Parent | null>(null);
@@ -68,18 +72,18 @@ export default function MeetingsPage() {
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!form.student || !form.teacher || !form.requested_date || !form.purpose) {
-            toast({ title: 'Missing fields', description: 'Please fill all required fields.', variant: 'destructive' });
+            toast({ title: t('parent.meetings.errorMissingFields'), variant: 'destructive' });
             return;
         }
         setSubmitting(true);
         try {
             await academicAPI.requestMeeting(form);
-            toast({ title: 'Meeting requested', description: 'Your request has been sent to the teacher.' });
+            toast({ title: t('parent.meetings.successRequested') });
             setFormOpen(false);
             setForm({ student: '', teacher: '', requested_date: '', preferred_slot: 'morning', purpose: '' });
             await load();
         } catch {
-            toast({ title: 'Error', description: 'Failed to submit meeting request.', variant: 'destructive' });
+            toast({ title: t('parent.meetings.errorSubmit'), variant: 'destructive' });
         } finally {
             setSubmitting(false);
         }
@@ -90,7 +94,7 @@ export default function MeetingsPage() {
             await academicAPI.cancelMeeting(meetingId, 'Cancelled by parent');
             await load();
         } catch {
-            toast({ title: 'Error', description: 'Failed to cancel meeting.', variant: 'destructive' });
+            toast({ title: t('parent.meetings.errorCancel'), variant: 'destructive' });
         }
     };
 
@@ -98,30 +102,30 @@ export default function MeetingsPage() {
         <div className="p-6 md:p-8 space-y-6 max-w-4xl">
             <div className="flex items-center justify-between">
                 <div>
-                    <h1 className="text-2xl font-black text-slate-900">Parent-Teacher Meetings</h1>
-                    <p className="text-slate-500 text-sm">Request and track meetings with your child&apos;s teachers.</p>
+                    <h1 className="text-2xl font-black text-slate-900">{t('parent.meetings.pageTitle')}</h1>
+                    <p className="text-slate-500 text-sm">{t('parent.meetings.subtitle')}</p>
                 </div>
                 <Dialog open={formOpen} onOpenChange={setFormOpen}>
                     <DialogTrigger asChild>
                         <Button className="bg-violet-600 hover:bg-violet-700 text-white rounded-xl text-xs font-bold h-9 gap-2">
-                            <Plus className="h-4 w-4" /> Request Meeting
+                            <Plus className="h-4 w-4" /> {t('parent.meetings.btnRequestMeeting')}
                         </Button>
                     </DialogTrigger>
                     <DialogContent className="sm:max-w-[500px]">
                         <DialogHeader>
-                            <DialogTitle className="font-black text-slate-900">New Meeting Request</DialogTitle>
+                            <DialogTitle className="font-black text-slate-900">{t('parent.meetings.dialogTitle')}</DialogTitle>
                         </DialogHeader>
                         <form onSubmit={handleSubmit} className="space-y-4 pt-2">
                             {/* Child selector */}
                             <div className="space-y-1.5">
-                                <label className="text-xs font-bold text-slate-600 uppercase tracking-wide">Child</label>
+                                <label className="text-xs font-bold text-slate-600 uppercase tracking-wide">{t('parent.meetings.labelChild')}</label>
                                 <select
                                     className="w-full border border-slate-200 rounded-xl px-3 py-2 text-sm bg-white"
                                     value={form.student}
                                     onChange={e => setForm(f => ({ ...f, student: e.target.value }))}
                                     required
                                 >
-                                    <option value="">Select child...</option>
+                                    <option value="">{t('parent.meetings.placeholderChild')}</option>
                                     {(parentData?.students ?? []).map(s => (
                                         <option key={s.student_id} value={s.student_id}>
                                             {s.first_name} {s.last_name}
@@ -132,9 +136,9 @@ export default function MeetingsPage() {
 
                             {/* Teacher ID */}
                             <div className="space-y-1.5">
-                                <label className="text-xs font-bold text-slate-600 uppercase tracking-wide">Teacher ID</label>
+                                <label className="text-xs font-bold text-slate-600 uppercase tracking-wide">{t('parent.meetings.labelTeacherId')}</label>
                                 <Input
-                                    placeholder="Teacher's ID or name..."
+                                    placeholder={t('parent.meetings.placeholderTeacherId')}
                                     value={form.teacher}
                                     onChange={e => setForm(f => ({ ...f, teacher: e.target.value }))}
                                     className="rounded-xl border-slate-200 text-sm"
@@ -144,7 +148,7 @@ export default function MeetingsPage() {
 
                             {/* Date */}
                             <div className="space-y-1.5">
-                                <label className="text-xs font-bold text-slate-600 uppercase tracking-wide">Preferred Date</label>
+                                <label className="text-xs font-bold text-slate-600 uppercase tracking-wide">{t('parent.meetings.labelPreferredDate')}</label>
                                 <Input
                                     type="date"
                                     value={form.requested_date}
@@ -157,7 +161,7 @@ export default function MeetingsPage() {
 
                             {/* Time slot */}
                             <div className="space-y-1.5">
-                                <label className="text-xs font-bold text-slate-600 uppercase tracking-wide">Preferred Time Slot</label>
+                                <label className="text-xs font-bold text-slate-600 uppercase tracking-wide">{t('parent.meetings.labelPreferredSlot')}</label>
                                 <div className="grid grid-cols-3 gap-2">
                                     {SLOTS.map(slot => (
                                         <button
@@ -170,10 +174,10 @@ export default function MeetingsPage() {
                                                     : 'border-slate-200 text-slate-500 hover:bg-slate-50'
                                             }`}
                                         >
-                                            {slot.label.split(' ')[0]}
+                                            {slot.label}
                                             <br />
                                             <span className="text-[10px] font-normal opacity-70">
-                                                {slot.label.split(' ').slice(1).join(' ')}
+                                                {slot.time}
                                             </span>
                                         </button>
                                     ))}
@@ -182,9 +186,9 @@ export default function MeetingsPage() {
 
                             {/* Purpose */}
                             <div className="space-y-1.5">
-                                <label className="text-xs font-bold text-slate-600 uppercase tracking-wide">Purpose / Agenda</label>
+                                <label className="text-xs font-bold text-slate-600 uppercase tracking-wide">{t('parent.meetings.labelPurpose')}</label>
                                 <Textarea
-                                    placeholder="Describe the purpose of this meeting..."
+                                    placeholder={t('parent.meetings.placeholderPurpose')}
                                     value={form.purpose}
                                     onChange={e => setForm(f => ({ ...f, purpose: e.target.value }))}
                                     rows={3}
@@ -195,10 +199,12 @@ export default function MeetingsPage() {
 
                             <div className="flex gap-3 pt-2">
                                 <Button type="submit" disabled={submitting} className="flex-1 bg-violet-600 hover:bg-violet-700 text-white rounded-xl font-bold text-sm">
-                                    {submitting ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Sending...</> : 'Send Request'}
+                                    {submitting
+                                        ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> {t('parent.meetings.btnSending')}</>
+                                        : t('parent.meetings.btnSendRequest')}
                                 </Button>
                                 <Button type="button" variant="outline" onClick={() => setFormOpen(false)} className="rounded-xl border-slate-200 text-slate-600">
-                                    Cancel
+                                    {t('parent.meetings.btnCancel')}
                                 </Button>
                             </div>
                         </form>
@@ -212,14 +218,15 @@ export default function MeetingsPage() {
                 <Card className="border-dashed border-2 border-slate-200">
                     <CardContent className="py-16 text-center">
                         <CalendarClock className="h-10 w-10 text-slate-200 mx-auto mb-3" />
-                        <p className="text-slate-400 font-medium">No meeting requests yet.</p>
-                        <p className="text-xs text-slate-400 mt-1">Click &quot;Request Meeting&quot; to schedule one.</p>
+                        <p className="text-slate-400 font-medium">{t('parent.meetings.noMeetings')}</p>
+                        <p className="text-xs text-slate-400 mt-1">{t('parent.meetings.noMeetingsHint')}</p>
                     </CardContent>
                 </Card>
             ) : (
                 <div className="space-y-3">
                     {meetings.map(m => {
                         const cfg = STATUS_CONFIG[m.status] ?? STATUS_CONFIG.pending;
+                        const slot = SLOTS.find(s => s.value === m.preferred_slot);
                         return (
                             <Card key={m.meeting_id} className="border-slate-200 shadow-sm">
                                 <CardContent className="p-5">
@@ -230,7 +237,7 @@ export default function MeetingsPage() {
                                                     {cfg.icon} {cfg.label}
                                                 </Badge>
                                                 <span className="text-xs text-slate-400">
-                                                    {new Date(m.created_at).toLocaleDateString()}
+                                                    {formatDate(new Date(m.created_at), locale)}
                                                 </span>
                                             </div>
                                             <div className="flex items-center gap-4 mt-2 text-sm">
@@ -244,7 +251,7 @@ export default function MeetingsPage() {
                                             <div className="mt-1 flex items-center gap-4 text-xs text-slate-500">
                                                 <span className="flex items-center gap-1">
                                                     <CalendarClock className="h-3 w-3" />
-                                                    {m.requested_date} · {SLOTS.find(s => s.value === m.preferred_slot)?.label ?? m.preferred_slot}
+                                                    {formatDate(new Date(m.requested_date), locale)} · {slot ? `${slot.label} ${slot.time}` : m.preferred_slot}
                                                 </span>
                                             </div>
                                             <p className="text-xs text-slate-500 mt-2 line-clamp-2">{m.purpose}</p>
@@ -252,13 +259,13 @@ export default function MeetingsPage() {
                                             {m.status === 'confirmed' && m.meeting_link && (
                                                 <a href={m.meeting_link} target="_blank" rel="noreferrer"
                                                     className="inline-flex items-center gap-1.5 mt-2 text-xs font-bold text-blue-600 hover:underline">
-                                                    <Video className="h-3.5 w-3.5" /> Join Meeting
+                                                    <Video className="h-3.5 w-3.5" /> {t('parent.meetings.joinMeeting')}
                                                 </a>
                                             )}
 
                                             {m.status === 'confirmed' && m.confirmed_datetime && (
                                                 <p className="text-xs text-blue-600 mt-1 font-medium">
-                                                    Confirmed: {new Date(m.confirmed_datetime).toLocaleString()}
+                                                    {t('parent.meetings.confirmed', { datetime: formatDate(new Date(m.confirmed_datetime), locale) })}
                                                 </p>
                                             )}
 
@@ -276,7 +283,7 @@ export default function MeetingsPage() {
                                                 onClick={() => handleCancel(m.meeting_id)}
                                                 className="text-red-600 border-red-200 hover:bg-red-50 rounded-lg text-xs h-8 px-3 flex-shrink-0"
                                             >
-                                                <XCircle className="h-3.5 w-3.5 mr-1" /> Cancel
+                                                <XCircle className="h-3.5 w-3.5 mr-1" /> {t('parent.meetings.btnCancelMeeting')}
                                             </Button>
                                         )}
                                     </div>

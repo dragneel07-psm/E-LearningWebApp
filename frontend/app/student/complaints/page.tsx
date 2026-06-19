@@ -23,6 +23,8 @@ import {
 } from 'lucide-react';
 import { complaintAPI, Complaint } from '@/lib/api';
 import { toast } from 'sonner';
+import { useTranslation } from '@/lib/localization';
+import { formatDate } from '@/lib/i18n/format';
 
 const STATUS_BADGE: Record<string, string> = {
     open: 'bg-blue-100 text-blue-700',
@@ -48,6 +50,7 @@ const CATEGORIES = [
 ];
 
 export default function StudentComplaintsPage() {
+    const { t, locale } = useTranslation();
     const [complaints, setComplaints] = useState<Complaint[]>([]);
     const [loading, setLoading] = useState(true);
     const [dialogOpen, setDialogOpen] = useState(false);
@@ -70,7 +73,7 @@ export default function StudentComplaintsPage() {
             const data = await complaintAPI.getComplaints();
             setComplaints(Array.isArray(data) ? data : []);
         } catch {
-            toast.error('Failed to load complaints.');
+            toast.error(t('student.complaints.errorLoad'));
         } finally {
             setLoading(false);
         }
@@ -84,17 +87,17 @@ export default function StudentComplaintsPage() {
 
     const handleSubmit = async () => {
         if (!category || !title.trim() || !description.trim()) {
-            toast.error('Please fill in all required fields.');
+            toast.error(t('student.complaints.errorRequiredFields'));
             return;
         }
         setSubmitting(true);
         try {
             await complaintAPI.submitComplaint({ category, title, description, priority, anonymous });
-            toast.success('Complaint submitted. We will review it shortly.');
+            toast.success(t('student.complaints.successSubmitted'));
             setDialogOpen(false);
             loadComplaints();
         } catch {
-            toast.error('Failed to submit complaint.');
+            toast.error(t('student.complaints.errorSubmit'));
         } finally {
             setSubmitting(false);
         }
@@ -107,13 +110,13 @@ export default function StudentComplaintsPage() {
                 <div>
                     <div className="flex items-center gap-2 text-indigo-600 font-bold mb-1">
                         <MessageSquareWarning className="h-4 w-4" />
-                        <span className="text-[10px] uppercase tracking-[0.2em]">Student Portal</span>
+                        <span className="text-[10px] uppercase tracking-[0.2em]">{t('student.nav.studentPortal')}</span>
                     </div>
-                    <h1 className="text-3xl font-black text-slate-900 tracking-tight">My Complaints</h1>
-                    <p className="text-slate-500 font-medium">Report issues and track their resolution.</p>
+                    <h1 className="text-3xl font-black text-slate-900 tracking-tight">{t('student.complaints.pageTitle')}</h1>
+                    <p className="text-slate-500 font-medium">{t('student.complaints.subtitle')}</p>
                 </div>
                 <Button onClick={openDialog} className="gap-2 bg-indigo-600 hover:bg-indigo-700 font-bold shrink-0">
-                    <PlusCircle className="h-4 w-4" /> Report Issue
+                    <PlusCircle className="h-4 w-4" /> {t('student.complaints.reportIssue')}
                 </Button>
             </div>
 
@@ -121,7 +124,7 @@ export default function StudentComplaintsPage() {
             <Card className="border-slate-200">
                 <CardHeader className="pb-3">
                     <CardTitle className="text-base font-bold text-slate-700 flex items-center gap-2">
-                        <MessageSquareWarning className="h-4 w-4 text-indigo-500" /> Submitted Complaints
+                        <MessageSquareWarning className="h-4 w-4 text-indigo-500" /> {t('student.complaints.submittedComplaints')}
                     </CardTitle>
                 </CardHeader>
                 <CardContent className="p-0">
@@ -132,7 +135,7 @@ export default function StudentComplaintsPage() {
                     ) : complaints.length === 0 ? (
                         <div className="py-16 text-center text-slate-400">
                             <MessageSquareWarning className="h-10 w-10 mx-auto mb-3 opacity-30" />
-                            <p className="font-medium">No complaints submitted yet.</p>
+                            <p className="font-medium">{t('student.complaints.noComplaints')}</p>
                         </div>
                     ) : (
                         <div className="divide-y divide-slate-50">
@@ -154,9 +157,9 @@ export default function StudentComplaintsPage() {
                                     <p className="text-sm text-slate-500 line-clamp-2">{c.description}</p>
                                     <div className="flex gap-3 mt-2 text-xs text-slate-400">
                                         <Badge variant="outline" className="capitalize text-xs">{c.category}</Badge>
-                                        <span>{new Date(c.created_at).toLocaleDateString()}</span>
+                                        <span>{formatDate(new Date(c.created_at), locale)}</span>
                                         {c.resolution_note && (
-                                            <span className="text-emerald-600 font-semibold">Resolution: {c.resolution_note}</span>
+                                            <span className="text-emerald-600 font-semibold">{t('student.complaints.resolution')}: {c.resolution_note}</span>
                                         )}
                                     </div>
                                 </div>
@@ -171,13 +174,13 @@ export default function StudentComplaintsPage() {
                 <DialogContent className="sm:max-w-md">
                     <DialogHeader>
                         <DialogTitle className="flex items-center gap-2 font-black text-slate-900">
-                            <MessageSquareWarning className="h-5 w-5 text-indigo-600" /> Report an Issue
+                            <MessageSquareWarning className="h-5 w-5 text-indigo-600" /> {t('student.complaints.dialogTitle')}
                         </DialogTitle>
                     </DialogHeader>
                     <div className="space-y-4 py-2">
                         <div className="grid grid-cols-2 gap-3">
                             <div className="space-y-1.5">
-                                <Label className="font-bold">Category <span className="text-red-500">*</span></Label>
+                                <Label className="font-bold">{t('student.complaints.labelCategory')} <span className="text-red-500">*</span></Label>
                                 <Select value={category} onValueChange={setCategory}>
                                     <SelectTrigger><SelectValue placeholder="Select..." /></SelectTrigger>
                                     <SelectContent>
@@ -188,42 +191,42 @@ export default function StudentComplaintsPage() {
                                 </Select>
                             </div>
                             <div className="space-y-1.5">
-                                <Label className="font-bold">Priority</Label>
+                                <Label className="font-bold">{t('student.complaints.labelPriority')}</Label>
                                 <Select value={priority} onValueChange={setPriority}>
                                     <SelectTrigger><SelectValue /></SelectTrigger>
                                     <SelectContent>
-                                        <SelectItem value="low">Low</SelectItem>
-                                        <SelectItem value="medium">Medium</SelectItem>
-                                        <SelectItem value="high">High</SelectItem>
+                                        <SelectItem value="low">{t('student.complaints.priorityLow')}</SelectItem>
+                                        <SelectItem value="medium">{t('student.complaints.priorityMedium')}</SelectItem>
+                                        <SelectItem value="high">{t('student.complaints.priorityHigh')}</SelectItem>
                                     </SelectContent>
                                 </Select>
                             </div>
                         </div>
                         <div className="space-y-1.5">
-                            <Label className="font-bold">Title <span className="text-red-500">*</span></Label>
-                            <Input value={title} onChange={e => setTitle(e.target.value)} placeholder="Brief title..." />
+                            <Label className="font-bold">{t('student.complaints.labelTitle')} <span className="text-red-500">*</span></Label>
+                            <Input value={title} onChange={e => setTitle(e.target.value)} placeholder={t('student.complaints.placeholderTitle')} />
                         </div>
                         <div className="space-y-1.5">
-                            <Label className="font-bold">Description <span className="text-red-500">*</span></Label>
-                            <Textarea value={description} onChange={e => setDescription(e.target.value)} placeholder="Describe the issue in detail..." rows={4} />
+                            <Label className="font-bold">{t('student.complaints.labelDescription')} <span className="text-red-500">*</span></Label>
+                            <Textarea value={description} onChange={e => setDescription(e.target.value)} placeholder={t('student.complaints.placeholderDescription')} rows={4} />
                         </div>
                         <div className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100">
                             <div>
-                                <p className="text-sm font-bold text-slate-700">Submit Anonymously</p>
-                                <p className="text-xs text-slate-400">Your name will be hidden from staff</p>
+                                <p className="text-sm font-bold text-slate-700">{t('student.complaints.anonymousLabel')}</p>
+                                <p className="text-xs text-slate-400">{t('student.complaints.anonymousHint')}</p>
                             </div>
                             <Switch checked={anonymous} onCheckedChange={setAnonymous} />
                         </div>
                     </div>
                     <DialogFooter>
-                        <Button variant="ghost" onClick={() => setDialogOpen(false)}>Cancel</Button>
+                        <Button variant="ghost" onClick={() => setDialogOpen(false)}>{t('common.cancel')}</Button>
                         <Button
                             className="bg-indigo-600 hover:bg-indigo-700 gap-2 font-bold"
                             onClick={handleSubmit}
                             disabled={submitting}
                         >
                             {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <PlusCircle className="h-4 w-4" />}
-                            {submitting ? 'Submitting...' : 'Submit'}
+                            {submitting ? t('student.complaints.submitting') : t('student.complaints.submit')}
                         </Button>
                     </DialogFooter>
                 </DialogContent>

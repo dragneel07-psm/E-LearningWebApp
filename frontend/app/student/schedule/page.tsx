@@ -15,6 +15,8 @@ import {
 } from 'lucide-react';
 import { format, parseISO, isToday, isTomorrow } from 'date-fns';
 import { toast } from "sonner";
+import { useTranslation } from '@/lib/localization';
+import { formatNumber } from '@/lib/i18n/format';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -65,6 +67,7 @@ export default function StudentSchedulePage() {
     const [generating, setGenerating] = useState(false);
     const [days, setDays] = useState(7);
     const [showSummary, setShowSummary] = useState(true);
+    const { t, locale } = useTranslation();
 
     const fetchSchedule = useCallback(async () => {
         setLoading(true);
@@ -77,7 +80,7 @@ export default function StudentSchedulePage() {
             setEvents(Array.isArray(eventsData) ? eventsData : []);
             setSummary(summaryData);
         } catch {
-            toast.error('Failed to load study schedule.');
+            toast.error(t('student.schedule.errorLoadSchedule'));
         } finally {
             setLoading(false);
         }
@@ -90,9 +93,9 @@ export default function StudentSchedulePage() {
         try {
             const result = await api.ai.generateStudySchedule(days, true);
             setEvents(result.events ?? []);
-            toast.success(`AI plan ready — ${result.count} sessions over ${result.days} days.`);
+            toast.success(t('student.schedule.planReady', { count: formatNumber(result.count, locale), days: formatNumber(result.days, locale) }));
         } catch {
-            toast.error('Failed to generate schedule.');
+            toast.error(t('student.schedule.errorGenerateSchedule'));
         } finally {
             setGenerating(false);
         }
@@ -104,7 +107,7 @@ export default function StudentSchedulePage() {
             await api.ai.markStudyEventComplete(id);
         } catch {
             setEvents(prev => prev.map(e => e.id === id ? { ...e, is_completed: current } : e));
-            toast.error('Failed to update status.');
+            toast.error(t('student.schedule.errorUpdateStatus'));
         }
     };
 
@@ -136,10 +139,10 @@ export default function StudentSchedulePage() {
                 <div>
                     <h1 className="text-3xl font-bold tracking-tight flex items-center gap-2">
                         <Brain className="h-8 w-8 text-indigo-600" />
-                        Smart Study Planner
+                        {t('student.schedule.pageTitle')}
                     </h1>
                     <p className="text-muted-foreground">
-                        AI-optimised schedule combining spaced repetition, skill gaps, and upcoming exams.
+                        {t('student.schedule.subtitle')}
                     </p>
                 </div>
                 <div className="flex items-center gap-2">
@@ -155,13 +158,13 @@ export default function StudentSchedulePage() {
                             </button>
                         ))}
                     </div>
-                    <Button variant="outline" size="icon" onClick={fetchSchedule} title="Refresh">
+                    <Button variant="outline" size="icon" onClick={fetchSchedule} title={t('student.schedule.refresh')}>
                         <RefreshCw className="h-4 w-4" />
                     </Button>
                     <Button onClick={handleGenerate} disabled={generating}>
                         {generating
-                            ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Generating…</>
-                            : <><Calendar className="mr-2 h-4 w-4" />Generate AI Plan</>
+                            ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />{t('student.schedule.generating')}</>
+                            : <><Calendar className="mr-2 h-4 w-4" />{t('student.schedule.generatePlan')}</>
                         }
                     </Button>
                 </div>
@@ -174,7 +177,7 @@ export default function StudentSchedulePage() {
                         <div className="flex justify-between items-center">
                             <CardTitle className="text-base flex items-center gap-2">
                                 <Zap className="h-4 w-4 text-indigo-600" />
-                                What the AI found for you
+                                {t('student.schedule.aiFoundTitle')}
                             </CardTitle>
                             <button onClick={() => setShowSummary(v => !v)} className="text-muted-foreground hover:text-foreground">
                                 {showSummary ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
@@ -185,31 +188,31 @@ export default function StudentSchedulePage() {
                         <CardContent>
                             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-4">
                                 <div className="text-center">
-                                    <p className="text-2xl font-bold text-blue-600">{summary.due_reviews}</p>
-                                    <p className="text-xs text-muted-foreground">Reviews due</p>
+                                    <p className="text-2xl font-bold text-blue-600">{formatNumber(summary.due_reviews, locale)}</p>
+                                    <p className="text-xs text-muted-foreground">{t('student.schedule.reviewsDue')}</p>
                                 </div>
                                 <div className="text-center">
-                                    <p className="text-2xl font-bold text-orange-500">{summary.skill_gaps.length}</p>
-                                    <p className="text-xs text-muted-foreground">Skill gaps</p>
+                                    <p className="text-2xl font-bold text-orange-500">{formatNumber(summary.skill_gaps.length, locale)}</p>
+                                    <p className="text-xs text-muted-foreground">{t('student.schedule.skillGaps')}</p>
                                 </div>
                                 <div className="text-center">
-                                    <p className="text-2xl font-bold text-red-500">{summary.upcoming_exams.length}</p>
-                                    <p className="text-xs text-muted-foreground">Upcoming exams</p>
+                                    <p className="text-2xl font-bold text-red-500">{formatNumber(summary.upcoming_exams.length, locale)}</p>
+                                    <p className="text-xs text-muted-foreground">{t('student.schedule.upcomingExams')}</p>
                                 </div>
                                 <div className="text-center">
-                                    <p className="text-2xl font-bold text-indigo-600">{summary.daily_goal_minutes}</p>
-                                    <p className="text-xs text-muted-foreground">Daily goal (min)</p>
+                                    <p className="text-2xl font-bold text-indigo-600">{formatNumber(summary.daily_goal_minutes, locale)}</p>
+                                    <p className="text-xs text-muted-foreground">{t('student.schedule.dailyGoal')}</p>
                                 </div>
                             </div>
 
                             {summary.skill_gaps.length > 0 && (
                                 <div className="space-y-1.5">
-                                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Top skill gaps</p>
+                                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">{t('student.schedule.topSkillGaps')}</p>
                                     {summary.skill_gaps.slice(0, 3).map((gap, i) => (
                                         <div key={i} className="flex items-center gap-2">
                                             <span className="text-xs w-32 truncate">{gap.skill}</span>
                                             <Progress value={Math.round(gap.p_mastery * 100)} className="flex-1 h-1.5" />
-                                            <span className="text-xs text-muted-foreground w-8">{Math.round(gap.p_mastery * 100)}%</span>
+                                            <span className="text-xs text-muted-foreground w-8">{formatNumber(Math.round(gap.p_mastery * 100), locale)}%</span>
                                         </div>
                                     ))}
                                 </div>
@@ -223,10 +226,10 @@ export default function StudentSchedulePage() {
             {events.length > 0 && (
                 <div className="flex items-center gap-3">
                     <span className="text-sm text-muted-foreground whitespace-nowrap">
-                        {completedCount}/{events.length} sessions
+                        {t('student.schedule.sessions', { completed: formatNumber(completedCount, locale), total: formatNumber(events.length, locale) })}
                     </span>
                     <Progress value={progress} className="flex-1 h-2" />
-                    <span className="text-sm font-medium text-indigo-600">{progress}%</span>
+                    <span className="text-sm font-medium text-indigo-600">{formatNumber(progress, locale)}%</span>
                 </div>
             )}
 
@@ -237,13 +240,12 @@ export default function StudentSchedulePage() {
                         <div className="p-4 bg-indigo-100 rounded-full">
                             <Calendar className="h-12 w-12 text-indigo-600" />
                         </div>
-                        <h3 className="text-xl font-semibold">No study plan yet</h3>
+                        <h3 className="text-xl font-semibold">{t('student.schedule.noScheduleTitle')}</h3>
                         <p className="text-muted-foreground max-w-sm">
-                            Click "Generate AI Plan" and the AI will build a personalised schedule
-                            using your spaced reviews, skill gaps, and upcoming exams.
+                            {t('student.schedule.noScheduleHint')}
                         </p>
                         <Button onClick={handleGenerate} disabled={generating}>
-                            {generating ? 'Generating…' : 'Generate AI Plan'}
+                            {generating ? t('student.schedule.generating') : t('student.schedule.generatePlan')}
                         </Button>
                     </div>
                 </Card>
@@ -255,9 +257,9 @@ export default function StudentSchedulePage() {
                     const dayEvents = grouped[dateKey];
                     const parsedDate = parseISO(dateKey);
                     const dayLabel = isToday(parsedDate)
-                        ? 'Today'
+                        ? t('student.schedule.dayToday')
                         : isTomorrow(parsedDate)
-                        ? 'Tomorrow'
+                        ? t('student.schedule.dayTomorrow')
                         : format(parsedDate, 'EEEE, MMMM do');
 
                     const dayCompleted = dayEvents.filter(e => e.is_completed).length;
@@ -270,7 +272,7 @@ export default function StudentSchedulePage() {
                                     {dayLabel}
                                 </h3>
                                 <Badge variant="secondary" className="text-xs">
-                                    {dayCompleted}/{dayEvents.length} done
+                                    {t('student.schedule.dayDone', { completed: formatNumber(dayCompleted, locale), total: formatNumber(dayEvents.length, locale) })}
                                 </Badge>
                             </div>
 
@@ -291,7 +293,7 @@ export default function StudentSchedulePage() {
                                                     <button
                                                         onClick={() => handleComplete(event.id, event.is_completed)}
                                                         className={`flex-shrink-0 rounded-full p-0.5 transition-colors ${event.is_completed ? 'text-green-500' : 'text-slate-300 hover:text-slate-500'}`}
-                                                        title={event.is_completed ? 'Mark incomplete' : 'Mark complete'}
+                                                        title={event.is_completed ? t('student.schedule.markIncomplete') : t('student.schedule.markComplete')}
                                                     >
                                                         <CheckCircle2 className="h-5 w-5" />
                                                     </button>
@@ -305,7 +307,7 @@ export default function StudentSchedulePage() {
                                                     {' – '}
                                                     {format(parseISO(event.end_time), 'h:mm a')}
                                                     {event.estimated_minutes > 0 && (
-                                                        <span className="ml-1 text-muted-foreground">· {event.estimated_minutes} min</span>
+                                                        <span className="ml-1 text-muted-foreground">· {t('student.schedule.minutesSuffix', { min: formatNumber(event.estimated_minutes, locale) })}</span>
                                                     )}
                                                 </CardDescription>
                                             </CardHeader>

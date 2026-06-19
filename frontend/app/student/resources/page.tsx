@@ -10,11 +10,13 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { ArrowLeft, ExternalLink, BookOpen, Calculator, Beaker, Languages, Globe, Monitor, HeartPulse, PieChart } from 'lucide-react';
 import Link from 'next/link';
+import { useTranslation } from '@/lib/localization';
 
 import { Suspense } from 'react';
 
 function ResourcesContent() {
     const searchParams = useSearchParams();
+    const { t } = useTranslation();
     const gradeParam = searchParams.get('grade') || '10';
     const grade = parseInt(gradeParam);
 
@@ -53,7 +55,7 @@ function ResourcesContent() {
             default:
                 // Generic fallback for other grades where we haven't mapped sections yet
                 return [
-                    { name: `Full Grade ${grade} Curriculum`, icon: BookOpen, url: baseUrl, color: 'text-indigo-600', bg: 'bg-indigo-50' },
+                    { name: t('student.resources.fullCurriculumLabel', { grade: String(grade) }), icon: BookOpen, url: baseUrl, color: 'text-indigo-600', bg: 'bg-indigo-50' },
                     { name: 'Mathematics', icon: Calculator, url: `${baseUrl}`, color: 'text-blue-600', bg: 'bg-blue-50' },
                     { name: 'Science', icon: Beaker, url: `${baseUrl}`, color: 'text-emerald-600', bg: 'bg-emerald-50' },
                     { name: 'Languages', icon: Languages, url: `${baseUrl}`, color: 'text-indigo-600', bg: 'bg-indigo-50' },
@@ -71,14 +73,14 @@ function ResourcesContent() {
                     <Link href="/student">
                         <Button variant="ghost" size="sm" className="gap-2 text-slate-600">
                             <ArrowLeft className="h-4 w-4" />
-                            Back
+                            {t('student.resources.back')}
                         </Button>
                     </Link>
                     <div className="h-6 w-px bg-gray-200"></div>
                     <div>
                         <h1 className="text-xl font-bold text-gray-900 flex items-center gap-2">
                             <img src="https://learning.cehrd.gov.np/pluginfile.php/1/theme_moest/logo/1660209549/Emblem_of_Nepal.png" alt="Govt Logo" className="h-8" />
-                            Govt. Learning Portal
+                            {t('student.resources.govtPortalTitle')}
                         </h1>
                     </div>
                 </div>
@@ -87,10 +89,9 @@ function ResourcesContent() {
             {/* Content */}
             <main className="max-w-5xl mx-auto p-8">
                 <div className="mb-8">
-                    <h2 className="text-2xl font-bold text-gray-900">Grade {grade} Resources</h2>
+                    <h2 className="text-2xl font-bold text-gray-900">{t('student.resources.gradeResources', { grade: String(grade) })}</h2>
                     <p className="text-muted-foreground mt-2">
-                        Official open-source learning materials from the Center for Education and Human Resource Development (CEHRD).
-                        Select a subject to access video lessons and textbooks.
+                        {t('student.resources.subtitle')}
                     </p>
                 </div>
 
@@ -107,13 +108,13 @@ function ResourcesContent() {
                                 </div>
                                 <div>
                                     <CardTitle className="text-lg group-hover:text-indigo-700 transition-colors">{subject.name}</CardTitle>
-                                    <CardDescription className="text-xs">CEHRD Module</CardDescription>
+                                    <CardDescription className="text-xs">{t('student.resources.cehrdModule')}</CardDescription>
                                 </div>
                             </CardHeader>
                             <CardContent>
                                 <div className="flex items-center text-sm text-slate-500 mt-2">
                                     <ExternalLink className="h-4 w-4 mr-2" />
-                                    Open Official Material
+                                    {t('student.resources.openMaterial')}
                                 </div>
                             </CardContent>
                         </Card>
@@ -122,17 +123,16 @@ function ResourcesContent() {
 
                 <div className="mt-12 bg-blue-50 border border-blue-100 rounded-lg p-6 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
                     <div>
-                        <h3 className="font-semibold text-blue-900">Why use the Government Portal?</h3>
+                        <h3 className="font-semibold text-blue-900">{t('student.resources.whyGovtTitle')}</h3>
                         <p className="text-sm text-blue-700 mt-1 max-w-2xl">
-                            These materials are aligned with the national curriculum and include official video lectures,
-                            digital textbooks, and interactive exercises directly from the Ministry of Education.
+                            {t('student.resources.whyGovtDesc')}
                         </p>
                     </div>
                     <Button
                         className="bg-blue-600 hover:bg-blue-700 text-white"
                         onClick={() => window.open('https://learning.cehrd.gov.np/', '_blank')}
                     >
-                        Visit Main Website
+                        {t('student.resources.visitMainSite')}
                     </Button>
                 </div>
             </main>

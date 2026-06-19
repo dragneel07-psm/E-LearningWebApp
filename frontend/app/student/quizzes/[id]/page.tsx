@@ -18,6 +18,8 @@ import {
 } from 'lucide-react';
 import { useGamification } from '@/components/providers/gamification-provider';
 import { academicAPI, Assessment, Question } from '@/lib/api';
+import { useTranslation } from '@/lib/localization';
+import { formatNumber } from '@/lib/i18n/format';
 
 function normalizeList<T>(payload: unknown): T[] {
     if (Array.isArray(payload)) return payload as T[];
@@ -32,6 +34,7 @@ export default function StudentQuizPage() {
     const router = useRouter();
     const id = params.id as string;
     const { awardXP } = useGamification();
+    const { t, locale } = useTranslation();
 
     const [loading, setLoading] = useState(true);
     const [submitting, setSubmitting] = useState(false);
@@ -62,7 +65,7 @@ export default function StudentQuizPage() {
                 setTimeLeft(assessmentData.duration_minutes * 60);
             } catch (error) {
                 console.error("Failed to load quiz", error);
-                toast.error("Failed to load quiz");
+                toast.error(t('student.quizDetail.errorLoad'));
             } finally {
                 setLoading(false);
             }
@@ -104,10 +107,10 @@ export default function StudentQuizPage() {
             const earnedXP = result.score ? result.score * 10 : 100;
             awardXP(earnedXP, `Quiz Completed`);
 
-            toast.success('Quiz submitted successfully!');
+            toast.success(t('student.quizDetail.successSubmit'));
         } catch (error) {
             console.error('Submission failed:', error);
-            toast.error('Failed to submit quiz');
+            toast.error(t('student.quizDetail.errorSubmit'));
             // Re-arm on failure so the student can retry
             submittedRef.current = false;
         } finally {
@@ -122,7 +125,7 @@ export default function StudentQuizPage() {
     };
 
     if (loading) return <div className="flex justify-center p-24"><Loader2 className="animate-spin h-8 w-8 text-indigo-600" /></div>;
-    if (!assessment) return <div className="p-12 text-center text-slate-500">Quiz not found</div>;
+    if (!assessment) return <div className="p-12 text-center text-slate-500">{t('student.quizDetail.notFound')}</div>;
 
     if (!quizStarted) {
         return (
@@ -135,31 +138,31 @@ export default function StudentQuizPage() {
                         </div>
                         <CardTitle className="text-3xl font-black text-slate-900">{assessment.title}</CardTitle>
                         <CardDescription className="text-base mt-2">
-                            {assessment.description || 'Welcome to this quiz. Please read the instructions carefully.'}
+                            {assessment.description || t('student.quizDetail.defaultDescription')}
                         </CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-8 pb-10">
                         <div className="grid grid-cols-2 gap-4">
                             <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 text-center">
-                                <span className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Duration</span>
-                                <span className="text-xl font-bold text-slate-800">{assessment.duration_minutes} Mins</span>
+                                <span className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">{t('student.quizDetail.labelDuration')}</span>
+                                <span className="text-xl font-bold text-slate-800">{formatNumber(assessment.duration_minutes, locale)} {t('student.quizDetail.suffixMins')}</span>
                             </div>
                             <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 text-center">
-                                <span className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Questions</span>
-                                <span className="text-xl font-bold text-slate-800">{questions.length} Total</span>
+                                <span className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">{t('student.quizDetail.labelQuestions')}</span>
+                                <span className="text-xl font-bold text-slate-800">{formatNumber(questions.length, locale)} {t('student.quizDetail.suffixTotal')}</span>
                             </div>
                         </div>
 
                         <div className="bg-amber-50 border border-amber-200 p-4 rounded-2xl flex gap-3 text-amber-800 text-sm">
                             <AlertCircle className="h-5 w-5 shrink-0" />
-                            <p>Once you start, the timer will begin. Do not refresh the page or your progress may be lost.</p>
+                            <p>{t('student.quizDetail.warningText')}</p>
                         </div>
 
                         <Button
                             className="w-full h-14 bg-indigo-600 hover:bg-indigo-700 text-lg font-bold rounded-2xl shadow-lg shadow-indigo-200"
                             onClick={() => setQuizStarted(true)}
                         >
-                            Start Quiz
+                            {t('student.quizDetail.startQuiz')}
                         </Button>
                     </CardContent>
                 </Card>
@@ -180,16 +183,16 @@ export default function StudentQuizPage() {
                             {passed ? <CheckCircle2 className="h-10 w-10" /> : <AlertCircle className="h-10 w-10" />}
                         </div>
                         <CardTitle className="text-3xl font-black text-slate-900">
-                            {passed ? 'Congratulations!' : 'Keep Trying!'}
+                            {passed ? t('student.quizDetail.resultPass') : t('student.quizDetail.resultFail')}
                         </CardTitle>
                         <CardDescription className="text-lg">
-                            You've completed the quiz: <strong>{assessment.title}</strong>
+                            {t('student.quizDetail.completedDesc')} <strong>{assessment.title}</strong>
                         </CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-8 pb-10">
                         <div className="py-6">
                             <div className="text-6xl font-black text-slate-900 mb-2">{score?.score}</div>
-                            <div className="text-slate-400 font-bold uppercase tracking-widest text-sm">Total Score Out Of {score?.max_score}</div>
+                            <div className="text-slate-400 font-bold uppercase tracking-widest text-sm">{t('student.quizDetail.totalScoreLabel', { max: formatNumber(score?.max_score ?? 0, locale) })}</div>
                         </div>
 
                         <div className="w-full bg-slate-100 rounded-full h-4 overflow-hidden">
@@ -205,7 +208,7 @@ export default function StudentQuizPage() {
                                 className="w-full h-14 rounded-2xl font-bold border-2"
                                 onClick={() => router.push('/student/exams')}
                             >
-                                Back to Exams
+                                {t('student.quizDetail.backToExams')}
                             </Button>
                         </div>
                     </CardContent>
@@ -225,7 +228,7 @@ export default function StudentQuizPage() {
                     <h1 className="font-bold text-lg text-slate-900 truncate">{assessment.title}</h1>
                     <div className="flex items-center gap-4 mt-1">
                         <Progress value={((currentQuestionIndex + 1) / questions.length) * 100} className="h-1 w-32" />
-                        <span className="text-xs text-slate-500 font-bold">Question {currentQuestionIndex + 1} of {questions.length}</span>
+                        <span className="text-xs text-slate-500 font-bold">{t('student.quizDetail.questionOf', { current: formatNumber(currentQuestionIndex + 1, locale), total: formatNumber(questions.length, locale) })}</span>
                     </div>
                 </div>
                 <div className={`flex items-center gap-2 px-4 py-2 rounded-2xl font-black ${timeLeft < 60 ? 'bg-red-50 text-red-600 animate-pulse' : 'bg-slate-100 text-slate-700'}`}>
@@ -239,7 +242,7 @@ export default function StudentQuizPage() {
                 <CardContent className="p-8 space-y-8">
                     <div className="space-y-4">
                         <span className="inline-block px-3 py-1 bg-indigo-50 text-indigo-600 text-[10px] font-black uppercase tracking-widest rounded-lg">
-                            {currentQuestion.type.replace('_', ' ')} • {currentQuestion.points} Points
+                            {currentQuestion.type.replace('_', ' ')} • {formatNumber(currentQuestion.points, locale)} {t('student.quizDetail.pointsSuffix')}
                         </span>
                         <h2 className="text-2xl font-bold text-slate-800 leading-tight">
                             {currentQuestion.text}
@@ -284,7 +287,7 @@ export default function StudentQuizPage() {
                     {(currentQuestion.type === 'short_answer' || currentQuestion.type === 'long_answer') && (
                         <textarea
                             className="w-full h-40 p-5 rounded-2xl border-2 border-slate-100 bg-slate-50 focus:bg-white focus:border-indigo-600 focus:ring-4 focus:ring-indigo-50 transition-all text-lg"
-                            placeholder="Type your answer here..."
+                            placeholder={t('student.quizDetail.placeholderAnswer')}
                             value={answers[currentQuestion.question_id] || ''}
                             onChange={(e) => handleAnswerChange(currentQuestion.question_id, e.target.value)}
                         />
@@ -298,7 +301,7 @@ export default function StudentQuizPage() {
                             disabled={currentQuestionIndex === 0}
                             className="rounded-2xl font-bold h-14 px-8"
                         >
-                            <ChevronLeft className="mr-2 h-5 w-5" /> Previous
+                            <ChevronLeft className="mr-2 h-5 w-5" /> {t('student.quizDetail.btnPrevious')}
                         </Button>
 
                         {currentQuestionIndex === questions.length - 1 ? (
@@ -309,7 +312,7 @@ export default function StudentQuizPage() {
                                 disabled={submitting}
                             >
                                 {submitting ? <Loader2 className="animate-spin h-5 w-5 mr-2" /> : <Send className="mr-2 h-5 w-5" />}
-                                Submit Quiz
+                                {t('student.quizDetail.btnSubmitQuiz')}
                             </Button>
                         ) : (
                             <Button
@@ -317,7 +320,7 @@ export default function StudentQuizPage() {
                                 className="bg-emerald-600 hover:bg-emerald-700 rounded-2xl font-bold h-14 px-8 shadow-lg shadow-emerald-100"
                                 onClick={() => setCurrentQuestionIndex(prev => prev + 1)}
                             >
-                                Next <ChevronRight className="ml-2 h-5 w-5" />
+                                {t('student.quizDetail.btnNext')} <ChevronRight className="ml-2 h-5 w-5" />
                             </Button>
                         )}
                     </div>

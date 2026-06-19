@@ -45,10 +45,10 @@ export function LanguageSelector() {
                     English
                 </DropdownMenuItem>
                 <DropdownMenuItem
-                    className={`rounded-xl font-bold cursor-pointer transition-colors ${locale === 'es' ? 'bg-indigo-50 text-indigo-600' : 'text-slate-600'}`}
-                    onClick={() => setLocale('es')}
+                    className={`rounded-xl font-bold cursor-pointer transition-colors ${locale === 'ne' ? 'bg-indigo-50 text-indigo-600' : 'text-slate-600'}`}
+                    onClick={() => setLocale('ne')}
                 >
-                    Español
+                    नेपाली
                 </DropdownMenuItem>
             </DropdownMenuContent>
         </DropdownMenu>

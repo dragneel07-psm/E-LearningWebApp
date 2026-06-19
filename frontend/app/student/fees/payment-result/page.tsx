@@ -9,8 +9,10 @@ import Link from 'next/link';
 import { CheckCircle2, XCircle, ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { useTranslation } from '@/lib/localization';
 
 function PaymentResultContent() {
+    const { t } = useTranslation();
     const params = useSearchParams();
     const status = params.get('status');
     const gateway = params.get('gateway');
@@ -29,18 +31,20 @@ function PaymentResultContent() {
                     </div>
                     <div>
                         <h1 className="text-2xl font-black text-slate-900">
-                            {success ? 'Payment Successful!' : 'Payment Failed'}
+                            {success ? t('student.paymentResult.successTitle') : t('student.paymentResult.failedTitle')}
                         </h1>
                         <p className="text-slate-500 mt-2">
                             {success
-                                ? `Your payment via ${gateway ? gateway.charAt(0).toUpperCase() + gateway.slice(1) : 'gateway'} has been processed.`
-                                : 'Your payment could not be completed. Please try again.'}
+                                ? t('student.paymentResult.successDesc', {
+                                    gateway: gateway ? gateway.charAt(0).toUpperCase() + gateway.slice(1) : 'gateway'
+                                  })
+                                : t('student.paymentResult.failedDesc')}
                         </p>
                     </div>
                     <Link href="/student/fees">
                         <Button className="gap-2 w-full bg-indigo-600 hover:bg-indigo-700">
                             <ArrowLeft className="h-4 w-4" />
-                            Back to Fees
+                            {t('student.paymentResult.backToFees')}
                         </Button>
                     </Link>
                 </CardContent>

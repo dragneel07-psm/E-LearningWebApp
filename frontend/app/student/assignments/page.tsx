@@ -15,8 +15,11 @@ import {
 import { academicAPI, Assessment, Submission } from '@/lib/api';
 import Link from 'next/link';
 import { toast } from 'sonner';
+import { useTranslation } from '@/lib/localization';
+import { formatNumber, formatDate } from '@/lib/i18n/format';
 
 export default function AssignmentsDashboard() {
+    const { t, locale } = useTranslation();
     const [loading, setLoading] = useState(true);
     const [assignments, setAssignments] = useState<Assessment[]>([]);
     const [submissions, setSubmissions] = useState<Submission[]>([]);
@@ -35,7 +38,7 @@ export default function AssignmentsDashboard() {
             setAssignments(allAssessments.filter((a) => a.type === 'assignment' || !a.type));
             setSubmissions(studentId ? allSubmissions.filter((s) => s.student === studentId) : []);
         } catch {
-            toast.error('Failed to load assignments. Please try again.');
+            toast.error(t('student.assignments.errorLoad'));
         } finally {
             setLoading(false);
         }
@@ -70,7 +73,7 @@ export default function AssignmentsDashboard() {
     if (loading) return (
         <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
             <Loader2 className="h-10 w-10 animate-spin text-indigo-500" />
-            <p className="text-slate-400 text-sm">Loading assignments…</p>
+            <p className="text-slate-400 text-sm">{t('student.assignments.loading')}</p>
         </div>
     );
 
@@ -99,25 +102,25 @@ export default function AssignmentsDashboard() {
                     <div className="flex items-start justify-between gap-2">
                         <div className="flex items-center gap-2 flex-wrap">
                             {status === 'pending' && isOverdue && (
-                                <Badge className="bg-red-100 text-red-700 border-0 text-[10px] font-bold">OVERDUE</Badge>
+                                <Badge className="bg-red-100 text-red-700 border-0 text-[10px] font-bold">{t('student.assignments.badgeOverdue')}</Badge>
                             )}
                             {status === 'pending' && isDueSoon && !isOverdue && (
                                 <Badge className="bg-orange-100 text-orange-700 border-0 text-[10px] font-bold gap-1">
-                                    <Flame className="h-2.5 w-2.5" /> DUE SOON
+                                    <Flame className="h-2.5 w-2.5" /> {t('student.assignments.badgeDueSoon')}
                                 </Badge>
                             )}
                             {status === 'graded' && (
-                                <Badge className="bg-emerald-100 text-emerald-700 border-0 text-[10px] font-bold">GRADED</Badge>
+                                <Badge className="bg-emerald-100 text-emerald-700 border-0 text-[10px] font-bold">{t('student.assignments.badgeGraded')}</Badge>
                             )}
                             {status === 'submitted' && (
-                                <Badge className="bg-blue-100 text-blue-700 border-0 text-[10px] font-bold">SUBMITTED</Badge>
+                                <Badge className="bg-blue-100 text-blue-700 border-0 text-[10px] font-bold">{t('student.assignments.badgeSubmitted')}</Badge>
                             )}
                             {status === 'pending' && !isOverdue && !isDueSoon && (
-                                <Badge className="bg-slate-100 text-slate-500 border-0 text-[10px] font-bold">PENDING</Badge>
+                                <Badge className="bg-slate-100 text-slate-500 border-0 text-[10px] font-bold">{t('student.assignments.badgePending')}</Badge>
                             )}
                         </div>
                         {assignment.total_marks && (
-                            <span className="text-xs font-black text-slate-500 shrink-0">{assignment.total_marks} pts</span>
+                            <span className="text-xs font-black text-slate-500 shrink-0">{formatNumber(Number(assignment.total_marks), locale)} {t('student.assignments.pts')}</span>
                         )}
                     </div>
 
@@ -134,11 +137,11 @@ export default function AssignmentsDashboard() {
                     <div className="flex items-center gap-2 text-xs">
                         <Calendar className="h-3.5 w-3.5 text-slate-400" />
                         <span className="text-slate-500">
-                            {assignment.due_date ? new Date(assignment.due_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'No deadline'}
+                            {assignment.due_date ? formatDate(new Date(assignment.due_date), locale) : t('student.assignments.noDeadline')}
                         </span>
                         {status === 'pending' && (
                             <span className={`ml-auto font-bold ${isOverdue ? 'text-red-600' : isDueSoon ? 'text-orange-600' : 'text-slate-400'}`}>
-                                {isOverdue ? `${Math.abs(days)}d late` : days === 0 ? 'Due today' : `${days}d left`}
+                                {isOverdue ? t('student.assignments.daysLate', { count: formatNumber(Math.abs(days), locale) }) : days === 0 ? t('student.assignments.dueToday') : t('student.assignments.daysLeft', { count: formatNumber(days, locale) })}
                             </span>
                         )}
                     </div>
@@ -148,7 +151,7 @@ export default function AssignmentsDashboard() {
                         <div className="flex items-center gap-2 p-3 bg-emerald-50 rounded-xl border border-emerald-100">
                             <Award className="h-4 w-4 text-emerald-600 shrink-0" />
                             <span className="text-sm font-black text-emerald-700">
-                                {score} / {assignment.total_marks} pts
+                                {formatNumber(Number(score), locale)} / {formatNumber(Number(assignment.total_marks), locale)} {t('student.assignments.pts')}
                             </span>
                             <span className="text-xs text-emerald-500 ml-auto font-medium">
                                 {assignment.total_marks ? Math.round((Number(score) / Number(assignment.total_marks)) * 100) : 0}%
@@ -162,13 +165,13 @@ export default function AssignmentsDashboard() {
                             <Link href={`/student/assignments/${assignment.assessment_id}`} className="block">
                                 <Button className="w-full bg-indigo-600 hover:bg-indigo-700 text-white gap-2 rounded-xl font-bold">
                                     <Upload className="h-4 w-4" />
-                                    {isOverdue ? 'Submit Now' : 'Start Assignment'}
+                                    {isOverdue ? t('student.assignments.submitNow') : t('student.assignments.startAssignment')}
                                     <ChevronRight className="h-4 w-4 ml-auto" />
                                 </Button>
                             </Link>
                         ) : (
                             <Button variant="outline" className="w-full border-slate-200 text-slate-600 hover:bg-slate-50 rounded-xl gap-2">
-                                <FileText className="h-4 w-4" /> View Details
+                                <FileText className="h-4 w-4" /> {t('student.assignments.viewDetails')}
                             </Button>
                         )}
                     </div>
@@ -184,10 +187,10 @@ export default function AssignmentsDashboard() {
             <div>
                 <div className="flex items-center gap-2 text-indigo-600 font-bold mb-1">
                     <FileText className="h-4 w-4" />
-                    <span className="text-[10px] uppercase tracking-[0.2em]">My Work</span>
+                    <span className="text-[10px] uppercase tracking-[0.2em]">{t('student.assignments.sectionLabel')}</span>
                 </div>
-                <h1 className="text-3xl font-black text-slate-900 tracking-tight">Assignments</h1>
-                <p className="text-slate-500 mt-1 text-sm">Track pending coursework, submit assignments, and view grades.</p>
+                <h1 className="text-3xl font-black text-slate-900 tracking-tight">{t('student.assignments.pageTitle')}</h1>
+                <p className="text-slate-500 mt-1 text-sm">{t('student.assignments.subtitle')}</p>
             </div>
 
             {/* Summary Cards */}
@@ -197,10 +200,10 @@ export default function AssignmentsDashboard() {
                         <div className="absolute inset-0 bg-gradient-to-br from-orange-50 to-amber-50" />
                         <div className="relative flex items-center justify-between">
                             <div>
-                                <p className="text-xs font-bold text-orange-600 uppercase tracking-widest mb-1">Pending</p>
-                                <p className="text-4xl font-black text-orange-700">{pending.length}</p>
+                                <p className="text-xs font-bold text-orange-600 uppercase tracking-widest mb-1">{t('student.assignments.statPending')}</p>
+                                <p className="text-4xl font-black text-orange-700">{formatNumber(pending.length, locale)}</p>
                                 <p className="text-[10px] text-orange-400 mt-2 font-medium">
-                                    {pending.filter((a) => getDaysUntilDue(a.due_date ?? '') < 0).length} overdue
+                                    {t('student.assignments.overdueCount', { count: formatNumber(pending.filter((a) => getDaysUntilDue(a.due_date ?? '') < 0).length, locale) })}
                                 </p>
                             </div>
                             <div className="h-14 w-14 rounded-2xl bg-orange-100 flex items-center justify-center">
@@ -215,9 +218,9 @@ export default function AssignmentsDashboard() {
                         <div className="absolute inset-0 bg-gradient-to-br from-blue-50 to-indigo-50" />
                         <div className="relative flex items-center justify-between">
                             <div>
-                                <p className="text-xs font-bold text-blue-600 uppercase tracking-widest mb-1">Submitted</p>
-                                <p className="text-4xl font-black text-blue-700">{submitted.length}</p>
-                                <p className="text-[10px] text-blue-400 mt-2 font-medium">Awaiting grades</p>
+                                <p className="text-xs font-bold text-blue-600 uppercase tracking-widest mb-1">{t('student.assignments.statSubmitted')}</p>
+                                <p className="text-4xl font-black text-blue-700">{formatNumber(submitted.length, locale)}</p>
+                                <p className="text-[10px] text-blue-400 mt-2 font-medium">{t('student.assignments.awaitingGrades')}</p>
                             </div>
                             <div className="h-14 w-14 rounded-2xl bg-blue-100 flex items-center justify-center">
                                 <Clock className="h-7 w-7 text-blue-500" />
@@ -231,9 +234,9 @@ export default function AssignmentsDashboard() {
                         <div className="absolute inset-0 bg-gradient-to-br from-emerald-50 to-teal-50" />
                         <div className="relative flex items-center justify-between">
                             <div>
-                                <p className="text-xs font-bold text-emerald-600 uppercase tracking-widest mb-1">Graded</p>
-                                <p className="text-4xl font-black text-emerald-700">{graded.length}</p>
-                                <p className="text-[10px] text-emerald-400 mt-2 font-medium">Results available</p>
+                                <p className="text-xs font-bold text-emerald-600 uppercase tracking-widest mb-1">{t('student.assignments.statGraded')}</p>
+                                <p className="text-4xl font-black text-emerald-700">{formatNumber(graded.length, locale)}</p>
+                                <p className="text-[10px] text-emerald-400 mt-2 font-medium">{t('student.assignments.resultsAvailable')}</p>
                             </div>
                             <div className="h-14 w-14 rounded-2xl bg-emerald-100 flex items-center justify-center">
                                 <CheckCircle2 className="h-7 w-7 text-emerald-500" />
@@ -247,13 +250,13 @@ export default function AssignmentsDashboard() {
             <Tabs defaultValue="pending" className="space-y-6">
                 <TabsList className="bg-white border border-slate-200 p-1 rounded-2xl shadow-sm w-full md:w-auto h-auto gap-1">
                     <TabsTrigger value="pending" className="rounded-xl px-5 py-2.5 font-bold text-sm data-[state=active]:bg-indigo-600 data-[state=active]:text-white data-[state=active]:shadow-md">
-                        Pending ({pending.length})
+                        {t('student.assignments.tabPending', { count: formatNumber(pending.length, locale) })}
                     </TabsTrigger>
                     <TabsTrigger value="submitted" className="rounded-xl px-5 py-2.5 font-bold text-sm data-[state=active]:bg-indigo-600 data-[state=active]:text-white data-[state=active]:shadow-md">
-                        Submitted ({submitted.length})
+                        {t('student.assignments.tabSubmitted', { count: formatNumber(submitted.length, locale) })}
                     </TabsTrigger>
                     <TabsTrigger value="graded" className="rounded-xl px-5 py-2.5 font-bold text-sm data-[state=active]:bg-indigo-600 data-[state=active]:text-white data-[state=active]:shadow-md">
-                        Graded ({graded.length})
+                        {t('student.assignments.tabGraded', { count: formatNumber(graded.length, locale) })}
                     </TabsTrigger>
                 </TabsList>
 
@@ -263,7 +266,7 @@ export default function AssignmentsDashboard() {
                             {pending.map((a) => <AssignmentCard key={a.assessment_id} assignment={a} status="pending" />)}
                         </div>
                     ) : (
-                        <EmptyState message="No pending assignments — you're all caught up!" icon={CheckCircle2} color="emerald" />
+                        <EmptyState message={t('student.assignments.emptyPending')} icon={CheckCircle2} color="emerald" />
                     )}
                 </TabsContent>
 
@@ -273,7 +276,7 @@ export default function AssignmentsDashboard() {
                             {submitted.map((a) => <AssignmentCard key={a.assessment_id} assignment={a} status="submitted" />)}
                         </div>
                     ) : (
-                        <EmptyState message="Nothing submitted yet. Start with your pending work!" icon={FileText} color="blue" />
+                        <EmptyState message={t('student.assignments.emptySubmitted')} icon={FileText} color="blue" />
                     )}
                 </TabsContent>
 
@@ -283,7 +286,7 @@ export default function AssignmentsDashboard() {
                             {graded.map((a) => <AssignmentCard key={a.assessment_id} assignment={a} status="graded" />)}
                         </div>
                     ) : (
-                        <EmptyState message="No graded assignments yet. Submit work and check back soon." icon={BookOpen} color="indigo" />
+                        <EmptyState message={t('student.assignments.emptyGraded')} icon={BookOpen} color="indigo" />
                     )}
                 </TabsContent>
             </Tabs>

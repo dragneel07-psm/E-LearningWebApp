@@ -4,9 +4,11 @@
 'use client';
 
 import MessagingPage from '@/components/messaging/MessagingPage';
+import { useTranslation } from '@/lib/localization';
 
 export default function ParentMessagesPage() {
+    const { t } = useTranslation();
     return (
-        <MessagingPage emptyStateMessage="Choose a conversation to message teachers or school staff." />
+        <MessagingPage emptyStateMessage={t('parent.messages.emptyState')} />
     );
 }

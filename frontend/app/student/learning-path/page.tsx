@@ -16,9 +16,12 @@ import {
 } from 'lucide-react';
 import { aiAPI, learningPathsAPI, academicAPI, usersAPI, LearningPath, LearningNode } from '@/lib/api';
 import { toast } from 'sonner';
+import { useTranslation } from '@/lib/localization';
+import { formatNumber } from '@/lib/i18n/format';
 
 export default function LearningPathPage() {
     const router = useRouter();
+    const { t, locale } = useTranslation();
     const [path, setPath] = useState<LearningPath | null>(null);
     const [loading, setLoading] = useState(true);
     const [generating, setGenerating] = useState(false);
@@ -44,7 +47,7 @@ export default function LearningPathPage() {
         } catch (error: any) {
             console.error("Path load error:", error);
             if (error.status !== 404) {
-                toast.error("Failed to load learning path.");
+                toast.error(t('student.learningPath.toastLoadFail'));
             }
         } finally {
             setLoading(false);
@@ -57,9 +60,9 @@ export default function LearningPathPage() {
             setGenerating(true);
             const newPath = await learningPathsAPI.generatePath({ student_id: studentId });
             setPath(newPath);
-            toast.success("New learning path generated!");
+            toast.success(t('student.learningPath.toastGenerateSuccess'));
         } catch (error) {
-            toast.error("Failed to generate path.");
+            toast.error(t('student.learningPath.toastGenerateFail'));
         } finally {
             setGenerating(false);
         }
@@ -74,12 +77,12 @@ export default function LearningPathPage() {
             setPath(activePath);
 
             if (result.next_node_unlocked) {
-                toast.success("Task completed! Next step unlocked.");
+                toast.success(t('student.learningPath.toastCompleteUnlocked'));
             } else {
-                toast.success("Path completed! Great job.");
+                toast.success(t('student.learningPath.toastCompleteAll'));
             }
         } catch (error) {
-            toast.error("Failed to update status.");
+            toast.error(t('student.learningPath.toastUpdateFail'));
         }
     };
 
@@ -102,7 +105,7 @@ export default function LearningPathPage() {
         }
     };
 
-    if (loading) return <div className="p-8 text-center text-slate-500">Loading your learning path...</div>;
+    if (loading) return <div className="p-8 text-center text-slate-500">{t('student.learningPath.loading')}</div>;
 
     if (user?.tenant_features?.student_ai_chatbot === false) {
         return (
@@ -110,8 +113,8 @@ export default function LearningPathPage() {
                 <div className="h-16 w-16 bg-slate-100 rounded-full flex items-center justify-center mb-4 mx-auto">
                     <BrainCircuit className="h-8 w-8 text-slate-400" />
                 </div>
-                <h2 className="text-2xl font-bold text-slate-900 mb-2">AI Learning Locked</h2>
-                <p className="text-slate-500 max-w-md mx-auto">AI-powered personalized learning paths are not enabled for your school portal.</p>
+                <h2 className="text-2xl font-bold text-slate-900 mb-2">{t('student.learningPath.lockedTitle')}</h2>
+                <p className="text-slate-500 max-w-md mx-auto">{t('student.learningPath.lockedDesc')}</p>
             </div>
         );
     }
@@ -123,9 +126,9 @@ export default function LearningPathPage() {
                 <div>
                     <div className="flex items-center gap-2 mb-2">
                         <Sparkles className="h-6 w-6 text-indigo-600" />
-                        <h1 className="text-3xl font-bold text-slate-900 tracking-tight">AI Learning Path</h1>
+                        <h1 className="text-3xl font-bold text-slate-900 tracking-tight">{t('student.learningPath.pageTitle')}</h1>
                     </div>
-                    <p className="text-slate-500">Your personalized roadmap for academic mastery.</p>
+                    <p className="text-slate-500">{t('student.learningPath.subtitle')}</p>
                 </div>
                 <Button
                     onClick={handleGenerate}
@@ -137,7 +140,7 @@ export default function LearningPathPage() {
                     ) : (
                         <RefreshCw className="h-4 w-4 mr-2" />
                     )}
-                    Regenerate My Path
+                    {generating ? t('student.learningPath.regenerating') : t('student.learningPath.regenerate')}
                 </Button>
             </div>
 
@@ -148,13 +151,13 @@ export default function LearningPathPage() {
                             <BrainCircuit className="h-8 w-8 text-indigo-600" />
                         </div>
                         <div className="text-center">
-                            <h3 className="text-xl font-bold text-slate-900">No Active Path</h3>
+                            <h3 className="text-xl font-bold text-slate-900">{t('student.learningPath.noPathTitle')}</h3>
                             <p className="text-slate-500 max-w-sm mt-2">
-                                Let AI analyze your recent performance and create a custom learning roadmap for you.
+                                {t('student.learningPath.noPathDesc')}
                             </p>
                         </div>
                         <Button onClick={handleGenerate} disabled={generating}>
-                            Get Started
+                            {t('student.learningPath.getStarted')}
                         </Button>
                     </CardContent>
                 </Card>
@@ -167,15 +170,15 @@ export default function LearningPathPage() {
                             <div className="flex justify-between items-start">
                                 <div>
                                     <Badge variant="outline" className="mb-2 bg-indigo-50 text-indigo-700 border-indigo-100">
-                                        Personalized for You
+                                        {t('student.learningPath.badgePersonalized')}
                                     </Badge>
                                     <CardTitle className="text-2xl">{path.title}</CardTitle>
                                     <CardDescription className="mt-2">{path.description}</CardDescription>
                                 </div>
                                 <div className="text-right">
-                                    <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Progress</p>
+                                    <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">{t('student.learningPath.progressLabel')}</p>
                                     <p className="text-2xl font-black text-slate-900">
-                                        {Math.round((path.nodes.filter(n => n.status === 'completed').length / path.nodes.length) * 100)}%
+                                        {formatNumber(Math.round((path.nodes.filter(n => n.status === 'completed').length / path.nodes.length) * 100), locale)}%
                                     </p>
                                 </div>
                             </div>
@@ -210,7 +213,7 @@ export default function LearningPathPage() {
                                     </div>
                                     {index === 0 && node.status !== 'completed' && (
                                         <Badge className="absolute -top-6 whitespace-nowrap bg-amber-500 shadow-lg animate-bounce">
-                                            Start Here
+                                            {t('student.learningPath.startHere')}
                                         </Badge>
                                     )}
                                 </div>
@@ -234,7 +237,7 @@ export default function LearningPathPage() {
                                                         </h4>
                                                         {node.status === 'in_progress' && (
                                                             <Badge variant="secondary" className="bg-amber-100 text-amber-700 border-amber-200">
-                                                                Recent
+                                                                {t('student.learningPath.badgeRecent')}
                                                             </Badge>
                                                         )}
                                                     </div>
@@ -244,7 +247,7 @@ export default function LearningPathPage() {
                                                     <div className="flex items-center gap-4 mt-3">
                                                         <div className="flex items-center gap-1.5 text-xs font-medium text-slate-400">
                                                             <Clock className="h-3.5 w-3.5" />
-                                                            {node.estimated_minutes} mins
+                                                            {t('student.learningPath.estMins', { mins: formatNumber(node.estimated_minutes, locale) })}
                                                         </div>
                                                         <Badge variant="outline" className={`text-[10px] uppercase font-bold tracking-wider
                                                             ${node.resource_type === 'video' ? 'text-blue-600 bg-blue-50' :
@@ -259,12 +262,12 @@ export default function LearningPathPage() {
                                             <div className="flex items-center gap-2">
                                                 {node.status === 'locked' ? (
                                                     <Button variant="ghost" disabled size="sm" className="text-slate-400">
-                                                        Locked
+                                                        {t('student.learningPath.btnLocked')}
                                                     </Button>
                                                 ) : node.status === 'completed' ? (
                                                     <Button variant="ghost" size="sm" className="text-emerald-600 font-semibold cursor-default">
                                                         <CheckCircle2 className="h-4 w-4 mr-2" />
-                                                        Done
+                                                        {t('student.learningPath.btnDone')}
                                                     </Button>
                                                 ) : (
                                                     <div className="flex gap-2 w-full md:w-auto">
@@ -274,14 +277,14 @@ export default function LearningPathPage() {
                                                                 className="flex-1 md:flex-none border-indigo-200 text-indigo-600 hover:bg-indigo-50"
                                                                 onClick={() => router.push(`/student/courses/${node.lesson}/view`)}
                                                             >
-                                                                Go to Lesson
+                                                                {t('student.learningPath.btnGoToLesson')}
                                                             </Button>
                                                         )}
                                                         <Button
                                                             className="flex-1 md:flex-none bg-indigo-600 hover:bg-indigo-700"
                                                             onClick={() => handleNodeComplete(node.id)}
                                                         >
-                                                            Mark Complete
+                                                            {t('student.learningPath.btnMarkComplete')}
                                                         </Button>
                                                     </div>
                                                 )}

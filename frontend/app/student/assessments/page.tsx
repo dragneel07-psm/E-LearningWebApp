@@ -18,6 +18,8 @@ import {
 import { SafeResponsiveContainer } from '@/components/ui/safe-responsive-container';
 import Link from 'next/link';
 import { ResultList } from '@/components/student/ResultList';
+import { useTranslation } from '@/lib/localization';
+import { formatNumber } from '@/lib/i18n/format';
 
 function toList<T>(payload: unknown): T[] {
     if (Array.isArray(payload)) return payload as T[];
@@ -28,6 +30,7 @@ function toList<T>(payload: unknown): T[] {
 }
 
 export default function AssessmentDashboard() {
+    const { t, locale } = useTranslation();
     const [loading, setLoading] = useState(true);
 
     type ResultWithDetails = Result & {
@@ -127,21 +130,21 @@ export default function AssessmentDashboard() {
         }
     }
 
-    if (loading) return <div className="p-8">Loading Assessments...</div>;
+    if (loading) return <div className="p-8">{t('student.assessments.loading')}</div>;
 
     return (
         <div className="space-y-8 p-8 max-w-7xl mx-auto bg-gray-50/50 min-h-screen">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                 <div>
-                    <h1 className="text-3xl font-bold tracking-tight text-gray-900">Exams & Performance</h1>
-                    <p className="text-muted-foreground mt-1">Track your progress and analyze detailed performance.</p>
+                    <h1 className="text-3xl font-bold tracking-tight text-gray-900">{t('student.assessments.pageTitle')}</h1>
+                    <p className="text-muted-foreground mt-1">{t('student.assessments.subtitle')}</p>
                 </div>
             </div>
 
             <div>
                 <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
                     <Calendar className="h-5 w-5 text-indigo-600" />
-                    Upcoming Assessments
+                    {t('student.assessments.upcomingAssessments')}
                 </h2>
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -155,11 +158,11 @@ export default function AssessmentDashboard() {
                                     </span>
                                 </div>
                                 <h3 className="font-bold text-lg mb-1">{test.title}</h3>
-                                <p className="text-sm text-muted-foreground mb-4 line-clamp-2">{test.description || 'No description provided.'}</p>
+                                <p className="text-sm text-muted-foreground mb-4 line-clamp-2">{test.description || t('student.assessments.noDescription')}</p>
                                 <div className="flex items-center justify-between mt-auto">
-                                    <span className="text-xs font-medium bg-indigo-50 text-indigo-700 px-2 py-1 rounded">{test.total_marks} Marks</span>
+                                    <span className="text-xs font-medium bg-indigo-50 text-indigo-700 px-2 py-1 rounded">{formatNumber(Number(test.total_marks), locale)} {t('student.assessments.marks')}</span>
                                     <Link href={test.type === 'assignment' ? `/student/assignments/${test.assessment_id}` : `/student/quizzes/${test.assessment_id}`}>
-                                        <Button size="sm" className="gap-1">Start <ArrowRight className="h-3 w-3" /></Button>
+                                        <Button size="sm" className="gap-1">{t('student.assessments.start')} <ArrowRight className="h-3 w-3" /></Button>
                                     </Link>
                                 </div>
                             </CardContent>
@@ -167,7 +170,7 @@ export default function AssessmentDashboard() {
                     )) : (
                         <div className="col-span-3 p-8 text-center bg-white rounded-lg border border-dashed">
                             <CheckCircle className="h-8 w-8 text-green-500 mx-auto mb-2" />
-                            <p className="text-muted-foreground">You&apos;re all caught up! No upcoming tests.</p>
+                            <p className="text-muted-foreground">{t('student.assessments.allCaughtUp')}</p>
                         </div>
                     )}
                 </div>
@@ -177,8 +180,8 @@ export default function AssessmentDashboard() {
                 <div className="lg:col-span-2 space-y-8">
                     <Card>
                         <CardHeader>
-                            <CardTitle className="flex items-center gap-2"><TrendingUp className="h-5 w-5 text-green-600" /> Performance Trend</CardTitle>
-                            <CardDescription>Your scores vs class average over time</CardDescription>
+                            <CardTitle className="flex items-center gap-2"><TrendingUp className="h-5 w-5 text-green-600" /> {t('student.assessments.performanceTrend')}</CardTitle>
+                            <CardDescription>{t('student.assessments.performanceTrendDesc')}</CardDescription>
                         </CardHeader>
                         <CardContent className="h-[300px]">
                             {trendData.length > 0 ? (
@@ -188,19 +191,19 @@ export default function AssessmentDashboard() {
                                         <XAxis dataKey="name" axisLine={false} tickLine={false} />
                                         <YAxis axisLine={false} tickLine={false} domain={[0, 100]} />
                                         <RechartsTooltip />
-                                        <Line type="monotone" dataKey="score" stroke="#4f46e5" strokeWidth={3} activeDot={{ r: 8 }} name="Your Score" />
-                                        <Line type="monotone" dataKey="avg" stroke="#94a3b8" strokeDasharray="5 5" name="Class Avg" />
+                                        <Line type="monotone" dataKey="score" stroke="#4f46e5" strokeWidth={3} activeDot={{ r: 8 }} name={t('student.assessments.yourScore')} />
+                                        <Line type="monotone" dataKey="avg" stroke="#94a3b8" strokeDasharray="5 5" name={t('student.assessments.classAvg')} />
                                     </LineChart>
                                 </SafeResponsiveContainer>
                             ) : (
-                                <div className="h-full flex items-center justify-center text-slate-500">Not enough results to draw trend.</div>
+                                <div className="h-full flex items-center justify-center text-slate-500">{t('student.assessments.notEnoughResults')}</div>
                             )}
                         </CardContent>
                     </Card>
 
                     <Card>
                         <CardHeader>
-                            <CardTitle>Recent Results</CardTitle>
+                            <CardTitle>{t('student.assessments.recentResults')}</CardTitle>
                         </CardHeader>
                         <CardContent>
                             <div className="space-y-4">
@@ -213,8 +216,8 @@ export default function AssessmentDashboard() {
                 <div className="space-y-6">
                     <Card>
                         <CardHeader>
-                            <CardTitle>Skill Breakdown</CardTitle>
-                            <CardDescription>Based on Bloom&apos;s taxonomy levels</CardDescription>
+                            <CardTitle>{t('student.assessments.skillBreakdown')}</CardTitle>
+                            <CardDescription>{t('student.assessments.skillBreakdownDesc')}</CardDescription>
                         </CardHeader>
                         <CardContent className="h-[300px]">
                             {skillData.length > 0 ? (
@@ -227,20 +230,20 @@ export default function AssessmentDashboard() {
                                     </RadarChart>
                                 </SafeResponsiveContainer>
                             ) : (
-                                <div className="h-full flex items-center justify-center text-slate-500">No skill data available.</div>
+                                <div className="h-full flex items-center justify-center text-slate-500">{t('student.assessments.noSkillData')}</div>
                             )}
                         </CardContent>
                     </Card>
 
                     <Card className="bg-gradient-to-br from-indigo-50 to-white">
                         <CardHeader>
-                            <CardTitle className="flex items-center gap-2 text-indigo-900"><BrainCircuit className="h-5 w-5 text-indigo-600" /> AI Insight</CardTitle>
+                            <CardTitle className="flex items-center gap-2 text-indigo-900"><BrainCircuit className="h-5 w-5 text-indigo-600" /> {t('student.assessments.aiInsight')}</CardTitle>
                         </CardHeader>
                         <CardContent>
                             <p className="text-sm text-indigo-800 leading-relaxed mb-4">
-                                &ldquo;Your strongest scores are in recently attempted assessments. Review low-scoring Bloom levels from Skill Breakdown for targeted improvement.&rdquo;
+                                &ldquo;{t('student.assessments.aiInsightText')}&rdquo;
                             </p>
-                            <Button variant="outline" className="w-full text-indigo-700 border-indigo-200 hover:bg-indigo-50">View Detailed Report</Button>
+                            <Button variant="outline" className="w-full text-indigo-700 border-indigo-200 hover:bg-indigo-50">{t('student.assessments.viewDetailedReport')}</Button>
                         </CardContent>
                     </Card>
                 </div>

@@ -15,6 +15,8 @@ import {
 } from 'lucide-react';
 import { academicAPI, Result, Assessment, Subject } from '@/lib/api';
 import { ProjectGradesCard } from '@/components/projects/ProjectGradesCard';
+import { useTranslation } from '@/lib/localization';
+import { formatNumber, formatDate } from '@/lib/i18n/format';
 
 type ResultWithMeta = Result & {
     assessmentDetails?: Assessment;
@@ -39,6 +41,7 @@ const GRADE_LABEL = (pct: number) => {
 
 export default function StudentGradesPage() {
     const router = useRouter();
+    const { t, locale } = useTranslation();
     const [loading, setLoading] = useState(true);
     const [results, setResults] = useState<ResultWithMeta[]>([]);
     const [subjectMastery, setSubjectMastery] = useState<Array<{ name: string; progress: number }>>([]);
@@ -88,7 +91,7 @@ export default function StudentGradesPage() {
             <div className="h-14 w-14 rounded-2xl bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center shadow-lg shadow-indigo-200 animate-pulse">
                 <Award className="h-7 w-7 text-white" />
             </div>
-            <p className="text-slate-400 text-sm font-medium animate-pulse">Loading your academic records…</p>
+            <p className="text-slate-400 text-sm font-medium animate-pulse">{t('student.grades.loading')}</p>
         </div>
     );
 
@@ -100,13 +103,13 @@ export default function StudentGradesPage() {
                 <div>
                     <div className="flex items-center gap-2 text-indigo-600 font-bold mb-1">
                         <Award className="h-4 w-4" />
-                        <span className="text-[10px] uppercase tracking-[0.2em]">Academic Records</span>
+                        <span className="text-[10px] uppercase tracking-[0.2em]">{t('student.grades.academicRecords')}</span>
                     </div>
-                    <h1 className="text-3xl font-black text-slate-900 tracking-tight">My Grades</h1>
-                    <p className="text-slate-500 mt-1 text-sm">Tracking your growth, one assessment at a time.</p>
+                    <h1 className="text-3xl font-black text-slate-900 tracking-tight">{t('student.grades.pageTitle')}</h1>
+                    <p className="text-slate-500 mt-1 text-sm">{t('student.grades.subtitle')}</p>
                 </div>
                 <Button variant="outline" className="rounded-xl border-slate-200 shadow-sm gap-2" onClick={() => router.push('/student/assessments')}>
-                    <TrendingUp className="h-4 w-4 text-indigo-500" /> View Assessments
+                    <TrendingUp className="h-4 w-4 text-indigo-500" /> {t('student.grades.viewAssessments')}
                 </Button>
             </div>
 
@@ -116,15 +119,15 @@ export default function StudentGradesPage() {
                     <CardContent className="p-0 relative">
                         <div className="absolute inset-0 bg-gradient-to-br from-indigo-600 to-violet-700" />
                         <div className="relative p-6">
-                            <p className="text-xs font-bold text-indigo-200 uppercase tracking-widest mb-3">Average Grade</p>
+                            <p className="text-xs font-bold text-indigo-200 uppercase tracking-widest mb-3">{t('student.grades.averageGrade')}</p>
                             <div className="flex items-end gap-2">
-                                <span className="text-5xl font-black text-white">{stats.averageScore}%</span>
+                                <span className="text-5xl font-black text-white">{formatNumber(stats.averageScore, locale)}%</span>
                                 <span className={`text-xl font-black mb-1 ${GRADE_LABEL(stats.averageScore).color.replace('600', '200')}`}>
                                     {GRADE_LABEL(stats.averageScore).label}
                                 </span>
                             </div>
                             <div className="mt-3 flex items-center gap-1.5 text-[10px] font-bold text-indigo-200 bg-white/10 w-fit px-2 py-1 rounded-full">
-                                <ArrowUpRight className="h-3 w-3" /> CURRENT PERFORMANCE
+                                <ArrowUpRight className="h-3 w-3" /> {t('student.grades.currentPerformance')}
                             </div>
                         </div>
                         <TrendingUp className="absolute -bottom-3 -right-3 h-20 w-20 opacity-10 rotate-12 text-white" />
@@ -132,11 +135,11 @@ export default function StudentGradesPage() {
                 </Card>
 
                 {[
-                    { label: 'XP Earned', value: stats.totalXp.toLocaleString(), sub: 'Keep pushing!', icon: Sparkles, color: 'from-amber-50 to-orange-50', icolor: 'text-amber-600', ibg: 'bg-amber-100' },
-                    { label: 'Total Assessed', value: stats.completedAssessments, sub: `${passCount} passed`, icon: Target, color: 'from-blue-50 to-indigo-50', icolor: 'text-blue-600', ibg: 'bg-blue-100' },
-                    { label: 'Top Mastery', value: stats.topSubject, sub: 'Strongest area', icon: Trophy, color: 'from-emerald-50 to-teal-50', icolor: 'text-emerald-600', ibg: 'bg-emerald-100' },
+                    { labelKey: 'student.grades.xpEarned' as const, value: formatNumber(stats.totalXp, locale), subKey: 'student.grades.keepPushing' as const, icon: Sparkles, color: 'from-amber-50 to-orange-50', icolor: 'text-amber-600', ibg: 'bg-amber-100' },
+                    { labelKey: 'student.grades.totalAssessed' as const, value: formatNumber(stats.completedAssessments, locale), subKey: null as null, subDynamic: t('student.grades.passedCount', { count: formatNumber(passCount, locale) }), icon: Target, color: 'from-blue-50 to-indigo-50', icolor: 'text-blue-600', ibg: 'bg-blue-100' },
+                    { labelKey: 'student.grades.topMastery' as const, value: stats.topSubject, subKey: 'student.grades.strongestArea' as const, icon: Trophy, color: 'from-emerald-50 to-teal-50', icolor: 'text-emerald-600', ibg: 'bg-emerald-100' },
                 ].map((s) => (
-                    <Card key={s.label} className="border-0 shadow-md rounded-2xl overflow-hidden">
+                    <Card key={s.labelKey} className="border-0 shadow-md rounded-2xl overflow-hidden">
                         <CardContent className="p-5 relative">
                             <div className={`absolute inset-0 bg-gradient-to-br ${s.color}`} />
                             <div className="relative flex flex-col gap-3">
@@ -144,9 +147,9 @@ export default function StudentGradesPage() {
                                     <s.icon className={`h-5 w-5 ${s.icolor}`} />
                                 </div>
                                 <div>
-                                    <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">{s.label}</p>
+                                    <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">{t(s.labelKey)}</p>
                                     <p className="text-2xl font-black text-slate-900 mt-1 truncate">{s.value}</p>
-                                    <p className="text-[10px] text-slate-500 font-medium mt-1">{s.sub}</p>
+                                    <p className="text-[10px] text-slate-500 font-medium mt-1">{s.subDynamic ?? (s.subKey ? t(s.subKey) : '')}</p>
                                 </div>
                             </div>
                         </CardContent>
@@ -159,7 +162,7 @@ export default function StudentGradesPage() {
 
                 {/* Recent Assessments */}
                 <div className="lg:col-span-2 space-y-4">
-                    <h2 className="text-xl font-bold text-slate-900">Recent Assessments</h2>
+                    <h2 className="text-xl font-bold text-slate-900">{t('student.grades.recentAssessments')}</h2>
                     <div className="space-y-3">
                         {results.map((result) => {
                             const pct = result.percentage || 0;
@@ -177,12 +180,12 @@ export default function StudentGradesPage() {
                                             </div>
                                             <div className="flex-1 min-w-0">
                                                 <h4 className="font-bold text-slate-900 group-hover:text-indigo-600 transition-colors truncate">
-                                                    {result.assessmentDetails?.title || `Assessment ${result.assessment}`}
+                                                    {result.assessmentDetails?.title || t('student.grades.assessmentFallback', { id: String(result.assessment) })}
                                                 </h4>
                                                 <div className="flex items-center gap-3 mt-1">
                                                     <span className="text-[10px] text-slate-400 flex items-center gap-1">
                                                         <Clock className="h-3 w-3" />
-                                                        {result.submitted_at ? new Date(result.submitted_at).toLocaleDateString() : 'N/A'}
+                                                        {result.submitted_at ? formatDate(new Date(result.submitted_at), locale) : 'N/A'}
                                                     </span>
                                                     {result.subjectDetails?.name && (
                                                         <Badge className="bg-slate-100 text-slate-500 border-0 text-[9px] font-bold">
@@ -198,9 +201,9 @@ export default function StudentGradesPage() {
                                             </div>
                                             <div className="flex items-center gap-3 shrink-0">
                                                 <div className="text-right">
-                                                    <div className="text-2xl font-black text-slate-900">{pct}%</div>
+                                                    <div className="text-2xl font-black text-slate-900">{formatNumber(pct, locale)}%</div>
                                                     <Badge className={`${pct >= 50 ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'} border-0 text-[9px] font-bold`}>
-                                                        {pct >= 50 ? 'PASSED' : 'RETRY'}
+                                                        {pct >= 50 ? t('student.grades.passed') : t('student.grades.retry')}
                                                     </Badge>
                                                 </div>
                                                 <ChevronRight className="h-4 w-4 text-slate-300 group-hover:text-indigo-500 group-hover:translate-x-0.5 transition-all" />
@@ -215,7 +218,7 @@ export default function StudentGradesPage() {
                             <Card className="border-0 shadow-md rounded-xl">
                                 <CardContent className="py-16 text-center">
                                     <BookOpen className="h-10 w-10 text-slate-200 mx-auto mb-3" />
-                                    <p className="text-slate-400 font-medium">No results published yet.</p>
+                                    <p className="text-slate-400 font-medium">{t('student.grades.noResultsYet')}</p>
                                 </CardContent>
                             </Card>
                         )}
@@ -224,11 +227,11 @@ export default function StudentGradesPage() {
 
                 {/* Subject Mastery */}
                 <div className="space-y-6">
-                    <h2 className="text-xl font-bold text-slate-900">Subject Mastery</h2>
+                    <h2 className="text-xl font-bold text-slate-900">{t('student.grades.subjectMastery')}</h2>
                     <Card className="border-0 shadow-xl rounded-2xl overflow-hidden">
                         <CardHeader className="bg-gradient-to-br from-slate-50 to-white border-b border-slate-50 px-6 pt-5 pb-4">
                             <CardTitle className="text-sm font-bold flex items-center gap-2 text-slate-700">
-                                <BarChart3 className="h-4 w-4 text-indigo-600" /> Topic Progress
+                                <BarChart3 className="h-4 w-4 text-indigo-600" /> {t('student.grades.topicProgress')}
                             </CardTitle>
                         </CardHeader>
                         <CardContent className="p-6 space-y-5">
@@ -240,7 +243,7 @@ export default function StudentGradesPage() {
                                             <span className="font-bold text-slate-700 truncate max-w-[140px]">{s.name}</span>
                                             <div className="flex items-center gap-2">
                                                 <span className={`text-xs font-black ${g.color}`}>{g.label}</span>
-                                                <span className="font-black text-slate-900 text-sm">{s.progress}%</span>
+                                                <span className="font-black text-slate-900 text-sm">{formatNumber(s.progress, locale)}%</span>
                                             </div>
                                         </div>
                                         <Progress value={s.progress} className="h-2.5 bg-slate-100" />
@@ -248,7 +251,7 @@ export default function StudentGradesPage() {
                                 );
                             })}
                             {subjectMastery.length === 0 && (
-                                <p className="text-sm text-slate-400 text-center py-4">No mastery data yet.</p>
+                                <p className="text-sm text-slate-400 text-center py-4">{t('student.grades.noMasteryData')}</p>
                             )}
                         </CardContent>
                     </Card>
@@ -261,16 +264,16 @@ export default function StudentGradesPage() {
                                 <div className="p-2 bg-indigo-500/30 rounded-xl">
                                     <TrendingUp className="h-4 w-4 text-indigo-300" />
                                 </div>
-                                <h4 className="font-bold text-white">Growth Insight</h4>
+                                <h4 className="font-bold text-white">{t('student.grades.growthInsight')}</h4>
                             </div>
                             <p className="text-sm text-indigo-100 leading-relaxed mb-4">
-                                Your strongest area is <span className="text-emerald-300 font-bold">{stats.topSubject}</span>. Maintain momentum while building weaker areas.
+                                {t('student.grades.growthInsightText', { subject: stats.topSubject })}
                             </p>
                             <Button
                                 className="w-full bg-white text-indigo-900 hover:bg-white/95 font-bold rounded-xl shadow-md"
                                 onClick={() => router.push('/student/learning-path')}
                             >
-                                View Learning Plan
+                                {t('student.grades.viewLearningPlan')}
                             </Button>
                         </div>
                     </div>

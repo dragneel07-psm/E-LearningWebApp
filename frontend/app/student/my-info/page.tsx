@@ -12,8 +12,11 @@ import {
 } from 'lucide-react';
 import { hostelAPI, transportAPI, HostelAllotment, TransportAssignment } from '@/lib/api';
 import { toast } from 'sonner';
+import { useTranslation } from '@/lib/localization';
+import { formatCurrency } from '@/lib/i18n/format';
 
 export default function StudentMyInfoPage() {
+    const { t, locale } = useTranslation();
     const [allotment, setAllotment] = useState<HostelAllotment | null | 'none'>('none');
     const [transport, setTransport] = useState<TransportAssignment | null | 'none'>('none');
     const [loading, setLoading] = useState(true);
@@ -29,7 +32,7 @@ export default function StudentMyInfoPage() {
                 setAllotment(allotments.length > 0 ? allotments[0] : null);
                 setTransport(assignments.length > 0 ? assignments[0] : null);
             } catch {
-                toast.error('Failed to load info.');
+                toast.error(t('student.myInfo.loadingError'));
             } finally {
                 setLoading(false);
             }
@@ -51,10 +54,10 @@ export default function StudentMyInfoPage() {
             <div>
                 <div className="flex items-center gap-2 text-indigo-600 font-bold mb-1">
                     <Info className="h-4 w-4" />
-                    <span className="text-[10px] uppercase tracking-[0.2em]">Student Portal</span>
+                    <span className="text-[10px] uppercase tracking-[0.2em]">{t('student.myInfo.sectionLabel')}</span>
                 </div>
-                <h1 className="text-3xl font-black text-slate-900 tracking-tight">My Info</h1>
-                <p className="text-slate-500 font-medium">Your hostel accommodation and transport assignment.</p>
+                <h1 className="text-3xl font-black text-slate-900 tracking-tight">{t('student.myInfo.pageTitle')}</h1>
+                <p className="text-slate-500 font-medium">{t('student.myInfo.subtitle')}</p>
             </div>
 
             {/* Hostel Card */}
@@ -64,8 +67,8 @@ export default function StudentMyInfoPage() {
                         <Building2 className="h-5 w-5 text-emerald-600" />
                     </div>
                     <div>
-                        <CardTitle className="text-lg font-black text-slate-900">Hostel Accommodation</CardTitle>
-                        <p className="text-sm text-slate-500">Your current room allotment</p>
+                        <CardTitle className="text-lg font-black text-slate-900">{t('student.myInfo.hostelTitle')}</CardTitle>
+                        <p className="text-sm text-slate-500">{t('student.myInfo.hostelSubtitle')}</p>
                     </div>
                 </CardHeader>
                 <CardContent>

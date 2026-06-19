@@ -31,8 +31,10 @@ import {
 } from '@/hooks/use-offline';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { useTranslation } from '@/lib/localization';
 
 export default function OfflinePage() {
+    const { t } = useTranslation();
     const { isOnline, connectionQuality } = useOffline();
     const [lessons, setLessons] = useState<OfflineLesson[]>([]);
     const [totalSize, setTotalSize] = useState('0 KB');
@@ -53,14 +55,14 @@ export default function OfflinePage() {
         removeOfflineLesson(lesson.id);
         setSelectedLesson(null);
         refresh();
-        toast.success(`"${lesson.title}" removed from offline storage.`);
+        toast.success(t('student.offline.toastRemoved', { title: lesson.title }));
     };
 
     const handleClearAll = () => {
         lessons.forEach(l => removeOfflineLesson(l.id));
         setSelectedLesson(null);
         refresh();
-        toast.success('All offline content cleared.');
+        toast.success(t('student.offline.toastClearedAll'));
     };
 
     if (!mounted) return null;
@@ -71,6 +73,14 @@ export default function OfflinePage() {
         acc[subject].push(lesson);
         return acc;
     }, {});
+
+    const studyTips = [
+        t('student.offline.tip1'),
+        t('student.offline.tip2'),
+        t('student.offline.tip3'),
+        t('student.offline.tip4'),
+        t('student.offline.tip5'),
+    ];
 
     return (
         <div className="min-h-screen bg-slate-50">
@@ -88,8 +98,8 @@ export default function OfflinePage() {
                                 <HardDrive className="h-4 w-4 text-white" />
                             </div>
                             <div>
-                                <h1 className="font-bold text-slate-900 text-sm leading-tight">Offline Content</h1>
-                                <p className="text-[10px] text-slate-500">{lessons.length} items • {totalSize}</p>
+                                <h1 className="font-bold text-slate-900 text-sm leading-tight">{t('student.offline.pageTitle')}</h1>
+                                <p className="text-[10px] text-slate-500">{t('student.offline.itemsCount', { count: lessons.length })} • {totalSize}</p>
                             </div>
                         </div>
                     </div>
@@ -103,8 +113,8 @@ export default function OfflinePage() {
                                 : 'bg-red-50 text-red-700 border-red-200'
                         )}>
                             {isOnline
-                                ? <><Wifi className="h-3 w-3" /> Online</>
-                                : <><WifiOff className="h-3 w-3" /> Offline</>
+                                ? <><Wifi className="h-3 w-3" /> {t('student.offline.statusOnline')}</>
+                                : <><WifiOff className="h-3 w-3" /> {t('student.offline.statusOffline')}</>
                             }
                         </div>
                         <Button
@@ -129,8 +139,8 @@ export default function OfflinePage() {
                                 <WifiOff className="h-5 w-5" />
                             </div>
                             <div>
-                                <p className="font-bold text-sm">You&apos;re studying offline</p>
-                                <p className="text-indigo-200 text-xs">All content below is available without internet</p>
+                                <p className="font-bold text-sm">{t('student.offline.studyingOffline')}</p>
+                                <p className="text-indigo-200 text-xs">{t('student.offline.studyingOfflineDesc')}</p>
                             </div>
                         </div>
                     )}
@@ -139,8 +149,8 @@ export default function OfflinePage() {
                         <div className="flex items-center gap-3 bg-amber-50 text-amber-800 rounded-2xl p-4 border border-amber-200">
                             <AlertCircle className="h-5 w-5 text-amber-600 shrink-0" />
                             <div>
-                                <p className="font-semibold text-sm">Slow connection detected</p>
-                                <p className="text-amber-700 text-xs">Use downloaded content to save data and study faster.</p>
+                                <p className="font-semibold text-sm">{t('student.offline.slowConnection')}</p>
+                                <p className="text-amber-700 text-xs">{t('student.offline.slowConnectionDesc')}</p>
                             </div>
                         </div>
                     )}
@@ -189,7 +199,7 @@ export default function OfflinePage() {
                                                 </div>
                                             </div>
                                             <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100 text-[10px] shrink-0">
-                                                ✓ Saved
+                                                {t('student.offline.savedBadge')}
                                             </Badge>
                                         </button>
                                     ))}
@@ -202,21 +212,21 @@ export default function OfflinePage() {
                             <div className="h-24 w-24 bg-indigo-100 rounded-3xl flex items-center justify-center mx-auto mb-6">
                                 <Download className="h-12 w-12 text-indigo-500" />
                             </div>
-                            <h2 className="text-xl font-bold text-slate-800 mb-3">No Offline Content Yet</h2>
+                            <h2 className="text-xl font-bold text-slate-800 mb-3">{t('student.offline.emptyTitle')}</h2>
                             <p className="text-slate-500 text-sm max-w-xs mb-6 leading-relaxed">
-                                Download lessons while online so you can study anytime — even without internet access.
+                                {t('student.offline.emptyDesc')}
                             </p>
                             {isOnline ? (
                                 <Link href="/student/classes">
                                     <Button className="bg-indigo-600 hover:bg-indigo-700">
                                         <BookOpen className="h-4 w-4 mr-2" />
-                                        Browse My Lessons
+                                        {t('student.offline.browseLessons')}
                                     </Button>
                                 </Link>
                             ) : (
                                 <div className="flex items-center gap-2 text-xs text-slate-500 bg-slate-100 px-4 py-2 rounded-full">
                                     <WifiOff className="h-3.5 w-3.5" />
-                                    Connect to internet to download content
+                                    {t('student.offline.connectToDownload')}
                                 </div>
                             )}
                         </div>
@@ -228,26 +238,26 @@ export default function OfflinePage() {
                     {/* Info Card */}
                     <Card className="border-none shadow-sm">
                         <CardHeader className="pb-2">
-                            <CardTitle className="text-sm font-bold text-slate-800">Storage Info</CardTitle>
+                            <CardTitle className="text-sm font-bold text-slate-800">{t('student.offline.storageInfo')}</CardTitle>
                         </CardHeader>
                         <CardContent className="space-y-3">
                             <div className="flex items-center justify-between text-sm">
-                                <span className="text-slate-500">Downloaded Items</span>
+                                <span className="text-slate-500">{t('student.offline.downloadedItems')}</span>
                                 <span className="font-bold text-slate-800">{lessons.length}</span>
                             </div>
                             <div className="flex items-center justify-between text-sm">
-                                <span className="text-slate-500">Space Used</span>
+                                <span className="text-slate-500">{t('student.offline.spaceUsed')}</span>
                                 <span className="font-bold text-slate-800">{totalSize}</span>
                             </div>
                             <div className="flex items-center justify-between text-sm">
-                                <span className="text-slate-500">Status</span>
+                                <span className="text-slate-500">{t('student.offline.storageStatus')}</span>
                                 <span className={cn(
                                     'font-bold text-xs flex items-center gap-1',
                                     isOnline ? 'text-emerald-600' : 'text-red-600'
                                 )}>
                                     {isOnline
-                                        ? <><CheckCircle2 className="h-3.5 w-3.5" />Online</>
-                                        : <><WifiOff className="h-3.5 w-3.5" />Offline</>
+                                        ? <><CheckCircle2 className="h-3.5 w-3.5" />{t('student.offline.statusOnline')}</>
+                                        : <><WifiOff className="h-3.5 w-3.5" />{t('student.offline.statusOffline')}</>
                                     }
                                 </span>
                             </div>
@@ -260,7 +270,7 @@ export default function OfflinePage() {
                                     onClick={handleClearAll}
                                 >
                                     <Trash2 className="h-3.5 w-3.5 mr-1.5" />
-                                    Clear All Downloads
+                                    {t('student.offline.clearAllDownloads')}
                                 </Button>
                             )}
                         </CardContent>
@@ -283,7 +293,7 @@ export default function OfflinePage() {
                                 ) : (
                                     <div className="text-center py-6 text-slate-400 text-sm">
                                         <BookOpen className="h-8 w-8 mx-auto mb-2 text-slate-300" />
-                                        <p>Lesson content will appear here when available offline.</p>
+                                        <p>{t('student.offline.noContent')}</p>
                                     </div>
                                 )}
 
@@ -295,7 +305,7 @@ export default function OfflinePage() {
                                         className="block"
                                     >
                                         <Button className="w-full text-xs bg-indigo-600 hover:bg-indigo-700">
-                                            Open PDF Material
+                                            {t('student.offline.openPdf')}
                                         </Button>
                                     </a>
                                 )}
@@ -307,7 +317,7 @@ export default function OfflinePage() {
                                     onClick={() => handleRemove(selectedLesson)}
                                 >
                                     <Trash2 className="h-3.5 w-3.5 mr-1.5" />
-                                    Remove from Offline
+                                    {t('student.offline.removeOffline')}
                                 </Button>
                             </CardContent>
                         </Card>
@@ -316,15 +326,9 @@ export default function OfflinePage() {
                     {/* How to Use */}
                     <Card className="bg-indigo-50 border-indigo-100 border-none shadow-sm">
                         <CardContent className="p-4 space-y-3">
-                            <h3 className="text-sm font-bold text-indigo-900">📱 Study Tips for Rural Areas</h3>
+                            <h3 className="text-sm font-bold text-indigo-900">{t('student.offline.studyTipsTitle')}</h3>
                             <ul className="space-y-2">
-                                {[
-                                    'Download lessons when connected to Wi-Fi',
-                                    'Study downloaded content without internet',
-                                    'Your progress syncs when back online',
-                                    'Low-data mode reduces image quality',
-                                    'Install this app on your phone for offline access',
-                                ].map((tip, idx) => (
+                                {studyTips.map((tip, idx) => (
                                     <li key={idx} className="flex items-start gap-2 text-xs text-indigo-800">
                                         <CheckCircle2 className="h-3.5 w-3.5 text-indigo-500 mt-0.5 shrink-0" />
                                         {tip}
