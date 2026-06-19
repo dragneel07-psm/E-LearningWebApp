@@ -15,6 +15,8 @@ import {
 import { academicAPI, aiAPI, Assessment, Submission } from '@/lib/api';
 import Link from 'next/link';
 import { toast } from 'sonner';
+import { useTranslation } from '@/lib/localization';
+import { formatDate } from '@/lib/i18n/format';
 
 function toList<T>(payload: unknown): T[] {
     if (Array.isArray(payload)) return payload as T[];
@@ -28,6 +30,7 @@ export default function AssignmentSubmissionPage() {
     const params = useParams();
     const router = useRouter();
     const id = params.id as string;
+    const { t, locale } = useTranslation();
 
     const [loading, setLoading] = useState(true);
     const [submitting, setSubmitting] = useState(false);
@@ -61,11 +64,11 @@ export default function AssignmentSubmissionPage() {
             }
         } catch (error) {
             console.error('Failed to load assignment:', error);
-            toast.error('Failed to load assignment details');
+            toast.error(t('student.assignmentDetail.toastLoadFailed'));
         } finally {
             setLoading(false);
         }
-    }, [id]);
+    }, [id, t]);
 
     useEffect(() => {
         if (id) loadData();
@@ -90,15 +93,15 @@ export default function AssignmentSubmissionPage() {
             }
 
             if (!asDraft) {
-                toast.success('Assignment submitted successfully');
+                toast.success(t('student.assignmentDetail.toastSubmitSuccess'));
                 router.push('/student/assignments');
             } else {
-                toast.success('Draft saved');
+                toast.success(t('student.assignmentDetail.toastDraftSaved'));
                 await loadData();
             }
         } catch (error: unknown) {
             console.error('Failed to submit:', error);
-            const message = error instanceof Error ? error.message : 'Failed to submit assignment';
+            const message = error instanceof Error ? error.message : t('student.assignmentDetail.toastSubmitFailed');
             toast.error(message);
         } finally {
             setSubmitting(false);
@@ -107,7 +110,7 @@ export default function AssignmentSubmissionPage() {
 
     const handleAIProofread = async () => {
         if (!content.trim()) {
-            toast.error('Write your response before AI proofread');
+            toast.error(t('student.assignmentDetail.toastProofreadNoContent'));
             return;
         }
         setProofreading(true);
@@ -122,14 +125,14 @@ export default function AssignmentSubmissionPage() {
             const response = await aiAPI.chat(prompt, '', []);
             const improved = String(response?.response || '').trim();
             if (!improved) {
-                toast.error('AI proofread returned an empty response');
+                toast.error(t('student.assignmentDetail.toastProofreadEmpty'));
                 return;
             }
             setContent(improved);
-            toast.success('AI proofread applied');
+            toast.success(t('student.assignmentDetail.toastProofreadSuccess'));
         } catch (error: unknown) {
             console.error('AI proofread failed:', error);
-            const message = error instanceof Error ? error.message : 'AI proofread failed';
+            const message = error instanceof Error ? error.message : t('student.assignmentDetail.toastProofreadFailed');
             toast.error(message);
         } finally {
             setProofreading(false);
@@ -138,7 +141,7 @@ export default function AssignmentSubmissionPage() {
 
     const handleAIGrade = async () => {
         if (!submission) return;
-        if (!confirm('Request AI grading for this assignment?')) return;
+        if (!confirm(t('student.assignmentDetail.confirmAIGrade'))) return;
 
         setAiGrading(true);
         try {
@@ -148,13 +151,13 @@ export default function AssignmentSubmissionPage() {
                 : undefined;
             toast.success(
                 typeof score === 'number'
-                    ? `AI grading completed. Score: ${score}`
-                    : 'AI grading completed'
+                    ? t('student.assignmentDetail.toastGradingSuccess', { score: String(score) })
+                    : t('student.assignmentDetail.toastGradingSuccessNoScore')
             );
             await loadData();
         } catch (error: unknown) {
             console.error('Failed to grade submission', error);
-            const message = error instanceof Error ? error.message : 'Grading failed';
+            const message = error instanceof Error ? error.message : t('student.assignmentDetail.toastGradingFailed');
             toast.error(message);
         } finally {
             setAiGrading(false);
@@ -162,7 +165,7 @@ export default function AssignmentSubmissionPage() {
     };
 
     if (loading) return <div className="p-8 flex justify-center"><Loader2 className="animate-spin" /></div>;
-    if (!assignment) return <div className="p-8">Assignment not found</div>;
+    if (!assignment) return <div className="p-8">{t('student.assignmentDetail.notFound')}</div>;
 
     const isSubmitted = submission?.status === 'submitted' || submission?.status === 'graded';
 
@@ -170,7 +173,7 @@ export default function AssignmentSubmissionPage() {
         <div className="p-8 max-w-4xl mx-auto min-h-screen">
             <Link href="/student/assignments">
                 <Button variant="ghost" className="mb-4 pl-0 hover:pl-2 transition-all">
-                    <ChevronLeft className="mr-1 h-4 w-4" /> Back to Assignments
+                    <ChevronLeft className="mr-1 h-4 w-4" /> {t('student.assignmentDetail.backToAssignments')}
                 </Button>
             </Link>
 
@@ -182,19 +185,19 @@ export default function AssignmentSubmissionPage() {
                             <Badge variant="outline" className="w-fit mb-2 bg-white">{assignment.type}</Badge>
                             <CardTitle className="text-xl">{assignment.title}</CardTitle>
                             <CardDescription className="flex items-center gap-2 mt-2">
-                                <Clock className="h-4 w-4" /> Due: {assignment.due_date ? new Date(assignment.due_date).toLocaleDateString() : 'No Date'}
+                                <Clock className="h-4 w-4" /> {assignment.due_date ? formatDate(new Date(assignment.due_date), locale) : t('common.loading')}
                             </CardDescription>
                         </CardHeader>
                         <CardContent className="prose prose-sm max-w-none text-slate-600">
-                            <h4 className="font-semibold text-slate-900 mb-2">Instructions:</h4>
-                            <p>{assignment.description || 'No instructions provided.'}</p>
+                            <h4 className="font-semibold text-slate-900 mb-2">{t('student.assignmentDetail.labelInstructions')}</h4>
+                            <p>{assignment.description || t('student.assignmentDetail.labelNoInstructions')}</p>
 
                             <div className="mt-6 pt-6 border-t">
-                                <h4 className="font-semibold text-slate-900 mb-2">Grading Criteria:</h4>
+                                <h4 className="font-semibold text-slate-900 mb-2">{t('student.assignmentDetail.labelGradingCriteria')}</h4>
                                 <ul className="list-disc pl-4 space-y-1">
-                                    <li>Clarity of thought (40%)</li>
-                                    <li>Evidence and examples (30%)</li>
-                                    <li>Grammar and structure (30%)</li>
+                                    <li>{t('student.assignmentDetail.criteriaClarity')}</li>
+                                    <li>{t('student.assignmentDetail.criteriaEvidence')}</li>
+                                    <li>{t('student.assignmentDetail.criteriaGrammar')}</li>
                                 </ul>
                             </div>
                         </CardContent>
@@ -207,14 +210,14 @@ export default function AssignmentSubmissionPage() {
                         <CardHeader>
                             <CardTitle className="flex items-center gap-2">
                                 <FileText className="h-5 w-5 text-indigo-600" />
-                                Your Response
+                                {t('student.assignmentDetail.labelYourResponse')}
                             </CardTitle>
                         </CardHeader>
                         <CardContent className="flex-1 min-h-[400px]">
                             {isSubmitted ? (
                                 <div className="bg-slate-50 p-6 rounded-lg h-full border">
                                     <div className="flex items-center gap-2 text-green-600 font-medium mb-4">
-                                        <CheckCircle className="h-5 w-5" /> Submitted on {new Date(submission.submitted_at).toLocaleDateString()}
+                                        <CheckCircle className="h-5 w-5" /> {t('student.assignmentDetail.submittedOn', { date: formatDate(new Date(submission.submitted_at), locale) })}
                                     </div>
                                     <div className="whitespace-pre-wrap text-slate-800 font-serif leading-relaxed">
                                         {content}
@@ -222,7 +225,7 @@ export default function AssignmentSubmissionPage() {
                                 </div>
                             ) : (
                                 <Textarea
-                                    placeholder="Type your essay or response here..."
+                                    placeholder={t('student.assignmentDetail.placeholderResponse')}
                                     className="h-full min-h-[300px] resize-none font-serif text-lg leading-relaxed p-6"
                                     value={content}
                                     onChange={(e) => setContent(e.target.value)}
@@ -233,7 +236,7 @@ export default function AssignmentSubmissionPage() {
                             {isSubmitted ? (
                                 <div className="space-y-4">
                                     <div className="flex items-center justify-between text-sm text-muted-foreground w-full">
-                                        <span>Submitted on {new Date(submission.submitted_at).toLocaleDateString()}</span>
+                                        <span>{t('student.assignmentDetail.submittedOn', { date: formatDate(new Date(submission.submitted_at), locale) })}</span>
                                         <Badge variant={submission.status === 'graded' ? 'default' : 'secondary'}>
                                             {submission.status.toUpperCase()}
                                         </Badge>
@@ -250,18 +253,17 @@ export default function AssignmentSubmissionPage() {
                                             ) : (
                                                 <BrainCircuit className="mr-2 h-4 w-4" />
                                             )}
-                                            Grade with AI
+                                            {t('student.assignmentDetail.btnGradeWithAI')}
                                         </Button>
                                     ) : null}
 
-                                    {submission.status === 'graded' && ( // Should fetch result really, but let's assume result logic
+                                    {submission.status === 'graded' && (
                                         <div className="bg-indigo-50 border border-indigo-100 p-4 rounded-lg mt-4">
                                             <h4 className="font-bold flex items-center gap-2 text-indigo-900 mb-2">
-                                                <BrainCircuit className="h-4 w-4" /> AI Feedback
+                                                <BrainCircuit className="h-4 w-4" /> {t('student.assignmentDetail.aiFeedbackTitle')}
                                             </h4>
                                             <p className="text-indigo-800 text-sm">
-                                                Check your results in the Exams tab for detailed feedback.
-                                                (Or I should fetch result here).
+                                                {t('student.assignmentDetail.aiFeedbackHint')}
                                             </p>
                                         </div>
                                     )}
@@ -269,16 +271,16 @@ export default function AssignmentSubmissionPage() {
                             ) : (
                                 <>
                                     <Button variant="outline" onClick={() => handleSubmit(true)} disabled={submitting}>
-                                        <Save className="mr-2 h-4 w-4" /> Save Draft
+                                        <Save className="mr-2 h-4 w-4" /> {t('student.assignmentDetail.btnSaveDraft')}
                                     </Button>
                                     <div className="flex gap-2">
                                         <Button variant="secondary" onClick={handleAIProofread} disabled={proofreading || submitting || !content.trim()}>
                                             {proofreading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                                            AI Proofread
+                                            {t('student.assignmentDetail.btnAIProofread')}
                                         </Button>
                                         <Button onClick={() => handleSubmit(false)} disabled={submitting || !content} className="bg-indigo-600 hover:bg-indigo-700">
                                             {submitting ? <Loader2 className="animate-spin mr-2 h-4 w-4" /> : <Send className="mr-2 h-4 w-4" />}
-                                            Submit Assignment
+                                            {t('student.assignmentDetail.btnSubmitAssignment')}
                                         </Button>
                                     </div>
                                 </>

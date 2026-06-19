@@ -10,6 +10,8 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ProjectProgressBar } from '@/components/projects/ProjectProgressBar';
 import { useProjects, type ProjectStatus } from '@/services/projects';
+import { useTranslation } from '@/lib/localization';
+import { formatDate, formatNumber } from '@/lib/i18n/format';
 
 const STATUS_TONE: Record<ProjectStatus, string> = {
     draft: 'bg-slate-100 text-slate-700',
@@ -20,6 +22,7 @@ const STATUS_TONE: Record<ProjectStatus, string> = {
 };
 
 export default function StudentProjectsPage() {
+    const { t, locale } = useTranslation();
     // Backend's project_visibility_q already filters to projects the student
     // is a member of or leader of, so the regular list is sufficient.
     const projectsQ = useProjects('all');
@@ -27,21 +30,21 @@ export default function StudentProjectsPage() {
     return (
         <div className="space-y-6 p-6">
             <header>
-                <h1 className="text-2xl font-semibold text-slate-900">My projects</h1>
+                <h1 className="text-2xl font-semibold text-slate-900">{t('student.projectsList.pageTitle')}</h1>
                 <p className="text-sm text-slate-500">
-                    Group + individual projects you&apos;re working on.
+                    {t('student.projectsList.subtitle')}
                 </p>
             </header>
 
-            {projectsQ.isLoading && <p className="text-sm text-slate-500">Loading…</p>}
+            {projectsQ.isLoading && <p className="text-sm text-slate-500">{t('student.projectsList.loading')}</p>}
             {projectsQ.error && (
-                <p className="text-sm text-rose-600">Failed to load projects.</p>
+                <p className="text-sm text-rose-600">{t('student.projectsList.errorLoad')}</p>
             )}
             {projectsQ.data && projectsQ.data.length === 0 && (
                 <div className="rounded-md border border-dashed border-slate-200 p-10 text-center">
                     <FolderKanban className="mx-auto mb-2 h-8 w-8 text-slate-300" />
                     <p className="text-sm text-slate-500">
-                        You haven&apos;t been assigned to any projects yet.
+                        {t('student.projectsList.empty')}
                     </p>
                 </div>
             )}
@@ -57,7 +60,7 @@ export default function StudentProjectsPage() {
                                 </div>
                                 {p.mentor_detail && (
                                     <p className="text-xs text-slate-500">
-                                        Mentor: {p.mentor_detail.full_name}
+                                        {t('student.projectsList.labelMentor', { name: p.mentor_detail.full_name })}
                                     </p>
                                 )}
                             </CardHeader>
@@ -65,10 +68,12 @@ export default function StudentProjectsPage() {
                                 <ProjectProgressBar value={p.progress_percent} label={p.progress_label} />
                                 <div className="flex items-center justify-between text-xs text-slate-500">
                                     <span>
-                                        {p.task_count} task{p.task_count === 1 ? '' : 's'}
+                                        {p.task_count === 1
+                                            ? t('student.projectsList.taskCountSingular', { count: formatNumber(p.task_count, locale) })
+                                            : t('student.projectsList.taskCountPlural', { count: formatNumber(p.task_count, locale) })}
                                     </span>
                                     {p.due_date && (
-                                        <span>Due {new Date(p.due_date).toLocaleDateString()}</span>
+                                        <span>{t('student.projectsList.labelDue', { date: formatDate(new Date(p.due_date), locale) })}</span>
                                     )}
                                 </div>
                             </CardContent>

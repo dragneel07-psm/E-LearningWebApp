@@ -18,6 +18,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { useProjectSocket } from '@/hooks/useProjectSocket';
 import { toast } from '@/hooks/use-toast';
 import { getUser } from '@/lib/auth';
+import { useTranslation } from '@/lib/localization';
+import { formatDate } from '@/lib/i18n/format';
 import {
     projectKeys,
     projectsAPI,
@@ -45,6 +47,7 @@ export default function StudentProjectDetailPage() {
     const router = useRouter();
     const id = params?.id;
     const qc = useQueryClient();
+    const { t, locale } = useTranslation();
 
     const projectQ = useProject(id);
     const tasksQ = useProjectTasks(id);
@@ -58,11 +61,11 @@ export default function StudentProjectDetailPage() {
     const [comment, setComment] = useState('');
     const me = getUser();
 
-    if (projectQ.isLoading) return <p className="p-6 text-sm text-slate-500">Loading…</p>;
+    if (projectQ.isLoading) return <p className="p-6 text-sm text-slate-500">{t('student.projectDetail.loading')}</p>;
     if (projectQ.error || !projectQ.data) {
         return (
             <p className="p-6 text-sm text-rose-600">
-                Project not found or you don&apos;t have access.
+                {t('student.projectDetail.notFound')}
             </p>
         );
     }
@@ -80,7 +83,7 @@ export default function StudentProjectDetailPage() {
     const canDrag = isLeader;
 
     const myTasks: ProjectTask[] = tasks.filter(
-        (t) => t.assignee_detail && myFullName && t.assignee_detail.name === myFullName,
+        (task) => task.assignee_detail && myFullName && task.assignee_detail.name === myFullName,
     );
 
     // Read membersQ.data so the call isn't unused — it primes the cache and
@@ -91,7 +94,7 @@ export default function StudentProjectDetailPage() {
         updateTask.mutate(
             { id: taskId, payload: { status: newStatus } },
             {
-                onError: () => toast({ title: 'Update failed', variant: 'destructive' }),
+                onError: () => toast({ title: t('student.projectDetail.toastUpdateFailed'), variant: 'destructive' }),
             },
         );
     };
@@ -99,11 +102,11 @@ export default function StudentProjectDetailPage() {
     const handleSubmit = async () => {
         try {
             await projectsAPI.submit(project.project_id);
-            toast({ title: 'Project submitted' });
+            toast({ title: t('student.projectDetail.toastProjectSubmitted') });
             qc.invalidateQueries({ queryKey: projectKeys.detail(project.project_id) });
         } catch (err) {
             const detail = (err as { response?: { data?: { message?: string } } }).response?.data?.message;
-            toast({ title: 'Submit failed', description: detail, variant: 'destructive' });
+            toast({ title: t('student.projectDetail.toastSubmitFailed'), description: detail, variant: 'destructive' });
         }
     };
 
@@ -113,7 +116,7 @@ export default function StudentProjectDetailPage() {
             await postComment.mutateAsync(comment.trim());
             setComment('');
         } catch {
-            toast({ title: 'Comment failed', variant: 'destructive' });
+            toast({ title: t('student.projectDetail.toastCommentFailed'), variant: 'destructive' });
         }
     };
 
@@ -121,7 +124,7 @@ export default function StudentProjectDetailPage() {
         <div className="space-y-6 p-6">
             <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="flex items-center gap-3">
-                    <Button variant="ghost" size="icon" onClick={() => router.back()} aria-label="Go back">
+                    <Button variant="ghost" size="icon" onClick={() => router.back()} aria-label={t('student.projectDetail.ariaGoBack')}>
                         <ArrowLeft className="h-4 w-4" />
                     </Button>
                     <div>
@@ -144,32 +147,32 @@ export default function StudentProjectDetailPage() {
                         </div>
                         {project.mentor_detail && (
                             <p className="text-sm text-slate-500">
-                                Mentor: {project.mentor_detail.full_name}
+                                {t('student.projectDetail.labelMentor', { name: project.mentor_detail.full_name })}
                             </p>
                         )}
                     </div>
                 </div>
                 {isLeader && project.status === 'active' && (
                     <Button onClick={handleSubmit}>
-                        <Send className="mr-1 h-4 w-4" /> Submit project
+                        <Send className="mr-1 h-4 w-4" /> {t('student.projectDetail.btnSubmitProject')}
                     </Button>
                 )}
             </div>
 
             <Card>
                 <CardHeader className="pb-3">
-                    <CardTitle className="text-base">Progress</CardTitle>
+                    <CardTitle className="text-base">{t('student.projectDetail.sectionProgress')}</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-2">
                     <ProjectProgressBar value={project.progress_percent} label={project.progress_label} />
                     {project.due_date && (
                         <p className="text-xs text-slate-500">
-                            Due {new Date(project.due_date).toLocaleString()}
+                            {t('student.projectDetail.labelDue', { date: formatDate(new Date(project.due_date), locale) })}
                         </p>
                     )}
                     {project.final_grade != null && (
                         <p className="text-sm text-slate-700">
-                            Final grade: <span className="font-semibold">{project.final_grade}</span>
+                            {t('student.projectDetail.labelFinalGrade')} <span className="font-semibold">{project.final_grade}</span>
                         </p>
                     )}
                 </CardContent>
@@ -178,28 +181,28 @@ export default function StudentProjectDetailPage() {
             {myTasks.length > 0 && (
                 <Card>
                     <CardHeader className="pb-3">
-                        <CardTitle className="text-base">My tasks</CardTitle>
+                        <CardTitle className="text-base">{t('student.projectDetail.sectionMyTasks')}</CardTitle>
                     </CardHeader>
                     <CardContent>
                         <ul className="space-y-2">
-                            {myTasks.map((t) => (
+                            {myTasks.map((task) => (
                                 <li
-                                    key={t.task_id}
+                                    key={task.task_id}
                                     className="flex items-center justify-between rounded-md border border-slate-200 bg-white px-3 py-2 text-sm"
                                 >
-                                    <span>{t.title}</span>
+                                    <span>{task.title}</span>
                                     <select
                                         className="rounded border border-slate-200 px-2 py-1 text-xs"
-                                        value={t.status}
+                                        value={task.status}
                                         onChange={(e) =>
-                                            handleMove(t.task_id, e.target.value as TaskStatus)
+                                            handleMove(task.task_id, e.target.value as TaskStatus)
                                         }
                                     >
-                                        <option value="todo">To Do</option>
-                                        <option value="in_progress">In Progress</option>
-                                        <option value="review">Review</option>
-                                        <option value="done">Done</option>
-                                        <option value="blocked">Blocked</option>
+                                        <option value="todo">{t('student.projectDetail.taskStatusTodo')}</option>
+                                        <option value="in_progress">{t('student.projectDetail.taskStatusInProgress')}</option>
+                                        <option value="review">{t('student.projectDetail.taskStatusReview')}</option>
+                                        <option value="done">{t('student.projectDetail.taskStatusDone')}</option>
+                                        <option value="blocked">{t('student.projectDetail.taskStatusBlocked')}</option>
                                     </select>
                                 </li>
                             ))}
@@ -210,11 +213,11 @@ export default function StudentProjectDetailPage() {
 
             <Card>
                 <CardHeader className="pb-3">
-                    <CardTitle className="text-base">All tasks</CardTitle>
+                    <CardTitle className="text-base">{t('student.projectDetail.sectionAllTasks')}</CardTitle>
                 </CardHeader>
                 <CardContent>
                     {tasksQ.isLoading ? (
-                        <p className="text-sm text-slate-500">Loading tasks…</p>
+                        <p className="text-sm text-slate-500">{t('student.projectDetail.loadingTasks')}</p>
                     ) : (
                         <TaskKanban tasks={tasks} canDrag={canDrag} onMove={handleMove} />
                     )}
@@ -223,22 +226,22 @@ export default function StudentProjectDetailPage() {
 
             <Card>
                 <CardHeader className="pb-3">
-                    <CardTitle className="text-base">Activity</CardTitle>
+                    <CardTitle className="text-base">{t('student.projectDetail.sectionActivity')}</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
                     <div className="flex items-start gap-2">
                         <Textarea
-                            placeholder="Comment for the team…"
+                            placeholder={t('student.projectDetail.placeholderComment')}
                             value={comment}
                             onChange={(e) => setComment(e.target.value)}
                             rows={2}
                         />
                         <Button onClick={handlePostComment} disabled={postComment.isPending || !comment.trim()}>
-                            <MessageSquare className="mr-1 h-4 w-4" /> Post
+                            <MessageSquare className="mr-1 h-4 w-4" /> {t('student.projectDetail.btnPost')}
                         </Button>
                     </div>
                     {updatesQ.isLoading ? (
-                        <p className="text-sm text-slate-500">Loading activity…</p>
+                        <p className="text-sm text-slate-500">{t('student.projectDetail.loadingActivity')}</p>
                     ) : (
                         <ActivityFeed updates={updatesQ.data || []} />
                     )}
@@ -248,7 +251,7 @@ export default function StudentProjectDetailPage() {
             {project.description && (
                 <Card>
                     <CardHeader className="pb-3">
-                        <CardTitle className="text-base">Description</CardTitle>
+                        <CardTitle className="text-base">{t('student.projectDetail.sectionDescription')}</CardTitle>
                     </CardHeader>
                     <CardContent>
                         <p className="whitespace-pre-wrap text-sm text-slate-700">{project.description}</p>
