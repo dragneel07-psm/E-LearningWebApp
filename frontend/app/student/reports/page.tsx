@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { toast } from 'sonner';
+import { useTranslation } from '@/lib/localization';
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
@@ -62,6 +63,7 @@ function MetricTile({ label, value, icon }: { label: string; value: string | num
 // ── Report Panels ────────────────────────────────────────────────────────────
 
 function StudentReportPanel({ data }: { data: ProgressReport['report'] }) {
+    const { t } = useTranslation();
     const ai = data.ai ?? {};
     const m = data.metrics ?? {} as any;
     return (
@@ -70,7 +72,7 @@ function StudentReportPanel({ data }: { data: ProgressReport['report'] }) {
                 <Card className="border-indigo-100 bg-indigo-50/40">
                     <CardHeader className="pb-2">
                         <CardTitle className="text-sm flex items-center gap-2">
-                            <Brain className="h-4 w-4 text-indigo-600" />AI Summary
+                            <Brain className="h-4 w-4 text-indigo-600" />{t('student.reports.aiSummary')}
                         </CardTitle>
                     </CardHeader>
                     <CardContent>
@@ -83,10 +85,10 @@ function StudentReportPanel({ data }: { data: ProgressReport['report'] }) {
             )}
 
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                <MetricTile label="Avg Score" value={`${m.avg_score?.toFixed?.(1) ?? '–'}%`} icon={<TrendingUp className="h-4 w-4 text-indigo-600" />} />
-                <MetricTile label="Attendance" value={`${m.attendance_rate?.toFixed?.(1) ?? '–'}%`} icon={<CheckCircle2 className="h-4 w-4 text-green-600" />} />
-                <MetricTile label="AI Sessions" value={m.tutor?.conversations_this_period ?? 0} icon={<Brain className="h-4 w-4 text-purple-600" />} />
-                <MetricTile label="Plan Done" value={`${m.plan_completion_pct?.toFixed?.(0) ?? 0}%`} icon={<BookOpen className="h-4 w-4 text-blue-600" />} />
+                <MetricTile label={t('student.reports.metaAvgScore')} value={`${m.avg_score?.toFixed?.(1) ?? '–'}%`} icon={<TrendingUp className="h-4 w-4 text-indigo-600" />} />
+                <MetricTile label={t('student.reports.metaAttendance')} value={`${m.attendance_rate?.toFixed?.(1) ?? '–'}%`} icon={<CheckCircle2 className="h-4 w-4 text-green-600" />} />
+                <MetricTile label={t('student.reports.metaAiSessions')} value={m.tutor?.conversations_this_period ?? 0} icon={<Brain className="h-4 w-4 text-purple-600" />} />
+                <MetricTile label={t('student.reports.metaPlanDone')} value={`${m.plan_completion_pct?.toFixed?.(0) ?? 0}%`} icon={<BookOpen className="h-4 w-4 text-blue-600" />} />
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -94,7 +96,7 @@ function StudentReportPanel({ data }: { data: ProgressReport['report'] }) {
                     <Card>
                         <CardHeader className="pb-2">
                             <CardTitle className="text-sm flex items-center gap-2 text-green-700">
-                                <TrendingUp className="h-4 w-4" />Strengths
+                                <TrendingUp className="h-4 w-4" />{t('student.reports.strengths')}
                             </CardTitle>
                         </CardHeader>
                         <CardContent className="space-y-2">
@@ -109,7 +111,7 @@ function StudentReportPanel({ data }: { data: ProgressReport['report'] }) {
                     <Card>
                         <CardHeader className="pb-2">
                             <CardTitle className="text-sm flex items-center gap-2 text-orange-700">
-                                <TrendingDown className="h-4 w-4" />Areas to Improve
+                                <TrendingDown className="h-4 w-4" />{t('student.reports.areasToImprove')}
                             </CardTitle>
                         </CardHeader>
                         <CardContent className="space-y-2">
@@ -125,7 +127,7 @@ function StudentReportPanel({ data }: { data: ProgressReport['report'] }) {
                 <Card>
                     <CardHeader className="pb-2">
                         <CardTitle className="text-sm flex items-center gap-2">
-                            <Zap className="h-4 w-4 text-yellow-500" />Recommended Actions
+                            <Zap className="h-4 w-4 text-yellow-500" />{t('student.reports.recommendedActions')}
                         </CardTitle>
                     </CardHeader>
                     <CardContent>
@@ -144,6 +146,7 @@ function StudentReportPanel({ data }: { data: ProgressReport['report'] }) {
 }
 
 function ParentReportPanel({ data }: { data: ProgressReport['report'] }) {
+    const { t } = useTranslation();
     const ai = data.ai ?? {};
     const m = data.metrics ?? {} as any;
     return (
@@ -152,7 +155,7 @@ function ParentReportPanel({ data }: { data: ProgressReport['report'] }) {
                 <Card className="border-blue-100 bg-blue-50/40">
                     <CardHeader className="pb-2">
                         <CardTitle className="text-sm flex items-center gap-2">
-                            <Users className="h-4 w-4 text-blue-600" />Parent Summary
+                            <Users className="h-4 w-4 text-blue-600" />{t('student.reports.parentSummary')}
                         </CardTitle>
                     </CardHeader>
                     <CardContent>
@@ -162,16 +165,16 @@ function ParentReportPanel({ data }: { data: ProgressReport['report'] }) {
             )}
 
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-                <MetricTile label="Avg Score" value={`${m.avg_score?.toFixed?.(1) ?? '–'}%`} icon={<TrendingUp className="h-4 w-4 text-indigo-600" />} />
-                <MetricTile label="Attendance" value={`${m.attendance_rate?.toFixed?.(1) ?? '–'}%`} icon={<CheckCircle2 className="h-4 w-4 text-green-600" />} />
-                <MetricTile label="AI Tutor Use" value={`${m.tutor?.conversations_this_period ?? 0} sessions`} icon={<Brain className="h-4 w-4 text-purple-600" />} />
+                <MetricTile label={t('student.reports.metaAvgScore')} value={`${m.avg_score?.toFixed?.(1) ?? '–'}%`} icon={<TrendingUp className="h-4 w-4 text-indigo-600" />} />
+                <MetricTile label={t('student.reports.metaAttendance')} value={`${m.attendance_rate?.toFixed?.(1) ?? '–'}%`} icon={<CheckCircle2 className="h-4 w-4 text-green-600" />} />
+                <MetricTile label={t('student.reports.metaAiTutorUse')} value={t('student.reports.metaAiTutorSessions', { count: m.tutor?.conversations_this_period ?? 0 })} icon={<Brain className="h-4 w-4 text-purple-600" />} />
             </div>
 
             {(ai.areas_to_watch?.length > 0) && (
                 <Card>
                     <CardHeader className="pb-2">
                         <CardTitle className="text-sm flex items-center gap-2 text-orange-700">
-                            <AlertTriangle className="h-4 w-4" />Areas to Watch
+                            <AlertTriangle className="h-4 w-4" />{t('student.reports.areasToWatch')}
                         </CardTitle>
                     </CardHeader>
                     <CardContent>
@@ -188,14 +191,14 @@ function ParentReportPanel({ data }: { data: ProgressReport['report'] }) {
                 <Card>
                     <CardHeader className="pb-2">
                         <CardTitle className="text-sm flex items-center gap-2">
-                            <BookOpen className="h-4 w-4 text-blue-500" />How to Help at Home
+                            <BookOpen className="h-4 w-4 text-blue-500" />{t('student.reports.howToHelpAtHome')}
                         </CardTitle>
                     </CardHeader>
                     <CardContent>
                         <ul className="space-y-1">
-                            {(ai.home_support_tips ?? ai.home_tips).map((t: string, i: number) => (
+                            {(ai.home_support_tips ?? ai.home_tips).map((tip: string, i: number) => (
                                 <li key={i} className="text-sm flex items-start gap-2">
-                                    <span className="text-blue-400 font-bold text-xs mt-0.5">•</span>{t}
+                                    <span className="text-blue-400 font-bold text-xs mt-0.5">•</span>{tip}
                                 </li>
                             ))}
                         </ul>
@@ -207,30 +210,31 @@ function ParentReportPanel({ data }: { data: ProgressReport['report'] }) {
 }
 
 function TeacherReportPanel({ data }: { data: ProgressReport['report'] }) {
+    const { t } = useTranslation();
     const ai = data.ai ?? {};
     const m = data.metrics ?? {} as any;
     const risk = (ai.risk_level ?? 'low').toLowerCase();
     return (
         <div className="space-y-6">
             <div className="flex items-center gap-3">
-                <span className="text-sm font-medium">Risk Level:</span>
+                <span className="text-sm font-medium">{t('student.reports.riskLevel')}</span>
                 <span className={`text-xs font-semibold px-2 py-0.5 rounded border ${riskClass(risk)}`}>
                     {risk.toUpperCase()}
                 </span>
             </div>
 
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                <MetricTile label="Avg Score" value={`${m.avg_score?.toFixed?.(1) ?? '–'}%`} icon={<TrendingUp className="h-4 w-4 text-indigo-600" />} />
-                <MetricTile label="Attendance" value={`${m.attendance_rate?.toFixed?.(1) ?? '–'}%`} icon={<CheckCircle2 className="h-4 w-4 text-green-600" />} />
-                <MetricTile label="AI Sessions" value={m.tutor?.conversations_this_period ?? 0} icon={<Brain className="h-4 w-4 text-purple-600" />} />
-                <MetricTile label="Plan Done" value={`${m.plan_completion_pct?.toFixed?.(0) ?? 0}%`} icon={<BookOpen className="h-4 w-4 text-blue-600" />} />
+                <MetricTile label={t('student.reports.metaAvgScore')} value={`${m.avg_score?.toFixed?.(1) ?? '–'}%`} icon={<TrendingUp className="h-4 w-4 text-indigo-600" />} />
+                <MetricTile label={t('student.reports.metaAttendance')} value={`${m.attendance_rate?.toFixed?.(1) ?? '–'}%`} icon={<CheckCircle2 className="h-4 w-4 text-green-600" />} />
+                <MetricTile label={t('student.reports.metaAiSessions')} value={m.tutor?.conversations_this_period ?? 0} icon={<Brain className="h-4 w-4 text-purple-600" />} />
+                <MetricTile label={t('student.reports.metaPlanDone')} value={`${m.plan_completion_pct?.toFixed?.(0) ?? 0}%`} icon={<BookOpen className="h-4 w-4 text-blue-600" />} />
             </div>
 
             {ai.key_concerns?.length > 0 && (
                 <Card className="border-red-100">
                     <CardHeader className="pb-2">
                         <CardTitle className="text-sm flex items-center gap-2 text-red-700">
-                            <AlertTriangle className="h-4 w-4" />Key Concerns
+                            <AlertTriangle className="h-4 w-4" />{t('student.reports.keyConcerns')}
                         </CardTitle>
                     </CardHeader>
                     <CardContent>
@@ -247,7 +251,7 @@ function TeacherReportPanel({ data }: { data: ProgressReport['report'] }) {
                 <Card>
                     <CardHeader className="pb-2">
                         <CardTitle className="text-sm flex items-center gap-2">
-                            <Zap className="h-4 w-4 text-yellow-500" />Suggested Interventions
+                            <Zap className="h-4 w-4 text-yellow-500" />{t('student.reports.suggestedInterventions')}
                         </CardTitle>
                     </CardHeader>
                     <CardContent>
@@ -265,7 +269,7 @@ function TeacherReportPanel({ data }: { data: ProgressReport['report'] }) {
             {m.bkt?.skill_gaps?.length > 0 && (
                 <Card>
                     <CardHeader className="pb-2">
-                        <CardTitle className="text-sm">Skill Gaps</CardTitle>
+                        <CardTitle className="text-sm">{t('student.reports.skillGaps')}</CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-2">
                         {m.bkt.skill_gaps.map((g: any, i: number) => (
@@ -281,6 +285,7 @@ function TeacherReportPanel({ data }: { data: ProgressReport['report'] }) {
 // ── Main Page ────────────────────────────────────────────────────────────────
 
 export default function StudentReportsPage() {
+    const { t } = useTranslation();
     const [reportType, setReportType] = useState<ReportType>('student');
     const [reportResult, setReportResult] = useState<ProgressReport | null>(null);
     const [history, setHistory] = useState<ProgressReportHistoryItem[]>([]);
@@ -307,9 +312,9 @@ export default function StudentReportsPage() {
         try {
             const data = await api.ai.generateMyProgressReport(reportType);
             setReportResult(data);
-            toast.success('Progress report generated.');
+            toast.success(t('student.reports.toastGenerated'));
         } catch {
-            toast.error('Failed to generate report.');
+            toast.error(t('student.reports.toastGenerateFailed'));
         } finally {
             setGenerating(false);
         }
@@ -337,20 +342,20 @@ export default function StudentReportsPage() {
                 <div>
                     <h1 className="text-3xl font-bold tracking-tight flex items-center gap-2">
                         <FileText className="h-8 w-8 text-indigo-600" />
-                        AI Progress Report
+                        {t('student.reports.pageTitle')}
                     </h1>
                     <p className="text-muted-foreground text-sm">
-                        Personalised weekly report combining scores, attendance, skill mastery, and AI tutor activity.
+                        {t('student.reports.subtitle')}
                     </p>
                 </div>
                 <div className="flex items-center gap-2">
-                    <Button variant="outline" size="icon" onClick={() => fetchReport(reportType)} title="Refresh">
+                    <Button variant="outline" size="icon" onClick={() => fetchReport(reportType)} title={t('student.reports.refreshTitle')}>
                         <RefreshCw className="h-4 w-4" />
                     </Button>
                     <Button onClick={handleGenerate} disabled={generating}>
                         {generating
-                            ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Generating…</>
-                            : <><Zap className="mr-2 h-4 w-4" />Generate Report</>
+                            ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />{t('student.reports.generating')}</>
+                            : <><Zap className="mr-2 h-4 w-4" />{t('student.reports.generateReport')}</>
                         }
                     </Button>
                 </div>
@@ -359,9 +364,9 @@ export default function StudentReportsPage() {
             {/* Tabs */}
             <Tabs value={reportType} onValueChange={v => setReportType(v as ReportType)}>
                 <TabsList>
-                    <TabsTrigger value="student">My Report</TabsTrigger>
-                    <TabsTrigger value="parent">Parent View</TabsTrigger>
-                    <TabsTrigger value="teacher">Teacher View</TabsTrigger>
+                    <TabsTrigger value="student">{t('student.reports.tabMyReport')}</TabsTrigger>
+                    <TabsTrigger value="parent">{t('student.reports.tabParentView')}</TabsTrigger>
+                    <TabsTrigger value="teacher">{t('student.reports.tabTeacherView')}</TabsTrigger>
                 </TabsList>
 
                 {(['student', 'parent', 'teacher'] as ReportType[]).map(type => (
@@ -376,12 +381,12 @@ export default function StudentReportsPage() {
                                     <div className="p-4 bg-indigo-100 rounded-full">
                                         <FileText className="h-12 w-12 text-indigo-600" />
                                     </div>
-                                    <h3 className="text-xl font-semibold">No report yet</h3>
+                                    <h3 className="text-xl font-semibold">{t('student.reports.noReportTitle')}</h3>
                                     <p className="text-muted-foreground max-w-sm text-sm">
-                                        Click "Generate Report" to create your AI-powered progress report.
+                                        {t('student.reports.noReportHint')}
                                     </p>
                                     <Button onClick={handleGenerate} disabled={generating}>
-                                        {generating ? 'Generating…' : 'Generate Report'}
+                                        {generating ? t('student.reports.generating') : t('student.reports.generateReport')}
                                     </Button>
                                 </div>
                             </Card>
@@ -391,8 +396,8 @@ export default function StudentReportsPage() {
                                 <div className="flex items-center justify-between text-xs text-muted-foreground">
                                     <span className="flex items-center gap-1">
                                         <Clock className="h-3 w-3" />
-                                        {reportResult?.cached ? 'Cached — ' : ''}
-                                        Generated {reportData.generated_at
+                                        {reportResult?.cached ? t('student.reports.cached') : ''}
+                                        {t('student.reports.generated')} {reportData.generated_at
                                             ? format(parseISO(reportData.generated_at), 'MMM d, yyyy h:mm a')
                                             : '–'}
                                     </span>
@@ -414,12 +419,12 @@ export default function StudentReportsPage() {
             {reportData && (
                 <div>
                     <Button variant="ghost" size="sm" onClick={handleShowHistory}>
-                        {showHistory ? 'Hide' : 'Show'} Report History
+                        {showHistory ? t('student.reports.historyHide') : t('student.reports.historyShow')}
                     </Button>
                     {showHistory && (
                         <div className="mt-3 space-y-2">
                             {history.length === 0 ? (
-                                <p className="text-sm text-muted-foreground">No previous reports.</p>
+                                <p className="text-sm text-muted-foreground">{t('student.reports.noPreviousReports')}</p>
                             ) : history.map((r, i) => (
                                 <Card key={i} className="p-3">
                                     <div className="flex justify-between items-center">
@@ -428,7 +433,7 @@ export default function StudentReportsPage() {
                                         </span>
                                         <div className="flex gap-2">
                                             <Badge variant="outline" className="text-xs">{r.report_type}</Badge>
-                                            {r.is_automated && <Badge variant="secondary" className="text-xs">Auto</Badge>}
+                                            {r.is_automated && <Badge variant="secondary" className="text-xs">{t('student.reports.historyAuto')}</Badge>}
                                         </div>
                                     </div>
                                     {r.report?.ai?.summary && (
