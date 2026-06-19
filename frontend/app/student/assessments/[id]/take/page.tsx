@@ -19,12 +19,15 @@ import {
 } from 'lucide-react';
 import { useGamification } from '@/components/providers/gamification-provider';
 import { academicAPI, Assessment, Question } from '@/lib/api';
+import { useTranslation } from '@/lib/localization';
+import { formatNumber } from '@/lib/i18n/format';
 
 export default function TakeAssessmentPage() {
     const router = useRouter();
     const params = useParams();
     const assessmentId = params.id as string;
     const { awardXP } = useGamification();
+    const { t, locale } = useTranslation();
 
     const [loading, setLoading] = useState(true);
     const [submitting, setSubmitting] = useState(false);
@@ -51,7 +54,7 @@ export default function TakeAssessmentPage() {
                 setTimeLeft(assessmentData.duration_minutes * 60);
             } catch (error) {
                 console.error("Failed to load assessment", error);
-                toast.error("Failed to load assessment");
+                toast.error(t('student.assessmentTake.errorLoad'));
             } finally {
                 setLoading(false);
             }
@@ -97,7 +100,7 @@ export default function TakeAssessmentPage() {
             router.push(`/student/assessments/${assessmentId}/results?result_id=${res.result_id}`);
         } catch (error) {
             console.error('Submission failed', error);
-            toast.error('Failed to submit assessment');
+            toast.error(t('student.assessmentTake.errorSubmit'));
             submittedRef.current = false;
             setSubmitting(false);
         }
@@ -109,9 +112,9 @@ export default function TakeAssessmentPage() {
         return `${mins}:${secs.toString().padStart(2, '0')}`;
     };
 
-    if (loading) return <div className="p-8 text-center text-slate-400">Loading assessment...</div>;
-    if (!assessment) return <div className="p-8 text-center text-red-400">Assessment not found</div>;
-    if (questions.length === 0) return <div className="p-8 text-center text-slate-400">No questions in this assessment.</div>;
+    if (loading) return <div className="p-8 text-center text-slate-400">{t('student.assessmentTake.loading')}</div>;
+    if (!assessment) return <div className="p-8 text-center text-red-400">{t('student.assessmentTake.notFound')}</div>;
+    if (questions.length === 0) return <div className="p-8 text-center text-slate-400">{t('student.assessmentTake.noQuestions')}</div>;
 
     const currentQuestion = questions[currentIndex];
     const progress = ((currentIndex + 1) / questions.length) * 100;
@@ -126,7 +129,7 @@ export default function TakeAssessmentPage() {
                     <div className="flex items-center gap-3 text-sm">
                         <Badge variant="outline" className="text-slate-500">{assessment.type.toUpperCase()}</Badge>
                         <span className="text-slate-400">|</span>
-                        <span className="text-slate-500 font-medium">Question {currentIndex + 1} of {questions.length}</span>
+                        <span className="text-slate-500 font-medium">{t('student.assessmentTake.questionOf', { current: formatNumber(currentIndex + 1, locale), total: formatNumber(questions.length, locale) })}</span>
                     </div>
                 </div>
                 <div className={`flex items-center gap-2 px-4 py-2 rounded-full border ${timeLeft < 300 ? 'bg-red-50 border-red-100 text-red-600 animate-pulse' : 'bg-indigo-50 border-indigo-100 text-indigo-600'}`}>
@@ -144,7 +147,7 @@ export default function TakeAssessmentPage() {
                         <CardHeader className="pb-4">
                             <div className="flex items-center justify-between">
                                 <Badge variant="secondary" className="bg-slate-100 text-slate-600 border-none">
-                                    {currentQuestion.points} Points
+                                    {t('student.assessmentTake.pointsBadge', { points: formatNumber(currentQuestion.points, locale) })}
                                 </Badge>
                                 <span className="text-xs text-slate-400 uppercase tracking-wider">{currentQuestion.type.replace('_', ' ')}</span>
                             </div>
@@ -173,16 +176,16 @@ export default function TakeAssessmentPage() {
 
                             {(currentQuestion.type === 'short_answer' || currentQuestion.type === 'long_answer' || currentQuestion.type === 'code') && (
                                 <div className="pt-4 space-y-2">
-                                    <Label className="text-slate-500">Your Answer</Label>
+                                    <Label className="text-slate-500">{t('student.assessmentTake.labelYourAnswer')}</Label>
                                     <Textarea
-                                        placeholder="Type your answer here..."
+                                        placeholder={t('student.assessmentTake.placeholderAnswer')}
                                         className={`min-h-[200px] text-base ${currentQuestion.type === 'code' ? 'font-mono bg-slate-900 text-slate-100 focus:bg-slate-900' : ''}`}
                                         value={answers[currentQuestion.question_id] || ''}
                                         onChange={(e) => handleAnswerChange(currentQuestion.question_id, e.target.value)}
                                     />
                                     {currentQuestion.type === 'code' && (
                                         <p className="text-[10px] text-slate-400 flex items-center gap-1">
-                                            <Info className="h-3 w-3" /> Syntax highlighting not available in preview
+                                            <Info className="h-3 w-3" /> {t('student.assessmentTake.syntaxHint')}
                                         </p>
                                     )}
                                 </div>
@@ -196,7 +199,7 @@ export default function TakeAssessmentPage() {
                                 disabled={currentIndex === 0}
                                 className="text-slate-500"
                             >
-                                <ChevronLeft className="mr-2 h-4 w-4" /> Previous
+                                <ChevronLeft className="mr-2 h-4 w-4" /> {t('student.assessmentTake.btnPrevious')}
                             </Button>
 
                             {isLastQuestion ? (
@@ -206,9 +209,9 @@ export default function TakeAssessmentPage() {
                                     onClick={submitAssessment}
                                     disabled={submitting}
                                 >
-                                    {submitting ? 'Submitting...' : (
+                                    {submitting ? t('student.assessmentTake.submitting') : (
                                         <>
-                                            Submit Quiz <Send className="ml-2 h-4 w-4" />
+                                            {t('student.assessmentTake.btnSubmitQuiz')} <Send className="ml-2 h-4 w-4" />
                                         </>
                                     )}
                                 </Button>
@@ -218,7 +221,7 @@ export default function TakeAssessmentPage() {
                                     onClick={() => setCurrentIndex(prev => prev + 1)}
                                     className="bg-indigo-600 hover:bg-indigo-700 min-w-[140px]"
                                 >
-                                    Next Question <ChevronRight className="ml-2 h-4 w-4" />
+                                    {t('student.assessmentTake.btnNextQuestion')} <ChevronRight className="ml-2 h-4 w-4" />
                                 </Button>
                             )}
                         </CardFooter>
@@ -229,7 +232,7 @@ export default function TakeAssessmentPage() {
                 <div className="md:col-span-1 space-y-6">
                     <Card className="border-slate-200 shadow-sm">
                         <CardHeader>
-                            <CardTitle className="text-sm font-bold uppercase tracking-wider text-slate-500">Navigator</CardTitle>
+                            <CardTitle className="text-sm font-bold uppercase tracking-wider text-slate-500">{t('student.assessmentTake.navigatorTitle')}</CardTitle>
                         </CardHeader>
                         <CardContent>
                             <div className="grid grid-cols-4 gap-2">
@@ -248,21 +251,21 @@ export default function TakeAssessmentPage() {
                             <div className="mt-6 space-y-2">
                                 <div className="flex items-center gap-2 text-xs text-slate-500">
                                     <div className="h-3 w-3 rounded-sm bg-indigo-600"></div>
-                                    Current
+                                    {t('student.assessmentTake.legendCurrent')}
                                 </div>
                                 <div className="flex items-center gap-2 text-xs text-slate-500">
                                     <div className="h-3 w-3 rounded-sm bg-indigo-50 border border-indigo-100"></div>
-                                    Answered
+                                    {t('student.assessmentTake.legendAnswered')}
                                 </div>
                                 <div className="flex items-center gap-2 text-xs text-slate-500">
                                     <div className="h-3 w-3 rounded-sm border border-slate-200"></div>
-                                    Remaining
+                                    {t('student.assessmentTake.legendRemaining')}
                                 </div>
                             </div>
                         </CardContent>
                         <CardFooter className="pt-0">
-                            <Button variant="ghost" className="w-full text-xs text-slate-400 group hover:text-indigo-600" onClick={() => toast.success("Draft saved!")}>
-                                <Save className="h-3 w-3 mr-2 group-hover:animate-bounce" /> Save Draft
+                            <Button variant="ghost" className="w-full text-xs text-slate-400 group hover:text-indigo-600" onClick={() => toast.success(t('student.assessmentTake.draftSaved'))}>
+                                <Save className="h-3 w-3 mr-2 group-hover:animate-bounce" /> {t('student.assessmentTake.saveDraft')}
                             </Button>
                         </CardFooter>
                     </Card>
@@ -270,8 +273,8 @@ export default function TakeAssessmentPage() {
                     <div className="p-4 bg-amber-50 rounded-xl border border-amber-100 flex gap-3">
                         <AlertCircle className="h-5 w-5 text-amber-500 shrink-0" />
                         <div className="space-y-1">
-                            <h4 className="text-sm font-bold text-amber-800">Proctoring Active</h4>
-                            <p className="text-xs text-amber-700 leading-relaxed">Switching tabs or leaving the fullscreen mode will be flagged.</p>
+                            <h4 className="text-sm font-bold text-amber-800">{t('student.assessmentTake.proctoringTitle')}</h4>
+                            <p className="text-xs text-amber-700 leading-relaxed">{t('student.assessmentTake.proctoringDesc')}</p>
                         </div>
                     </div>
                 </div>
