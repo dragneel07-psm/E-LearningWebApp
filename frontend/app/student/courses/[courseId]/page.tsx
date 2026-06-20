@@ -11,8 +11,11 @@ import { BookOpen, Clock, CheckCircle2, PlayCircle, Circle } from 'lucide-react'
 import { academicAPI, Subject, Chapter } from '@/lib/api';
 import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
+import { useTranslation } from '@/lib/localization';
+import { formatNumber } from '@/lib/i18n/format';
 
 export default function StudentCoursePage() {
+    const { t, locale } = useTranslation();
     const params = useParams();
     const router = useRouter();
     const courseId = params.courseId as string;
@@ -32,7 +35,7 @@ export default function StudentCoursePage() {
                 setChapters(chaptersData);
             } catch (error) {
                 console.error('Failed to load course:', error);
-                toast.error('Failed to load course content');
+                toast.error(t('student.courses.courseDetail.toastLoadFail'));
             } finally {
                 setLoading(false);
             }
@@ -52,7 +55,7 @@ export default function StudentCoursePage() {
         );
     }
 
-    if (!subject) return <div>Course not found</div>;
+    if (!subject) return <div>{t('student.courses.courseDetail.notFound')}</div>;
 
     const publishedLessons = chapters.flatMap((c) => (c.lessons || []).filter((l) => l.is_published));
     const totalLessons = publishedLessons.length;
@@ -71,16 +74,16 @@ export default function StudentCoursePage() {
                         {subject.code || 'COURSE'}
                     </Badge>
                     <h1 className="mb-2 text-4xl font-black tracking-tight">{subject.name}</h1>
-                    <p className="mb-6 max-w-2xl text-indigo-100 opacity-90">{subject.description || 'No description available for this course.'}</p>
+                    <p className="mb-6 max-w-2xl text-indigo-100 opacity-90">{subject.description || t('student.courses.courseDetail.defaultDescription')}</p>
 
                     <div className="flex items-center gap-6">
                         <div className="flex items-center gap-2">
                             <BookOpen className="h-5 w-5 text-indigo-200" />
-                            <span className="font-bold">{totalLessons} Lessons</span>
+                            <span className="font-bold">{t('student.courses.courseDetail.lessonsCount', { count: formatNumber(totalLessons, locale) })}</span>
                         </div>
                         <div className="flex items-center gap-2">
                             <Clock className="h-5 w-5 text-indigo-200" />
-                            <span className="font-bold">12h 30m Content</span>
+                            <span className="font-bold">{t('student.courses.courseDetail.contentDuration')}</span>
                         </div>
                     </div>
 
@@ -98,7 +101,7 @@ export default function StudentCoursePage() {
                                 }}
                             >
                                 <PlayCircle className="mr-2 h-5 w-5" />
-                                {progress > 0 ? "Resume Learning" : "Start Course"}
+                                {progress > 0 ? t('student.courses.courseDetail.btnResume') : t('student.courses.courseDetail.btnStart')}
                             </Button>
                         )}
                         {progress === 100 && (
@@ -109,15 +112,15 @@ export default function StudentCoursePage() {
                                     if (allLessons.length > 0) handleStartLesson(allLessons[0].id);
                                 }}
                             >
-                                <CheckCircle2 className="mr-2 h-5 w-5" /> Review Course
+                                <CheckCircle2 className="mr-2 h-5 w-5" /> {t('student.courses.courseDetail.btnReview')}
                             </Button>
                         )}
                     </div>
 
                     <div className="mt-6">
                         <div className="mb-2 flex justify-between text-sm font-bold">
-                            <span>Your Progress</span>
-                            <span>{progress}% Completed</span>
+                            <span>{t('student.courses.courseDetail.progressLabel')}</span>
+                            <span>{t('student.courses.courseDetail.progressCompleted', { pct: formatNumber(progress, locale) })}</span>
                         </div>
                         <div className="h-2 w-full overflow-hidden rounded-full bg-black/20">
                             <div
@@ -135,7 +138,7 @@ export default function StudentCoursePage() {
 
             {/* Curriculum List */}
             <div className="space-y-6">
-                <h2 className="text-2xl font-bold text-slate-900">Course Content</h2>
+                <h2 className="text-2xl font-bold text-slate-900">{t('student.courses.courseDetail.courseContent')}</h2>
 
                 <div className="space-y-4">
                     {chapters.map((chapter, index) => (
@@ -146,7 +149,7 @@ export default function StudentCoursePage() {
                                     {chapter.title}
                                 </h3>
                                 <Badge variant="outline" className="bg-white">
-                                    {chapter.lessons?.filter(l => l.is_published).length} Lessons
+                                    {t('student.courses.courseDetail.lessonsCountBadge', { count: formatNumber(chapter.lessons?.filter(l => l.is_published).length ?? 0, locale) })}
                                 </Badge>
                             </div>
                             <CardContent className="p-0">
@@ -181,21 +184,21 @@ export default function StudentCoursePage() {
                                                 </p>
                                                 {isInProgress && (
                                                     <p className="text-[10px] font-bold text-amber-600 uppercase tracking-wide mt-1">
-                                                        In Progress {Math.round(lessonProgress)}%
+                                                        {t('student.courses.courseDetail.inProgress', { pct: formatNumber(Math.round(lessonProgress), locale) })}
                                                     </p>
                                                 )}
                                             </div>
                                         </div>
 
                                         <Button variant="ghost" size="sm" className="opacity-0 group-hover:opacity-100 transition-opacity">
-                                            Start Lesson
+                                            {t('student.courses.courseDetail.btnStartLesson')}
                                         </Button>
                                     </div>
                                     );
                                 })}
                                 {(!chapter.lessons || chapter.lessons.length === 0) && (
                                     <div className="p-6 text-center text-slate-400 text-sm">
-                                        No lessons available in this chapter.
+                                        {t('student.courses.courseDetail.noLessonsInChapter')}
                                     </div>
                                 )}
                             </CardContent>
